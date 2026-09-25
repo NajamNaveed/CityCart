@@ -41,7 +41,7 @@ Brand users can only access resources belonging to their own brand.
 
 ### 👥 Employee Management
 
-Brand administrators can create employees and assign granular permissions such as:
+Brand administrators can create employees and assign granular permissions, for example:
 
 ```text
 products.view
@@ -51,15 +51,32 @@ products.delete
 
 orders.view
 orders.manage
+orders.cancel
 
 inventory.view
 inventory.manage
 
 customers.view
-employees.manage
+customers.manage
+
+employees.view
+employees.create
+employees.update
+employees.delete
+employees.manage_permissions
+
+delivery.view
+delivery.manage
+
+payments.view
+payments.manage
+
+reviews.view
 reviews.manage
 analytics.view
 ```
+
+The full, authoritative permission list lives in `docs/02-user-roles-and-permissions.md` — treat it as the source of truth over this README when implementing RBAC.
 
 Permissions are enforced on the backend.
 
@@ -654,7 +671,7 @@ Main API areas include:
 /cart
 /orders
 /payments
-/delivery
+/deliveries
 /employees
 /reviews
 /notifications

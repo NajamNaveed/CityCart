@@ -94,6 +94,7 @@ City
       │
       ├── Order
       │    ├── Payment
+      │    ├── Delivery
       │    └── Review
       │
       └── Notification
@@ -126,9 +127,12 @@ inventory
 carts
 orders
 payments
+deliveries
 reviews
 notifications
 ```
+
+`deliveries` is part of the MVP (see `11-delivery-system.md`), not a future addition — it is required for brand fulfillment and customer tracking as described in `01-product-requirements.md` and `18-development-roadmap.md` (Phase 10).
 
 Additional collections may be introduced later for:
 
@@ -136,7 +140,6 @@ Additional collections may be introduced later for:
 commissions
 payouts
 coupons
-delivery
 auditLogs
 ```
 
@@ -320,6 +323,7 @@ Employee.brandId
 Order.brandId
 Inventory.brandId
 Store.brandId
+Delivery.brandId
 ```
 
 This is essential for tenant isolation.
@@ -458,13 +462,14 @@ images
 price
 compareAtPrice
 sku
-stockTracking
 isActive
 status
 attributes
 createdAt
 updatedAt
 ```
+
+Whether stock is tracked for a product is controlled by `Inventory.trackInventory` (§18), not by a separate field on Product. Keeping a single flag avoids the two documents disagreeing about which one is authoritative.
 
 ### Product status
 
@@ -565,6 +570,8 @@ quantity - reservedQuantity
 ```
 
 The exact implementation may calculate rather than permanently store derived values.
+
+`trackInventory` is the single authoritative flag for whether a product's stock is tracked (see §14 — Product does not duplicate this flag). When `trackInventory` is `false`, checkout should skip quantity/availability checks for that product.
 
 ---
 
@@ -768,6 +775,58 @@ The order service must enforce valid state transitions.
 
 ---
 
+# 25a. Delivery Model
+
+Collection:
+
+```text
+deliveries
+```
+
+Delivery is tracked separately from Order and Payment, as required by `11-delivery-system.md`.
+
+### Fields
+
+```text
+_id
+orderId
+brandId
+customerId
+status
+address
+deliveryFee
+trackingReference
+assignedAgent
+failureReason
+createdAt
+updatedAt
+```
+
+`address` is a snapshot, captured the same way as `Order.shippingAddress`, so a later profile change never alters an existing delivery record.
+
+### Delivery status
+
+Initial statuses (see `11-delivery-system.md`, §9):
+
+```text
+PENDING
+PREPARING
+READY_FOR_PICKUP
+PICKED_UP
+IN_TRANSIT
+OUT_FOR_DELIVERY
+DELIVERED
+FAILED
+CANCELLED
+RETURNED
+```
+
+Delivery status, order status, and payment status are three separate fields and must never be merged.
+
+A delivery record is created when its order reaches `READY_FOR_SHIPMENT` (see order status in §25).
+
+---
+
 # 26. Payment Model
 
 Collection:
@@ -914,6 +973,7 @@ Brand
  ├── Products
  ├── Inventory
  ├── Orders
+ ├── Deliveries
  └── Reviews
 
 Category
@@ -929,7 +989,8 @@ Customer
  └── Notifications
 
 Order
- └── Payment
+ ├── Payment
+ └── Delivery
 ```
 
 ---
@@ -1057,6 +1118,16 @@ orderStatus
 createdAt
 ```
 
+### Deliveries
+
+```text
+orderId: unique
+brandId
+customerId
+status
+trackingReference
+```
+
 ### Reviews
 
 ```text
@@ -1101,6 +1172,7 @@ The application must enforce:
 4. Inventory and product brand IDs must match.
 5. Brand employees belong to one brand.
 6. Brand orders belong to one brand.
+6a. Every delivery belongs to exactly one order and one brand, and the delivery's brandId must match its order's brandId.
 7. Customers can only access their own private resources.
 8. Brand users can only access resources within their brand.
 9. Order totals are calculated server-side.
@@ -1360,6 +1432,7 @@ The following documents must remain consistent with it:
 03-system-architecture.md
 05-api-specification.md
 06-authentication-and-security.md
+11-delivery-system.md
 ```
 
 Any major schema change should be documented before implementation.

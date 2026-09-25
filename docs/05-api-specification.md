@@ -1126,6 +1126,12 @@ GET /api/v1/payments/order/:orderId
 
 Access must be restricted according to order ownership.
 
+Required (brand users):
+
+```text
+payments.view
+```
+
 ---
 
 ## Update Payment Status
@@ -1134,9 +1140,95 @@ Access must be restricted according to order ownership.
 PATCH /api/v1/payments/:id/status
 ```
 
+Required (brand users):
+
+```text
+payments.manage
+```
+
 This endpoint must be heavily protected.
 
 For future online gateways, payment status should preferably be updated through verified provider callbacks/webhooks rather than trusting arbitrary client requests.
+
+---
+
+# 22a. Delivery Endpoints
+
+Base:
+
+```text
+/api/v1/deliveries
+```
+
+Delivery is part of the MVP. See `11-delivery-system.md` for the full business rules.
+
+## List Deliveries
+
+```text
+GET /api/v1/deliveries
+```
+
+Brand users only see their own brand's deliveries. Customers use the order endpoints (§16) for their own delivery/tracking view instead of this list.
+
+Required (brand users):
+
+```text
+delivery.view
+```
+
+---
+
+## Get Delivery
+
+```text
+GET /api/v1/deliveries/:deliveryId
+```
+
+Access must be restricted to:
+
+* The brand that owns the delivery, or
+* The customer who owns the related order, or
+* Super Admin.
+
+---
+
+## Update Delivery Status
+
+```text
+PATCH /api/v1/deliveries/:deliveryId/status
+```
+
+Example:
+
+```json
+{
+  "status": "OUT_FOR_DELIVERY"
+}
+```
+
+Required (brand users):
+
+```text
+delivery.manage
+```
+
+The backend must validate the status transition (see `11-delivery-system.md`, §9–10) and must not allow the order/payment status fields to be set directly through this endpoint.
+
+---
+
+## Update Delivery
+
+```text
+PATCH /api/v1/deliveries/:deliveryId
+```
+
+Used for fields such as `trackingReference`, `assignedAgent`, or `failureReason`.
+
+Required (brand users):
+
+```text
+delivery.manage
+```
 
 ---
 

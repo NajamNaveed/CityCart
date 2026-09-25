@@ -223,6 +223,24 @@ notifications.view
 notifications.manage
 ```
 
+## 6.12 Delivery Permissions
+
+```text
+delivery.view
+delivery.manage
+```
+
+See `11-delivery-system.md` and `05-api-specification.md` (§22a) — delivery is part of the MVP, not a future addition.
+
+## 6.13 Payment Permissions
+
+```text
+payments.view
+payments.manage
+```
+
+`payments.manage` guards the payment-status update endpoint (`05-api-specification.md`, §22) and should be treated as at least as sensitive as `orders.manage`.
+
 ---
 
 # 7. Super Admin
@@ -782,15 +800,11 @@ They must not bypass tenant isolation.
 
 The permission system must be extensible.
 
+`payments.*` and `delivery.*` are now defined in §6.12–6.13 (MVP), not here.
+
 Future permissions may include:
 
 ```text
-payments.view
-payments.manage
-
-delivery.view
-delivery.manage
-
 coupons.view
 coupons.create
 coupons.update
