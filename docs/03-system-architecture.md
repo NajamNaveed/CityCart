@@ -288,50 +288,41 @@ Business rules should primarily live in services rather than being duplicated ac
 
 # 11. Backend Directory Structure
 
-Recommended structure:
+Implemented structure (see `server/`):
 
 ```text
 server/
 ├── src/
 │   ├── config/
+│   ├── controllers/
 │   ├── middleware/
-│   ├── modules/
-│   │   ├── auth/
-│   │   ├── users/
-│   │   ├── cities/
-│   │   ├── brands/
-│   │   ├── stores/
-│   │   ├── products/
-│   │   ├── categories/
-│   │   ├── inventory/
-│   │   ├── cart/
-│   │   ├── orders/
-│   │   ├── payments/
-│   │   ├── delivery/
-│   │   ├── employees/
-│   │   ├── reviews/
-│   │   ├── notifications/
-│   │   └── analytics/
+│   ├── models/
+│   ├── routes/
+│   ├── services/
+│   ├── validators/
 │   ├── utils/
+│   ├── sockets/
 │   ├── app.js
 │   └── server.js
 ├── tests/
 └── package.json
 ```
 
-Each module should contain only the code required for that domain.
+This is a flat, layer-first structure: each top-level folder holds one architectural layer (routes, controllers, services, models, validators) across all domains, rather than nesting a full module per domain. `app.js` configures the Express app and is exported without calling `listen()`; `server.js` is the actual process entry point.
 
-Example:
+Each domain gets one file per layer, named after the domain. Example, for products:
 
 ```text
-products/
-├── product.model.js
-├── product.routes.js
-├── product.controller.js
-├── product.service.js
-├── product.validation.js
-└── product.test.js
+routes/product.routes.js
+controllers/product.controller.js
+services/product.service.js
+models/product.model.js
+validators/product.validator.js
 ```
+
+Domain-specific tests live under `tests/`, e.g. `tests/product.test.js`.
+
+Business logic should live in the relevant `services/` file, not in `controllers/` or `routes/` (see §10, Backend Layering).
 
 ---
 
