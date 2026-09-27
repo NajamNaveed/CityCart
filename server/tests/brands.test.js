@@ -180,7 +180,12 @@ describe('PATCH /api/v1/brands/:id (own-brand update)', () => {
     const brandId = new mongoose.Types.ObjectId();
     const brandAdmin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
     const save = jest.fn().mockResolvedValue(true);
-    Brand.findById.mockResolvedValue({ _id: brandId, brandId, name: 'Old', save });
+    // Brand IS the tenant — it has no brandId field. Ownership is
+    // resource._id === req.user.brandId, so the fixture must not fake a
+    // brandId field (that would mask the real bug this test guards against).
+    const brandFixture = { _id: brandId, name: 'Old', save };
+    expect(brandFixture).not.toHaveProperty('brandId');
+    Brand.findById.mockResolvedValue(brandFixture);
 
     const res = await request(app)
       .patch(`/api/v1/brands/${brandId.toString()}`)
@@ -195,7 +200,7 @@ describe('PATCH /api/v1/brands/:id (own-brand update)', () => {
     const ownBrandId = new mongoose.Types.ObjectId();
     const otherBrandId = new mongoose.Types.ObjectId();
     const brandAdmin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId: ownBrandId });
-    Brand.findById.mockResolvedValue({ _id: otherBrandId, brandId: otherBrandId, name: 'Other' });
+    Brand.findById.mockResolvedValue({ _id: otherBrandId, name: 'Other' });
 
     const res = await request(app)
       .patch(`/api/v1/brands/${otherBrandId.toString()}`)
@@ -209,7 +214,7 @@ describe('PATCH /api/v1/brands/:id (own-brand update)', () => {
     const brandId = new mongoose.Types.ObjectId();
     const superAdmin = makeFakeUser({ role: ROLES.SUPER_ADMIN });
     const save = jest.fn().mockResolvedValue(true);
-    Brand.findById.mockResolvedValue({ _id: brandId, brandId, name: 'Old', save });
+    Brand.findById.mockResolvedValue({ _id: brandId, name: 'Old', save });
 
     const res = await request(app)
       .patch(`/api/v1/brands/${brandId.toString()}`)
@@ -247,7 +252,7 @@ describe('PATCH /api/v1/brands/:id (own-brand update)', () => {
     const brandId = new mongoose.Types.ObjectId();
     const brandAdmin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
     const save = jest.fn().mockResolvedValue(true);
-    const brandDoc = { _id: brandId, brandId, name: 'Old', status: 'ACTIVE', save };
+    const brandDoc = { _id: brandId, name: 'Old', status: 'ACTIVE', save };
     Brand.findById.mockResolvedValue(brandDoc);
 
     await request(app)

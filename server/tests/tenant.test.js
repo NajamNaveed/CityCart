@@ -263,6 +263,74 @@ describe('requireBrandOwnership', () => {
     expect(res.body.product.name).toBe('Custom');
     expect(res.body.resource).toBeNull();
   });
+
+  describe("resourceType: 'tenant' (resource IS the brand, e.g. Brand itself)", () => {
+    it('allows a BRAND_ADMIN to access their own brand via resource._id, not resource.brandId', async () => {
+      const brandAId = new mongoose.Types.ObjectId();
+      // No brandId field at all — matches the real Brand model.
+      const fetchResource = fetchResourceFactory({ _id: brandAId, name: 'Brand A' });
+      const app = buildTestApp(
+        makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId: brandAId }),
+        requireBrandOwnership(fetchResource, { resourceType: 'tenant' })
+      );
+      const res = await request(app).get('/protected');
+      expect(res.status).toBe(200);
+      expect(res.body.resource.name).toBe('Brand A');
+    });
+
+    it('denies a BRAND_ADMIN of Brand A accessing Brand B via resourceType: tenant', async () => {
+      const brandAId = new mongoose.Types.ObjectId();
+      const brandBId = new mongoose.Types.ObjectId();
+      const fetchResource = fetchResourceFactory({ _id: brandBId, name: 'Brand B' });
+      const app = buildTestApp(
+        makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId: brandAId }),
+        requireBrandOwnership(fetchResource, { resourceType: 'tenant' })
+      );
+      const res = await request(app).get('/protected');
+      expect(res.status).toBe(403);
+    });
+
+    it('allows SUPER_ADMIN to access any brand via resourceType: tenant', async () => {
+      const brandId = new mongoose.Types.ObjectId();
+      const fetchResource = fetchResourceFactory({ _id: brandId, name: 'Any Brand' });
+      const app = buildTestApp(
+        makeFakeUser({ role: ROLES.SUPER_ADMIN }),
+        requireBrandOwnership(fetchResource, { resourceType: 'tenant' })
+      );
+      const res = await request(app).get('/protected');
+      expect(res.status).toBe(200);
+    });
+
+    it('denies CUSTOMER via resourceType: tenant', async () => {
+      const brandId = new mongoose.Types.ObjectId();
+      const fetchResource = fetchResourceFactory({ _id: brandId, name: 'Brand' });
+      const app = buildTestApp(
+        makeFakeUser({ role: ROLES.CUSTOMER }),
+        requireBrandOwnership(fetchResource, { resourceType: 'tenant' })
+      );
+      const res = await request(app).get('/protected');
+      expect(res.status).toBe(403);
+    });
+
+    it('does NOT fall back to a brandId field even if one is spuriously present on a tenant resource', async () => {
+      // Regression guard: a resource.brandId that happens to equal the
+      // caller's brandId must not be used to grant access under
+      // resourceType: 'tenant' — only resource._id counts.
+      const brandAId = new mongoose.Types.ObjectId();
+      const actualBrandId = new mongoose.Types.ObjectId();
+      const fetchResource = fetchResourceFactory({
+        _id: actualBrandId,
+        brandId: brandAId, // spurious — must be ignored under 'tenant'
+        name: 'Brand',
+      });
+      const app = buildTestApp(
+        makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId: brandAId }),
+        requireBrandOwnership(fetchResource, { resourceType: 'tenant' })
+      );
+      const res = await request(app).get('/protected');
+      expect(res.status).toBe(403);
+    });
+  });
 });
 
 describe('full chain: requireTenant then requireBrandOwnership', () => {

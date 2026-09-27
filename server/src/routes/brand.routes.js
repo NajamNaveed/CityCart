@@ -32,7 +32,9 @@ router.patch(
   authenticate,
   requireRole(ROLES.SUPER_ADMIN, ROLES.BRAND_ADMIN),
   requireTenant,
-  requireBrandOwnership((req) => getBrandByIdRaw(req.params.id)),
+  requireBrandOwnership((req) => getBrandByIdRaw(req.params.id), {
+    resourceType: 'tenant',
+  }),
   update
 );
 

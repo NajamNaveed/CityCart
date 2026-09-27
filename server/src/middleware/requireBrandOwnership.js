@@ -35,9 +35,18 @@ const { ROLES } = require('../config/roles');
  * On success, attaches the loaded document to `req.resource` (or the
  * key given via options.resourceKey) so the controller can reuse it
  * without a second query.
+ *
+ * options.resourceType:
+ *   - 'owned' (default) — the resource is BRAND-OWNED (Store, Product,
+ *     Category, etc.). Ownership is `resource.brandId === req.user.brandId`.
+ *   - 'tenant' — the resource IS the tenant itself (Brand). Brand has no
+ *     `brandId` field (it would be redundant with its own `_id`), so
+ *     ownership is `resource._id === req.user.brandId` instead. Use this
+ *     only for Brand routes (e.g. PATCH /api/v1/brands/:id).
  */
 function requireBrandOwnership(fetchResource, options = {}) {
   const resourceKey = options.resourceKey || 'resource';
+  const resourceType = options.resourceType || 'owned';
 
   return async function ownershipMiddleware(req, res, next) {
     try {
@@ -76,7 +85,19 @@ function requireBrandOwnership(fetchResource, options = {}) {
       // here, by design, so a client-supplied brandId can never override
       // or spoof the check.
       const userBrandId = req.user.brandId ? req.user.brandId.toString() : null;
-      const resourceBrandId = resource.brandId ? resource.brandId.toString() : null;
+
+      // For 'tenant' resources (Brand), the resource's own _id IS the
+      // brand identity — Brand does not (and must not) carry a redundant
+      // brandId field. For 'owned' resources (Store, Product, ...), the
+      // resource is scoped by its brandId field instead.
+      const resourceBrandId =
+        resourceType === 'tenant'
+          ? resource._id
+            ? resource._id.toString()
+            : null
+          : resource.brandId
+            ? resource.brandId.toString()
+            : null;
 
       if (!userBrandId || resourceBrandId !== userBrandId) {
         return res
