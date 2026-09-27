@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 
+const { BRAND_STATUSES } = require('../config/brandStatuses');
+
 /**
  * Brand model — the primary tenant in CityCart.
  *
@@ -12,9 +14,11 @@ const mongoose = require('mongoose');
  * delivery settings are mentioned at a feature level only). Enforcing an
  * invented sub-schema here would be a business-rule assumption beyond
  * what's documented.
+ *
+ * BRAND_STATUSES now lives in ../config/brandStatuses.js (moved out
+ * during Phase 6 so the brand service/validators can reference the same
+ * list instead of a second copy — same pattern as config/roles.js).
  */
-const BRAND_STATUSES = ['PENDING', 'ACTIVE', 'SUSPENDED', 'REJECTED'];
-
 const brandSchema = new mongoose.Schema(
   {
     name: {

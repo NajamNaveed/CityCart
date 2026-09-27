@@ -10,6 +10,21 @@
  * business modules are out of scope until later phases build them —
  * add to this same file when that happens, rather than creating a
  * second permissions module.
+ *
+ * DOCUMENTATION CONFLICT (flagged, not silently resolved): STORE_UPDATE
+ * was added during Phase 6. docs/05-api-specification.md §10 (Store
+ * Endpoints -> Update Store) explicitly states this endpoint's
+ * authorization "requires: store.update + correct brand ownership,"
+ * but docs/02-user-roles-and-permissions.md §6 (Permission Groups) has
+ * no Store permission group at all — Products, Orders, Inventory,
+ * Customers, Employees, Reviews, Analytics, Notifications, Delivery,
+ * and Payments are the only groups defined there. Since doc02 §24
+ * documents the permission system as explicitly extensible, and doc05
+ * names this exact permission string, adding it here (rather than
+ * inventing a different mechanism, or leaving Store Update
+ * unenforceable for BRAND_EMPLOYEE) is the smallest change consistent
+ * with both documents. This should be confirmed by a human and, ideally,
+ * doc02 §6 updated to include it.
  */
 const PERMISSIONS = Object.freeze({
   PRODUCTS_VIEW: 'products.view',
@@ -30,6 +45,8 @@ const PERMISSIONS = Object.freeze({
   EMPLOYEES_UPDATE: 'employees.update',
   EMPLOYEES_DELETE: 'employees.delete',
   EMPLOYEES_MANAGE_PERMISSIONS: 'employees.manage_permissions',
+
+  STORE_UPDATE: 'store.update',
 });
 
 const ALL_PERMISSIONS = Object.values(PERMISSIONS);

@@ -5,6 +5,9 @@ const cookieParser = require('cookie-parser');
 const env = require('./config/env');
 const healthRoutes = require('./routes/health.routes');
 const authRoutes = require('./routes/auth.routes');
+const cityRoutes = require('./routes/city.routes');
+const brandRoutes = require('./routes/brand.routes');
+const storeRoutes = require('./routes/store.routes');
 
 const app = express();
 
@@ -34,5 +37,8 @@ app.get('/api/v1', (req, res) => {
 });
 
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/cities', cityRoutes);
+app.use('/api/v1/brands', brandRoutes);
+app.use('/api/v1/stores', storeRoutes);
 
 module.exports = app;
