@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 
+const { ALL_ROLES, BRAND_SCOPED_ROLES } = require('../config/roles');
+
 /**
  * User model — represents authentication and identity.
  *
@@ -7,17 +9,13 @@ const mongoose = require('mongoose');
  * (User Constraints).
  *
  * Phase 2 scope: schema definition only. Password hashing, JWT issuance,
- * registration/login, and RBAC middleware are later-phase concerns (see
- * docs/18-development-roadmap.md, Phase 2 — Authentication & Users) and
- * are not implemented here.
+ * and registration/login were added in the authentication phase.
+ * RBAC role/permission constants now live in ../config/roles.js and
+ * ../config/permissions.js (this file previously defined its own
+ * ROLES/BRAND_SCOPED_ROLES arrays locally — moved out during the RBAC
+ * phase so role names have a single source of truth instead of two
+ * copies that could drift).
  */
-
-const ROLES = ['SUPER_ADMIN', 'BRAND_ADMIN', 'BRAND_EMPLOYEE', 'CUSTOMER'];
-
-// Brand-scoped roles must carry a brandId; SUPER_ADMIN and CUSTOMER must
-// not, per §6: "A customer is not a tenant member merely because they
-// purchase from a brand."
-const BRAND_SCOPED_ROLES = ['BRAND_ADMIN', 'BRAND_EMPLOYEE'];
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -46,7 +44,7 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ROLES,
+      enum: ALL_ROLES,
       required: true,
     },
     brandId: {
