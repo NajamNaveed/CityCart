@@ -12,6 +12,8 @@ const storeRoutes = require('./routes/store.routes');
 const categoryRoutes = require('./routes/category.routes');
 const productRoutes = require('./routes/product.routes');
 
+const inventoryRoutes = require('./routes/inventory.routes');
+
 const app = express();
 
 // Core middleware
@@ -46,5 +48,7 @@ app.use('/api/v1/stores', storeRoutes);
 
 app.use('/api/v1/categories', categoryRoutes);
 app.use('/api/v1/products', productRoutes);
+
+app.use('/api/v1/inventory', inventoryRoutes);
 
 module.exports = app;
