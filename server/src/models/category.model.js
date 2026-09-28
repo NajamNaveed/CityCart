@@ -50,6 +50,12 @@ const categorySchema = new mongoose.Schema(
   }
 );
 
+// Slugs are unique PER BRAND, not globally (docs/04 — two brands may each
+// have a category named "Phones"). This enforces it at the MongoDB level so
+// concurrent requests can't slip past the service-layer findOne check in
+// services/category.service.js.
+categorySchema.index({ brandId: 1, slug: 1 }, { unique: true });
+
 const Category = mongoose.model('Category', categorySchema);
 
 module.exports = Category;

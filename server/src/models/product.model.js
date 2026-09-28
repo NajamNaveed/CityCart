@@ -85,6 +85,12 @@ const productSchema = new mongoose.Schema(
   }
 );
 
+// Slugs are unique PER BRAND, not globally (docs/04 — two brands may each
+// sell a product with the same name). This enforces it at the MongoDB level
+// so concurrent requests can't slip past the service-layer findOne check in
+// services/product.service.js.
+productSchema.index({ brandId: 1, slug: 1 }, { unique: true });
+
 const Product = mongoose.model('Product', productSchema);
 
 module.exports = Product;
