@@ -32,6 +32,14 @@ const PERMISSIONS = Object.freeze({
   PRODUCTS_UPDATE: 'products.update',
   PRODUCTS_DELETE: 'products.delete',
 
+  // Added in Phase 7 — already documented in docs/02 §6.2 (Category
+  // Permissions), just not centralized here until a Category route
+  // needed them.
+  CATEGORIES_VIEW: 'categories.view',
+  CATEGORIES_CREATE: 'categories.create',
+  CATEGORIES_UPDATE: 'categories.update',
+  CATEGORIES_DELETE: 'categories.delete',
+
   ORDERS_VIEW: 'orders.view',
   ORDERS_MANAGE: 'orders.manage',
 

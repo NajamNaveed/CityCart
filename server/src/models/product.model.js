@@ -88,3 +88,10 @@ const productSchema = new mongoose.Schema(
 const Product = mongoose.model('Product', productSchema);
 
 module.exports = Product;
+// Exposed so validators/product.validator.js can build its status enum
+// from the same single source of truth instead of a second, drift-prone
+// copy (same pattern as config/roles.js, config/brandStatuses.js).
+// Nothing previously imported product.model.js (Phase 7 is the first
+// consumer), so this is purely additive — `require('./product.model')`
+// still returns the Mongoose model exactly as before.
+module.exports.STATUSES = PRODUCT_STATUSES;

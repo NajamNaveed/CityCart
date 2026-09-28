@@ -9,6 +9,9 @@ const cityRoutes = require('./routes/city.routes');
 const brandRoutes = require('./routes/brand.routes');
 const storeRoutes = require('./routes/store.routes');
 
+const categoryRoutes = require('./routes/category.routes');
+const productRoutes = require('./routes/product.routes');
+
 const app = express();
 
 // Core middleware
@@ -40,5 +43,8 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/cities', cityRoutes);
 app.use('/api/v1/brands', brandRoutes);
 app.use('/api/v1/stores', storeRoutes);
+
+app.use('/api/v1/categories', categoryRoutes);
+app.use('/api/v1/products', productRoutes);
 
 module.exports = app;
