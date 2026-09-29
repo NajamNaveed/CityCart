@@ -15,11 +15,20 @@ const mongoose = require('mongoose');
  *    across two awaited calls WILL be caught racing here; a service that
  *    puts its guard in the filter of one findOneAndUpdate will not.
  *  - Supports only the operators the inventory service uses, and throws
- *    on anything else so a new operator can't silently go untested.
+ *    on anything else so a new operator can't silently go untested. This
+ *    includes a small $expr evaluator (PHASE 8 REVIEW addition) covering
+ *    just $subtract/$gte/$lte/$gt/$and and '$field' references, because
+ *    every availableQuantity guard now reads `quantity - reservedQuantity`
+ *    via $expr instead of a stored field (see models/inventory.model.js
+ *    and services/inventory.service.js).
  *  - Unique productId (E11000, code 11000), like the real index.
  *
  * It does NOT verify real MongoDB semantics — it verifies the service's
- * logic against the documented atomic-update contract.
+ * logic against the documented atomic-update contract. In particular,
+ * this fake's $expr evaluator is a hand-rolled JS re-implementation of a
+ * few aggregation operators, NOT the real MongoDB aggregation engine —
+ * passing here does not prove the same $expr queries behave identically
+ * against a real MongoDB server. See the Phase 8 review report.
  */
 
 const isPlainOperatorObject = (value) =>
@@ -32,8 +41,48 @@ function yieldToEventLoop() {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
+// Minimal aggregation-expression evaluator for $expr filters — only the
+// operators services/inventory.service.js actually emits.
+function evalExpr(doc, expr) {
+  if (Array.isArray(expr)) {
+    return expr.map((item) => evalExpr(doc, item));
+  }
+  if (typeof expr === 'string' && expr.startsWith('$')) {
+    return doc[expr.slice(1)];
+  }
+  if (typeof expr !== 'object' || expr === null) {
+    return expr;
+  }
+  const [operator, operands] = Object.entries(expr)[0];
+  switch (operator) {
+    case '$subtract': {
+      const [a, b] = evalExpr(doc, operands);
+      return a - b;
+    }
+    case '$gte': {
+      const [a, b] = evalExpr(doc, operands);
+      return a >= b;
+    }
+    case '$lte': {
+      const [a, b] = evalExpr(doc, operands);
+      return a <= b;
+    }
+    case '$gt': {
+      const [a, b] = evalExpr(doc, operands);
+      return a > b;
+    }
+    case '$and':
+      return operands.every((clause) => evalExpr(doc, clause));
+    default:
+      throw new Error(`fake inventory store: unsupported $expr operator ${operator}`);
+  }
+}
+
 function matches(doc, filter) {
   return Object.entries(filter).every(([field, condition]) => {
+    if (field === '$expr') {
+      return evalExpr(doc, condition);
+    }
     if (field.startsWith('$')) {
       throw new Error(`fake inventory store: unsupported top-level operator ${field}`);
     }
@@ -81,7 +130,13 @@ function applyUpdate(doc, update, { inserting }) {
 function createFakeInventoryModel() {
   let docs = [];
 
-  const copy = (doc) => (doc ? { ...doc } : null);
+  // Mirrors the real model's `availableQuantity` VIRTUAL (see
+  // models/inventory.model.js): computed on the way out, never stored or
+  // written by $inc — a stale literal `availableQuantity` field that may
+  // exist on a seeded fixture is deliberately overwritten here, exactly as
+  // Mongoose's virtual getter would shadow it.
+  const copy = (doc) =>
+    doc ? { ...doc, availableQuantity: doc.quantity - doc.reservedQuantity } : null;
 
   return {
     async findOne(filter) {

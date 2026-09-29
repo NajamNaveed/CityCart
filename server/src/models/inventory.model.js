@@ -9,13 +9,26 @@ const mongoose = require('mongoose');
  * `availableQuantity` is documented as conceptually `quantity -
  * reservedQuantity`, with the doc explicitly allowing either a stored or
  * calculated value ("the exact implementation may calculate rather than
- * permanently store derived values"). This schema stores it (matching
- * the explicit field list in §18) and derives it automatically via a
- * pre-validate hook, so it can never drift out of sync with
- * quantity/reservedQuantity. This is a data-consistency safeguard on the
- * model itself, not order/checkout business logic (which stays out of
- * scope here per §19 — "Inventory operations should be handled by
- * backend services rather than directly by controllers").
+ * permanently store derived values").
+ *
+ * PHASE 8 REVIEW CORRECTION: this used to be a stored field, kept in sync
+ * by a `pre('validate')` hook. That hook only runs on `.save()` /
+ * `.create()` — NEVER on `findOneAndUpdate`, which is how every write in
+ * services/inventory.service.js mutates stock (required for atomicity;
+ * see that file's header comment). So the stored value could only ever
+ * be trusted immediately after `ensureInventory`'s upsert, and would
+ * silently go stale the moment any $inc-based update ran — exactly the
+ * class of drift the doc's "may calculate rather than store" escape
+ * hatch exists to avoid. It is now a virtual (computed, never persisted)
+ * so `quantity` and `reservedQuantity` are the only authoritative,
+ * stored numbers, and availableQuantity can never disagree with them.
+ *
+ * Concurrency guards that used to compare the stored `availableQuantity`
+ * in an update's filter now use MongoDB's `$expr` to compare
+ * `quantity - reservedQuantity` directly, still evaluated atomically by
+ * the database as part of the same findOneAndUpdate — this does not
+ * change the atomicity guarantees described in
+ * services/inventory.service.js.
  */
 const inventorySchema = new mongoose.Schema(
   {
@@ -43,11 +56,6 @@ const inventorySchema = new mongoose.Schema(
       min: 0,
       default: 0,
     },
-    availableQuantity: {
-      type: Number,
-      min: 0,
-      default: 0,
-    },
     lowStockThreshold: {
       type: Number,
       min: 0,
@@ -63,12 +71,17 @@ const inventorySchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    // So `.toObject()` / `.toJSON()` (used by
+    // services/inventory.service.js#serializeInventory for API responses)
+    // include the virtual below, the same shape the field used to have.
+    toObject: { virtuals: true },
+    toJSON: { virtuals: true },
   }
 );
 
-inventorySchema.pre('validate', function deriveAvailableQuantity(next) {
-  this.availableQuantity = this.quantity - this.reservedQuantity;
-  next();
+// Computed, never persisted — see the model-level comment above.
+inventorySchema.virtual('availableQuantity').get(function getAvailableQuantity() {
+  return this.quantity - this.reservedQuantity;
 });
 
 const Inventory = mongoose.model('Inventory', inventorySchema);

@@ -223,16 +223,20 @@ describe('GET /api/v1/inventory', () => {
       .set(...asUser(makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId })));
 
     expect(res.status).toBe(200);
+    // availableQuantity is a computed virtual, not a stored field (Phase 8
+    // review correction), so the stock-status filter is expressed entirely
+    // via $expr over quantity/reservedQuantity — never a raw
+    // availableQuantity field in the Mongo query.
     expect(Inventory.find).toHaveBeenCalledWith({
       trackInventory: true,
-      availableQuantity: { $lte: 0 },
+      $expr: { $lte: [{ $subtract: ['$quantity', '$reservedQuantity'] }, 0] },
       brandId: brandId.toString(),
     });
     expect(chain.skip).toHaveBeenCalledWith(20);
     expect(chain.limit).toHaveBeenCalledWith(10);
   });
 
-  it('builds the LOW_STOCK filter from availableQuantity vs lowStockThreshold', async () => {
+  it('builds the LOW_STOCK filter from quantity minus reservedQuantity vs lowStockThreshold', async () => {
     const brandId = oid();
     mockInventoryFind([]);
     Inventory.countDocuments.mockResolvedValue(0);
@@ -241,10 +245,10 @@ describe('GET /api/v1/inventory', () => {
       .get('/api/v1/inventory?stockStatus=LOW_STOCK')
       .set(...asUser(makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId })));
 
+    const AVAILABLE = { $subtract: ['$quantity', '$reservedQuantity'] };
     expect(Inventory.find).toHaveBeenCalledWith({
       trackInventory: true,
-      availableQuantity: { $gt: 0 },
-      $expr: { $lte: ['$availableQuantity', '$lowStockThreshold'] },
+      $expr: { $and: [{ $gt: [AVAILABLE, 0] }, { $lte: [AVAILABLE, '$lowStockThreshold'] }] },
       brandId: brandId.toString(),
     });
   });
@@ -451,7 +455,8 @@ describe('PATCH /api/v1/inventory/:productId (set stock)', () => {
       quantity: 20,
       reservedQuantity: { $lte: 50 },
     });
-    expect(update).toEqual({ $inc: { quantity: 30, availableQuantity: 30 } });
+    // availableQuantity is a virtual — only quantity is ever $inc'd.
+    expect(update).toEqual({ $inc: { quantity: 30 } });
     expect(options).toEqual({ new: true });
   });
 
@@ -469,9 +474,11 @@ describe('PATCH /api/v1/inventory/:productId (set stock)', () => {
 
     const [scope, update, options] = Inventory.findOneAndUpdate.mock.calls[0];
     expect(scope).toEqual({ productId: product._id, brandId: product.brandId });
+    // availableQuantity is never inserted — it isn't a document field.
     expect(update.$setOnInsert).toEqual(
-      expect.objectContaining({ quantity: 0, reservedQuantity: 0, availableQuantity: 0 })
+      expect.objectContaining({ quantity: 0, reservedQuantity: 0 })
     );
+    expect(update.$setOnInsert).not.toHaveProperty('availableQuantity');
     expect(options).toEqual({ upsert: true, new: true });
   });
 
@@ -765,7 +772,7 @@ describe('POST /api/v1/inventory/:productId/adjust', () => {
 
     const [filter, update] = Inventory.findOneAndUpdate.mock.calls[1];
     expect(filter).toEqual({ productId: product._id, brandId: product.brandId });
-    expect(update).toEqual({ $inc: { quantity: 20, availableQuantity: 20 } });
+    expect(update).toEqual({ $inc: { quantity: 20 } });
   });
 
   it('removes stock with the availableQuantity guard in the atomic filter', async () => {
@@ -784,12 +791,14 @@ describe('POST /api/v1/inventory/:productId/adjust', () => {
 
     expect(res.status).toBe(200);
     const [filter, update] = Inventory.findOneAndUpdate.mock.calls[1];
+    // The removal guard is $expr-based (quantity - reservedQuantity >= 5),
+    // not a raw availableQuantity field — see models/inventory.model.js.
     expect(filter).toEqual({
       productId: product._id,
       brandId: product.brandId,
-      availableQuantity: { $gte: 5 },
+      $expr: { $gte: [{ $subtract: ['$quantity', '$reservedQuantity'] }, 5] },
     });
-    expect(update).toEqual({ $inc: { quantity: -5, availableQuantity: -5 } });
+    expect(update).toEqual({ $inc: { quantity: -5 } });
   });
 
   it('rejects removing more than the available stock with 409 (stock cannot become negative)', async () => {

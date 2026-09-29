@@ -25,15 +25,23 @@ const MAX_SET_ATTEMPTS = 3;
  * atomically on the single inventory document. Two concurrent requests
  * for the last unit can never both match the filter.
  *
- * INVARIANT: the schema stores availableQuantity, and its pre-validate
- * hook (models/inventory.model.js) only runs on save()/create() — NOT on
- * findOneAndUpdate. So every atomic update below $incs quantity and/or
- * reservedQuantity together WITH availableQuantity in the same update, and
- * every guard reads availableQuantity. Any future code (checkout, order
- * cancellation) must mutate stock through these functions, never with a
- * direct .save() on a loaded inventory document.
+ * INVARIANT: availableQuantity is a VIRTUAL on the model
+ * (models/inventory.model.js) — quantity and reservedQuantity are the
+ * only stored, authoritative numbers. So every atomic update below $incs
+ * quantity and/or reservedQuantity ONLY (never availableQuantity, which
+ * cannot be $inc'd — it isn't a document field), and every guard that
+ * used to compare a stored availableQuantity now compares
+ * `quantity - reservedQuantity` via MongoDB's `$expr` in the filter,
+ * still evaluated atomically as part of the same findOneAndUpdate. Any
+ * future code (checkout, order cancellation) must mutate stock through
+ * these functions, never with a direct .save() on a loaded inventory
+ * document.
  * ---------------------------------------------------------------------
  */
+
+// $subtract: ['$quantity', '$reservedQuantity'] as a reusable aggregation
+// expression, for every $expr-based availableQuantity guard below.
+const AVAILABLE_EXPR = { $subtract: ['$quantity', '$reservedQuantity'] };
 
 /**
  * Derived stock state for API responses and filters.
@@ -69,18 +77,16 @@ function serializeInventory(inventory) {
 function buildStockStatusFilter(stockStatus) {
   switch (stockStatus) {
     case 'OUT_OF_STOCK':
-      return { trackInventory: true, availableQuantity: { $lte: 0 } };
+      return { trackInventory: true, $expr: { $lte: [AVAILABLE_EXPR, 0] } };
     case 'LOW_STOCK':
       return {
         trackInventory: true,
-        availableQuantity: { $gt: 0 },
-        $expr: { $lte: ['$availableQuantity', '$lowStockThreshold'] },
+        $expr: { $and: [{ $gt: [AVAILABLE_EXPR, 0] }, { $lte: [AVAILABLE_EXPR, '$lowStockThreshold'] }] },
       };
     case 'IN_STOCK':
       return {
         trackInventory: true,
-        availableQuantity: { $gt: 0 },
-        $expr: { $gt: ['$availableQuantity', '$lowStockThreshold'] },
+        $expr: { $and: [{ $gt: [AVAILABLE_EXPR, 0] }, { $gt: [AVAILABLE_EXPR, '$lowStockThreshold'] }] },
       };
     default:
       return {};
@@ -161,10 +167,12 @@ async function ensureInventory(product) {
     return await Inventory.findOneAndUpdate(
       scope,
       {
+        // availableQuantity is a virtual now (see models/inventory.model.js)
+        // — it is never a real field to insert, and is 0 here regardless
+        // since quantity and reservedQuantity both start at 0.
         $setOnInsert: {
           quantity: 0,
           reservedQuantity: 0,
-          availableQuantity: 0,
           lowStockThreshold: 0,
           trackInventory: true,
         },
@@ -187,28 +195,31 @@ async function ensureInventory(product) {
  * Adds (change > 0) or removes (change < 0) stock — docs/09 §5 "Add stock /
  * Remove stock / Adjust stock". One atomic conditional update.
  *
- * Removal is guarded by `availableQuantity >= |change|` IN THE FILTER, so
- * stock can never go negative and reserved units can never be removed
- * (available = quantity - reserved, so quantity can't drop below
- * reservedQuantity).
+ * Removal is guarded by `(quantity - reservedQuantity) >= |change|` IN THE
+ * FILTER (via $expr, since availableQuantity is a computed virtual, not a
+ * stored field — see models/inventory.model.js), so stock can never go
+ * negative and reserved units can never be removed (available = quantity -
+ * reserved, so quantity can't drop below reservedQuantity).
  *
  * Returns the updated inventory plus a traceability record shaped per
  * docs/09 §6. previousQuantity is derived from the document this very
  * update returned, so it is exact even under concurrency. The record is
  * returned to the caller but NOT persisted — see the Phase 8 report
- * (there is no adjustment/audit collection in docs/04 yet).
+ * (there is no adjustment/audit collection in docs/04 yet, and docs/09 §6
+ * only says adjustments "should preferably" be recorded, not that they
+ * must be — not an explicit requirement yet).
  */
 async function adjustStock(product, { change, reason, userId }) {
   await ensureInventory(product);
 
   const filter = { productId: product._id, brandId: product.brandId };
   if (change < 0) {
-    filter.availableQuantity = { $gte: -change };
+    filter.$expr = { $gte: [AVAILABLE_EXPR, -change] };
   }
 
   const updated = await Inventory.findOneAndUpdate(
     filter,
-    { $inc: { quantity: change, availableQuantity: change } },
+    { $inc: { quantity: change } },
     { new: true }
   );
 
@@ -236,9 +247,10 @@ async function adjustStock(product, { change, reason, userId }) {
  * stock") and/or updates lowStockThreshold / trackInventory.
  *
  * "Set to N" is relative to whatever the current quantity is, so it can't
- * be a single blind $set (availableQuantity would go stale). Instead it is
- * an optimistic compare-and-swap: read the current quantity, compute the
- * delta, then apply `$inc: { quantity: delta, availableQuantity: delta }`
+ * be a single blind $set. Instead it is an optimistic compare-and-swap:
+ * read the current quantity, compute the delta, then apply
+ * `$inc: { quantity: delta }` (availableQuantity is a virtual now — it is
+ * never $inc'd directly, it just reflects the new quantity automatically)
  * with the observed quantity in the FILTER. If another request changed the
  * quantity in between, the filter no longer matches and we re-read and
  * retry (bounded). The filter also carries `reservedQuantity <= N`, so a
@@ -282,7 +294,7 @@ async function updateInventory(product, data) {
       update.$set = settings;
     }
     if (delta !== 0) {
-      update.$inc = { quantity: delta, availableQuantity: delta };
+      update.$inc = { quantity: delta };
     }
     if (Object.keys(update).length === 0) {
       return current;
@@ -313,9 +325,11 @@ function assertPositiveInteger(value) {
  * out of scope for Phase 8, and docs/09 §8 says the backend performs
  * deductions, never the client.
  *
- * One atomic conditional update: matches only if availableQuantity >= qty,
- * so reserved stock can never exceed available stock and available can
- * never go negative — even with the last unit requested concurrently.
+ * One atomic conditional update: matches only if
+ * (quantity - reservedQuantity) >= qty — via $expr, since availableQuantity
+ * is a computed virtual, not a stored field — so reserved stock can never
+ * exceed available stock and available can never go negative, even with
+ * the last unit requested concurrently.
  *
  * Untracked products (trackInventory=false) are not reserved; the caller is
  * told so and should skip checks for them (docs/04 §18).
@@ -324,8 +338,8 @@ async function reserveStock(productId, quantity) {
   assertPositiveInteger(quantity);
 
   const updated = await Inventory.findOneAndUpdate(
-    { productId, trackInventory: true, availableQuantity: { $gte: quantity } },
-    { $inc: { reservedQuantity: quantity, availableQuantity: -quantity } },
+    { productId, trackInventory: true, $expr: { $gte: [AVAILABLE_EXPR, quantity] } },
+    { $inc: { reservedQuantity: quantity } },
     { new: true }
   );
   if (updated) {
@@ -355,7 +369,7 @@ async function releaseStock(productId, quantity) {
 
   const updated = await Inventory.findOneAndUpdate(
     { productId, reservedQuantity: { $gte: quantity } },
-    { $inc: { reservedQuantity: -quantity, availableQuantity: quantity } },
+    { $inc: { reservedQuantity: -quantity } },
     { new: true }
   );
   if (updated) {
