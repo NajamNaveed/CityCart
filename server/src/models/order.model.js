@@ -14,20 +14,7 @@ const mongoose = require('mongoose');
  * embedded historical snapshots (§23, §32) so a later product-price or
  * profile change never alters an existing order.
  */
-const ORDER_STATUSES = [
-  'PENDING',
-  'CONFIRMED',
-  'PROCESSING',
-  'READY_FOR_SHIPMENT',
-  'SHIPPED',
-  'OUT_FOR_DELIVERY',
-  'DELIVERED',
-  'CANCELLED',
-  'REJECTED',
-  'RETURN_REQUESTED',
-  'RETURNED',
-  'REFUNDED',
-];
+const { ORDER_STATUSES } = require('../config/orderStatuses');
 
 // Payment status is tracked independently of order status (§25, §27) —
 // these must never be merged into a single field.
@@ -81,6 +68,8 @@ const addressSnapshotSchema = new mongoose.Schema(
     phone: { type: String, required: true },
     address: { type: String, required: true },
     city: { type: String },
+    state: { type: String },
+    country: { type: String },
     postalCode: { type: String },
     additionalInstructions: { type: String },
   },
@@ -153,6 +142,11 @@ const orderSchema = new mongoose.Schema(
       enum: PAYMENT_STATUSES,
       default: 'PENDING',
       index: true,
+    },
+    // Explicit currency (docs/08 §13) — never inferred from formatting.
+    currency: {
+      type: String,
+      default: 'PKR',
     },
     orderStatus: {
       type: String,

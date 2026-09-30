@@ -45,6 +45,10 @@ const paymentSchema = new mongoose.Schema(
       default: 'PENDING',
       index: true,
     },
+    currency: {
+      type: String,
+      default: 'PKR',
+    },
     transactionReference: {
       type: String,
       trim: true,

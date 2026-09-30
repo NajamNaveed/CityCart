@@ -356,6 +356,49 @@ async function getAvailabilityMap(productIds) {
   return new Map(records.map((r) => [String(r.productId), getPublicAvailability(r)]));
 }
 
+/**
+ * Checkout deduction (docs/09 §8): removes `quantity` from stock in one
+ * atomic conditional update that only matches while
+ * (quantity - reservedQuantity) >= qty, so stock can never go negative and
+ * two buyers can never both get the last unit. Pass the checkout `session`
+ * so the deduction commits or rolls back with the order.
+ *
+ * Untracked products are not deducted (docs/04 §18). Throws
+ * InventoryError(409) when stock is insufficient.
+ */
+async function deductStock(productId, quantity, { session } = {}) {
+  assertPositiveInteger(quantity);
+
+  const updated = await Inventory.findOneAndUpdate(
+    { productId, trackInventory: true, $expr: { $gte: [AVAILABLE_EXPR, quantity] } },
+    { $inc: { quantity: -quantity } },
+    { new: true, session }
+  );
+  if (updated) {
+    return { deducted: true, inventory: updated };
+  }
+
+  const existing = await Inventory.findOne({ productId }).session(session || null);
+  if (existing && existing.trackInventory === false) {
+    return { deducted: false, tracked: false };
+  }
+  throw new InventoryError(409, 'Insufficient available stock.');
+}
+
+/**
+ * Restores stock after a cancellation/rejection (docs/09 §14). The caller
+ * MUST guard against double restocking (orders do this with an atomic
+ * status change) — this function itself is a plain increment.
+ */
+async function restockStock(productId, quantity, { session } = {}) {
+  assertPositiveInteger(quantity);
+  await Inventory.updateOne(
+    { productId, trackInventory: true },
+    { $inc: { quantity } },
+    { session }
+  );
+}
+
 async function reserveStock(productId, quantity) {
   assertPositiveInteger(quantity);
 
@@ -413,6 +456,8 @@ module.exports = {
   updateInventory,
   reserveStock,
   releaseStock,
+  deductStock,
+  restockStock,
   getStockStatus,
   getPublicAvailability,
   getAvailabilityMap,
