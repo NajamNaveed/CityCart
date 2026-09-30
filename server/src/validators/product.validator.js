@@ -70,7 +70,6 @@ const listProductsQuerySchema = z.object({
   search: z.string().trim().min(1).optional(),
   minPrice: z.coerce.number().min(0).optional(),
   maxPrice: z.coerce.number().min(0).optional(),
-  status: z.enum(Product.STATUSES).optional(),
   page: z.coerce.number().int().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
   sort: z.enum(['createdAt', 'price', 'name']).optional(),

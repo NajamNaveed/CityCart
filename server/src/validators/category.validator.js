@@ -50,10 +50,6 @@ const updateCategorySchema = z
 const listCategoriesQuerySchema = z.object({
   brandId: objectIdString.optional(),
   parentId: objectIdString.optional(),
-  isActive: z
-    .enum(['true', 'false'])
-    .optional()
-    .transform((value) => (value === undefined ? undefined : value === 'true')),
 });
 
 module.exports = { createCategorySchema, updateCategorySchema, listCategoriesQuerySchema };

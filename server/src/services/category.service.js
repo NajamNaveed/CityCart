@@ -16,7 +16,7 @@ class CategoryError extends Error {
  * an explicit ?isActive= override is honored. Same judgment call, flagged
  * in the Phase 7 report.
  */
-async function listPublicCategories({ brandId, parentId, isActive } = {}) {
+async function listPublicCategories({ brandId, parentId } = {}) {
   const filter = {};
 
   if (brandId) {
@@ -25,7 +25,9 @@ async function listPublicCategories({ brandId, parentId, isActive } = {}) {
   if (parentId) {
     filter.parentId = parentId;
   }
-  filter.isActive = isActive !== undefined ? isActive : true;
+  // Always active-only for public callers (hardening pass: the old
+  // ?isActive=false override exposed deactivated categories).
+  filter.isActive = true;
 
   return Category.find(filter).sort({ name: 1 });
 }

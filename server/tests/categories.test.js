@@ -574,3 +574,14 @@ describe('DELETE /api/v1/categories/:id', () => {
     expect(res.status).toBe(404);
   });
 });
+describe('GET /api/v1/categories — hardening', () => {
+  it('ignores a client-supplied ?isActive=false and still returns active categories only', async () => {
+    const sort = jest.fn().mockResolvedValue([]);
+    Category.find.mockReturnValue({ sort });
+
+    const res = await request(app).get('/api/v1/categories?isActive=false');
+
+    expect(res.status).toBe(200);
+    expect(Category.find).toHaveBeenCalledWith({ isActive: true });
+  });
+});

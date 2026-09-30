@@ -7,6 +7,7 @@ const requireRole = require('../middleware/requireRole');
 const requirePermission = require('../middleware/requirePermission');
 const requireTenant = require('../middleware/requireTenant');
 const requireBrandOwnership = require('../middleware/requireBrandOwnership');
+const validateObjectIdParam = require('../middleware/validateObjectIdParam');
 const { ROLES } = require('../config/roles');
 const { PERMISSIONS } = require('../config/permissions');
 
@@ -35,6 +36,7 @@ router.patch(
   authenticate,
   requirePermission(PERMISSIONS.STORE_UPDATE),
   requireTenant,
+  validateObjectIdParam,
   requireBrandOwnership((req) => getStoreByIdRaw(req.params.id)),
   update
 );

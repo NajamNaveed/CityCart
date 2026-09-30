@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
+const helmet = require('helmet');
 
 const env = require('./config/env');
 const healthRoutes = require('./routes/health.routes');
@@ -14,16 +15,28 @@ const productRoutes = require('./routes/product.routes');
 
 const inventoryRoutes = require('./routes/inventory.routes');
 
+const requestLogger = require('./middleware/requestLogger');
+const { apiLimiter } = require('./middleware/rateLimiters');
+const { notFound, errorHandler } = require('./middleware/errorHandler');
+
 const app = express();
 
+// Behind Render/Vercel the real client IP is in X-Forwarded-For; without
+// this every client shares the proxy's IP and rate limiting breaks.
+if (env.nodeEnv === 'production') {
+  app.set('trust proxy', 1);
+}
+
 // Core middleware
+app.use(helmet());
+app.use(requestLogger);
 app.use(
   cors({
     origin: env.clientUrl,
     credentials: true,
   })
 );
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
 app.use(express.urlencoded({ extended: true }));
 // Required to populate req.cookies for the HTTP-only auth cookie (see
 // config/cookie.js and middleware/authenticate.js).
@@ -41,6 +54,8 @@ app.get('/api/v1', (req, res) => {
   });
 });
 
+app.use('/api/v1', apiLimiter);
+
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/cities', cityRoutes);
 app.use('/api/v1/brands', brandRoutes);
@@ -50,5 +65,9 @@ app.use('/api/v1/categories', categoryRoutes);
 app.use('/api/v1/products', productRoutes);
 
 app.use('/api/v1/inventory', inventoryRoutes);
+
+// Must stay LAST: unmatched routes -> 404, then the global error handler.
+app.use(notFound);
+app.use(errorHandler);
 
 module.exports = app;

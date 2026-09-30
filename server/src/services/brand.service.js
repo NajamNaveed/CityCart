@@ -1,6 +1,7 @@
 const Brand = require('../models/brand.model');
 const City = require('../models/city.model');
 const { slugify } = require('../utils/slugify');
+const { escapeRegex } = require('../utils/escapeRegex');
 
 class BrandError extends Error {
   constructor(status, message) {
@@ -10,22 +11,21 @@ class BrandError extends Error {
 }
 
 /**
- * Public brand listing, per docs/05-api-specification.md §9:
- * "Public users should normally only receive active brands." Read as a
- * default rather than an absolute (see validators/brand.validator.js
- * comment) — an explicit ?status= is honored, but the default (no
- * status given) is ACTIVE-only. This is a judgment call on ambiguous
- * wording ("normally"); flagged in the Phase 6 report.
+ * Public brand listing, per docs/05-api-specification.md §9. ACTIVE-only,
+ * always (hardening pass: the old ?status= override let anonymous users
+ * list PENDING/SUSPENDED/REJECTED brands).
  */
-async function listPublicBrands({ cityId, status, search } = {}) {
-  const filter = {};
+async function listPublicBrands({ cityId, search } = {}) {
+  // Public users only ever see ACTIVE brands. There is deliberately no
+  // client-controlled status here: PENDING/SUSPENDED/REJECTED brands must
+  // not be discoverable by anonymous callers.
+  const filter = { status: 'ACTIVE' };
 
   if (cityId) {
     filter.cityId = cityId;
   }
-  filter.status = status || 'ACTIVE';
   if (search) {
-    filter.name = { $regex: search, $options: 'i' };
+    filter.name = { $regex: escapeRegex(search), $options: 'i' };
   }
 
   return Brand.find(filter).sort({ name: 1 });

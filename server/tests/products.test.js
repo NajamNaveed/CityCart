@@ -63,6 +63,8 @@ beforeEach(() => {
 
 describe('GET /api/v1/products (public)', () => {
   it('lists ACTIVE products with pagination and no authentication', async () => {
+    const activeBrand = oid();
+    Brand.find.mockResolvedValue([{ _id: activeBrand }]);
     const chain = mockProductFind([{ name: 'Phone' }]);
     Product.countDocuments.mockResolvedValue(45);
 
@@ -71,28 +73,35 @@ describe('GET /api/v1/products (public)', () => {
     expect(res.status).toBe(200);
     expect(res.body.products).toHaveLength(1);
     expect(res.body.pagination).toEqual({ page: 1, limit: 20, total: 45, pages: 3 });
-    expect(Product.find).toHaveBeenCalledWith({ isActive: true, status: 'ACTIVE' });
+    // Only ACTIVE brands are eligible, and only ACTIVE products are returned.
+    expect(Brand.find).toHaveBeenCalledWith({ status: 'ACTIVE' }, '_id');
+    expect(Product.find).toHaveBeenCalledWith({
+      isActive: true,
+      status: 'ACTIVE',
+      brandId: { $in: [activeBrand] },
+    });
     expect(chain.sort).toHaveBeenCalledWith({ createdAt: -1 });
     expect(chain.skip).toHaveBeenCalledWith(0);
     expect(chain.limit).toHaveBeenCalledWith(20);
   });
 
-  it('applies brandId, categoryId, search, price range, status, page, limit and sort', async () => {
+  it('applies brandId, categoryId, search, price range, page, limit and sort', async () => {
     const brandId = oid().toString();
     const categoryId = oid().toString();
+    Brand.find.mockResolvedValue([{ _id: brandId }]);
     const chain = mockProductFind([]);
     Product.countDocuments.mockResolvedValue(0);
 
     const res = await request(app).get(
       `/api/v1/products?brandId=${brandId}&categoryId=${categoryId}&search=phone` +
-        '&minPrice=10&maxPrice=500&status=DRAFT&page=2&limit=5&sort=price&order=asc'
+        '&minPrice=10&maxPrice=500&page=2&limit=5&sort=price&order=asc'
     );
 
     expect(res.status).toBe(200);
     expect(Product.find).toHaveBeenCalledWith({
       isActive: true,
-      status: 'DRAFT',
-      brandId,
+      status: 'ACTIVE',
+      brandId: { $in: [brandId] },
       categoryId,
       name: { $regex: 'phone', $options: 'i' },
       price: { $gte: 10, $lte: 500 },
@@ -113,7 +122,7 @@ describe('GET /api/v1/products (public)', () => {
     const res = await request(app).get(`/api/v1/products?cityId=${cityId}`);
 
     expect(res.status).toBe(200);
-    expect(Brand.find).toHaveBeenCalledWith({ cityId }, '_id');
+    expect(Brand.find).toHaveBeenCalledWith({ status: 'ACTIVE', cityId }, '_id');
     expect(Product.find).toHaveBeenCalledWith({
       isActive: true,
       status: 'ACTIVE',
@@ -126,9 +135,45 @@ describe('GET /api/v1/products (public)', () => {
     expect(res.status).toBe(400);
   });
 
-  it('rejects an invalid status with 400', async () => {
-    const res = await request(app).get('/api/v1/products?status=BOGUS');
-    expect(res.status).toBe(400);
+  it.each(['DRAFT', 'INACTIVE', 'ARCHIVED', 'BOGUS'])(
+    'ignores a client-supplied ?status=%s (never exposes non-ACTIVE products)',
+    async (status) => {
+      Brand.find.mockResolvedValue([{ _id: oid() }]);
+      mockProductFind([]);
+      Product.countDocuments.mockResolvedValue(0);
+
+      const res = await request(app).get(`/api/v1/products?status=${status}`);
+
+      expect(res.status).toBe(200);
+      expect(Product.find).toHaveBeenCalledWith(
+        expect.objectContaining({ isActive: true, status: 'ACTIVE' })
+      );
+    }
+  );
+
+  it('escapes regex metacharacters in search', async () => {
+    Brand.find.mockResolvedValue([{ _id: oid() }]);
+    mockProductFind([]);
+    Product.countDocuments.mockResolvedValue(0);
+
+    await request(app).get('/api/v1/products').query({ search: '(a+)+$' });
+
+    expect(Product.find).toHaveBeenCalledWith(
+      expect.objectContaining({ name: { $regex: '\\(a\\+\\)\\+\\$', $options: 'i' } })
+    );
+  });
+
+  it('returns no products when the brand filter matches no ACTIVE brand', async () => {
+    Brand.find.mockResolvedValue([]); // e.g. brandId belongs to a SUSPENDED brand
+    mockProductFind([]);
+    Product.countDocuments.mockResolvedValue(0);
+
+    const res = await request(app).get(`/api/v1/products?brandId=${oid().toString()}`);
+
+    expect(res.status).toBe(200);
+    expect(Product.find).toHaveBeenCalledWith(
+      expect.objectContaining({ brandId: { $in: [] } })
+    );
   });
 
   it('rejects an invalid categoryId with 400', async () => {
@@ -147,12 +192,25 @@ describe('GET /api/v1/products (public)', () => {
 describe('GET /api/v1/products/:id (public)', () => {
   it('returns an active product', async () => {
     const id = oid().toString();
-    Product.findOne.mockResolvedValue({ _id: id, name: 'Phone' });
+    const brandId = oid();
+    Product.findOne.mockResolvedValue({ _id: id, name: 'Phone', brandId });
+    Brand.findOne.mockResolvedValue({ _id: brandId, status: 'ACTIVE' });
 
     const res = await request(app).get(`/api/v1/products/${id}`);
 
     expect(res.status).toBe(200);
     expect(Product.findOne).toHaveBeenCalledWith({ _id: id, status: 'ACTIVE', isActive: true });
+    expect(Brand.findOne).toHaveBeenCalledWith({ _id: brandId, status: 'ACTIVE' });
+  });
+
+  it('returns 404 when the product belongs to a non-ACTIVE brand', async () => {
+    const id = oid().toString();
+    Product.findOne.mockResolvedValue({ _id: id, name: 'Phone', brandId: oid() });
+    Brand.findOne.mockResolvedValue(null);
+
+    const res = await request(app).get(`/api/v1/products/${id}`);
+
+    expect(res.status).toBe(404);
   });
 
   it('returns 404 for a nonexistent or non-active product', async () => {

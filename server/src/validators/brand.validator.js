@@ -53,7 +53,6 @@ const updateBrandStatusSchema = z.object({
 
 const listBrandsQuerySchema = z.object({
   cityId: objectIdString.optional(),
-  status: z.enum(BRAND_STATUSES).optional(),
   search: z.string().trim().min(1).optional(),
 });
 

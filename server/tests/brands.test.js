@@ -38,7 +38,7 @@ describe('GET /api/v1/brands (public)', () => {
 
     const res = await request(app).get('/api/v1/brands');
     expect(res.status).toBe(200);
-    // Default filter (no ?status=) is ACTIVE-only.
+    // Public listing is ACTIVE-only.
     expect(Brand.find).toHaveBeenCalledWith(expect.objectContaining({ status: 'ACTIVE' }));
   });
 
@@ -63,19 +63,28 @@ describe('GET /api/v1/brands (public)', () => {
     );
   });
 
-  it('supports an explicit status filter', async () => {
+  it('escapes regex metacharacters in search so input is matched literally', async () => {
     const sort = jest.fn().mockResolvedValue([]);
     Brand.find.mockReturnValue({ sort });
 
-    const res = await request(app).get('/api/v1/brands?status=PENDING');
+    const res = await request(app).get('/api/v1/brands').query({ search: '(a+)+$' });
     expect(res.status).toBe(200);
-    expect(Brand.find).toHaveBeenCalledWith(expect.objectContaining({ status: 'PENDING' }));
+    expect(Brand.find).toHaveBeenCalledWith(
+      expect.objectContaining({ name: { $regex: '\\(a\\+\\)\\+\\$', $options: 'i' } })
+    );
   });
 
-  it('rejects an invalid status value with 400', async () => {
-    const res = await request(app).get('/api/v1/brands?status=NOT_A_STATUS');
-    expect(res.status).toBe(400);
-  });
+  it.each(['PENDING', 'SUSPENDED', 'REJECTED', 'NOT_A_STATUS'])(
+    'ignores a client-supplied ?status=%s and still returns ACTIVE brands only',
+    async (status) => {
+      const sort = jest.fn().mockResolvedValue([]);
+      Brand.find.mockReturnValue({ sort });
+
+      const res = await request(app).get(`/api/v1/brands?status=${status}`);
+      expect(res.status).toBe(200);
+      expect(Brand.find).toHaveBeenCalledWith(expect.objectContaining({ status: 'ACTIVE' }));
+    }
+  );
 });
 
 describe('GET /api/v1/brands/:id (public)', () => {

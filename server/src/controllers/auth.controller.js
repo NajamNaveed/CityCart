@@ -1,6 +1,7 @@
 const { registerSchema, loginSchema } = require('../validators/auth.validator');
 const { registerUser, loginUser, toSafeUser, AuthError } = require('../services/auth.service');
 const { AUTH_COOKIE_NAME, authCookieOptions } = require('../config/cookie');
+const { formatZodError } = require('../utils/formatZodError');
 
 /**
  * Auth controllers for the endpoints in
@@ -10,13 +11,6 @@ const { AUTH_COOKIE_NAME, authCookieOptions } = require('../config/cookie');
  *   POST /api/v1/auth/logout
  *   GET  /api/v1/auth/me
  */
-
-function formatZodError(zodError) {
-  return zodError.issues.map((issue) => ({
-    field: issue.path.join('.'),
-    message: issue.message,
-  }));
-}
 
 async function register(req, res, next) {
   const parsed = registerSchema.safeParse(req.body);

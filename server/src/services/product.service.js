@@ -2,6 +2,7 @@ const Product = require('../models/product.model');
 const Category = require('../models/category.model');
 const Brand = require('../models/brand.model');
 const { slugify } = require('../utils/slugify');
+const { escapeRegex } = require('../utils/escapeRegex');
 
 class ProductError extends Error {
   constructor(status, message) {
@@ -34,26 +35,32 @@ async function listPublicProducts({
   search,
   minPrice,
   maxPrice,
-  status,
   page,
   limit,
   sort,
   order,
 } = {}) {
-  const filter = { isActive: true, status: status || 'ACTIVE' };
+  // Public users only ever see ACTIVE + isActive products (hardening
+  // pass: the old ?status= override exposed DRAFT/INACTIVE products).
+  const filter = { isActive: true, status: 'ACTIVE' };
 
+  // Products of PENDING/SUSPENDED/REJECTED brands are never public. An
+  // explicit brandId and/or cityId only NARROWS the set of ACTIVE brands.
+  const brandFilter = { status: 'ACTIVE' };
   if (brandId) {
-    filter.brandId = brandId;
-  } else if (cityId) {
-    const brandsInCity = await Brand.find({ cityId }, '_id');
-    filter.brandId = { $in: brandsInCity.map((brand) => brand._id) };
+    brandFilter._id = brandId;
   }
+  if (cityId) {
+    brandFilter.cityId = cityId;
+  }
+  const activeBrands = await Brand.find(brandFilter, '_id');
+  filter.brandId = { $in: activeBrands.map((brand) => brand._id) };
 
   if (categoryId) {
     filter.categoryId = categoryId;
   }
   if (search) {
-    filter.name = { $regex: search, $options: 'i' };
+    filter.name = { $regex: escapeRegex(search), $options: 'i' };
   }
   if (minPrice !== undefined || maxPrice !== undefined) {
     filter.price = {};
@@ -98,6 +105,11 @@ async function listPublicProducts({
 async function getPublicProductById(id) {
   const product = await Product.findOne({ _id: id, status: 'ACTIVE', isActive: true });
   if (!product) {
+    throw new ProductError(404, 'Product not found.');
+  }
+  // A product is only public while its brand is ACTIVE.
+  const brand = await Brand.findOne({ _id: product.brandId, status: 'ACTIVE' });
+  if (!brand) {
     throw new ProductError(404, 'Product not found.');
   }
   return product;

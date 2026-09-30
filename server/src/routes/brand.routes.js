@@ -6,6 +6,7 @@ const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
 const requireTenant = require('../middleware/requireTenant');
 const requireBrandOwnership = require('../middleware/requireBrandOwnership');
+const validateObjectIdParam = require('../middleware/validateObjectIdParam');
 const { ROLES } = require('../config/roles');
 
 const router = express.Router();
@@ -32,6 +33,7 @@ router.patch(
   authenticate,
   requireRole(ROLES.SUPER_ADMIN, ROLES.BRAND_ADMIN),
   requireTenant,
+  validateObjectIdParam,
   requireBrandOwnership((req) => getBrandByIdRaw(req.params.id), {
     resourceType: 'tenant',
   }),
