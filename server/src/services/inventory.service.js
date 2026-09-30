@@ -334,6 +334,28 @@ function assertPositiveInteger(value) {
  * Untracked products (trackInventory=false) are not reserved; the caller is
  * told so and should skip checks for them (docs/04 §18).
  */
+/**
+ * Public availability state (docs/07 §20): IN_STOCK | LOW_STOCK |
+ * OUT_OF_STOCK. Only the STATE is public — exact quantities are not
+ * exposed to customers. A product with no inventory record has nothing to
+ * sell (ensureInventory starts at 0), and an untracked product is always
+ * purchasable (docs/04 §18).
+ */
+function getPublicAvailability(inventory) {
+  if (!inventory) {
+    return 'OUT_OF_STOCK';
+  }
+  const status = getStockStatus(inventory);
+  return status === 'NOT_TRACKED' ? 'IN_STOCK' : status;
+}
+
+// One query for many products (no N+1). Returns Map<productId, availability>;
+// products missing from the map have no inventory record (=> OUT_OF_STOCK).
+async function getAvailabilityMap(productIds) {
+  const records = await Inventory.find({ productId: { $in: productIds } });
+  return new Map(records.map((r) => [String(r.productId), getPublicAvailability(r)]));
+}
+
 async function reserveStock(productId, quantity) {
   assertPositiveInteger(quantity);
 
@@ -392,6 +414,8 @@ module.exports = {
   reserveStock,
   releaseStock,
   getStockStatus,
+  getPublicAvailability,
+  getAvailabilityMap,
   serializeInventory,
   InventoryError,
 };

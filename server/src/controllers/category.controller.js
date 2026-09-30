@@ -2,9 +2,11 @@ const {
   createCategorySchema,
   updateCategorySchema,
   listCategoriesQuerySchema,
+  categoryTreeQuerySchema,
 } = require('../validators/category.validator');
 const { objectIdParamSchema } = require('../validators/common.validator');
 const {
+  getPublicCategoryTree,
   listPublicCategories,
   getPublicCategoryById,
   createCategory,
@@ -120,4 +122,26 @@ async function remove(req, res, next) {
   }
 }
 
-module.exports = { list, getById, create, update, remove };
+async function tree(req, res, next) {
+  const parsedQuery = categoryTreeQuerySchema.safeParse(req.query);
+  if (!parsedQuery.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsedQuery.error),
+    });
+  }
+
+  try {
+    const categories = await getPublicCategoryTree(parsedQuery.data.brandId);
+    return res.status(200).json({ success: true, categories });
+  } catch (err) {
+    if (err instanceof CategoryError) {
+      return res.status(err.status).json({ success: false, message: err.message });
+    }
+    return next(err);
+  }
+}
+
+module.exports = {
+  tree, list, getById, create, update, remove };

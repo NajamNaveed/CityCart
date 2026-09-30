@@ -9,6 +9,7 @@ const {
   updateInventory,
   reserveStock,
   releaseStock,
+  getAvailabilityMap,
 } = require('../../src/services/inventory.service');
 
 const oid = () => new mongoose.Types.ObjectId();
@@ -231,5 +232,33 @@ describe('transactions (groundwork for checkout)', () => {
     await session.endSession();
 
     expect((await reload(a)).quantity).toBe(3);
+  });
+});
+
+describe('getAvailabilityMap (real MongoDB, uses the availableQuantity virtual)', () => {
+  it('maps stock states from real documents in one query', async () => {
+    const inStock = makeProduct();
+    const low = makeProduct();
+    const out = makeProduct();
+    const reservedOut = makeProduct();
+    const untracked = makeProduct();
+    const noRecord = makeProduct();
+
+    await seed(inStock, { quantity: 10, lowStockThreshold: 2 });
+    await seed(low, { quantity: 3, lowStockThreshold: 3 });
+    await seed(out, { quantity: 0 });
+    await seed(reservedOut, { quantity: 5, reservedQuantity: 5 });
+    await seed(untracked, { quantity: 0, trackInventory: false });
+
+    const map = await getAvailabilityMap(
+      [inStock, low, out, reservedOut, untracked, noRecord].map((p) => p._id)
+    );
+
+    expect(map.get(String(inStock._id))).toBe('IN_STOCK');
+    expect(map.get(String(low._id))).toBe('LOW_STOCK');
+    expect(map.get(String(out._id))).toBe('OUT_OF_STOCK');
+    expect(map.get(String(reservedOut._id))).toBe('OUT_OF_STOCK'); // all units reserved
+    expect(map.get(String(untracked._id))).toBe('IN_STOCK');
+    expect(map.has(String(noRecord._id))).toBe(false); // caller defaults to OUT_OF_STOCK
   });
 });

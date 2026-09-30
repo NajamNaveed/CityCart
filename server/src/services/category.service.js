@@ -1,5 +1,6 @@
 const Category = require('../models/category.model');
 const Product = require('../models/product.model');
+const Brand = require('../models/brand.model');
 const { slugify } = require('../utils/slugify');
 
 class CategoryError extends Error {
@@ -19,9 +20,13 @@ class CategoryError extends Error {
 async function listPublicCategories({ brandId, parentId } = {}) {
   const filter = {};
 
-  if (brandId) {
-    filter.brandId = brandId;
-  }
+  // Categories of PENDING/SUSPENDED/REJECTED brands are never public.
+  // brandId only NARROWS the set of ACTIVE brands.
+  const activeBrands = await Brand.find(
+    { status: 'ACTIVE', ...(brandId && { _id: brandId }) },
+    '_id'
+  );
+  filter.brandId = { $in: activeBrands.map((b) => b._id) };
   if (parentId) {
     filter.parentId = parentId;
   }
@@ -30,6 +35,41 @@ async function listPublicCategories({ brandId, parentId } = {}) {
   filter.isActive = true;
 
   return Category.find(filter).sort({ name: 1 });
+}
+
+/**
+ * Flat list -> nested tree via `parentId`. Nodes whose parent is missing
+ * (e.g. the parent is inactive) are dropped, and a parentId cycle (A<->B)
+ * leaves both unreachable from any root — so it can never loop forever.
+ */
+function buildCategoryTree(categories) {
+  const nodes = new Map(
+    categories.map((c) => [
+      String(c._id),
+      { ...(typeof c.toObject === 'function' ? c.toObject() : c), children: [] },
+    ])
+  );
+  const roots = [];
+  nodes.forEach((node) => {
+    if (!node.parentId) {
+      roots.push(node);
+      return;
+    }
+    const parent = nodes.get(String(node.parentId));
+    if (parent) {
+      parent.children.push(node);
+    }
+  });
+  return roots;
+}
+
+async function getPublicCategoryTree(brandId) {
+  const brand = await Brand.findOne({ _id: brandId, status: 'ACTIVE' });
+  if (!brand) {
+    throw new CategoryError(404, 'Brand not found.');
+  }
+  const categories = await Category.find({ brandId, isActive: true }).sort({ name: 1 });
+  return buildCategoryTree(categories);
 }
 
 /**
@@ -135,6 +175,8 @@ async function deactivateCategory(category) {
 }
 
 module.exports = {
+  buildCategoryTree,
+  getPublicCategoryTree,
   listPublicCategories,
   getPublicCategoryById,
   getCategoryByIdRaw,

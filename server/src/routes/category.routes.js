@@ -1,6 +1,6 @@
 const express = require('express');
 
-const { list, getById, create, update, remove } = require('../controllers/category.controller');
+const { list, tree, getById, create, update, remove } = require('../controllers/category.controller');
 const { getCategoryByIdRaw } = require('../services/category.service');
 const authenticate = require('../middleware/authenticate');
 const requirePermission = require('../middleware/requirePermission');
@@ -13,6 +13,7 @@ const router = express.Router();
 
 // Public (docs/05 §11 — "Public users may retrieve active categories")
 router.get('/', list);
+router.get('/tree', tree); // must stay above '/:id'
 router.get('/:id', getById);
 
 // Create: no existing resource to fetch, so tenant ownership comes from

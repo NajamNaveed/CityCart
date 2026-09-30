@@ -14,6 +14,7 @@ const {
   BrandError,
 } = require('../services/brand.service');
 const { formatZodError } = require('../utils/formatZodError');
+const { getBrandStorefront, StorefrontError } = require('../services/storefront.service');
 
 async function list(req, res, next) {
   const parsedQuery = listBrandsQuerySchema.safeParse(req.query);
@@ -142,4 +143,26 @@ async function updateStatus(req, res, next) {
   }
 }
 
-module.exports = { list, getById, create, update, updateStatus };
+async function storefront(req, res, next) {
+  const parsedParams = objectIdParamSchema.safeParse(req.params);
+  if (!parsedParams.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsedParams.error),
+    });
+  }
+
+  try {
+    const data = await getBrandStorefront(parsedParams.data.id);
+    return res.status(200).json({ success: true, ...data });
+  } catch (err) {
+    if (err instanceof StorefrontError) {
+      return res.status(err.status).json({ success: false, message: err.message });
+    }
+    return next(err);
+  }
+}
+
+module.exports = {
+  storefront, list, getById, create, update, updateStatus };

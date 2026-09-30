@@ -1,6 +1,6 @@
 const express = require('express');
 
-const { list, getById, create, update, updateStatus } = require('../controllers/brand.controller');
+const { list, getById, storefront, create, update, updateStatus } = require('../controllers/brand.controller');
 const { getBrandByIdRaw } = require('../services/brand.service');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
@@ -14,6 +14,7 @@ const router = express.Router();
 // Public
 router.get('/', list);
 router.get('/:id', getById);
+router.get('/:id/storefront', storefront);
 
 // Super Admin only
 router.post('/', authenticate, requireRole(ROLES.SUPER_ADMIN), create);

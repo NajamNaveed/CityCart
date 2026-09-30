@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 jest.mock('../src/models/user.model');
 jest.mock('../src/models/employee.model');
 jest.mock('../src/models/category.model');
+jest.mock('../src/models/brand.model');
 // Factory mock: automock would turn Product.STATUSES into an empty array,
 // which product.validator.js (loaded via app) needs for its status enum.
 jest.mock('../src/models/product.model', () => {
@@ -21,6 +22,7 @@ jest.mock('../src/models/product.model', () => {
 const User = require('../src/models/user.model');
 const Employee = require('../src/models/employee.model');
 const Category = require('../src/models/category.model');
+const Brand = require('../src/models/brand.model');
 const Product = require('../src/models/product.model');
 const app = require('../src/app');
 const { ROLES } = require('../src/config/roles');
@@ -52,6 +54,8 @@ beforeEach(() => {
 
 describe('GET /api/v1/categories (public)', () => {
   it('lists active categories with no authentication', async () => {
+    const activeBrand = oid();
+    Brand.find.mockResolvedValue([{ _id: activeBrand }]);
     const sort = jest.fn().mockResolvedValue([{ name: 'Phones' }]);
     Category.find.mockReturnValue({ sort });
 
@@ -59,17 +63,24 @@ describe('GET /api/v1/categories (public)', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.categories).toHaveLength(1);
-    expect(Category.find).toHaveBeenCalledWith({ isActive: true });
+    // Only categories of ACTIVE brands are public.
+    expect(Brand.find).toHaveBeenCalledWith({ status: 'ACTIVE' }, '_id');
+    expect(Category.find).toHaveBeenCalledWith({
+      brandId: { $in: [activeBrand] },
+      isActive: true,
+    });
   });
 
   it('filters by brandId', async () => {
     const brandId = oid().toString();
+    Brand.find.mockResolvedValue([{ _id: brandId }]);
     Category.find.mockReturnValue({ sort: jest.fn().mockResolvedValue([]) });
 
     const res = await request(app).get(`/api/v1/categories?brandId=${brandId}`);
 
     expect(res.status).toBe(200);
-    expect(Category.find).toHaveBeenCalledWith({ brandId, isActive: true });
+    expect(Brand.find).toHaveBeenCalledWith({ status: 'ACTIVE', _id: brandId }, '_id');
+    expect(Category.find).toHaveBeenCalledWith({ brandId: { $in: [brandId] }, isActive: true });
   });
 
   it('rejects an invalid brandId with 400', async () => {
@@ -576,12 +587,13 @@ describe('DELETE /api/v1/categories/:id', () => {
 });
 describe('GET /api/v1/categories — hardening', () => {
   it('ignores a client-supplied ?isActive=false and still returns active categories only', async () => {
+    Brand.find.mockResolvedValue([]);
     const sort = jest.fn().mockResolvedValue([]);
     Category.find.mockReturnValue({ sort });
 
     const res = await request(app).get('/api/v1/categories?isActive=false');
 
     expect(res.status).toBe(200);
-    expect(Category.find).toHaveBeenCalledWith({ isActive: true });
+    expect(Category.find).toHaveBeenCalledWith({ brandId: { $in: [] }, isActive: true });
   });
 });

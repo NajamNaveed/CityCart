@@ -5,6 +5,7 @@ jest.mock('../src/models/user.model');
 jest.mock('../src/models/employee.model');
 jest.mock('../src/models/category.model');
 jest.mock('../src/models/brand.model');
+jest.mock('../src/models/inventory.model');
 // Factory mock: automock would turn Product.STATUSES into an empty array,
 // which product.validator.js needs for its status enum.
 jest.mock('../src/models/product.model', () => {
@@ -23,6 +24,7 @@ const User = require('../src/models/user.model');
 const Employee = require('../src/models/employee.model');
 const Category = require('../src/models/category.model');
 const Brand = require('../src/models/brand.model');
+const Inventory = require('../src/models/inventory.model');
 const Product = require('../src/models/product.model');
 const app = require('../src/app');
 const { ROLES } = require('../src/config/roles');
@@ -65,13 +67,18 @@ describe('GET /api/v1/products (public)', () => {
   it('lists ACTIVE products with pagination and no authentication', async () => {
     const activeBrand = oid();
     Brand.find.mockResolvedValue([{ _id: activeBrand }]);
-    const chain = mockProductFind([{ name: 'Phone' }]);
+    const productId = oid();
+    Inventory.find.mockResolvedValue([
+      { productId, availableQuantity: 5, lowStockThreshold: 0, trackInventory: true },
+    ]);
+    const chain = mockProductFind([{ _id: productId, name: 'Phone' }]);
     Product.countDocuments.mockResolvedValue(45);
 
     const res = await request(app).get('/api/v1/products');
 
     expect(res.status).toBe(200);
     expect(res.body.products).toHaveLength(1);
+    expect(res.body.products[0].availability).toBe('IN_STOCK');
     expect(res.body.pagination).toEqual({ page: 1, limit: 20, total: 45, pages: 3 });
     // Only ACTIVE brands are eligible, and only ACTIVE products are returned.
     expect(Brand.find).toHaveBeenCalledWith({ status: 'ACTIVE' }, '_id');
@@ -195,10 +202,12 @@ describe('GET /api/v1/products/:id (public)', () => {
     const brandId = oid();
     Product.findOne.mockResolvedValue({ _id: id, name: 'Phone', brandId });
     Brand.findOne.mockResolvedValue({ _id: brandId, status: 'ACTIVE' });
+    Inventory.find.mockResolvedValue([]); // no record => OUT_OF_STOCK
 
     const res = await request(app).get(`/api/v1/products/${id}`);
 
     expect(res.status).toBe(200);
+    expect(res.body.product.availability).toBe('OUT_OF_STOCK');
     expect(Product.findOne).toHaveBeenCalledWith({ _id: id, status: 'ACTIVE', isActive: true });
     expect(Brand.findOne).toHaveBeenCalledWith({ _id: brandId, status: 'ACTIVE' });
   });

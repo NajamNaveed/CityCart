@@ -52,4 +52,7 @@ const listCategoriesQuerySchema = z.object({
   parentId: objectIdString.optional(),
 });
 
-module.exports = { createCategorySchema, updateCategorySchema, listCategoriesQuerySchema };
+const categoryTreeQuerySchema = z.object({ brandId: objectIdString });
+
+module.exports = {
+  categoryTreeQuerySchema, createCategorySchema, updateCategorySchema, listCategoriesQuerySchema };

@@ -3,6 +3,7 @@ const Category = require('../models/category.model');
 const Brand = require('../models/brand.model');
 const { slugify } = require('../utils/slugify');
 const { escapeRegex } = require('../utils/escapeRegex');
+const { getAvailabilityMap } = require('./inventory.service');
 
 class ProductError extends Error {
   constructor(status, message) {
@@ -28,6 +29,21 @@ const DEFAULT_LIMIT = 20;
  * resolved to the brands in that city. An explicit brandId takes
  * precedence over cityId.
  */
+/**
+ * Adds `availability` (IN_STOCK | LOW_STOCK | OUT_OF_STOCK) to public
+ * product results using ONE inventory query for the whole page.
+ */
+async function withAvailability(products) {
+  if (products.length === 0) {
+    return [];
+  }
+  const map = await getAvailabilityMap(products.map((p) => p._id));
+  return products.map((p) => ({
+    ...(typeof p.toObject === 'function' ? p.toObject() : p),
+    availability: map.get(String(p._id)) || 'OUT_OF_STOCK',
+  }));
+}
+
 async function listPublicProducts({
   cityId,
   brandId,
@@ -88,7 +104,7 @@ async function listPublicProducts({
   ]);
 
   return {
-    items,
+    items: await withAvailability(items),
     pagination: {
       page: pageNumber,
       limit: limitNumber,
@@ -112,7 +128,7 @@ async function getPublicProductById(id) {
   if (!brand) {
     throw new ProductError(404, 'Product not found.');
   }
-  return product;
+  return (await withAvailability([product]))[0];
 }
 
 /**
@@ -189,6 +205,7 @@ async function archiveProduct(product) {
 }
 
 module.exports = {
+  withAvailability,
   listPublicProducts,
   getPublicProductById,
   getProductByIdRaw,
