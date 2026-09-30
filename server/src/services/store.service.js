@@ -1,4 +1,6 @@
 const Store = require('../models/store.model');
+const Brand = require('../models/brand.model');
+const { slugify } = require('../utils/slugify');
 
 class StoreError extends Error {
   constructor(status, message) {
@@ -55,4 +57,20 @@ async function applyStoreUpdate(store, data) {
   return store.save();
 }
 
-module.exports = { getPublicStoreById, getMyStore, getStoreByIdRaw, applyStoreUpdate, StoreError };
+async function createStore(brandId, data) {
+  const brand = await Brand.findById(brandId);
+  if (!brand) throw new StoreError(404, 'Brand not found.');
+  if (await Store.findOne({ brandId })) {
+    throw new StoreError(409, 'This brand already has a store.');
+  }
+  const fields = { ...data };
+  delete fields.brandId;
+  try {
+    return await Store.create({ ...fields, brandId, slug: slugify(data.name) });
+  } catch (err) {
+    if (err.code === 11000) throw new StoreError(409, 'This brand already has a store.');
+    throw err;
+  }
+}
+
+module.exports = { getPublicStoreById, getMyStore, getStoreByIdRaw, applyStoreUpdate, StoreError, createStore };

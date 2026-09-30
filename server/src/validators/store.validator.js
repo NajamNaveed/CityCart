@@ -1,4 +1,5 @@
 const { z } = require('zod');
+const mongoose = require('mongoose');
 
 /**
  * Zod validation schema for Store update, per
@@ -29,4 +30,18 @@ const updateStoreSchema = z
     message: 'At least one field must be provided.',
   });
 
-module.exports = { updateStoreSchema };
+const createStoreSchema = z.object({
+  brandId: z
+    .string()
+    .refine((v) => mongoose.Types.ObjectId.isValid(v), { message: 'Invalid brandId' })
+    .optional(),
+  name: z.string().trim().min(1, 'name is required'),
+  description: z.string().trim().optional(),
+  address: z.record(z.string(), z.unknown()).optional(),
+  contact: z.record(z.string(), z.unknown()).optional(),
+  businessHours: z.record(z.string(), z.unknown()).optional(),
+  logo: z.string().trim().optional(),
+  banner: z.string().trim().optional(),
+});
+
+module.exports = { updateStoreSchema, createStoreSchema };

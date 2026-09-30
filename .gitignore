@@ -218,3 +218,10 @@ docker-compose.override.yml
 *.rej
 .DS_Store
 Thumbs.db
+
+# -------------------------
+# Postman
+# -------------------------
+
+.postman/
+postman/

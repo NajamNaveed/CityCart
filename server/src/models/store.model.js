@@ -15,7 +15,7 @@ const storeSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Brand',
       required: true,
-      index: true,
+      unique: true, // MVP: exactly one storefront per brand
     },
     name: {
       type: String,

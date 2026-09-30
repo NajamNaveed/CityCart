@@ -1,6 +1,6 @@
 const express = require('express');
 
-const { getById, me, update } = require('../controllers/store.controller');
+const { getById, me, update, create } = require('../controllers/store.controller');
 const { getStoreByIdRaw } = require('../services/store.service');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
@@ -21,6 +21,14 @@ router.get(
   requireRole(ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE),
   requireTenant,
   me
+);
+
+router.post(
+  '/',
+  authenticate,
+  requireRole(ROLES.SUPER_ADMIN, ROLES.BRAND_ADMIN),
+  requireTenant,
+  create
 );
 
 // Public
