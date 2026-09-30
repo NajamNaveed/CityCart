@@ -10,9 +10,11 @@
     "dev": "nodemon src/server.js",
     "lint": "eslint .",
     "test": "jest",
-    "seed": "node scripts/seed.js"
+    "seed": "node scripts/seed.js",
+    "test:integration": "jest --config jest.integration.config.js"
   },
   "jest": {
+    "testPathIgnorePatterns": ["/node_modules/", "/tests/integration/"],
     "testEnvironment": "node",
     "setupFiles": [
       "<rootDir>/tests/setupEnv.js"
