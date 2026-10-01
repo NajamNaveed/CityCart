@@ -10,7 +10,7 @@ const mongoose = require('mongoose');
  * an order can be DELIVERED while its payment is separately PAID.
  */
 const PAYMENT_METHODS = ['COD', 'CARD', 'BANK_TRANSFER', 'WALLET', 'ONLINE_GATEWAY'];
-const PAYMENT_STATUSES = ['PENDING', 'PAID', 'FAILED', 'REFUNDED', 'CANCELLED'];
+const PAYMENT_STATUSES = ['PENDING', 'PAID', 'FAILED', 'REFUNDED', 'PARTIALLY_REFUNDED', 'CANCELLED'];
 
 const paymentSchema = new mongoose.Schema(
   {
@@ -64,6 +64,26 @@ const paymentSchema = new mongoose.Schema(
     },
     paidAt: {
       type: Date,
+    },
+    // Refunds (docs/10 §13): cumulative total + an audit entry per refund.
+    refundedAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    refunds: {
+      type: [
+        new mongoose.Schema(
+          {
+            amount: { type: Number, required: true, min: 0 },
+            reason: { type: String, required: true },
+            by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+            at: { type: Date, default: Date.now },
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
     },
   },
   {

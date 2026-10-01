@@ -36,4 +36,14 @@ const authLimiter = rateLimit({
   message: json429('Too many attempts. Please try again later.'),
 });
 
-module.exports = { apiLimiter, authLimiter };
+// Money-moving endpoints (payment status / refunds) get their own tight cap.
+const paymentWriteLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  skip,
+  message: json429('Too many payment updates. Please try again later.'),
+});
+
+module.exports = { apiLimiter, authLimiter, paymentWriteLimiter };

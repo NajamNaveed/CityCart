@@ -18,7 +18,7 @@ const { ORDER_STATUSES } = require('../config/orderStatuses');
 
 // Payment status is tracked independently of order status (§25, §27) —
 // these must never be merged into a single field.
-const PAYMENT_STATUSES = ['PENDING', 'PAID', 'FAILED', 'REFUNDED', 'CANCELLED'];
+const PAYMENT_STATUSES = ['PENDING', 'PAID', 'FAILED', 'REFUNDED', 'PARTIALLY_REFUNDED', 'CANCELLED'];
 
 // COD is the only method implemented in the MVP; the others are
 // documented future methods (docs/04-database-design.md §26).
