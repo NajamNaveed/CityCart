@@ -11,18 +11,7 @@ const mongoose = require('mongoose');
  * Delivery status, order status, and payment status are three separate
  * fields (§25a) and must never be merged.
  */
-const DELIVERY_STATUSES = [
-  'PENDING',
-  'PREPARING',
-  'READY_FOR_PICKUP',
-  'PICKED_UP',
-  'IN_TRANSIT',
-  'OUT_FOR_DELIVERY',
-  'DELIVERED',
-  'FAILED',
-  'CANCELLED',
-  'RETURNED',
-];
+const { DELIVERY_STATUSES } = require('../config/deliveryStatuses');
 
 // Kept in sync in shape with Order.shippingAddress (see order.model.js).
 const addressSnapshotSchema = new mongoose.Schema(
@@ -31,6 +20,8 @@ const addressSnapshotSchema = new mongoose.Schema(
     phone: { type: String, required: true },
     address: { type: String, required: true },
     city: { type: String },
+    state: { type: String },
+    country: { type: String },
     postalCode: { type: String },
     additionalInstructions: { type: String },
   },

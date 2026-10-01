@@ -43,6 +43,12 @@ const PERMISSIONS = Object.freeze({
   ORDERS_VIEW: 'orders.view',
   ORDERS_MANAGE: 'orders.manage',
 
+  // docs/02 §229-242: delivery is MVP scope; payments.manage guards the
+  // payment-status endpoint (A6b) and is as sensitive as orders.manage.
+  DELIVERY_VIEW: 'delivery.view',
+  DELIVERY_MANAGE: 'delivery.manage',
+  PAYMENTS_VIEW: 'payments.view',
+  PAYMENTS_MANAGE: 'payments.manage',
   INVENTORY_VIEW: 'inventory.view',
   INVENTORY_MANAGE: 'inventory.manage',
 

@@ -8,6 +8,7 @@ const Cart = require('../../src/models/cart.model');
 const Order = require('../../src/models/order.model');
 const Payment = require('../../src/models/payment.model');
 const Counter = require('../../src/models/counter.model');
+const Delivery = require('../../src/models/delivery.model');
 const { checkout, cancelMyOrder } = require('../../src/services/order.service');
 const { updateBrandOrderStatus } = require('../../src/services/brandOrder.service');
 
@@ -41,7 +42,7 @@ const bad = (r) => r.filter((x) => x.status === 'rejected');
 
 beforeAll(async () => {
   await connect();
-  await Promise.all([Brand, Product, Inventory, Cart, Order, Payment, Counter].map((m) => m.init()));
+  await Promise.all([Brand, Product, Inventory, Cart, Order, Payment, Counter, Delivery].map((m) => m.init()));
 });
 afterAll(disconnect);
 beforeEach(clearAll);

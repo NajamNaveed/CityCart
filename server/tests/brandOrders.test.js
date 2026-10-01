@@ -10,6 +10,7 @@ jest.mock('../src/models/inventory.model');
 jest.mock('../src/models/cart.model');
 jest.mock('../src/models/order.model');
 jest.mock('../src/models/payment.model');
+jest.mock('../src/models/delivery.model');
 jest.mock('../src/models/counter.model');
 jest.mock('../src/models/product.model', () => {
   const actual = jest.requireActual('../src/models/product.model');
@@ -30,6 +31,7 @@ const User = require('../src/models/user.model');
 const Employee = require('../src/models/employee.model');
 const Order = require('../src/models/order.model');
 const Payment = require('../src/models/payment.model');
+const Delivery = require('../src/models/delivery.model');
 const Inventory = require('../src/models/inventory.model');
 const app = require('../src/app');
 const { ROLES } = require('../src/config/roles');
@@ -193,6 +195,32 @@ describe('PATCH /api/v1/brand/orders/:id/status', () => {
       { session: 'SESSION' }
     );
     expect(Payment.updateMany).toHaveBeenCalled();
+  });
+
+  it('READY_FOR_SHIPMENT creates the delivery record from the order snapshot, in the same transaction', async () => {
+    const { cookie } = asRole(ROLES.BRAND_ADMIN);
+    const orderId = oid();
+    const customerId = oid();
+    const shippingAddress = { name: 'John', phone: '+9230', address: 'Street 1', city: 'Lahore' };
+    Order.findOneAndUpdate.mockResolvedValue({
+      _id: orderId, brandId, customerId, shippingAddress, deliveryFee: 0, items: [],
+    });
+    Delivery.create.mockResolvedValue([]);
+
+    const res = await patch(cookie, orderId, 'READY_FOR_SHIPMENT');
+
+    expect(res.status).toBe(200);
+    expect(Delivery.create).toHaveBeenCalledWith(
+      [{ orderId, brandId, customerId, status: 'READY_FOR_PICKUP', address: shippingAddress, deliveryFee: 0 }],
+      { session: 'SESSION' }
+    );
+  });
+
+  it('other statuses do not create a delivery', async () => {
+    const { cookie } = asRole(ROLES.BRAND_ADMIN);
+    Order.findOneAndUpdate.mockResolvedValue({ _id: oid(), items: [] });
+    await patch(cookie, oid(), 'PROCESSING');
+    expect(Delivery.create).not.toHaveBeenCalled();
   });
 
   it('409 INVALID_TRANSITION (with allowed next steps) and NO restock for an illegal move', async () => {

@@ -10,6 +10,7 @@ jest.mock('../src/models/inventory.model');
 jest.mock('../src/models/cart.model');
 jest.mock('../src/models/order.model');
 jest.mock('../src/models/payment.model');
+jest.mock('../src/models/delivery.model');
 jest.mock('../src/models/counter.model');
 jest.mock('../src/models/product.model', () => {
   const actual = jest.requireActual('../src/models/product.model');

@@ -1,5 +1,6 @@
 const Order = require('../models/order.model');
 const Payment = require('../models/payment.model');
+const Delivery = require('../models/delivery.model');
 const Cart = require('../models/cart.model');
 const Product = require('../models/product.model');
 const Brand = require('../models/brand.model');
@@ -240,8 +241,11 @@ async function getOrderForUser(user, orderId) {
   if (!order) {
     throw new OrderError(404, 'Order not found.');
   }
-  const payment = await Payment.findOne({ orderId: order._id });
-  return { order, payment };
+  const [payment, delivery] = await Promise.all([
+    Payment.findOne({ orderId: order._id }),
+    Delivery.findOne({ orderId: order._id }),
+  ]);
+  return { order, payment, delivery };
 }
 
 /**

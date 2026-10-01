@@ -57,6 +57,11 @@ const paymentSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    // docs/10 §11: who confirmed collection (set when COD is marked PAID).
+    confirmedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
     paidAt: {
       type: Date,
     },

@@ -1,5 +1,6 @@
 const Order = require('../models/order.model');
 const Payment = require('../models/payment.model');
+const Delivery = require('../models/delivery.model');
 const { runInTransaction } = require('../utils/transaction');
 const { restockStock } = require('./inventory.service');
 const { OrderError } = require('./order.service');
@@ -34,8 +35,11 @@ async function getBrandOrder(brandId, orderId) {
   if (!order) {
     throw new OrderError(404, 'Order not found.');
   }
-  const payment = await Payment.findOne({ orderId: order._id });
-  return { order, payment };
+  const [payment, delivery] = await Promise.all([
+    Payment.findOne({ orderId: order._id }),
+    Delivery.findOne({ orderId: order._id }),
+  ]);
+  return { order, payment, delivery };
 }
 
 /**
@@ -86,6 +90,28 @@ async function updateBrandOrderStatus({ brandId, orderId, status, userId }) {
       await Payment.updateMany(
         { orderId: order._id, status: 'PENDING' },
         { $set: { status: 'CANCELLED' } },
+        { session }
+      );
+    }
+    // Delivery is created when the order reaches the fulfillment stage
+    // (docs/11 §11). Only the request that won the atomic status change gets
+    // here, and Delivery.orderId is unique, so there is never a duplicate.
+    if (status === 'READY_FOR_SHIPMENT') {
+      const address =
+        typeof order.shippingAddress.toObject === 'function'
+          ? order.shippingAddress.toObject()
+          : order.shippingAddress;
+      await Delivery.create(
+        [
+          {
+            orderId: order._id,
+            brandId: order.brandId,
+            customerId: order.customerId,
+            status: 'READY_FOR_PICKUP',
+            address,
+            deliveryFee: order.deliveryFee,
+          },
+        ],
         { session }
       );
     }

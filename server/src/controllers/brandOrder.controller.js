@@ -39,8 +39,8 @@ async function getById(req, res, next) {
   const params = objectIdParamSchema.safeParse(req.params);
   if (!params.success) return invalid(res, params.error);
   try {
-    const { order, payment } = await getBrandOrder(req.tenantBrandId, params.data.id);
-    return res.status(200).json({ success: true, order, payment });
+    const { order, payment, delivery } = await getBrandOrder(req.tenantBrandId, params.data.id);
+    return res.status(200).json({ success: true, order, payment, delivery });
   } catch (err) {
     return handleError(err, res, next);
   }
