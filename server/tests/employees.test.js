@@ -61,7 +61,9 @@ describe('access control', () => {
   it('each endpoint needs its own employees.* permission for an employee', async () => {
     const id = oid();
     const { cookie } = actAs(ROLES.BRAND_EMPLOYEE, { perms: [PERMISSIONS.EMPLOYEES_VIEW] });
-    expect((await request(app).get('/api/v1/employees').set(...cookie).send()).status).not.toBe(403);
+    Employee.find.mockReturnValue({ sort: () => ({ skip: () => ({ limit: () => Promise.resolve([]) }) }) });
+    Employee.countDocuments.mockResolvedValue(0);
+    expect((await request(app).get('/api/v1/employees').set(...cookie)).status).toBe(200);
     expect((await request(app).post('/api/v1/employees').set(...cookie).send({})).status).toBe(403);
     expect((await request(app).patch(`/api/v1/employees/${id}`).set(...cookie).send({ name: 'x' })).status).toBe(403);
     expect((await request(app).delete(`/api/v1/employees/${id}`).set(...cookie)).status).toBe(403);
