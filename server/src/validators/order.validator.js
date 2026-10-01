@@ -1,5 +1,6 @@
 const { z } = require('zod');
 const { ORDER_STATUSES } = require('../config/orderStatuses');
+const { BRAND_SETTABLE_STATUSES } = require('../config/orderTransitions');
 
 /**
  * Checkout / order validation (docs/05 §15-16). The client sends ONLY the
@@ -34,4 +35,10 @@ const listOrdersQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).optional(),
 });
 
-module.exports = { createOrderSchema, listOrdersQuerySchema };
+const updateOrderStatusSchema = z.object({
+  status: z.enum(BRAND_SETTABLE_STATUSES, {
+    error: `status must be one of: ${BRAND_SETTABLE_STATUSES.join(', ')}`,
+  }),
+});
+
+module.exports = { createOrderSchema, listOrdersQuerySchema, updateOrderStatusSchema };

@@ -154,6 +154,20 @@ const orderSchema = new mongoose.Schema(
       default: 'PENDING',
       index: true,
     },
+    // Audit trail (docs/08 §36): who moved the order to which status, when.
+    statusHistory: {
+      type: [
+        new mongoose.Schema(
+          {
+            status: { type: String, required: true },
+            by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+            at: { type: Date, default: Date.now },
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
     notes: {
       type: String,
       trim: true,

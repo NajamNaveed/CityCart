@@ -176,6 +176,7 @@ async function checkout(userId, { shippingAddress, paymentMethod }) {
         paymentMethod,
         paymentStatus: 'PENDING',
         orderStatus: 'PENDING',
+        statusHistory: [{ status: 'PENDING', by: userId, at: new Date() }],
       });
     }
 
@@ -254,7 +255,10 @@ async function cancelMyOrder(userId, orderId) {
   return runInTransaction(async (session) => {
     const order = await Order.findOneAndUpdate(
       { _id: orderId, customerId: userId, orderStatus: { $in: CANCELLABLE_BY_CUSTOMER } },
-      { $set: { orderStatus: 'CANCELLED', paymentStatus: 'CANCELLED' } },
+      {
+        $set: { orderStatus: 'CANCELLED', paymentStatus: 'CANCELLED' },
+        $push: { statusHistory: { status: 'CANCELLED', by: userId, at: new Date() } },
+      },
       { new: true, session }
     );
 

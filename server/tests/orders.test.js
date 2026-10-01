@@ -299,7 +299,10 @@ describe('PATCH /api/v1/orders/:id/cancel', () => {
     expect(res.status).toBe(200);
     expect(Order.findOneAndUpdate).toHaveBeenCalledWith(
       { _id: id.toString(), customerId: user._id, orderStatus: { $in: ['PENDING'] } },
-      { $set: { orderStatus: 'CANCELLED', paymentStatus: 'CANCELLED' } },
+      {
+        $set: { orderStatus: 'CANCELLED', paymentStatus: 'CANCELLED' },
+        $push: { statusHistory: { status: 'CANCELLED', by: user._id, at: expect.any(Date) } },
+      },
       { new: true, session: 'SESSION' }
     );
     expect(Inventory.updateOne).toHaveBeenCalledWith(
