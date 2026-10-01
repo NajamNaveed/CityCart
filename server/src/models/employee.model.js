@@ -30,7 +30,7 @@ const employeeSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
-      index: true,
+      unique: true, // a user has at most one employee record
     },
     // §10 (Brand Ownership) explicitly lists Employee.brandId as an
     // ownership/tenant-isolation example.
@@ -42,6 +42,21 @@ const employeeSchema = new mongoose.Schema(
     },
     permissions: {
       type: [String],
+      default: [],
+    },
+    // Audit trail of permission changes (docs/02 §20: protected action).
+    permissionHistory: {
+      type: [
+        new mongoose.Schema(
+          {
+            by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+            at: { type: Date, default: Date.now },
+            added: { type: [String], default: [] },
+            removed: { type: [String], default: [] },
+          },
+          { _id: false }
+        ),
+      ],
       default: [],
     },
     jobTitle: {

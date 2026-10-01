@@ -70,6 +70,9 @@ function requirePermission(permission) {
           if (!employee.permissions.includes(permission)) {
             return deny();
           }
+          // Exposed so handlers (e.g. permission-escalation checks) don't
+          // have to re-query it.
+          req.employee = employee;
           return next();
         }
 
