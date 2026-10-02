@@ -85,6 +85,11 @@ async function loginUser({ email, password }) {
     throw new AuthError(401, GENERIC_LOGIN_ERROR);
   }
 
+  // Staff of a terminated brand can log in only until their access ends.
+  if (user.accessExpiresAt && user.accessExpiresAt.getTime() <= Date.now()) {
+    throw new AuthError(401, GENERIC_LOGIN_ERROR);
+  }
+
   const passwordMatches = await comparePassword(password, user.passwordHash);
   if (!passwordMatches) {
     throw new AuthError(401, GENERIC_LOGIN_ERROR);
@@ -107,6 +112,10 @@ function toSafeUser(user) {
     name: user.name,
     email: user.email,
     role: user.role,
+    // Only present for staff of a terminated brand, so the UI can show a banner.
+    ...(user.accessRestricted && {
+      access: { restricted: true, expiresAt: user.accessExpiresAt },
+    }),
   };
 }
 

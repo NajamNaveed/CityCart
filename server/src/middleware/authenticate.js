@@ -1,6 +1,7 @@
 const User = require('../models/user.model');
 const { verifyToken } = require('../utils/jwt');
 const { AUTH_COOKIE_NAME } = require('../config/cookie');
+const { isAllowedWhenRestricted } = require('../config/restrictedAccess');
 
 /**
  * Authentication middleware, per
@@ -41,6 +42,25 @@ async function authenticate(req, res, next) {
     // Conceptual shape from §11 (req.user = { id, role, brandId }),
     // extended with the full user document so downstream handlers (e.g.
     // GET /auth/me) can read safe profile fields without a second query.
+    // Terminated brand: access ends at accessExpiresAt (docs: grace period).
+    if (user.accessExpiresAt && user.accessExpiresAt.getTime() <= Date.now()) {
+      return res.status(401).json({
+        success: false,
+        message: 'Your access has ended.',
+        code: 'ACCESS_EXPIRED',
+      });
+    }
+
+    // Until then the account is read-only (plus finishing deliveries).
+    if (user.accessRestricted && !isAllowedWhenRestricted(req.method, req.originalUrl.split('?')[0])) {
+      return res.status(403).json({
+        success: false,
+        message: 'Your brand has been terminated. Your account is read-only until your access ends.',
+        code: 'ACCOUNT_RESTRICTED',
+        accessExpiresAt: user.accessExpiresAt,
+      });
+    }
+
     req.user = user;
 
     return next();

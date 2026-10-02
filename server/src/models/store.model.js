@@ -26,7 +26,8 @@ const storeSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
-      index: true,
+      lowercase: true,
+      unique: true, // store names are unique platform-wide (case-insensitive)
     },
     description: {
       type: String,

@@ -60,6 +60,12 @@ const brandSchema = new mongoose.Schema(
       default: 'PENDING',
       index: true,
     },
+    // Permanent removal by a super admin (policy violation etc.).
+    terminationReason: { type: String, trim: true },
+    terminatedAt: { type: Date },
+    terminatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    // When the terminated brand's staff lose their (read-only) access.
+    accessEndsAt: { type: Date },
     contact: {
       type: mongoose.Schema.Types.Mixed,
       default: {},

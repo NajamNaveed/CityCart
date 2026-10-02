@@ -57,20 +57,35 @@ async function applyStoreUpdate(store, data) {
   return store.save();
 }
 
+/**
+ * Creates the brand's storefront. `brandId` is decided by the controller
+ * (tenant for BRAND_ADMIN, body for SUPER_ADMIN) — never trusted from a
+ * brand user's body. One store per brand (409 if it already exists).
+ */
 async function createStore(brandId, data) {
   const brand = await Brand.findById(brandId);
-  if (!brand) throw new StoreError(404, 'Brand not found.');
+  if (!brand) {
+    throw new StoreError(404, 'Brand not found.');
+  }
   if (await Store.findOne({ brandId })) {
     throw new StoreError(409, 'This brand already has a store.');
+  }
+  if (await Store.findOne({ slug: slugify(data.name) })) {
+    throw new StoreError(409, 'A store with this name already exists.');
   }
   const fields = { ...data };
   delete fields.brandId;
   try {
     return await Store.create({ ...fields, brandId, slug: slugify(data.name) });
   } catch (err) {
-    if (err.code === 11000) throw new StoreError(409, 'This brand already has a store.');
+    if (err.code === 11000) {
+      if (err.keyPattern && err.keyPattern.slug) {
+        throw new StoreError(409, 'A store with this name already exists.');
+      }
+      throw new StoreError(409, 'This brand already has a store.');
+    }
     throw err;
   }
 }
 
-module.exports = { getPublicStoreById, getMyStore, getStoreByIdRaw, applyStoreUpdate, StoreError, createStore };
+module.exports = { createStore, getPublicStoreById, getMyStore, getStoreByIdRaw, applyStoreUpdate, StoreError };

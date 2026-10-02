@@ -1,6 +1,8 @@
 const express = require('express');
 
 const { list, getById, storefront, create, update, updateStatus } = require('../controllers/brand.controller');
+const { apply, checkBrandName } = require('../controllers/brandOnboarding.controller');
+const { authLimiter } = require('../middleware/rateLimiters');
 const { getBrandByIdRaw } = require('../services/brand.service');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
@@ -13,6 +15,8 @@ const router = express.Router();
 
 // Public
 router.get('/', list);
+router.get('/check-name', checkBrandName); // must stay above '/:id'
+router.post('/apply', authLimiter, apply); // public seller sign-up (creates an account)
 router.get('/:id', getById);
 router.get('/:id/storefront', storefront);
 

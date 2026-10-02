@@ -2,25 +2,29 @@
   "name": "citycart-server",
   "version": "0.1.0",
   "private": true,
-  "description": "CityCart backend (Node.js, Express, Mongoose) — modular monolith",
+  "description": "CityCart backend (Node.js, Express, Mongoose) \u2014 modular monolith",
   "main": "src/server.js",
   "type": "commonjs",
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "lint": "eslint .",
-    "test": "jest",
     "seed": "node scripts/seed.js",
-    "test:integration": "jest --config jest.integration.config.js"
+    "test": "jest",
+    "test:integration": "jest --config jest.integration.config.js",
+    "sync-indexes": "node scripts/syncIndexes.js"
   },
   "jest": {
-    "testPathIgnorePatterns": ["/node_modules/", "/tests/integration/"],
     "testEnvironment": "node",
     "setupFiles": [
       "<rootDir>/tests/setupEnv.js"
     ],
     "testMatch": [
       "**/tests/**/*.test.js"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/tests/integration/"
     ]
   },
   "engines": {

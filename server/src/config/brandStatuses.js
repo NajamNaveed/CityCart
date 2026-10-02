@@ -7,6 +7,6 @@
  * enum and any validator/service that needs the same list can't drift
  * out of sync.
  */
-const BRAND_STATUSES = Object.freeze(['PENDING', 'ACTIVE', 'SUSPENDED', 'REJECTED']);
+const BRAND_STATUSES = Object.freeze(['PENDING', 'ACTIVE', 'SUSPENDED', 'REJECTED', 'TERMINATED']);
 
 module.exports = { BRAND_STATUSES };

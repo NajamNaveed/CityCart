@@ -29,7 +29,8 @@ const apiLimiter = rateLimit({
 // Strict limit for credential endpoints (brute-force / credential stuffing).
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 10,
+  // Strict in production; relaxed locally so Postman/test runs aren't blocked.
+  limit: env.nodeEnv === 'production' ? 10 : 100,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   skip,

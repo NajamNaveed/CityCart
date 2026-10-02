@@ -106,6 +106,9 @@ async function updateBrandStatus(id, status) {
     throw new BrandError(404, 'Brand not found.');
   }
 
+  if (brand.status === 'TERMINATED') {
+    throw new BrandError(409, 'A terminated brand cannot be changed.');
+  }
   brand.status = status;
   return brand.save();
 }

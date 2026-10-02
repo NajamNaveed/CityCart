@@ -47,8 +47,10 @@ const updateBrandSchema = z
     message: 'At least one field must be provided.',
   });
 
+// TERMINATED is permanent and has its own endpoint (POST /admin/brands/:id/terminate).
+const SETTABLE_BRAND_STATUSES = BRAND_STATUSES.filter((s) => s !== 'TERMINATED');
 const updateBrandStatusSchema = z.object({
-  status: z.enum(BRAND_STATUSES),
+  status: z.enum(SETTABLE_BRAND_STATUSES),
 });
 
 const listBrandsQuerySchema = z.object({

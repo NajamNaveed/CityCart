@@ -97,8 +97,12 @@ async function createEmployee({ brandId, actorPermissions, data }) {
   const permissions = data.permissions || [];
   assertCanManage(actorPermissions, permissions);
 
-  if (!(await Brand.findById(brandId))) {
+  const brand = await Brand.findById(brandId);
+  if (!brand) {
     throw new EmployeeError(404, 'Brand not found.');
+  }
+  if (brand.status === 'TERMINATED') {
+    throw new EmployeeError(409, 'A terminated brand cannot add employees.', { code: 'BRAND_TERMINATED' });
   }
   const passwordHash = await hashPassword(data.password); // slow: outside the transaction
 

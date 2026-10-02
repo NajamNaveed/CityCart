@@ -24,6 +24,13 @@ const env = {
   mongodbUri: process.env.MONGODB_URI || '',
   jwtSecret: process.env.JWT_SECRET || '',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  // How long a terminated brand's staff keep (read-only) access, in hours.
+  // 0 = cut off immediately. Capped at 30 days.
+  terminationGraceHours: (() => {
+    const raw = (process.env.TERMINATION_GRACE_HOURS || '').trim();
+    const hours = Number(raw);
+    return raw !== '' && Number.isFinite(hours) && hours >= 0 ? Math.min(hours, 720) : 24;
+  })(),
 };
 
 module.exports = env;

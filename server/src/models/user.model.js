@@ -78,6 +78,11 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    // Time-limited access after a brand is terminated: until accessExpiresAt
+    // the account works in read-only mode (accessRestricted); afterwards
+    // every request is rejected (see middleware/authenticate.js).
+    accessExpiresAt: { type: Date },
+    accessRestricted: { type: Boolean, default: false },
   },
   {
     timestamps: true,
