@@ -3,7 +3,8 @@ const Category = require('../models/category.model');
 const Brand = require('../models/brand.model');
 const { slugify } = require('../utils/slugify');
 const { escapeRegex } = require('../utils/escapeRegex');
-const { getAvailabilityMap } = require('./inventory.service');
+const Inventory = require('../models/inventory.model');
+const { getAvailabilityMap, serializeInventory } = require('./inventory.service');
 
 class ProductError extends Error {
   constructor(status, message) {
@@ -132,6 +133,53 @@ async function getPublicProductById(id) {
 }
 
 /**
+ * The brand dashboard's own product list: ALL statuses (drafts, inactive and
+ * archived included), scoped to the caller's brand. brandId comes from the
+ * authenticated user's tenant (req.tenantBrandId), never from the request.
+ * Each item carries its inventory (quantity, reserved, available, stockStatus)
+ * so the dashboard needs one request, not one per product.
+ */
+async function listBrandProducts(brandId, { status, search, page, limit } = {}) {
+  const filter = { brandId };
+  if (status) {
+    filter.status = status;
+  }
+  if (search) {
+    filter.name = { $regex: escapeRegex(search), $options: 'i' };
+  }
+
+  const pageNumber = page || DEFAULT_PAGE;
+  const limitNumber = limit || DEFAULT_LIMIT;
+
+  const [products, total] = await Promise.all([
+    Product.find(filter)
+      .sort({ createdAt: -1 })
+      .skip((pageNumber - 1) * limitNumber)
+      .limit(limitNumber),
+    Product.countDocuments(filter),
+  ]);
+
+  const inventories = products.length
+    ? await Inventory.find({ brandId, productId: { $in: products.map((p) => p._id) } })
+    : [];
+  const byProduct = new Map(inventories.map((inv) => [String(inv.productId), serializeInventory(inv)]));
+
+  return {
+    items: products.map((p) => ({
+      ...(typeof p.toObject === 'function' ? p.toObject() : p),
+      // A product with no inventory record yet simply has no stock.
+      inventory: byProduct.get(String(p._id)) || null,
+    })),
+    pagination: {
+      page: pageNumber,
+      limit: limitNumber,
+      total,
+      pages: Math.ceil(total / limitNumber),
+    },
+  };
+}
+
+/**
  * Raw fetch by id, no status filtering — for requireBrandOwnership's
  * fetch callback on PATCH/DELETE (an owner must be able to load a DRAFT
  * or ARCHIVED product to edit or restore it).
@@ -207,6 +255,7 @@ async function archiveProduct(product) {
 module.exports = {
   withAvailability,
   listPublicProducts,
+  listBrandProducts,
   getPublicProductById,
   getProductByIdRaw,
   createProduct,

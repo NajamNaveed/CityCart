@@ -14,7 +14,13 @@ import Cart from './pages/Cart'
 import Sell from './pages/Sell'
 import SellerLogin from './pages/SellerLogin'
 import Apply from './pages/Apply'
-import BrandHome from './pages/BrandHome'
+import BrandLayout from './components/brand/BrandLayout'
+import Overview from './pages/brand/Overview'
+import BrandProducts from './pages/brand/Products'
+import ProductForm from './pages/brand/ProductForm'
+import Categories from './pages/brand/Categories'
+import Orders from './pages/brand/Orders'
+import OrderDetail from './pages/brand/OrderDetail'
 import AdminLogin from './pages/AdminLogin'
 import AdminHome from './pages/AdminHome'
 import NotFound from './pages/NotFound'
@@ -46,15 +52,25 @@ function App() {
                 <Route path="*" element={<NotFound />} />
               </Route>
 
-              {/* Sellers */}
+              {/* Sellers: marketing and sign-in */}
               <Route element={<SellerLayout />}>
                 <Route path="sell" element={<Sell />} />
                 <Route element={<GuestRoute />}>
                   <Route path="sell/login" element={<SellerLogin />} />
                   <Route path="sell/apply" element={<Apply />} />
                 </Route>
-                <Route element={<ProtectedRoute roles={BRAND_ROLES} loginPath="/sell/login" />}>
-                  <Route path="brand" element={<BrandHome />} />
+              </Route>
+
+              {/* Brand dashboard: its own layout, brand staff only */}
+              <Route element={<ProtectedRoute roles={BRAND_ROLES} loginPath="/sell/login" />}>
+                <Route path="brand" element={<BrandLayout />}>
+                  <Route index element={<Overview />} />
+                  <Route path="products" element={<BrandProducts />} />
+                  <Route path="products/new" element={<ProductForm />} />
+                  <Route path="products/:id" element={<ProductForm />} />
+                  <Route path="categories" element={<Categories />} />
+                  <Route path="orders" element={<Orders />} />
+                  <Route path="orders/:id" element={<OrderDetail />} />
                 </Route>
               </Route>
 

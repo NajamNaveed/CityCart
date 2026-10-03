@@ -134,6 +134,8 @@ function toSafeUser(user) {
     name: user.name,
     email: user.email,
     role: user.role,
+    // A brand account's own brand id (the dashboard needs it to load its categories).
+    ...(user.brandId && { brandId: user.brandId }),
     // Only present for staff of a terminated brand, so the UI can show a banner.
     ...(user.accessRestricted && {
       access: { restricted: true, expiresAt: user.accessExpiresAt },

@@ -29,3 +29,13 @@ export const btnCreamOutline =
 
 export const inputClass =
   'w-full rounded-sm border border-line bg-paper px-3.5 text-sm text-ink placeholder-muted/60 outline-none transition focus:border-ink'
+
+
+const dateTime = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+export const formatDateTime = (value) => (value ? dateTime.format(new Date(value)) : '')
+
+// "READY_FOR_SHIPMENT" -> "Ready for shipment"
+export const humanize = (value = '') => {
+  const text = value.toLowerCase().replaceAll('_', ' ')
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}

@@ -2,16 +2,19 @@ const {
   createProductSchema,
   updateProductSchema,
   listProductsQuerySchema,
+  listMyProductsQuerySchema,
 } = require('../validators/product.validator');
 const { objectIdParamSchema } = require('../validators/common.validator');
 const {
   listPublicProducts,
+  listBrandProducts,
   getPublicProductById,
   createProduct,
   applyProductUpdate,
   archiveProduct,
   ProductError,
 } = require('../services/product.service');
+const { getInventoryForProduct, serializeInventory } = require('../services/inventory.service');
 const { formatZodError } = require('../utils/formatZodError');
 
 async function list(req, res, next) {
@@ -27,6 +30,47 @@ async function list(req, res, next) {
   try {
     const { items, pagination } = await listPublicProducts(parsedQuery.data);
     return res.status(200).json({ success: true, products: items, pagination });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+// GET /products/mine — the caller's own products, every status.
+async function mine(req, res, next) {
+  const parsedQuery = listMyProductsQuerySchema.safeParse(req.query);
+  if (!parsedQuery.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsedQuery.error),
+    });
+  }
+
+  // A super admin has no brand of their own, so there is nothing to list.
+  if (!req.tenantBrandId) {
+    return res
+      .status(403)
+      .json({ success: false, message: 'You are not authorized to perform this action.' });
+  }
+
+  try {
+    const { items, pagination } = await listBrandProducts(req.tenantBrandId, parsedQuery.data);
+    return res.status(200).json({ success: true, products: items, pagination });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+// GET /products/mine/:id — one of the caller's own products in ANY status, with its inventory.
+// req.resource was loaded and brand-ownership-verified by requireBrandOwnership.
+async function mineById(req, res, next) {
+  try {
+    const inventory = await getInventoryForProduct(req.resource);
+    return res.status(200).json({
+      success: true,
+      product: req.resource,
+      inventory: serializeInventory(inventory),
+    });
   } catch (err) {
     return next(err);
   }
@@ -119,4 +163,4 @@ async function remove(req, res, next) {
   }
 }
 
-module.exports = { list, getById, create, update, remove };
+module.exports = { list, mine, mineById, getById, create, update, remove };

@@ -1,6 +1,6 @@
 const express = require('express');
 
-const { list, getById, create, update, remove } = require('../controllers/product.controller');
+const { list, mine, mineById, getById, create, update, remove } = require('../controllers/product.controller');
 const { getProductByIdRaw } = require('../services/product.service');
 const authenticate = require('../middleware/authenticate');
 const requirePermission = require('../middleware/requirePermission');
@@ -13,6 +13,24 @@ const router = express.Router();
 
 // Public (docs/05 §12 — public users receive active products only)
 router.get('/', list);
+// The caller's own products, every status. Must stay above '/:id'.
+// A super admin has no brand (tenantBrandId is null), so the route is brand-staff only.
+router.get(
+  '/mine',
+  authenticate,
+  requirePermission(PERMISSIONS.PRODUCTS_VIEW),
+  requireTenant,
+  mine
+);
+router.get(
+  '/mine/:id',
+  authenticate,
+  requirePermission(PERMISSIONS.PRODUCTS_VIEW),
+  requireTenant,
+  validateObjectIdParam,
+  requireBrandOwnership((req) => getProductByIdRaw(req.params.id)),
+  mineById
+);
 router.get('/:id', getById);
 
 // Create: no existing resource to fetch, so tenant ownership comes from

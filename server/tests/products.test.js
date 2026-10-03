@@ -234,6 +234,127 @@ describe('GET /api/v1/products/:id (public)', () => {
   });
 });
 
+describe('GET /api/v1/products/mine (brand dashboard list)', () => {
+  it('returns the brand\'s own products of EVERY status, with inventory, scoped to its brand', async () => {
+    const brandId = oid();
+    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
+    const draftId = oid();
+    const activeId = oid();
+    mockProductFind([
+      { _id: draftId, brandId, name: 'Draft tee', status: 'DRAFT', isActive: true },
+      { _id: activeId, brandId, name: 'Live tee', status: 'ACTIVE', isActive: true },
+    ]);
+    Product.countDocuments.mockResolvedValue(2);
+    Inventory.find.mockResolvedValue([
+      { productId: activeId, brandId, quantity: 5, reservedQuantity: 1, lowStockThreshold: 2, trackInventory: true },
+    ]);
+
+    const res = await request(app).get('/api/v1/products/mine').set(...asUser(admin));
+
+    expect(res.status).toBe(200);
+    expect(res.body.products).toHaveLength(2);
+    // Unlike the public list, no status/isActive restriction is applied...
+    const filter = Product.find.mock.calls[0][0];
+    expect(filter.status).toBeUndefined();
+    expect(filter.isActive).toBeUndefined();
+    // ...but the brand always comes from the logged-in user.
+    expect(String(filter.brandId)).toBe(String(brandId));
+    expect(res.body.products.find((p) => p._id === String(draftId)).inventory).toBeNull();
+    expect(res.body.products.find((p) => p._id === String(activeId)).inventory.quantity).toBe(5);
+  });
+
+  it('ignores a client-supplied brandId (cannot read another brand)', async () => {
+    const brandId = oid();
+    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
+    mockProductFind([]);
+    Product.countDocuments.mockResolvedValue(0);
+
+    await request(app).get(`/api/v1/products/mine?brandId=${oid()}`).set(...asUser(admin));
+
+    expect(String(Product.find.mock.calls[0][0].brandId)).toBe(String(brandId));
+  });
+
+  it('lets a BRAND_EMPLOYEE with products.view in, and keeps one without out', async () => {
+    const brandId = oid();
+    const employee = makeFakeUser({ role: ROLES.BRAND_EMPLOYEE, brandId });
+    mockProductFind([]);
+    Product.countDocuments.mockResolvedValue(0);
+
+    Employee.findOne.mockResolvedValue({ isActive: true, permissions: [PERMISSIONS.PRODUCTS_VIEW] });
+    const allowed = await request(app).get('/api/v1/products/mine').set(...asUser(employee));
+    expect(allowed.status).toBe(200);
+
+    Employee.findOne.mockResolvedValue({ isActive: true, permissions: [] });
+    const denied = await request(app).get('/api/v1/products/mine').set(...asUser(employee));
+    expect(denied.status).toBe(403);
+  });
+
+  it('is closed to guests, customers and the super admin (who has no brand)', async () => {
+    expect((await request(app).get('/api/v1/products/mine')).status).toBe(401);
+
+    const customer = makeFakeUser({ role: ROLES.CUSTOMER });
+    expect((await request(app).get('/api/v1/products/mine').set(...asUser(customer))).status).toBe(403);
+
+    const superAdmin = makeFakeUser({ role: ROLES.SUPER_ADMIN });
+    expect((await request(app).get('/api/v1/products/mine').set(...asUser(superAdmin))).status).toBe(403);
+  });
+
+  it('is not shadowed by GET /products/:id', async () => {
+    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId: oid() });
+    mockProductFind([]);
+    Product.countDocuments.mockResolvedValue(0);
+    const res = await request(app).get('/api/v1/products/mine').set(...asUser(admin));
+    expect(res.status).toBe(200);
+    expect(Product.findOne).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/v1/products/mine/:id (edit page)', () => {
+  it('returns the brand\'s own DRAFT product with its inventory', async () => {
+    const brandId = oid();
+    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
+    const productId = oid();
+    Product.findById.mockResolvedValue({ _id: productId, brandId, name: 'Draft tee', status: 'DRAFT' });
+    Inventory.findOne.mockResolvedValue({ productId, brandId, quantity: 3, reservedQuantity: 0, lowStockThreshold: 1, trackInventory: true });
+
+    const res = await request(app).get(`/api/v1/products/mine/${productId}`).set(...asUser(admin));
+
+    expect(res.status).toBe(200);
+    expect(res.body.product.status).toBe('DRAFT');
+    expect(res.body.inventory.quantity).toBe(3);
+  });
+
+  it('answers a zero-stock default when no inventory record exists yet', async () => {
+    const brandId = oid();
+    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
+    const productId = oid();
+    Product.findById.mockResolvedValue({ _id: productId, brandId, name: 'New', status: 'DRAFT' });
+    Inventory.findOne.mockResolvedValue(null);
+
+    const res = await request(app).get(`/api/v1/products/mine/${productId}`).set(...asUser(admin));
+
+    expect(res.status).toBe(200);
+    expect(res.body.inventory.quantity).toBe(0);
+  });
+
+  it('hides another brand\'s product from a brand admin', async () => {
+    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId: oid() });
+    const productId = oid();
+    Product.findById.mockResolvedValue({ _id: productId, brandId: oid(), name: 'Theirs', status: 'DRAFT' });
+
+    const res = await request(app).get(`/api/v1/products/mine/${productId}`).set(...asUser(admin));
+
+    expect([403, 404]).toContain(res.status);
+    expect(res.body.product).toBeUndefined();
+  });
+
+  it('rejects guests and malformed ids', async () => {
+    expect((await request(app).get(`/api/v1/products/mine/${oid()}`)).status).toBe(401);
+    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId: oid() });
+    expect((await request(app).get('/api/v1/products/mine/not-an-id').set(...asUser(admin))).status).toBe(400);
+  });
+});
+
 describe('POST /api/v1/products', () => {
   const validBody = (categoryId) => ({
     name: 'Phone X',
