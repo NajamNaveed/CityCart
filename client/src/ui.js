@@ -17,3 +17,15 @@ const money = new Intl.NumberFormat('en-PK', {
 export const formatPrice = (value) => money.format(value ?? 0)
 
 export const wrap = 'mx-auto w-full max-w-7xl px-5'
+
+
+// Seller side uses the pine green; the shop keeps clay.
+export const btnPine =
+  'inline-flex h-11 items-center justify-center rounded-sm bg-pine px-6 text-[13px] font-medium uppercase tracking-[0.08em] text-cream transition hover:bg-[#162b22] disabled:cursor-not-allowed disabled:opacity-50'
+export const btnCream =
+  'inline-flex h-11 items-center justify-center rounded-sm bg-cream px-6 text-[13px] font-medium uppercase tracking-[0.08em] text-pine transition hover:bg-white'
+export const btnCreamOutline =
+  'inline-flex h-11 items-center justify-center rounded-sm border border-cream/60 px-6 text-[13px] font-medium uppercase tracking-[0.08em] text-cream transition hover:bg-cream hover:text-pine'
+
+export const inputClass =
+  'w-full rounded-sm border border-line bg-paper px-3.5 text-sm text-ink placeholder-muted/60 outline-none transition focus:border-ink'

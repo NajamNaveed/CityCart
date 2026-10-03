@@ -38,6 +38,13 @@ export function AuthProvider({ children }) {
     return res.data.user
   }, [])
 
+  // Seller sign-up: creates the owner, brand and store in one request and signs the owner in.
+  const applyForBrand = useCallback(async (payload) => {
+    const res = await api.post('/brands/apply', payload)
+    setUser(res.data.user)
+    return res.data
+  }, [])
+
   const logout = useCallback(async () => {
     try {
       await api.post('/auth/logout')
@@ -46,9 +53,9 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  const value = useMemo(
-    () => ({ user, loading, login, register, logout }),
-    [user, loading, login, register, logout],
+    const value = useMemo(
+    () => ({ user, loading, login, register, applyForBrand, logout }),
+    [user, loading, login, register, applyForBrand, logout],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

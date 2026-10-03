@@ -2,6 +2,7 @@ import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useCart } from '../hooks/useCart'
 import { useCity } from '../hooks/useCity'
+import { homeFor } from '../utils/nav'
 import { wrap } from '../ui'
 
 const navLink = ({ isActive }) =>
@@ -78,6 +79,11 @@ export default function StoreLayout() {
 
             {user ? (
               <>
+                {user.role !== 'CUSTOMER' && (
+                  <NavLink to={homeFor(user.role)} className={navLink}>
+                    Dashboard
+                  </NavLink>
+                )}
                 {user.role === 'CUSTOMER' && (
                   <NavLink to="/cart" className={navLink}>
                     Cart{itemCount > 0 ? ` (${itemCount})` : ''}
