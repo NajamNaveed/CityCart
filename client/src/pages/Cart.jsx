@@ -5,6 +5,8 @@ import { useCart } from '../hooks/useCart'
 import ProductImage from '../components/ProductImage'
 import { btnPrimary, formatPrice, wrap } from '../ui'
 
+const MAX_QTY = 99
+
 const ISSUES = {
   PRODUCT_UNAVAILABLE: 'No longer available',
   BRAND_UNAVAILABLE: 'This brand is unavailable',
@@ -14,10 +16,11 @@ const ISSUES = {
 const issueText = (item) =>
   item.issue === 'INSUFFICIENT_STOCK' ? `Only ${item.availableQuantity} available` : ISSUES[item.issue]
 
-// Read-only cart for now: quantity editing and checkout arrive in the next step.
 export default function Cart() {
   const { setCount } = useCart()
   const [state, setState] = useState({ loading: true, cart: null, error: '' })
+  const [busyId, setBusyId] = useState(null)
+  const [notice, setNotice] = useState('')
 
   useEffect(() => {
     let active = true
@@ -34,17 +37,27 @@ export default function Cart() {
     }
   }, [setCount])
 
-  async function remove(productId) {
+  // One place for every cart change: show the server's fresh cart, or its error.
+  async function change(productId, request) {
+    setBusyId(productId)
+    setNotice('')
     try {
-      const res = await api.delete(`/cart/items/${productId}`)
+      const res = await request()
       setState({ loading: false, cart: res.data.cart, error: '' })
       setCount(res.data.cart.itemCount)
     } catch (err) {
-      setState((s) => ({ ...s, error: getErrorMessage(err) }))
+      setNotice(getErrorMessage(err))
+    } finally {
+      setBusyId(null)
     }
   }
 
+  const setQuantity = (productId, quantity) =>
+    change(productId, () => api.patch(`/cart/items/${productId}`, { quantity }))
+  const remove = (productId) => change(productId, () => api.delete(`/cart/items/${productId}`))
+
   const { loading, cart, error } = state
+  const hasIssues = cart?.groups.some((g) => g.items.some((i) => i.issue))
 
   return (
     <div className={`${wrap} py-10`}>
@@ -52,6 +65,11 @@ export default function Cart() {
 
       {loading && <div className="mt-8 h-40 animate-pulse bg-sand" />}
       {error && <p className="mt-6 text-clay">{error}</p>}
+      {notice && (
+        <p role="alert" className="mt-6 border-l-2 border-clay bg-sand px-3 py-2 text-sm">
+          {notice}
+        </p>
+      )}
 
       {cart && cart.groups.length === 0 && (
         <div className="py-20 text-center">
@@ -76,23 +94,47 @@ export default function Cart() {
                       <Link to={`/product/${item.productId}`} className="block w-20 shrink-0 overflow-hidden bg-sand">
                         <ProductImage src={item.image} name={item.name || ''} className="aspect-[4/5] w-full" />
                       </Link>
-                      <div className="flex flex-1 flex-col justify-between">
+                      <div className="flex flex-1 flex-col justify-between gap-3">
                         <div>
                           <Link to={`/product/${item.productId}`} className="text-[15px] font-medium hover:text-clay">
                             {item.name || 'Unavailable product'}
                           </Link>
-                          <p className="mt-1 text-sm text-muted">
-                            {item.quantity} × {item.unitPrice != null ? formatPrice(item.unitPrice) : '—'}
-                          </p>
+                          <p className="mt-1 text-sm text-muted">{item.unitPrice != null ? formatPrice(item.unitPrice) : '—'} each</p>
                           {item.issue && <p className="mt-1 text-sm text-clay">{issueText(item)}</p>}
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => remove(item.productId)}
-                          className="self-start text-[13px] text-muted underline underline-offset-4 hover:text-clay"
-                        >
-                          Remove
-                        </button>
+                        <div className="flex items-center gap-5">
+                          <div className="inline-flex h-9 items-center border border-line bg-paper">
+                            <button
+                              type="button"
+                              aria-label={`Decrease quantity of ${item.name}`}
+                              disabled={busyId === item.productId || item.quantity <= 1}
+                              onClick={() => setQuantity(item.productId, item.quantity - 1)}
+                              className="h-full w-9 hover:bg-sand disabled:text-muted disabled:hover:bg-transparent"
+                            >
+                              −
+                            </button>
+                            <span className="w-9 text-center text-sm font-medium" aria-live="polite">
+                              {item.quantity}
+                            </span>
+                            <button
+                              type="button"
+                              aria-label={`Increase quantity of ${item.name}`}
+                              disabled={busyId === item.productId || item.quantity >= MAX_QTY}
+                              onClick={() => setQuantity(item.productId, item.quantity + 1)}
+                              className="h-full w-9 hover:bg-sand disabled:text-muted disabled:hover:bg-transparent"
+                            >
+                              +
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={busyId === item.productId}
+                            onClick={() => remove(item.productId)}
+                            className="text-[13px] text-muted underline underline-offset-4 hover:text-clay"
+                          >
+                            Remove
+                          </button>
+                        </div>
                       </div>
                       <p className="text-[15px] font-semibold">{formatPrice(item.lineTotal)}</p>
                     </li>
@@ -120,9 +162,13 @@ export default function Cart() {
             <p className="mt-4 text-xs leading-relaxed text-muted">
               Each brand prepares and delivers its own order. You pay in cash on delivery.
             </p>
-            <button type="button" disabled className={`${btnPrimary} mt-5 w-full`}>
-              Checkout
-            </button>
+            {hasIssues ? (
+              <p className="mt-5 text-sm text-clay">Remove or fix the items marked above to continue.</p>
+            ) : (
+              <Link to="/checkout" className={`${btnPrimary} mt-5 w-full`}>
+                Checkout
+              </Link>
+            )}
           </aside>
         </div>
       )}

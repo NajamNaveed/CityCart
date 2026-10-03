@@ -11,6 +11,10 @@ import ProductDetail from './pages/ProductDetail'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Cart from './pages/Cart'
+import Checkout from './pages/Checkout'
+import OrderPlaced from './pages/OrderPlaced'
+import MyOrders from './pages/MyOrders'
+import MyOrderDetail from './pages/MyOrderDetail'
 import Sell from './pages/Sell'
 import SellerLogin from './pages/SellerLogin'
 import Apply from './pages/Apply'
@@ -47,12 +51,16 @@ function App() {
 
                 <Route element={<ProtectedRoute roles={['CUSTOMER']} />}>
                   <Route path="cart" element={<Cart />} />
+                  <Route path="checkout" element={<Checkout />} />
+                  <Route path="order-placed" element={<OrderPlaced />} />
+                  <Route path="orders" element={<MyOrders />} />
+                  <Route path="orders/:id" element={<MyOrderDetail />} />
                 </Route>
 
                 <Route path="*" element={<NotFound />} />
               </Route>
 
-              {/* Sellers: marketing and sign-in */}
+              {/* Sellers */}
               <Route element={<SellerLayout />}>
                 <Route path="sell" element={<Sell />} />
                 <Route element={<GuestRoute />}>

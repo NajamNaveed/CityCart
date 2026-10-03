@@ -85,9 +85,14 @@ export default function StoreLayout() {
                   </NavLink>
                 )}
                 {user.role === 'CUSTOMER' && (
-                  <NavLink to="/cart" className={navLink}>
-                    Cart{itemCount > 0 ? ` (${itemCount})` : ''}
-                  </NavLink>
+                  <>
+                    <NavLink to="/orders" className={navLink}>
+                      Orders
+                    </NavLink>
+                    <NavLink to="/cart" className={navLink}>
+                      Cart{itemCount > 0 ? ` (${itemCount})` : ''}
+                    </NavLink>
+                  </>
                 )}
                 <button type="button" onClick={logout} className="text-[13px] font-medium hover:text-clay">
                   Sign out
@@ -95,6 +100,9 @@ export default function StoreLayout() {
               </>
             ) : (
               <>
+                <Link to="/sell" className="hidden text-[13px] font-medium text-pine hover:text-clay lg:inline">
+                  Sell on CityCart
+                </Link>
                 <NavLink to="/login" className={navLink}>
                   Sign in
                 </NavLink>
@@ -163,6 +171,11 @@ export default function StoreLayout() {
               <li>
                 <Link to="/cart" className="hover:text-cream">
                   Cart
+                </Link>
+              </li>
+              <li>
+                <Link to="/sell" className="hover:text-cream">
+                  Sell on CityCart
                 </Link>
               </li>
             </ul>
