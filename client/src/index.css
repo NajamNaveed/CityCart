@@ -1,1 +1,39 @@
 @import "tailwindcss";
+
+@theme {
+  --font-sans: "Poppins", ui-sans-serif, system-ui, sans-serif;
+
+  /* Warm neutrals built around the brand cream #FDF5ED */
+  --color-cream: #fdf5ed;
+  --color-paper: #fffbf6;
+  --color-sand: #f4e7d8;
+  --color-line: #e8d8c4;
+  --color-ink: #231c16;
+  --color-muted: #6f6256;
+
+  /* One accent (clay) for the shop, one deep green (pine) reserved for the seller side */
+  --color-clay: #b6472a;
+  --color-clay-dark: #98381f;
+  --color-pine: #1e3a2f;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    margin: 0;
+    background: var(--color-cream);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background: var(--color-clay);
+    color: var(--color-cream);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-clay);
+    outline-offset: 2px;
+  }
+}

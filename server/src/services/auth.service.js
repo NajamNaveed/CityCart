@@ -1,6 +1,7 @@
 const User = require('../models/user.model');
 const { hashPassword, comparePassword } = require('../utils/password');
 const { signToken } = require('../utils/jwt');
+const { ROLES } = require('../config/roles');
 
 /**
  * Auth business logic, per docs/06-authentication-and-security.md §4
@@ -66,10 +67,26 @@ async function registerUser({ name, email, password }) {
 }
 
 /**
- * Authenticates a user by email/password. Works for any existing role
- * (login itself is not customer-only — only public registration is).
+ * Login portals. Each portal accepts ONLY its own roles, so a brand account
+ * can never sign in through the customer form (and vice versa), and the
+ * super admin has a separate entry point. The role check happens on the
+ * server; a wrong-portal attempt gets the same generic error as a wrong
+ * password, so nobody can probe which accounts exist or what role they hold.
  */
-async function loginUser({ email, password }) {
+const PORTAL_ROLES = Object.freeze({
+  customer: [ROLES.CUSTOMER],
+  brand: [ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE],
+  admin: [ROLES.SUPER_ADMIN],
+});
+
+/**
+ * Authenticates a user by email/password for one portal (see PORTAL_ROLES).
+ */
+async function loginUser({ email, password }, portal = 'customer') {
+  const allowedRoles = PORTAL_ROLES[portal];
+  if (!allowedRoles) {
+    throw new Error(`Unknown login portal: ${portal}`);
+  }
   // select('+passwordHash') is required: the User schema sets
   // passwordHash to select: false by default.
   const user = await User.findOne({ email }).select('+passwordHash');
@@ -92,6 +109,11 @@ async function loginUser({ email, password }) {
 
   const passwordMatches = await comparePassword(password, user.passwordHash);
   if (!passwordMatches) {
+    throw new AuthError(401, GENERIC_LOGIN_ERROR);
+  }
+
+  // Right credentials, wrong door: same generic error (see PORTAL_ROLES).
+  if (!allowedRoles.includes(user.role)) {
     throw new AuthError(401, GENERIC_LOGIN_ERROR);
   }
 
@@ -119,4 +141,4 @@ function toSafeUser(user) {
   };
 }
 
-module.exports = { registerUser, loginUser, toSafeUser, AuthError };
+module.exports = { registerUser, loginUser, toSafeUser, AuthError, PORTAL_ROLES };

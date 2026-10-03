@@ -39,32 +39,39 @@ async function register(req, res, next) {
   }
 }
 
-async function login(req, res, next) {
-  const parsed = loginSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({
-      success: false,
-      message: 'Validation failed.',
-      errors: formatZodError(parsed.error),
-    });
-  }
-
-  try {
-    const { user, token } = await loginUser(parsed.data);
-
-    res.cookie(AUTH_COOKIE_NAME, token, authCookieOptions);
-    return res.status(200).json({
-      success: true,
-      message: 'Login successful',
-      user,
-    });
-  } catch (err) {
-    if (err instanceof AuthError) {
-      return res.status(err.status).json({ success: false, message: err.message });
+// One handler per login portal (customer / brand / admin). The portal decides
+// which roles may sign in; see PORTAL_ROLES in services/auth.service.js.
+const loginFor = (portal) =>
+  async function login(req, res, next) {
+    const parsed = loginSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed.',
+        errors: formatZodError(parsed.error),
+      });
     }
-    return next(err);
-  }
-}
+
+    try {
+      const { user, token } = await loginUser(parsed.data, portal);
+
+      res.cookie(AUTH_COOKIE_NAME, token, authCookieOptions);
+      return res.status(200).json({
+        success: true,
+        message: 'Login successful',
+        user,
+      });
+    } catch (err) {
+      if (err instanceof AuthError) {
+        return res.status(err.status).json({ success: false, message: err.message });
+      }
+      return next(err);
+    }
+  };
+
+const login = loginFor('customer');
+const brandLogin = loginFor('brand');
+const adminLogin = loginFor('admin');
 
 function logout(req, res) {
   // §10: "The server must use the same cookie configuration required to
@@ -86,4 +93,4 @@ function me(req, res) {
   return res.status(200).json({ success: true, user: toSafeUser(req.user) });
 }
 
-module.exports = { register, login, logout, me };
+module.exports = { register, login, brandLogin, adminLogin, logout, me };

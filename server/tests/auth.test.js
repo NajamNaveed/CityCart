@@ -212,6 +212,46 @@ describe('POST /api/v1/auth/login', () => {
   });
 });
 
+describe('login portals: each role can only use its own door', () => {
+  const PORTALS = [
+    ['/api/v1/auth/login', 'CUSTOMER'],
+    ['/api/v1/auth/brand/login', 'BRAND_ADMIN'],
+    ['/api/v1/auth/brand/login', 'BRAND_EMPLOYEE'],
+    ['/api/v1/auth/admin/login', 'SUPER_ADMIN'],
+  ];
+  const ROLES_LIST = ['CUSTOMER', 'BRAND_ADMIN', 'BRAND_EMPLOYEE', 'SUPER_ADMIN'];
+
+  async function attempt(path, role) {
+    const passwordHash = await hashPassword('correct-password');
+    const brandId = role.startsWith('BRAND') ? new mongoose.Types.ObjectId() : undefined;
+    const fakeUser = makeFakeUser({ role, brandId, passwordHash });
+    User.findOne.mockReturnValue({ select: jest.fn().mockResolvedValue(fakeUser) });
+    return request(app).post(path).send({ email: fakeUser.email, password: 'correct-password' });
+  }
+
+  for (const [path, role] of PORTALS) {
+    it(`${role} can log in at ${path}`, async () => {
+      const res = await attempt(path, role);
+      expect(res.status).toBe(200);
+      expect(res.body.user.role).toBe(role);
+      expect(getCookieValue(res, AUTH_COOKIE_NAME)).toBeTruthy();
+    });
+  }
+
+  for (const [path, allowedRole] of PORTALS) {
+    for (const role of ROLES_LIST) {
+      const allowed = PORTALS.some(([p, r]) => p === path && r === role);
+      if (allowed || role === allowedRole) continue;
+      it(`${role} is refused at ${path} with the generic error and no cookie`, async () => {
+        const res = await attempt(path, role);
+        expect(res.status).toBe(401);
+        expect(res.body.message).toBe('Invalid email or password.');
+        expect(getCookieValue(res, AUTH_COOKIE_NAME)).toBeNull();
+      });
+    }
+  }
+});
+
 describe('GET /api/v1/auth/me (JWT/cookie authentication)', () => {
   it('returns the authenticated user when a valid session cookie is sent', async () => {
     const passwordHash = await hashPassword('correcthorse123');

@@ -114,7 +114,7 @@ describe('after the grace period', () => {
   it('they can no longer log in', async () => {
     const user = { _id: oid(), role: ROLES.BRAND_ADMIN, isActive: true, brandId, accessRestricted: true, accessExpiresAt: new Date(Date.now() - 1000), passwordHash: 'x', email: 'a@b.co' };
     User.findOne.mockReturnValue({ select: () => Promise.resolve(user) });
-    const res = await request(app).post('/api/v1/auth/login').send({ email: 'a@b.co', password: 'secret123' });
+    const res = await request(app).post('/api/v1/auth/brand/login').send({ email: 'a@b.co', password: 'secret123' });
     expect(res.status).toBe(401);
     expect(res.body.message).toBe('Invalid email or password.');
   });
@@ -124,7 +124,7 @@ describe('login during the grace period, and normal users are unaffected', () =>
   it('can still log in before the access ends, and sees the restricted flag', async () => {
     const user = { _id: oid(), name: 'A', email: 'a@b.co', role: ROLES.BRAND_ADMIN, isActive: true, brandId, accessRestricted: true, accessExpiresAt: new Date(Date.now() + HOUR), passwordHash: 'x' };
     User.findOne.mockReturnValue({ select: () => Promise.resolve(user) });
-    const res = await request(app).post('/api/v1/auth/login').send({ email: 'a@b.co', password: 'secret123' });
+    const res = await request(app).post('/api/v1/auth/brand/login').send({ email: 'a@b.co', password: 'secret123' });
     expect(res.status).toBe(200);
     expect(res.body.user.access.restricted).toBe(true);
   });
