@@ -79,6 +79,7 @@ describe('delivery access control', () => {
     ({ cookie } = asRole(ROLES.BRAND_EMPLOYEE, [PERMISSIONS.DELIVERY_VIEW]));
     Delivery.find.mockReturnValue({ sort: () => ({ skip: () => ({ limit: () => Promise.resolve([]) }) }) });
     Delivery.countDocuments.mockResolvedValue(0);
+    Order.find.mockReturnValue({ select: () => Promise.resolve([]) });
     expect((await request(app).get('/api/v1/deliveries').set(...cookie)).status).toBe(200);
     expect((await request(app).patch(`/api/v1/deliveries/${oid()}/status`).set(...cookie).send({ status: 'PICKED_UP' })).status).toBe(403);
   });
@@ -90,11 +91,25 @@ describe('GET /api/v1/deliveries and /:id', () => {
     const limit = jest.fn().mockResolvedValue([{ status: 'READY_FOR_PICKUP' }]);
     Delivery.find.mockReturnValue({ sort: () => ({ skip: () => ({ limit }) }) });
     Delivery.countDocuments.mockResolvedValue(1);
-
+    Order.find.mockReturnValue({ select: () => Promise.resolve([]) });
     const res = await request(app).get(`/api/v1/deliveries?status=READY_FOR_PICKUP&brandId=${oid()}`).set(...cookie);
 
     expect(res.status).toBe(200);
     expect(Delivery.find).toHaveBeenCalledWith({ brandId: brandId.toString(), status: 'READY_FOR_PICKUP' });
+  });
+  
+    it('attaches each delivery\'s order number so the dashboard can show it', async () => {
+    const { cookie } = asRole(ROLES.BRAND_ADMIN);
+    const orderId = oid();
+    const limit = jest.fn().mockResolvedValue([{ _id: oid(), orderId, status: 'READY_FOR_PICKUP' }]);
+    Delivery.find.mockReturnValue({ sort: () => ({ skip: () => ({ limit }) }) });
+    Delivery.countDocuments.mockResolvedValue(1);
+    Order.find.mockReturnValue({ select: () => Promise.resolve([{ _id: orderId, orderNumber: 'CC-2026-000007' }]) });
+
+    const res = await request(app).get('/api/v1/deliveries').set(...cookie);
+
+    expect(res.status).toBe(200);
+    expect(res.body.deliveries[0].orderNumber).toBe('CC-2026-000007');
   });
 
   it('scopes GET /:id per role: customer by owner, brand by brand, super admin unrestricted', async () => {

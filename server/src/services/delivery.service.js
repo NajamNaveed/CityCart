@@ -26,8 +26,17 @@ async function listDeliveries(brandId, { status, page, limit } = {}) {
       .limit(limitNumber),
     Delivery.countDocuments(filter),
   ]);
+    // The dashboard shows the human order number ("CC-2026-000001"), which lives on the order.
+  const orders = items.length
+    ? await Order.find({ _id: { $in: items.map((d) => d.orderId) } }).select('orderNumber')
+    : [];
+  const numberByOrder = new Map(orders.map((o) => [String(o._id), o.orderNumber]));
+
   return {
-    items,
+    items: items.map((d) => ({
+      ...(typeof d.toObject === 'function' ? d.toObject() : d),
+      orderNumber: numberByOrder.get(String(d.orderId)) || null,
+    })),
     pagination: { page: pageNumber, limit: limitNumber, total, pages: Math.ceil(total / limitNumber) },
   };
 }

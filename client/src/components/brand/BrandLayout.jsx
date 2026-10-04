@@ -7,6 +7,7 @@ const NAV = [
   ['/brand/products', 'Products', false],
   ['/brand/categories', 'Categories', false],
   ['/brand/orders', 'Orders', false],
+  ['/brand/deliveries', 'Deliveries', false],
 ]
 
 const navClass = ({ isActive }) =>

@@ -2,10 +2,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import api, { getErrorMessage } from '../../services/api'
 import { Notice, PageHeader, StatusBadge } from '../../components/brand/Bits'
+import DeliveryPanel from '../../components/brand/DeliveryPanel'
 import { formatDateTime, formatPrice, humanize } from '../../ui'
 
 // What a brand may do next. The server re-checks every move, so this only decides which buttons to offer.
-// Shipping onwards is handled by delivery, not here.
+// From "ready for shipment" onwards the delivery panel takes over.
 const ACTIONS = {
   PENDING: [['CONFIRMED', 'Confirm order', true], ['REJECTED', 'Reject', false]],
   CONFIRMED: [['PROCESSING', 'Start processing', true], ['REJECTED', 'Reject', false]],
@@ -123,6 +124,8 @@ export default function OrderDetail() {
         </div>
       )}
 
+      {delivery && <DeliveryPanel key={delivery._id} delivery={delivery} onChanged={async () => setState(await fetchOrder())} />}
+        
       <div className="grid gap-12 lg:grid-cols-[1fr_17rem]">
         <section>
           <h2 className="border-b border-ink pb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Items</h2>
