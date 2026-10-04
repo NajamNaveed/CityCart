@@ -2,6 +2,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './context/AuthProvider'
 import { CityProvider } from './context/CityProvider'
 import { CartProvider } from './context/CartProvider'
+import ServerBanner from './components/ServerBanner'
 import StoreLayout from './components/StoreLayout'
 import SellerLayout from './components/SellerLayout'
 import { GuestRoute, ProtectedRoute } from './components/RouteGuards'
@@ -45,6 +46,7 @@ function App() {
       <AuthProvider>
         <CityProvider>
           <CartProvider>
+            <ServerBanner />
             <Routes>
               {/* Shoppers */}
               <Route element={<StoreLayout />}>

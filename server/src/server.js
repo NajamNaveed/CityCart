@@ -1,6 +1,6 @@
 const app = require('./app');
 const env = require('./config/env');
-const { connectDB, disconnectDB } = require('./config/db');
+const { connectDB, disconnectDB, describeConnectionError } = require('./config/db');
 
 let httpServer;
 
@@ -18,6 +18,10 @@ async function start() {
   } catch (err) {
     console.error('Failed to connect to MongoDB. Server will not start.');
     console.error(err.message);
+    const hint = describeConnectionError(err);
+    if (hint) {
+      console.error(`\nWhat to do: ${hint}`);
+    }
     process.exitCode = 1;
     return;
   }

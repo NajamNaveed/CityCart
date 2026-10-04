@@ -37,7 +37,7 @@ const { ROLES } = require('../config/roles');
  *
  * Usage: router.patch('/products/:id', authenticate, requirePermission(PERMISSIONS.PRODUCTS_UPDATE), handler)
  */
-function requirePermission(permission) {
+function requirePermission(...permissions) {
   return async function permissionMiddleware(req, res, next) {
     try {
       if (!req.user) {
@@ -69,8 +69,10 @@ function requirePermission(permission) {
                     if (!employee || !employee.isActive) {
             return deny('EMPLOYEE_INACTIVE');
           }
-          if (!employee.permissions.includes(permission)) {
-            return deny('PERMISSION_DENIED', { permission });
+          if (!permissions.some((permission) => employee.permissions.includes(permission))) {
+            return deny('PERMISSION_DENIED', {
+              permission: permissions.length === 1 ? permissions[0] : permissions,
+            });
           }
           // Exposed so handlers (e.g. permission-escalation checks) don't
           // have to re-query it.

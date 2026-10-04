@@ -19,7 +19,7 @@ const json429 = (message) => ({ success: false, message });
 // Broad protection for the whole API.
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 300,
+  limit: env.nodeEnv === 'production' ? 1000 : 10000,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   skip,

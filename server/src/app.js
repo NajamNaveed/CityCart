@@ -4,6 +4,7 @@ const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 
 const env = require('./config/env');
+const { corsOptions } = require('./config/cors');
 const healthRoutes = require('./routes/health.routes');
 const authRoutes = require('./routes/auth.routes');
 const cityRoutes = require('./routes/city.routes');
@@ -22,6 +23,7 @@ const paymentRoutes = require('./routes/payment.routes');
 const employeeRoutes = require('./routes/employee.routes');
 const adminBrandRoutes = require('./routes/adminBrand.routes');
 const adminOrderRoutes = require('./routes/adminOrder.routes');
+const uploadRoutes = require('./routes/upload.routes');
 
 const requestLogger = require('./middleware/requestLogger');
 const { apiLimiter } = require('./middleware/rateLimiters');
@@ -38,12 +40,7 @@ if (env.nodeEnv === 'production') {
 // Core middleware
 app.use(helmet());
 app.use(requestLogger);
-app.use(
-  cors({
-    origin: env.clientUrl,
-    credentials: true,
-  })
-);
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '100kb' }));
 app.use(express.urlencoded({ extended: true }));
 // Required to populate req.cookies for the HTTP-only auth cookie (see
@@ -81,6 +78,7 @@ app.use('/api/v1/payments', paymentRoutes);
 app.use('/api/v1/employees', employeeRoutes);
 app.use('/api/v1/admin/brands', adminBrandRoutes);
 app.use('/api/v1/admin/orders', adminOrderRoutes);
+app.use('/api/v1/uploads', uploadRoutes);
 
 // Must stay LAST: unmatched routes -> 404, then the global error handler.
 app.use(notFound);

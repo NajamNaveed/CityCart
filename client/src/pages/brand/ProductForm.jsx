@@ -4,6 +4,7 @@ import api, { getErrorMessage, getFieldErrors } from '../../services/api'
 import { useAuth } from '../../hooks/useAuth'
 import { useCan } from '../../hooks/useCan'
 import Field from '../../components/Field'
+import ImageUploader from '../../components/brand/ImageUploader'
 import { Notice, PageHeader } from '../../components/brand/Bits'
 import { btnPine, inputClass } from '../../ui'
 
@@ -23,7 +24,6 @@ function toForm(product, inventory) {
     compareAtPrice: product?.compareAtPrice != null ? String(product.compareAtPrice) : '',
     sku: product?.sku ?? '',
     categoryId: product?.categoryId ?? '',
-    images: (product?.images ?? []).join('\n'),
     status: product && product.status !== 'ARCHIVED' ? product.status : 'ACTIVE',
     quantity: String(inventory?.quantity ?? 0),
     lowStockThreshold: String(inventory?.lowStockThreshold ?? 0),
@@ -38,6 +38,7 @@ function FormBody({ id, product, inventory, categories }) {
   const canArchive = can('products.delete')
   const initial = toForm(product, inventory)
   const [form, setForm] = useState(initial)
+  const [images, setImages] = useState(product?.images ?? [])
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
   const [saving, setSaving] = useState(false)
@@ -57,7 +58,7 @@ function FormBody({ id, product, inventory, categories }) {
       description: form.description,
       price: Number(form.price),
       categoryId: form.categoryId,
-      images: form.images.split('\n').map((l) => l.trim()).filter(Boolean),
+      images,
       status: form.status,
       // Left out when empty: the API cannot clear these once set.
       ...(form.sku.trim() && { sku: form.sku.trim() }),
@@ -196,11 +197,8 @@ function FormBody({ id, product, inventory, categories }) {
         </fieldset>
 
         <div className="border-t border-line pt-8">
-          <label htmlFor="images" className={labelClass}>
-            Image links
-          </label>
-          <textarea id="images" name="images" rows={4} value={form.images} onChange={onChange} placeholder={'One image address per line\nThe first one is the main photo'} className={`${inputClass} py-3`} />
-          <p className="mt-1.5 text-xs text-muted">Image upload is not available yet, so paste links to images that are already online.</p>
+          <p className={labelClass}>Photos</p>
+          <ImageUploader images={images} onChange={setImages} name={form.name || 'Product'} />
         </div>
 
         </fieldset>

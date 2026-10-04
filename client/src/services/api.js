@@ -1,12 +1,25 @@
 import axios from 'axios'
 
 // VITE_API_URL is documented in .env.example, e.g. http://localhost:5000/api/v1
-const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'
+// A missing "/api/v1" on the end is added, so "http://localhost:5000" works too.
+function resolveBaseURL(raw) {
+  const trimmed = (raw || 'http://localhost:5000/api/v1').trim().replace(/\/+$/, '')
+  return /\/api\/v\d+$/.test(trimmed) ? trimmed : `${trimmed}/api/v1`
+}
 
 const api = axios.create({
-  baseURL,
+  baseURL: resolveBaseURL(import.meta.env.VITE_API_URL),
   withCredentials: true, // required for the HTTP-only auth cookie
 })
+
+// Lets the app tell the person when the server is refusing them for sending too much.
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 429) window.dispatchEvent(new Event('citycart:rate-limited'))
+    return Promise.reject(error)
+  },
+)
 
 // The server's 403 message is deliberately generic; its `code` says why.
 const FORBIDDEN_MESSAGES = {

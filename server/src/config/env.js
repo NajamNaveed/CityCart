@@ -22,8 +22,21 @@ const env = {
   port: Number(process.env.PORT) || 5000,
   clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',
   mongodbUri: process.env.MONGODB_URI || '',
+  // Optional, comma-separated (e.g. "8.8.8.8,1.1.1.1"). Some networks block the DNS lookup
+  // Atlas "mongodb+srv://" addresses need; naming a public DNS here works around that.
+  mongodbDnsServers: (process.env.MONGODB_DNS_SERVERS || '')
+    .split(',')
+    .map((server) => server.trim())
+    .filter(Boolean),
   jwtSecret: process.env.JWT_SECRET || '',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  // Image hosting (Cloudinary). Optional: without all three, image upload
+  // answers 503 and the dashboard falls back to "add an image by link".
+  cloudinary: {
+    cloudName: (process.env.CLOUDINARY_CLOUD_NAME || '').trim(),
+    apiKey: (process.env.CLOUDINARY_API_KEY || '').trim(),
+    apiSecret: (process.env.CLOUDINARY_API_SECRET || '').trim(),
+  },
   // How long a terminated brand's staff keep (read-only) access, in hours.
   // 0 = cut off immediately. Capped at 30 days.
   terminationGraceHours: (() => {
