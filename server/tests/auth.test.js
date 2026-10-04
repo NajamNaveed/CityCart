@@ -10,8 +10,10 @@ const mongoose = require('mongoose');
 // enough to exercise the full HTTP request/response cycle, including
 // real bcrypt hashing and real JWT signing/verification.
 jest.mock('../src/models/user.model');
+jest.mock('../src/models/employee.model');
 
 const User = require('../src/models/user.model');
+const Employee = require('../src/models/employee.model');
 const app = require('../src/app');
 const { hashPassword, comparePassword } = require('../src/utils/password');
 const { AUTH_COOKIE_NAME } = require('../src/config/cookie');
@@ -250,6 +252,37 @@ describe('login portals: each role can only use its own door', () => {
       });
     }
   }
+});
+
+describe('GET /api/v1/auth/me: team members get their permissions', () => {
+  // Logs the fake user in through the brand portal, then calls /me with that session.
+  async function meAs(role, employeeRecord) {
+    const passwordHash = await hashPassword('correct-password');
+    const user = makeFakeUser({ role, brandId: new mongoose.Types.ObjectId(), passwordHash });
+    User.findOne.mockReturnValue({ select: jest.fn().mockResolvedValue(user) });
+    const agent = request.agent(app);
+    await agent.post('/api/v1/auth/brand/login').send({ email: user.email, password: 'correct-password' });
+    User.findById.mockResolvedValue(user);
+    Employee.findOne.mockResolvedValue(employeeRecord);
+    return agent.get('/api/v1/auth/me');
+  }
+
+  it('returns a BRAND_EMPLOYEE\'s permission list', async () => {
+    const res = await meAs('BRAND_EMPLOYEE', { isActive: true, permissions: ['orders.view', 'orders.manage'] });
+    expect(res.status).toBe(200);
+    expect(res.body.user.permissions).toEqual(['orders.view', 'orders.manage']);
+  });
+
+  it('gives a deactivated employee record an empty list', async () => {
+    const res = await meAs('BRAND_EMPLOYEE', { isActive: false, permissions: ['orders.view'] });
+    expect(res.body.user.permissions).toEqual([]);
+  });
+
+  it('adds no permission list for a brand owner (who has full access)', async () => {
+    const res = await meAs('BRAND_ADMIN', null);
+    expect(res.status).toBe(200);
+    expect(res.body.user.permissions).toBeUndefined();
+  });
 });
 
 describe('GET /api/v1/auth/me (JWT/cookie authentication)', () => {

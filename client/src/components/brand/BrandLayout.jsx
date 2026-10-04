@@ -1,22 +1,26 @@
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
+import { useCan } from '../../hooks/useCan'
 import { wrap } from '../../ui'
 
+// [path, label, exact match, permission needed to see it (null = everyone on the team)]
 const NAV = [
-  ['/brand', 'Overview', true],
-  ['/brand/products', 'Products', false],
-  ['/brand/categories', 'Categories', false],
-  ['/brand/orders', 'Orders', false],
-  ['/brand/deliveries', 'Deliveries', false],
+  ['/brand', 'Overview', true, null],
+  ['/brand/products', 'Products', false, 'products.view'],
+  ['/brand/categories', 'Categories', false, 'categories.view'],
+  ['/brand/orders', 'Orders', false, 'orders.view'],
+  ['/brand/deliveries', 'Deliveries', false, 'delivery.view'],
+  ['/brand/team', 'Team', false, 'employees.view'],
 ]
 
 const navClass = ({ isActive }) =>
-  `whitespace-nowrap border-b-2 px-1 py-3 text-[13px] font-medium transition lg:border-b-0 lg:border-l-2 lg:py-2 lg:pl-4 ${
+  `block whitespace-nowrap border-b-2 px-1 py-3 text-[13px] font-medium transition lg:border-b-0 lg:border-l-2 lg:py-2 lg:pl-4 ${
     isActive ? 'border-pine text-pine' : 'border-transparent text-muted hover:text-ink'
   }`
 
 export default function BrandLayout() {
   const { user, logout } = useAuth()
+  const can = useCan()
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -46,9 +50,13 @@ export default function BrandLayout() {
         </div>
       )}
 
-      <div className={`${wrap} grid flex-1 gap-x-12 py-8 lg:grid-cols-[11rem_1fr]`}>
-        <nav aria-label="Dashboard" className="-mx-5 flex gap-5 overflow-x-auto border-b border-line px-5 lg:mx-0 lg:block lg:space-y-1 lg:border-0 lg:px-0">
-          {NAV.map(([to, label, end]) => (
+      <div className={`${wrap} grid flex-1 gap-x-12 py-8 lg:grid-cols-[11rem_1fr] lg:items-start`}>
+        {/* A row of tabs on small screens, a vertical menu from lg up. */}
+        <nav
+          aria-label="Dashboard"
+          className="-mx-5 flex gap-5 overflow-x-auto border-b border-line px-5 [scrollbar-width:none] lg:mx-0 lg:flex-col lg:gap-1 lg:overflow-visible lg:border-0 lg:px-0 [&::-webkit-scrollbar]:hidden"
+        >
+          {NAV.filter(([, , , permission]) => !permission || can(permission)).map(([to, label, end]) => (
             <NavLink key={to} to={to} end={end} className={navClass}>
               {label}
             </NavLink>

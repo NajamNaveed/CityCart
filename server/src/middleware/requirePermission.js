@@ -45,10 +45,12 @@ function requirePermission(permission) {
         return res.status(401).json({ success: false, message: 'Authentication required.' });
       }
 
-      const deny = () =>
+      // `code` tells the client WHY (the message stays generic): a team member
+      // missing a permission is a normal, explainable situation, not an error.
+      const deny = (code = 'ROLE_NOT_ALLOWED', extra = {}) =>
         res
           .status(403)
-          .json({ success: false, message: 'You are not authorized to perform this action.' });
+          .json({ success: false, message: 'You are not authorized to perform this action.', code, ...extra });
 
       switch (req.user.role) {
         case ROLES.SUPER_ADMIN:
@@ -64,11 +66,11 @@ function requirePermission(permission) {
 
         case ROLES.BRAND_EMPLOYEE: {
           const employee = await Employee.findOne({ userId: req.user._id });
-          if (!employee || !employee.isActive) {
-            return deny();
+                    if (!employee || !employee.isActive) {
+            return deny('EMPLOYEE_INACTIVE');
           }
           if (!employee.permissions.includes(permission)) {
-            return deny();
+            return deny('PERMISSION_DENIED', { permission });
           }
           // Exposed so handlers (e.g. permission-escalation checks) don't
           // have to re-query it.

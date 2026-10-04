@@ -28,7 +28,11 @@ function requireRole(...allowedRoles) {
       // failures in this codebase.
       return res
         .status(403)
-        .json({ success: false, message: 'You are not authorized to perform this action.' });
+        .json({
+          success: false,
+          message: 'You are not authorized to perform this action.',
+          code: 'ROLE_NOT_ALLOWED',
+        });
     }
 
     return next();

@@ -36,10 +36,10 @@ function requireTenant(req, res, next) {
     return res.status(401).json({ success: false, message: 'Authentication required.' });
   }
 
-  const deny = () =>
+  const deny = (code = 'ROLE_NOT_ALLOWED') =>
     res
       .status(403)
-      .json({ success: false, message: 'You are not authorized to perform this action.' });
+      .json({ success: false, message: 'You are not authorized to perform this action.', code });
 
   if (req.user.role === ROLES.SUPER_ADMIN) {
     req.tenantBrandId = null;
@@ -51,7 +51,7 @@ function requireTenant(req, res, next) {
     // these roles (see models/user.model.js), but a tenant-scoped route
     // should never proceed on a missing brandId regardless.
     if (!req.user.brandId) {
-      return deny();
+      return deny('NO_BRAND');
     }
     req.tenantBrandId = req.user.brandId.toString();
     return next();

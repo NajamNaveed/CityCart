@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import api, { getErrorMessage, getFieldErrors } from '../../services/api'
 import { useAuth } from '../../hooks/useAuth'
+import { useCan } from '../../hooks/useCan'
 import Field from '../../components/Field'
 import { Notice, PageHeader } from '../../components/brand/Bits'
 import { btnPine, inputClass } from '../../ui'
@@ -32,6 +33,9 @@ function toForm(product, inventory) {
 function FormBody({ id, product, inventory, categories }) {
   const navigate = useNavigate()
   const location = useLocation()
+  const can = useCan()
+  const canSave = can(id ? 'products.update' : 'products.create')
+  const canArchive = can('products.delete')
   const initial = toForm(product, inventory)
   const [form, setForm] = useState(initial)
   const [error, setError] = useState('')
@@ -119,6 +123,10 @@ function FormBody({ id, product, inventory, categories }) {
       />
       <Notice tone={location.state?.tone}>{location.state?.notice}</Notice>
 
+      {!canSave && (
+        <p className="mb-6 border-l-2 border-line bg-sand px-3 py-2 text-sm">You can view this product but not change it.</p>
+      )}
+
       <form onSubmit={onSubmit} className="max-w-3xl space-y-10" noValidate>
         {error && (
           <p role="alert" className="border-l-2 border-clay bg-sand px-3 py-2 text-sm">
@@ -126,6 +134,7 @@ function FormBody({ id, product, inventory, categories }) {
           </p>
         )}
 
+        <fieldset disabled={!canSave} className="min-w-0 space-y-10">
         <fieldset className="grid gap-5 sm:grid-cols-2">
           <legend className="sr-only">Details</legend>
           <div className="sm:col-span-2">
@@ -194,16 +203,20 @@ function FormBody({ id, product, inventory, categories }) {
           <p className="mt-1.5 text-xs text-muted">Image upload is not available yet, so paste links to images that are already online.</p>
         </div>
 
+        </fieldset>
+
         <div className="flex flex-wrap items-center gap-4 border-t border-line pt-8">
-          <button type="submit" disabled={saving} className={btnPine}>
-            {saving ? 'Saving…' : id ? 'Save changes' : 'Add product'}
-          </button>
-          {id && !archived && !confirmArchive && (
+          {canSave && (
+            <button type="submit" disabled={saving} className={btnPine}>
+              {saving ? 'Saving…' : id ? 'Save changes' : 'Add product'}
+            </button>
+          )}
+          {id && !archived && canArchive && !confirmArchive && (
             <button type="button" onClick={() => setConfirmArchive(true)} className="text-[13px] font-medium text-clay hover:underline">
               Archive product
             </button>
           )}
-          {id && !archived && confirmArchive && (
+          {id && !archived && canArchive && confirmArchive && (
             <span className="flex items-center gap-3 text-sm">
               Hide this product from the shop?
               <button type="button" onClick={archive} disabled={saving} className="font-medium text-clay hover:underline">

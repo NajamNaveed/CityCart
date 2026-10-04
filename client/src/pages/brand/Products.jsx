@@ -3,6 +3,7 @@ import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import api, { getErrorMessage } from '../../services/api'
 import ProductImage from '../../components/ProductImage'
 import { Notice, PageHeader, Pager, StatusBadge, selectClass } from '../../components/brand/Bits'
+import { useCan } from '../../hooks/useCan'
 import { btnPine, formatPrice, inputClass } from '../../ui'
 
 const STATUSES = ['ACTIVE', 'DRAFT', 'INACTIVE', 'ARCHIVED']
@@ -26,6 +27,7 @@ function Stock({ inventory }) {
 export default function Products() {
   const [params, setParams] = useSearchParams()
   const location = useLocation()
+  const canCreate = useCan()('products.create')
   const search = params.get('search') || ''
   const status = params.get('status') || ''
   const page = Math.max(1, Number(params.get('page')) || 1)
@@ -58,9 +60,11 @@ export default function Products() {
         title="Products"
         intro="Everything you sell, including drafts and archived items."
         action={
-          <Link to="/brand/products/new" className={btnPine}>
-            Add product
-          </Link>
+          canCreate && (
+            <Link to="/brand/products/new" className={btnPine}>
+              Add product
+            </Link>
+          )
         }
       />
       <Notice>{location.state?.notice}</Notice>
@@ -102,7 +106,7 @@ export default function Products() {
       ) : state.items.length === 0 ? (
         <div className="border border-dashed border-line py-16 text-center">
           <p className="font-medium">{search || status ? 'No products match.' : 'You have not added any products yet.'}</p>
-          {!search && !status && (
+          {!search && !status && canCreate && (
             <Link to="/brand/products/new" className={`${btnPine} mt-5`}>
               Add your first product
             </Link>

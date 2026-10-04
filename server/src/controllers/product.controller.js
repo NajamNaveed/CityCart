@@ -50,7 +50,7 @@ async function mine(req, res, next) {
   if (!req.tenantBrandId) {
     return res
       .status(403)
-      .json({ success: false, message: 'You are not authorized to perform this action.' });
+      .json({ success: false, message: 'You are not authorized to perform this action.', code: 'NO_BRAND' });
   }
 
   try {

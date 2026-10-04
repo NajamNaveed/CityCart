@@ -156,7 +156,28 @@ export default function MyOrderDetail() {
               {a.additionalInstructions && <span className="mt-2 block text-muted">Note: {a.additionalInstructions}</span>}
             </address>
           </section>
-
+          {delivery && (delivery.trackingReference || delivery.assignedAgent || delivery.status === 'FAILED') && (
+            <section>
+              <h2 className="border-b border-ink pb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Delivery</h2>
+              <dl className="mt-3 space-y-2">
+                {delivery.trackingReference && (
+                  <div>
+                    <dt className="text-muted">Tracking reference</dt>
+                    <dd className="font-medium">{delivery.trackingReference}</dd>
+                  </div>
+                )}
+                {delivery.assignedAgent && (
+                  <div>
+                    <dt className="text-muted">Delivered by</dt>
+                    <dd className="font-medium">{delivery.assignedAgent}</dd>
+                  </div>
+                )}
+              </dl>
+              {delivery.status === 'FAILED' && (
+                <p className="mt-3 text-clay">The last delivery attempt did not go through. The brand will try again.</p>
+              )}
+            </section>
+          )}
           {order.statusHistory?.length > 0 && (
             <section>
               <h2 className="border-b border-ink pb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Progress</h2>

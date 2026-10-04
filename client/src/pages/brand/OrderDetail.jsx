@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import api, { getErrorMessage } from '../../services/api'
 import { Notice, PageHeader, StatusBadge } from '../../components/brand/Bits'
 import DeliveryPanel from '../../components/brand/DeliveryPanel'
+import { useCan } from '../../hooks/useCan'
 import { formatDateTime, formatPrice, humanize } from '../../ui'
 
 // What a brand may do next. The server re-checks every move, so this only decides which buttons to offer.
@@ -15,6 +16,7 @@ const ACTIONS = {
 
 export default function OrderDetail() {
   const { id } = useParams()
+  const can = useCan()
   const [state, setState] = useState({ id: null, order: null, payment: null, delivery: null, error: '' })
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState({ text: '', tone: 'ok' })
@@ -65,7 +67,7 @@ export default function OrderDetail() {
   }
 
   const { order, payment, delivery } = state
-  const actions = ACTIONS[order.orderStatus] || []
+  const actions = can('orders.manage') ? ACTIONS[order.orderStatus] || [] : []
   const a = order.shippingAddress || {}
 
   return (
@@ -124,8 +126,8 @@ export default function OrderDetail() {
         </div>
       )}
 
-      {delivery && <DeliveryPanel key={delivery._id} delivery={delivery} onChanged={async () => setState(await fetchOrder())} />}
-        
+      {delivery && can('delivery.manage') && <DeliveryPanel key={delivery._id} delivery={delivery} onChanged={async () => setState(await fetchOrder())} />}
+
       <div className="grid gap-12 lg:grid-cols-[1fr_17rem]">
         <section>
           <h2 className="border-b border-ink pb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Items</h2>

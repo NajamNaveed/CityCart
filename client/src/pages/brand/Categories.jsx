@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import api, { getErrorMessage } from '../../services/api'
 import { useAuth } from '../../hooks/useAuth'
+import { useCan } from '../../hooks/useCan'
 import { Notice, PageHeader, selectClass } from '../../components/brand/Bits'
 import { btnPine, inputClass } from '../../ui'
 
 export default function Categories() {
   const { user } = useAuth()
+  const can = useCan()
   const [categories, setCategories] = useState(null)
   const [loadError, setLoadError] = useState('')
   const [reload, setReload] = useState(0)
@@ -64,6 +66,7 @@ export default function Categories() {
       <PageHeader title="Categories" intro="Group your products so customers can find them." />
       <Notice tone={message.tone}>{message.text}</Notice>
 
+      {can('categories.create') && (
       <form onSubmit={onAdd} className="mb-10 flex flex-wrap items-end gap-3 border border-line bg-paper p-5">
         <div className="flex-1 basis-56">
           <label htmlFor="cat-name" className="mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-muted">
@@ -88,6 +91,7 @@ export default function Categories() {
           Add
         </button>
       </form>
+      )}
 
       {loadError ? (
         <p className="text-clay">{loadError}</p>
@@ -119,17 +123,21 @@ export default function Categories() {
                     {c.parentId && <span className="ml-3 text-xs text-muted">inside {nameOf[c.parentId] || 'another category'}</span>}
                   </span>
                   <span className="flex gap-5 text-[13px] font-medium">
-                    <button type="button" onClick={() => setEditing({ id: c._id, name: c.name })} className="text-pine hover:underline">
-                      Rename
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => run(() => api.delete(`/categories/${c._id}`), 'Category removed.')}
-                      className="text-clay hover:underline"
-                    >
-                      Remove
-                    </button>
+                    {can('categories.update') && (
+                      <button type="button" onClick={() => setEditing({ id: c._id, name: c.name })} className="text-pine hover:underline">
+                        Rename
+                      </button>
+                    )}
+                    {can('categories.delete') && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => run(() => api.delete(`/categories/${c._id}`), 'Category removed.')}
+                        className="text-clay hover:underline"
+                      >
+                        Remove
+                      </button>
+                    )}
                   </span>
                 </>
               )}

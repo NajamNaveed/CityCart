@@ -26,6 +26,7 @@ import Categories from './pages/brand/Categories'
 import Orders from './pages/brand/Orders'
 import OrderDetail from './pages/brand/OrderDetail'
 import Deliveries from './pages/brand/Deliveries'
+import Team from './pages/brand/Team'
 import AdminLogin from './pages/AdminLogin'
 import AdminHome from './pages/AdminHome'
 import NotFound from './pages/NotFound'
@@ -81,6 +82,7 @@ function App() {
                   <Route path="orders" element={<Orders />} />
                   <Route path="orders/:id" element={<OrderDetail />} />
                   <Route path="deliveries" element={<Deliveries />} />
+                  <Route path="team" element={<Team />} />
                 </Route>
               </Route>
 

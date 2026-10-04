@@ -28,8 +28,13 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (email, password, portal = 'customer') => {
     const res = await api.post(LOGIN_PATHS[portal], { email, password })
-    setUser(res.data.user)
-    return res.data.user
+    const login = useCallback(async (email, password, portal = 'customer') => {
+      await api.post(LOGIN_PATHS[portal], { email, password })
+      // /auth/me is the complete picture: a team member's permissions only come with it.
+      const me = await api.get('/auth/me')
+      setUser(me.data.user)
+      return me.data.user
+    }, [])
   }, [])
 
   const register = useCallback(async (name, email, password) => {
@@ -53,7 +58,7 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-    const value = useMemo(
+  const value = useMemo(
     () => ({ user, loading, login, register, applyForBrand, logout }),
     [user, loading, login, register, applyForBrand, logout],
   )

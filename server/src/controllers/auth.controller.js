@@ -1,6 +1,8 @@
 const { registerSchema, loginSchema } = require('../validators/auth.validator');
 const { registerUser, loginUser, toSafeUser, AuthError } = require('../services/auth.service');
 const { AUTH_COOKIE_NAME, authCookieOptions } = require('../config/cookie');
+const { ROLES } = require('../config/roles');
+const Employee = require('../models/employee.model');
 const { formatZodError } = require('../utils/formatZodError');
 
 /**
@@ -86,11 +88,22 @@ function logout(req, res) {
   return res.status(200).json({ success: true, message: 'Logout successful' });
 }
 
-function me(req, res) {
+async function me(req, res, next) {
   // req.user is attached by the authenticate middleware; this route is
   // only reachable when that middleware has already confirmed the user
   // is authenticated and active.
-  return res.status(200).json({ success: true, user: toSafeUser(req.user) });
+  try {
+    const user = toSafeUser(req.user);
+    // A team member's permissions decide what the dashboard offers them.
+    // (Brand owners and the super admin have full access and need no list.)
+    if (req.user.role === ROLES.BRAND_EMPLOYEE) {
+      const employee = await Employee.findOne({ userId: req.user._id });
+      user.permissions = employee && employee.isActive ? employee.permissions : [];
+    }
+    return res.status(200).json({ success: true, user });
+  } catch (err) {
+    return next(err);
+  }
 }
 
 module.exports = { register, login, brandLogin, adminLogin, logout, me };
