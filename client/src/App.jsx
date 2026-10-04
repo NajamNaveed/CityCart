@@ -28,7 +28,13 @@ import OrderDetail from './pages/brand/OrderDetail'
 import Deliveries from './pages/brand/Deliveries'
 import Team from './pages/brand/Team'
 import AdminLogin from './pages/AdminLogin'
-import AdminHome from './pages/AdminHome'
+import AdminLayout from './components/admin/AdminLayout'
+import AdminOverview from './pages/admin/Overview'
+import AdminBrands from './pages/admin/Brands'
+import AdminBrandDetail from './pages/admin/BrandDetail'
+import AdminOrders from './pages/admin/Orders'
+import AdminOrderDetail from './pages/admin/OrderDetail'
+import AdminCities from './pages/admin/Cities'
 import NotFound from './pages/NotFound'
 
 const BRAND_ROLES = ['BRAND_ADMIN', 'BRAND_EMPLOYEE']
@@ -91,7 +97,14 @@ function App() {
                 <Route path="admin/login" element={<AdminLogin />} />
               </Route>
               <Route element={<ProtectedRoute roles={['SUPER_ADMIN']} loginPath="/admin/login" />}>
-                <Route path="admin" element={<AdminHome />} />
+                <Route path="admin" element={<AdminLayout />}>
+                  <Route index element={<AdminOverview />} />
+                  <Route path="brands" element={<AdminBrands />} />
+                  <Route path="brands/:id" element={<AdminBrandDetail />} />
+                  <Route path="orders" element={<AdminOrders />} />
+                  <Route path="orders/:id" element={<AdminOrderDetail />} />
+                  <Route path="cities" element={<AdminCities />} />
+                </Route>
               </Route>
             </Routes>
           </CartProvider>

@@ -1,6 +1,7 @@
 const { z } = require('zod');
 const { ORDER_STATUSES } = require('../config/orderStatuses');
 const { BRAND_SETTABLE_STATUSES } = require('../config/orderTransitions');
+const mongoose = require('mongoose');
 
 /**
  * Checkout / order validation (docs/05 §15-16). The client sends ONLY the
@@ -35,10 +36,24 @@ const listOrdersQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).optional(),
 });
 
+// Super admin: every order on the platform, optionally narrowed to one brand or order number.
+const adminListOrdersQuerySchema = z.object({
+  status: z.enum(ORDER_STATUSES).optional(),
+  brandId: z.string().refine((v) => mongoose.Types.ObjectId.isValid(v), { message: 'Invalid id.' }).optional(),
+  search: z.string().trim().min(1).max(40).optional(),
+  page: z.coerce.number().int().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(50).optional(),
+});
+
 const updateOrderStatusSchema = z.object({
   status: z.enum(BRAND_SETTABLE_STATUSES, {
     error: `status must be one of: ${BRAND_SETTABLE_STATUSES.join(', ')}`,
   }),
 });
 
-module.exports = { createOrderSchema, listOrdersQuerySchema, updateOrderStatusSchema };
+module.exports = {
+  createOrderSchema,
+  listOrdersQuerySchema,
+  adminListOrdersQuerySchema,
+  updateOrderStatusSchema,
+};

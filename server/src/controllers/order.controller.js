@@ -1,8 +1,13 @@
-const { createOrderSchema, listOrdersQuerySchema } = require('../validators/order.validator');
+const {
+  createOrderSchema,
+  listOrdersQuerySchema,
+  adminListOrdersQuerySchema,
+} = require('../validators/order.validator');
 const { objectIdParamSchema } = require('../validators/common.validator');
 const {
   checkout,
   listMyOrders,
+  listAllOrders,
   getOrderForUser,
   cancelMyOrder,
   OrderError,
@@ -68,4 +73,16 @@ async function cancel(req, res, next) {
   }
 }
 
-module.exports = { create, my, getById, cancel };
+// GET /admin/orders: every order on the platform (super admin only; see adminOrder.routes.js).
+async function adminList(req, res, next) {
+  const parsed = adminListOrdersQuerySchema.safeParse(req.query);
+  if (!parsed.success) return invalid(res, parsed.error);
+  try {
+    const { items, pagination } = await listAllOrders(parsed.data);
+    return res.status(200).json({ success: true, orders: items, pagination });
+  } catch (err) {
+    return handleError(err, res, next);
+  }
+}
+
+module.exports = { adminList, create, my, getById, cancel };

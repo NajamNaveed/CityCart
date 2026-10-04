@@ -236,6 +236,68 @@ describe('POST /api/v1/orders (checkout)', () => {
   });
 });
 
+describe('GET /api/v1/admin/orders (super admin, all orders)', () => {
+  function mockList(items, total = items.length) {
+    const limit = jest.fn().mockResolvedValue(items);
+    Order.find.mockReturnValue({ sort: () => ({ skip: () => ({ limit }) }) });
+    Order.countDocuments.mockResolvedValue(total);
+  }
+
+  it('lists orders from every brand with the brand name attached', async () => {
+    const { cookie } = asRole(ROLES.SUPER_ADMIN);
+    const brandId = oid();
+    mockList([{ _id: oid(), orderNumber: 'CC-2026-000001', brandId, orderStatus: 'PENDING' }], 41);
+    Brand.find.mockReturnValue({ select: () => Promise.resolve([{ _id: brandId, name: 'Loom & Co' }]) });
+
+    const res = await request(app).get('/api/v1/admin/orders?limit=10').set(...cookie);
+
+    expect(res.status).toBe(200);
+    expect(Order.find).toHaveBeenCalledWith({});
+    expect(res.body.orders[0].brandName).toBe('Loom & Co');
+    expect(res.body.pagination).toEqual({ page: 1, limit: 10, total: 41, pages: 5 });
+  });
+
+  it('filters by status, brand and an order-number prefix', async () => {
+    const { cookie } = asRole(ROLES.SUPER_ADMIN);
+    const brandId = oid();
+    mockList([]);
+
+    const res = await request(app)
+      .get(`/api/v1/admin/orders?status=DELIVERED&brandId=${brandId}&search=cc-2026`)
+      .set(...cookie);
+
+    expect(res.status).toBe(200);
+    const filter = Order.find.mock.calls[0][0];
+    expect(filter.orderStatus).toBe('DELIVERED');
+    expect(String(filter.brandId)).toBe(String(brandId));
+    expect(filter.orderNumber.$regex).toBe('^cc-2026');
+    expect(filter.orderNumber.$options).toBe('i');
+  });
+
+  it('treats search text literally (no regex injection)', async () => {
+    const { cookie } = asRole(ROLES.SUPER_ADMIN);
+    mockList([]);
+
+    await request(app).get('/api/v1/admin/orders?search=' + encodeURIComponent('.*')).set(...cookie);
+
+    expect(Order.find.mock.calls[0][0].orderNumber.$regex).toBe('^\\.\\*');
+  });
+
+  it('rejects bad filters with 400', async () => {
+    const { cookie } = asRole(ROLES.SUPER_ADMIN);
+    expect((await request(app).get('/api/v1/admin/orders?status=NOPE').set(...cookie)).status).toBe(400);
+    expect((await request(app).get('/api/v1/admin/orders?brandId=x').set(...cookie)).status).toBe(400);
+  });
+
+  it('is closed to guests, customers, brand admins and employees', async () => {
+    expect((await request(app).get('/api/v1/admin/orders')).status).toBe(401);
+    for (const role of [ROLES.CUSTOMER, ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE]) {
+      const { cookie } = asRole(role);
+      expect((await request(app).get('/api/v1/admin/orders').set(...cookie)).status).toBe(403);
+    }
+  });
+});
+
 describe('GET /api/v1/orders/my and /:id', () => {
   it('lists only the caller\'s orders with pagination', async () => {
     const { cookie, user } = asRole();

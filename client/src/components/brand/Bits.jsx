@@ -9,6 +9,7 @@ const TONES = {
 const STATUS_TONE = {
   ACTIVE: 'good', DELIVERED: 'good', CONFIRMED: 'good', PAID: 'good', IN_STOCK: 'good',
   PENDING: 'warn', LOW_STOCK: 'warn', OUT_OF_STOCK: 'warn', REJECTED: 'warn', CANCELLED: 'warn', FAILED: 'warn',
+  SUSPENDED: 'warn', TERMINATED: 'warn',
 }
 
 export function StatusBadge({ value }) {

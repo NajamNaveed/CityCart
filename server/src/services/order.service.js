@@ -227,6 +227,48 @@ async function listMyOrders(userId, { status, page, limit } = {}) {
   };
 }
 
+// Platform-wide order list for the super admin (all brands, all customers).
+// Each item also carries its brand's name so the console need not look it up.
+async function listAllOrders({ status, brandId, search, page, limit } = {}) {
+  const filter = {};
+  if (status) filter.orderStatus = status;
+  if (brandId) filter.brandId = brandId;
+  if (search) {
+    // Order numbers look like CC-2026-000123: match from the start, case-insensitively.
+    // Special characters are escaped so the search text is always taken literally.
+    const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    filter.orderNumber = { $regex: `^${escaped}`, $options: 'i' };
+  }
+  const pageNumber = page || 1;
+  const limitNumber = limit || DEFAULT_LIMIT;
+
+  const [items, total] = await Promise.all([
+    Order.find(filter)
+      .sort({ createdAt: -1 })
+      .skip((pageNumber - 1) * limitNumber)
+      .limit(limitNumber),
+    Order.countDocuments(filter),
+  ]);
+
+  const brands = items.length
+    ? await Brand.find({ _id: { $in: [...new Set(items.map((o) => String(o.brandId)))] } }).select('name')
+    : [];
+  const nameById = new Map(brands.map((b) => [String(b._id), b.name]));
+
+  return {
+    items: items.map((o) => ({
+      ...(typeof o.toObject === 'function' ? o.toObject() : o),
+      brandName: nameById.get(String(o.brandId)) || null,
+    })),
+    pagination: {
+      page: pageNumber,
+      limit: limitNumber,
+      total,
+      pages: Math.ceil(total / limitNumber),
+    },
+  };
+}
+
 /**
  * Customers only ever see their own orders (someone else's order is a 404,
  * not a 403, so ids can't be probed). SUPER_ADMIN may view any order.
@@ -293,6 +335,7 @@ async function cancelMyOrder(userId, orderId) {
 module.exports = {
   checkout,
   listMyOrders,
+  listAllOrders,
   getOrderForUser,
   cancelMyOrder,
   nextOrderNumber,

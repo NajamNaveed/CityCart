@@ -21,6 +21,7 @@ const deliveryRoutes = require('./routes/delivery.routes');
 const paymentRoutes = require('./routes/payment.routes');
 const employeeRoutes = require('./routes/employee.routes');
 const adminBrandRoutes = require('./routes/adminBrand.routes');
+const adminOrderRoutes = require('./routes/adminOrder.routes');
 
 const requestLogger = require('./middleware/requestLogger');
 const { apiLimiter } = require('./middleware/rateLimiters');
@@ -79,6 +80,7 @@ app.use('/api/v1/deliveries', deliveryRoutes);
 app.use('/api/v1/payments', paymentRoutes);
 app.use('/api/v1/employees', employeeRoutes);
 app.use('/api/v1/admin/brands', adminBrandRoutes);
+app.use('/api/v1/admin/orders', adminOrderRoutes);
 
 // Must stay LAST: unmatched routes -> 404, then the global error handler.
 app.use(notFound);
