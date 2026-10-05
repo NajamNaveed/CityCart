@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import ProductImage from './ProductImage'
+import Stars from './Stars'
 import { useAuth } from '../hooks/useAuth'
 import { useCart } from '../hooks/useCart'
 import { getErrorMessage } from '../services/api'
 import { loginUrl } from '../utils/nav'
 import { formatPrice } from '../ui'
 
-export default function ProductCard({ product, brandName }) {
+export default function ProductCard({ product, brandName, rating }) {
   const { user } = useAuth()
   const { addItem } = useCart()
   const navigate = useNavigate()
@@ -68,6 +69,14 @@ export default function ProductCard({ product, brandName }) {
             <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted">{brandName}</p>
           )}
           <h3 className="mt-1 line-clamp-2 text-[15px] font-medium leading-snug">{product.name}</h3>
+          {rating && (
+            <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted">
+              <Stars value={rating.average} />
+              <span>
+                {rating.average.toFixed(1)} ({rating.count})
+              </span>
+            </p>
+          )}
           <p className="mt-1.5 flex items-baseline gap-2 text-[15px]">
             <span className="font-semibold">{formatPrice(product.price)}</span>
             {discount > 0 && (

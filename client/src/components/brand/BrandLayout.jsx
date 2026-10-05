@@ -10,6 +10,7 @@ const NAV = [
   ['/brand/categories', 'Categories', false, 'categories.view'],
   ['/brand/orders', 'Orders', false, 'orders.view'],
   ['/brand/deliveries', 'Deliveries', false, 'delivery.view'],
+  ['/brand/reviews', 'Reviews', false, 'products.view'],
   ['/brand/team', 'Team', false, 'employees.view'],
 ]
 

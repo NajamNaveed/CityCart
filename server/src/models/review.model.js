@@ -74,6 +74,11 @@ const reviewSchema = new mongoose.Schema(
   }
 );
 
+// One review per customer per product (race-safe: the database itself refuses a second one).
+reviewSchema.index({ customerId: 1, productId: 1 }, { unique: true });
+// The product page's list: newest approved reviews first.
+reviewSchema.index({ productId: 1, isApproved: 1, createdAt: -1 });
+
 const Review = mongoose.model('Review', reviewSchema);
 
 module.exports = Review;

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import api, { getErrorMessage } from '../services/api'
 import StatusPill from '../components/StatusPill'
+import OrderItemReview from '../components/OrderItemReview'
 import { formatDateTime, formatPrice, humanize, wrap } from '../ui'
 
 export default function MyOrderDetail() {
@@ -10,6 +11,7 @@ export default function MyOrderDetail() {
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState({ text: '', tone: 'ok' })
+  const [myReviews, setMyReviews] = useState([])
 
   useEffect(() => {
     let active = true
@@ -21,6 +23,24 @@ export default function MyOrderDetail() {
       active = false
     }
   }, [id])
+
+  // Once the order is delivered, load the customer's own reviews of its items.
+  const delivered = state.order?.orderStatus === 'DELIVERED'
+  useEffect(() => {
+    if (!delivered) return undefined
+    let active = true
+    api
+      .get('/reviews/mine', { params: { orderId: id } })
+      .then((res) => active && setMyReviews(res.data.reviews))
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [delivered, id])
+
+  const reviewOf = (productId) => myReviews.find((r) => String(r.productId) === String(productId))
+  const saveReview = (review) => setMyReviews((list) => [review, ...list.filter((r) => r._id !== review._id)])
+  const dropReview = (reviewId) => setMyReviews((list) => list.filter((r) => r._id !== reviewId))
 
   async function cancel() {
     setBusy(true)
@@ -90,16 +110,28 @@ export default function MyOrderDetail() {
           <h2 className="border-b border-ink pb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Items</h2>
           <ul className="divide-y divide-line">
             {order.items.map((item) => (
-              <li key={`${item.productId}-${item.sku || ''}`} className="flex justify-between gap-4 py-4 text-sm">
-                <span>
-                  <Link to={`/product/${item.productId}`} className="font-medium hover:text-clay">
-                    {item.productName}
-                  </Link>
-                  <span className="block text-muted">
-                    {item.quantity} × {formatPrice(item.unitPrice)}
+              <li key={`${item.productId}-${item.sku || ''}`} className="py-4 text-sm">
+                <div className="flex justify-between gap-4">
+                  <span>
+                    <Link to={`/product/${item.productId}`} className="font-medium hover:text-clay">
+                      {item.productName}
+                    </Link>
+                    <span className="block text-muted">
+                      {item.quantity} × {formatPrice(item.unitPrice)}
+                    </span>
                   </span>
-                </span>
-                <span className="font-semibold">{formatPrice(item.totalPrice)}</span>
+                  <span className="font-semibold">{formatPrice(item.totalPrice)}</span>
+                </div>
+                {delivered && (
+                  <OrderItemReview
+                    key={reviewOf(item.productId)?._id || 'new'}
+                    orderId={order._id}
+                    item={item}
+                    review={reviewOf(item.productId)}
+                    onSaved={saveReview}
+                    onDeleted={dropReview}
+                  />
+                )}
               </li>
             ))}
           </ul>
@@ -156,6 +188,7 @@ export default function MyOrderDetail() {
               {a.additionalInstructions && <span className="mt-2 block text-muted">Note: {a.additionalInstructions}</span>}
             </address>
           </section>
+
           {delivery && (delivery.trackingReference || delivery.assignedAgent || delivery.status === 'FAILED') && (
             <section>
               <h2 className="border-b border-ink pb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Delivery</h2>
@@ -178,6 +211,7 @@ export default function MyOrderDetail() {
               )}
             </section>
           )}
+
           {order.statusHistory?.length > 0 && (
             <section>
               <h2 className="border-b border-ink pb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Progress</h2>

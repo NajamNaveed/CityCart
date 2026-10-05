@@ -4,6 +4,9 @@ import api, { getErrorMessage } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import { useCart } from '../hooks/useCart'
 import ProductImage from '../components/ProductImage'
+import ReviewsSection from '../components/ReviewsSection'
+import Stars from '../components/Stars'
+import { useProductReviews } from '../hooks/useProductReviews'
 import { loginUrl } from '../utils/nav'
 import { btnPrimary, formatPrice, sectionLabel, wrap } from '../ui'
 
@@ -30,6 +33,7 @@ function ProductView({ product, brand }) {
       ? Math.round((1 - product.price / product.compareAtPrice) * 100)
       : 0
   const details = Object.entries(product.attributes || {}).filter(([, v]) => v !== '' && v != null)
+  const reviews = useProductReviews(product._id)
 
   async function add(quantity) {
     setBusy(true)
@@ -70,6 +74,7 @@ function ProductView({ product, brand }) {
   }
 
   return (
+    <>
     <div className={`${wrap} py-10`}>
       <p className="text-[13px] text-muted">
         <Link to="/" className="hover:text-clay">
@@ -110,6 +115,16 @@ function ProductView({ product, brand }) {
             </Link>
           )}
           <h1 className="mt-3 text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">{product.name}</h1>
+
+          {reviews.summary.count > 0 && (
+            <a href="#reviews" className="mt-3 inline-flex items-center gap-2 text-sm hover:text-clay">
+              <Stars value={reviews.summary.average} />
+              <span className="font-medium">{reviews.summary.average.toFixed(1)}</span>
+              <span className="text-muted">
+                ({reviews.summary.count} {reviews.summary.count === 1 ? 'review' : 'reviews'})
+              </span>
+            </a>
+          )}
 
           <p className="mt-5 flex items-baseline gap-3">
             <span className="text-2xl font-semibold">{formatPrice(product.price)}</span>
@@ -193,6 +208,9 @@ function ProductView({ product, brand }) {
         </div>
       </div>
     </div>
+
+    <ReviewsSection data={reviews} />
+    </>
   )
 }
 

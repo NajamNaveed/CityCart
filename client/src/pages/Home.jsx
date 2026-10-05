@@ -4,6 +4,7 @@ import api from '../services/api'
 import { useCity } from '../hooks/useCity'
 import { useBrands } from '../hooks/useBrands'
 import ProductCard from '../components/ProductCard'
+import { useRatings } from '../hooks/useRatings'
 import ProductImage from '../components/ProductImage'
 import SectionHeader from '../components/SectionHeader'
 import { btnOutline, btnPrimary, formatPrice, sectionLabel, wrap } from '../ui'
@@ -63,6 +64,7 @@ export default function Home() {
   const loading = result.key !== key
   const products = result.items
   const brandName = Object.fromEntries(brands.map((b) => [b._id, b.name]))
+  const ratings = useRatings(products.map((p) => p._id))
   const featured = products.slice(0, 2)
 
   return (
@@ -147,7 +149,7 @@ export default function Home() {
         ) : (
           <div className="grid grid-cols-2 gap-x-5 gap-y-10 md:grid-cols-3 lg:grid-cols-4">
             {products.map((p) => (
-              <ProductCard key={p._id} product={p} brandName={brandName[p.brandId]} />
+              <ProductCard key={p._id} product={p} brandName={brandName[p.brandId]} rating={ratings[p._id]} />
             ))}
           </div>
         )}

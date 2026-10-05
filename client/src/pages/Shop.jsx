@@ -4,6 +4,7 @@ import api, { getErrorMessage } from '../services/api'
 import { useCity } from '../hooks/useCity'
 import { useBrands } from '../hooks/useBrands'
 import ProductCard from '../components/ProductCard'
+import { useRatings } from '../hooks/useRatings'
 import { btnOutline, wrap } from '../ui'
 
 const PAGE_SIZE = 12
@@ -68,6 +69,7 @@ export default function Shop() {
 
   const loading = result.key !== key
   const brandName = Object.fromEntries(brands.map((b) => [b._id, b.name]))
+  const ratings = useRatings(result.items.map((p) => p._id))
   const activeBrand = brands.find((b) => b._id === brandId)
   const pg = result.pagination
 
@@ -140,7 +142,7 @@ export default function Shop() {
         ) : (
           <div className="grid grid-cols-2 gap-x-5 gap-y-10 md:grid-cols-3 lg:grid-cols-4">
             {result.items.map((p) => (
-              <ProductCard key={p._id} product={p} brandName={brandName[p.brandId]} />
+              <ProductCard key={p._id} product={p} brandName={brandName[p.brandId]} rating={ratings[p._id]} />
             ))}
           </div>
         )}

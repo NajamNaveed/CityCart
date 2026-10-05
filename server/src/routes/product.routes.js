@@ -1,6 +1,7 @@
 const express = require('express');
 
 const { list, mine, mineById, getById, create, update, remove } = require('../controllers/product.controller');
+const { forProduct: reviewsForProduct } = require('../controllers/review.controller');
 const { getProductByIdRaw } = require('../services/product.service');
 const authenticate = require('../middleware/authenticate');
 const requirePermission = require('../middleware/requirePermission');
@@ -31,6 +32,8 @@ router.get(
   requireBrandOwnership((req) => getProductByIdRaw(req.params.id)),
   mineById
 );
+// A product's public reviews and rating summary.
+router.get('/:id/reviews', validateObjectIdParam, reviewsForProduct);
 router.get('/:id', getById);
 
 // Create: no existing resource to fetch, so tenant ownership comes from

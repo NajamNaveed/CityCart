@@ -28,6 +28,7 @@ import Orders from './pages/brand/Orders'
 import OrderDetail from './pages/brand/OrderDetail'
 import Deliveries from './pages/brand/Deliveries'
 import Team from './pages/brand/Team'
+import BrandReviews from './pages/brand/Reviews'
 import AdminLogin from './pages/AdminLogin'
 import AdminLayout from './components/admin/AdminLayout'
 import AdminOverview from './pages/admin/Overview'
@@ -36,6 +37,7 @@ import AdminBrandDetail from './pages/admin/BrandDetail'
 import AdminOrders from './pages/admin/Orders'
 import AdminOrderDetail from './pages/admin/OrderDetail'
 import AdminCities from './pages/admin/Cities'
+import AdminReviews from './pages/admin/Reviews'
 import NotFound from './pages/NotFound'
 
 const BRAND_ROLES = ['BRAND_ADMIN', 'BRAND_EMPLOYEE']
@@ -90,6 +92,7 @@ function App() {
                   <Route path="orders" element={<Orders />} />
                   <Route path="orders/:id" element={<OrderDetail />} />
                   <Route path="deliveries" element={<Deliveries />} />
+                  <Route path="reviews" element={<BrandReviews />} />
                   <Route path="team" element={<Team />} />
                 </Route>
               </Route>
@@ -105,6 +108,7 @@ function App() {
                   <Route path="brands/:id" element={<AdminBrandDetail />} />
                   <Route path="orders" element={<AdminOrders />} />
                   <Route path="orders/:id" element={<AdminOrderDetail />} />
+                  <Route path="reviews" element={<AdminReviews />} />
                   <Route path="cities" element={<AdminCities />} />
                 </Route>
               </Route>
