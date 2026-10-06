@@ -8,11 +8,13 @@ jest.mock('../src/models/payment.model');
 jest.mock('../src/utils/transaction', () => ({
   runInTransaction: (work) => work('SESSION'),
 }));
+jest.mock('../src/services/notification.service');
 
 const User = require('../src/models/user.model');
 const Employee = require('../src/models/employee.model');
 const Order = require('../src/models/order.model');
 const Payment = require('../src/models/payment.model');
+const notifications = require('../src/services/notification.service');
 const app = require('../src/app');
 const { ROLES } = require('../src/config/roles');
 const { PERMISSIONS } = require('../src/config/permissions');
@@ -158,6 +160,11 @@ describe('PATCH /api/v1/payments/:id/status — rules', () => {
         { new: true, session: 'SESSION' }
       );
       expect(Order.updateOne).toHaveBeenCalledWith({ _id: payment.orderId }, { $set: { paymentStatus: 'PAID' } }, { session: 'SESSION' });
+      // Cash collection reaches the buyer exactly once (docs/12 §16).
+      expect(notifications.notifyPaymentReceived).toHaveBeenCalledTimes(1);
+      expect(notifications.notifyPaymentReceived).toHaveBeenCalledWith(
+        expect.objectContaining({ _id: payment.orderId })
+      );
     });
 
     it('409 before delivery (no early "cash collected")', async () => {
@@ -168,6 +175,7 @@ describe('PATCH /api/v1/payments/:id/status — rules', () => {
       expect(res.status).toBe(409);
       expect(res.body.code).toBe('PAYMENT_NOT_COLLECTABLE');
       expect(Payment.findOneAndUpdate).not.toHaveBeenCalled();
+      expect(notifications.notifyPaymentReceived).not.toHaveBeenCalled();
     });
 
     it.each(['PAID', 'REFUNDED', 'CANCELLED', 'FAILED'])('409 when the payment is already %s', async (status) => {
@@ -194,6 +202,11 @@ describe('PATCH /api/v1/payments/:id/status — rules', () => {
         { new: true, session: 'SESSION' }
       );
       expect(Order.updateOne).toHaveBeenCalledWith({ _id: payment.orderId }, { $set: { paymentStatus: 'REFUNDED' } }, { session: 'SESSION' });
+      // The buyer learns a refund was issued, with amount and reason.
+      expect(notifications.notifyRefundIssued).toHaveBeenCalledWith(
+        expect.objectContaining({ _id: payment.orderId }),
+        { amount: 70, reason }
+      );
     });
 
     it('PARTIALLY_REFUNDED adds to the cumulative refunded total', async () => {
@@ -248,6 +261,8 @@ describe('PATCH /api/v1/payments/:id/status — rules', () => {
       expect(res.status).toBe(409);
       expect(res.body.code).toBe('PAYMENT_CHANGED');
       expect(Order.updateOne).not.toHaveBeenCalled();
+      // A refund that never committed is never announced.
+      expect(notifications.notifyRefundIssued).not.toHaveBeenCalled();
     });
   });
 });

@@ -27,8 +27,12 @@ const NOTIFICATION_TYPES = [
   'REFUND_ISSUED',
   'EMPLOYEE_CREATED',
   'EMPLOYEE_PERMISSION_CHANGED',
+  'NEW_REVIEW',
   'SYSTEM_NOTIFICATION',
 ];
+// NEW_REVIEW is the one type added beyond doc12 §4's initial list: §6 lists
+// "New review received" as a brand notification example, and §4 explicitly
+// allows "additional types may be added later". doc04 §29 was updated to match.
 
 const notificationSchema = new mongoose.Schema(
   {
@@ -36,12 +40,10 @@ const notificationSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
-      // Not documented as a required index in doc04 §33 (Notification
-      // isn't listed there), but added per AGENTS.md §13 ("add indexes
-      // where justified") since notifications are always looked up by
-      // recipient (§29 — "should only be visible to their intended
-      // recipient").
-      index: true,
+      // Lookups are always by recipient (§29 — "should only be visible to
+      // their intended recipient"); indexed via the compound indexes below
+      // (whose { userId } prefix covers the single-field case), so a
+      // standalone index would be redundant.
     },
     type: {
       type: String,
@@ -66,11 +68,24 @@ const notificationSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // doc12 §9/§10: set when the recipient opens the notification. Not in
+    // doc04 §29's field list; §10 says "The database may use isRead, readAt".
+    readAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: { createdAt: true, updatedAt: false },
   }
 );
+
+// Inbox queries are always "one user's notifications": the unread badge
+// counts { userId, isRead: false } and the list sorts { userId, createdAt }.
+// Both compound indexes serve those; their userId prefix covers any
+// userId-only lookup.
+notificationSchema.index({ userId: 1, isRead: 1 });
+notificationSchema.index({ userId: 1, createdAt: -1 });
 
 const Notification = mongoose.model('Notification', notificationSchema);
 

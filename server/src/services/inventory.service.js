@@ -1,5 +1,6 @@
 const Inventory = require('../models/inventory.model');
 const { DEFAULT_ADJUSTMENT_REASON } = require('../config/inventoryReasons');
+const { notifyStockTransitions } = require('./notification.service');
 
 class InventoryError extends Error {
   constructor(status, message) {
@@ -210,7 +211,8 @@ async function ensureInventory(product) {
  * must be — not an explicit requirement yet).
  */
 async function adjustStock(product, { change, reason, userId }) {
-  await ensureInventory(product);
+  const existing = await ensureInventory(product);
+  const fromStatus = getStockStatus(existing);
 
   const filter = { productId: product._id, brandId: product.brandId };
   if (change < 0) {
@@ -226,6 +228,18 @@ async function adjustStock(product, { change, reason, userId }) {
   if (!updated) {
     throw new InventoryError(409, 'Insufficient available stock for this adjustment.');
   }
+
+  // Alert brand staff only if the adjustment pushed the product INTO a low/
+  // out-of-stock state (notifyStockTransitions filters non-transitions).
+  await notifyStockTransitions([
+    {
+      brandId: product.brandId,
+      productId: product._id,
+      productName: product.name,
+      from: fromStatus,
+      to: getStockStatus(updated),
+    },
+  ]);
 
   return {
     inventory: updated,
@@ -263,12 +277,21 @@ async function updateInventory(product, data) {
   const hasSettings = Object.keys(settings).length > 0;
 
   const ensured = await ensureInventory(product);
+  const fromStatus = getStockStatus(ensured);
+  const transitionFor = (doc) => ({
+    brandId: product.brandId,
+    productId: product._id,
+    productName: product.name,
+    from: fromStatus,
+    to: getStockStatus(doc),
+  });
 
   if (quantity === undefined) {
     const updated = await Inventory.findOneAndUpdate(scope, { $set: settings }, { new: true });
     if (!updated) {
       throw new InventoryError(404, 'Inventory not found.');
     }
+    await notifyStockTransitions([transitionFor(updated)]);
     return updated;
   }
 
@@ -306,6 +329,7 @@ async function updateInventory(product, data) {
       { new: true }
     );
     if (updated) {
+      await notifyStockTransitions([transitionFor(updated)]);
       return updated;
     }
   }

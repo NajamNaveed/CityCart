@@ -1,6 +1,7 @@
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { useCan } from '../../hooks/useCan'
+import NotificationBell from '../NotificationBell'
 import { wrap } from '../../ui'
 
 // [path, label, exact match, permission needed to see it (null = everyone on the team)]
@@ -34,6 +35,7 @@ export default function BrandLayout() {
             <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-pine">dashboard</span>
           </Link>
           <div className="ml-auto flex items-center gap-5 text-[13px]">
+            <NotificationBell />
             <Link to="/" className="font-medium hover:text-pine">
               View shop
             </Link>

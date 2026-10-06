@@ -26,6 +26,7 @@ jest.mock('../src/models/product.model', () => {
 jest.mock('../src/utils/transaction', () => ({
   runInTransaction: (work) => work('SESSION'),
 }));
+jest.mock('../src/services/notification.service');
 
 const User = require('../src/models/user.model');
 const Employee = require('../src/models/employee.model');
@@ -33,6 +34,7 @@ const Order = require('../src/models/order.model');
 const Payment = require('../src/models/payment.model');
 const Delivery = require('../src/models/delivery.model');
 const Inventory = require('../src/models/inventory.model');
+const notifications = require('../src/services/notification.service');
 const app = require('../src/app');
 const { ROLES } = require('../src/config/roles');
 const { PERMISSIONS } = require('../src/config/permissions');
@@ -169,6 +171,11 @@ describe('PATCH /api/v1/brand/orders/:id/status', () => {
       { new: true, session: 'SESSION' }
     );
     expect(Inventory.updateOne).not.toHaveBeenCalled(); // only REJECTED restocks
+    // The buyer is told their order is confirmed (docs/12 §5).
+    expect(notifications.notifyCustomerOfOrderStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: id, orderStatus: 'CONFIRMED' }),
+      'CONFIRMED'
+    );
   });
 
   it('REJECTED restocks every item, cancels the payment and payment status', async () => {
@@ -214,6 +221,8 @@ describe('PATCH /api/v1/brand/orders/:id/status', () => {
       [{ orderId, brandId, customerId, status: 'READY_FOR_PICKUP', address: shippingAddress, deliveryFee: 0 }],
       { session: 'SESSION' }
     );
+    // READY_FOR_SHIPMENT is internal workflow — the customer hears nothing yet.
+    expect(notifications.notifyCustomerOfOrderStatus).not.toHaveBeenCalled();
   });
 
   it('other statuses do not create a delivery', async () => {
@@ -234,6 +243,8 @@ describe('PATCH /api/v1/brand/orders/:id/status', () => {
     expect(res.body).toMatchObject({ code: 'INVALID_TRANSITION', from: 'PENDING', to: 'PROCESSING' });
     expect(res.body.allowed.sort()).toEqual(['CONFIRMED', 'REJECTED']);
     expect(Inventory.updateOne).not.toHaveBeenCalled();
+    // An illegal move changes nothing and announces nothing.
+    expect(notifications.notifyCustomerOfOrderStatus).not.toHaveBeenCalled();
   });
 
   it("404 for another brand's or a missing order", async () => {

@@ -5,8 +5,11 @@ const mongoose = require('mongoose');
 jest.mock('../src/models/inventory.model', () =>
   require('./helpers/fakeInventoryStore').createFakeInventoryModel()
 );
+// Stock-transition alerts: automocked so no real notifications are attempted.
+jest.mock('../src/services/notification.service');
 
 const Inventory = require('../src/models/inventory.model');
+const notifications = require('../src/services/notification.service');
 const {
   ensureInventory,
   adjustStock,
@@ -179,6 +182,17 @@ describe('adjustStock', () => {
     );
     expect(adjustment.timestamp).toBeInstanceOf(Date);
     expectConsistent(product._id);
+    // Transition detection is wired: from/to states are reported (the real
+    // notifyStockTransitions only alerts on entries INTO low/out-of-stock).
+    expect(notifications.notifyStockTransitions).toHaveBeenCalledWith([
+      expect.objectContaining({
+        productId: product._id,
+        brandId: product.brandId,
+        productName: product.name,
+        from: 'IN_STOCK',
+        to: 'IN_STOCK',
+      }),
+    ]);
   });
 
   it('defaults the reason to MANUAL_ADJUSTMENT', async () => {

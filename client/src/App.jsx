@@ -2,6 +2,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './context/AuthProvider'
 import { CityProvider } from './context/CityProvider'
 import { CartProvider } from './context/CartProvider'
+import { NotificationProvider } from './context/NotificationProvider'
 import ServerBanner from './components/ServerBanner'
 import StoreLayout from './components/StoreLayout'
 import SellerLayout from './components/SellerLayout'
@@ -38,6 +39,7 @@ import AdminOrders from './pages/admin/Orders'
 import AdminOrderDetail from './pages/admin/OrderDetail'
 import AdminCities from './pages/admin/Cities'
 import AdminReviews from './pages/admin/Reviews'
+import Notifications from './pages/Notifications'
 import NotFound from './pages/NotFound'
 
 const BRAND_ROLES = ['BRAND_ADMIN', 'BRAND_EMPLOYEE']
@@ -46,75 +48,85 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <CityProvider>
-          <CartProvider>
-            <ServerBanner />
-            <Routes>
-              {/* Shoppers */}
-              <Route element={<StoreLayout />}>
-                <Route index element={<Home />} />
-                <Route path="shop" element={<Shop />} />
-                <Route path="product/:id" element={<ProductDetail />} />
+        {/* Notifications need the signed-in user only; its socket lives as long as the session. */}
+        <NotificationProvider>
+          <CityProvider>
+            <CartProvider>
+              <ServerBanner />
+              <Routes>
+                {/* Shoppers */}
+                <Route element={<StoreLayout />}>
+                  <Route index element={<Home />} />
+                  <Route path="shop" element={<Shop />} />
+                  <Route path="product/:id" element={<ProductDetail />} />
 
+                  <Route element={<GuestRoute />}>
+                    <Route path="login" element={<Login />} />
+                    <Route path="register" element={<Register />} />
+                  </Route>
+
+                  <Route element={<ProtectedRoute roles={['CUSTOMER']} />}>
+                    <Route path="cart" element={<Cart />} />
+                    <Route path="checkout" element={<Checkout />} />
+                    <Route path="order-placed" element={<OrderPlaced />} />
+                    <Route path="orders" element={<MyOrders />} />
+                    <Route path="orders/:id" element={<MyOrderDetail />} />
+                  </Route>
+
+                  {/* The inbox is personal: any signed-in user may read their own. */}
+                  <Route element={<ProtectedRoute />}>
+                    <Route path="notifications" element={<Notifications />} />
+                  </Route>
+
+                  <Route path="*" element={<NotFound />} />
+                </Route>
+
+                {/* Sellers */}
+                <Route element={<SellerLayout />}>
+                  <Route path="sell" element={<Sell />} />
+                  <Route element={<GuestRoute />}>
+                    <Route path="sell/login" element={<SellerLogin />} />
+                    <Route path="sell/apply" element={<Apply />} />
+                  </Route>
+                </Route>
+
+                {/* Brand dashboard: its own layout, brand staff only */}
+                <Route element={<ProtectedRoute roles={BRAND_ROLES} loginPath="/sell/login" />}>
+                  <Route path="brand" element={<BrandLayout />}>
+                    <Route index element={<Overview />} />
+                    <Route path="products" element={<BrandProducts />} />
+                    <Route path="products/new" element={<ProductForm />} />
+                    <Route path="products/:id" element={<ProductForm />} />
+                    <Route path="categories" element={<Categories />} />
+                    <Route path="orders" element={<Orders />} />
+                    <Route path="orders/:id" element={<OrderDetail />} />
+                    <Route path="deliveries" element={<Deliveries />} />
+                    <Route path="reviews" element={<BrandReviews />} />
+                    <Route path="team" element={<Team />} />
+                    <Route path="notifications" element={<Notifications />} />
+                  </Route>
+                </Route>
+
+                {/* Super admin: unlinked, no shared layout */}
                 <Route element={<GuestRoute />}>
-                  <Route path="login" element={<Login />} />
-                  <Route path="register" element={<Register />} />
+                  <Route path="admin/login" element={<AdminLogin />} />
                 </Route>
-
-                <Route element={<ProtectedRoute roles={['CUSTOMER']} />}>
-                  <Route path="cart" element={<Cart />} />
-                  <Route path="checkout" element={<Checkout />} />
-                  <Route path="order-placed" element={<OrderPlaced />} />
-                  <Route path="orders" element={<MyOrders />} />
-                  <Route path="orders/:id" element={<MyOrderDetail />} />
+                <Route element={<ProtectedRoute roles={['SUPER_ADMIN']} loginPath="/admin/login" />}>
+                  <Route path="admin" element={<AdminLayout />}>
+                    <Route index element={<AdminOverview />} />
+                    <Route path="brands" element={<AdminBrands />} />
+                    <Route path="brands/:id" element={<AdminBrandDetail />} />
+                    <Route path="orders" element={<AdminOrders />} />
+                    <Route path="orders/:id" element={<AdminOrderDetail />} />
+                    <Route path="reviews" element={<AdminReviews />} />
+                    <Route path="cities" element={<AdminCities />} />
+                    <Route path="notifications" element={<Notifications />} />
+                  </Route>
                 </Route>
-
-                <Route path="*" element={<NotFound />} />
-              </Route>
-
-              {/* Sellers */}
-              <Route element={<SellerLayout />}>
-                <Route path="sell" element={<Sell />} />
-                <Route element={<GuestRoute />}>
-                  <Route path="sell/login" element={<SellerLogin />} />
-                  <Route path="sell/apply" element={<Apply />} />
-                </Route>
-              </Route>
-
-              {/* Brand dashboard: its own layout, brand staff only */}
-              <Route element={<ProtectedRoute roles={BRAND_ROLES} loginPath="/sell/login" />}>
-                <Route path="brand" element={<BrandLayout />}>
-                  <Route index element={<Overview />} />
-                  <Route path="products" element={<BrandProducts />} />
-                  <Route path="products/new" element={<ProductForm />} />
-                  <Route path="products/:id" element={<ProductForm />} />
-                  <Route path="categories" element={<Categories />} />
-                  <Route path="orders" element={<Orders />} />
-                  <Route path="orders/:id" element={<OrderDetail />} />
-                  <Route path="deliveries" element={<Deliveries />} />
-                  <Route path="reviews" element={<BrandReviews />} />
-                  <Route path="team" element={<Team />} />
-                </Route>
-              </Route>
-
-              {/* Super admin: unlinked, no shared layout */}
-              <Route element={<GuestRoute />}>
-                <Route path="admin/login" element={<AdminLogin />} />
-              </Route>
-              <Route element={<ProtectedRoute roles={['SUPER_ADMIN']} loginPath="/admin/login" />}>
-                <Route path="admin" element={<AdminLayout />}>
-                  <Route index element={<AdminOverview />} />
-                  <Route path="brands" element={<AdminBrands />} />
-                  <Route path="brands/:id" element={<AdminBrandDetail />} />
-                  <Route path="orders" element={<AdminOrders />} />
-                  <Route path="orders/:id" element={<AdminOrderDetail />} />
-                  <Route path="reviews" element={<AdminReviews />} />
-                  <Route path="cities" element={<AdminCities />} />
-                </Route>
-              </Route>
-            </Routes>
-          </CartProvider>
-        </CityProvider>
+              </Routes>
+            </CartProvider>
+          </CityProvider>
+        </NotificationProvider>
       </AuthProvider>
     </BrowserRouter>
   )

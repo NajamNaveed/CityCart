@@ -5,6 +5,7 @@ const Order = require('../models/order.model');
 const Product = require('../models/product.model');
 const Brand = require('../models/brand.model');
 const User = require('../models/user.model');
+const { notifyBrandOfNewReview } = require('./notification.service');
 
 class ReviewError extends Error {
   constructor(status, message, extra = {}) {
@@ -115,7 +116,7 @@ async function createReview(customerId, { orderId, productId, rating, title, com
   try {
     // brandId comes from the order, never from the request. A verified purchase is shown straight away;
     // the super admin can hide a review that breaks the rules.
-    return await Review.create({
+    const review = await Review.create({
       customerId,
       productId,
       brandId: order.brandId,
@@ -125,6 +126,9 @@ async function createReview(customerId, { orderId, productId, rating, title, com
       ...(comment && { comment }),
       isApproved: true,
     });
+    // Post-create and best-effort: a failed alert must not fail the review.
+    await notifyBrandOfNewReview(review);
+    return review;
   } catch (err) {
     if (err && err.code === 11000) {
       throw new ReviewError(409, 'You have already reviewed this product.', { code: 'ALREADY_REVIEWED' });

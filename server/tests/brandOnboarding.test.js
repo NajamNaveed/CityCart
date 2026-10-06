@@ -12,12 +12,14 @@ jest.mock('../src/models/delivery.model');
 jest.mock('../src/models/inventory.model');
 jest.mock('../src/utils/password', () => ({ hashPassword: jest.fn(), comparePassword: jest.fn() }));
 jest.mock('../src/utils/transaction', () => ({ runInTransaction: (work) => work('SESSION') }));
+jest.mock('../src/services/notification.service');
 
 const User = require('../src/models/user.model');
 const Employee = require('../src/models/employee.model');
 const Brand = require('../src/models/brand.model');
 const Store = require('../src/models/store.model');
 const City = require('../src/models/city.model');
+const notifications = require('../src/services/notification.service');
 const Order = require('../src/models/order.model');
 const Payment = require('../src/models/payment.model');
 const Delivery = require('../src/models/delivery.model');
@@ -110,6 +112,14 @@ describe('POST /api/v1/brands/apply', () => {
     expect(storeDoc).toMatchObject({ slug: 'fresh-kicks-store', name: 'Fresh Kicks Store' });
     expect(String(storeDoc.brandId)).toBe(String(brandDoc._id));
     expect(JSON.stringify(res.body)).not.toMatch(/HASHED|secret123|passwordHash/);
+    // docs/12 §8: the platform is told a brand registered; the owner is welcomed.
+    expect(notifications.notifySuperAdminsOfNewBrand).toHaveBeenCalledTimes(1);
+    expect(notifications.notifySuperAdminsOfNewBrand).toHaveBeenCalledWith(
+      expect.objectContaining({ brandName: 'Fresh Kicks', ownerName: 'Sara Owner' })
+    );
+    expect(notifications.notifyBrandOwnerWelcome).toHaveBeenCalledWith(
+      expect.objectContaining({ brandName: 'Fresh Kicks' })
+    );
   });
 
   it('status, role and brandId can never be set by the client', async () => {

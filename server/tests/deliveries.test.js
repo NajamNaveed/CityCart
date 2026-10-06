@@ -9,12 +9,14 @@ jest.mock('../src/models/delivery.model');
 jest.mock('../src/utils/transaction', () => ({
   runInTransaction: (work) => work('SESSION'),
 }));
+jest.mock('../src/services/notification.service');
 
 const User = require('../src/models/user.model');
 const Employee = require('../src/models/employee.model');
 const Order = require('../src/models/order.model');
 const Payment = require('../src/models/payment.model');
 const Delivery = require('../src/models/delivery.model');
+const notifications = require('../src/services/notification.service');
 const app = require('../src/app');
 const { ROLES } = require('../src/config/roles');
 const { PERMISSIONS } = require('../src/config/permissions');
@@ -146,6 +148,10 @@ describe('PATCH /api/v1/deliveries/:id/status', () => {
     Delivery.findById.mockReturnValue({ session: () => Promise.resolve({ _id: previous && previous._id, status: 'x' }) });
     Order.findOneAndUpdate.mockResolvedValue(order);
     Order.updateOne.mockResolvedValue({});
+    // Conditional COD flip (findOneAndUpdate, so a double DELIVERED can't
+    // double-announce payment); updateOne stays mocked for the "not called"
+    // assertions below.
+    Payment.findOneAndUpdate.mockResolvedValue({});
     Payment.updateOne.mockResolvedValue({});
   }
 
@@ -194,6 +200,9 @@ describe('PATCH /api/v1/deliveries/:id/status', () => {
       { new: true, session: 'SESSION' }
     );
     expect(Payment.updateOne).not.toHaveBeenCalled();
+    // The buyer hears "shipped" (docs/12 §5).
+    expect(notifications.notifyCustomerOfOrderStatus).toHaveBeenCalledWith(expect.anything(), 'SHIPPED');
+    expect(notifications.notifyPaymentReceived).not.toHaveBeenCalled();
   });
 
   it('DELIVERED: order DELIVERED and COD payment PAID (only if still PENDING) with confirmer', async () => {
@@ -206,11 +215,14 @@ describe('PATCH /api/v1/deliveries/:id/status', () => {
 
     expect(res.status).toBe(200);
     expect(Order.updateOne).toHaveBeenCalledWith({ _id: orderId }, { $set: { paymentStatus: 'PAID' } }, { session: 'SESSION' });
-    expect(Payment.updateOne).toHaveBeenCalledWith(
+    expect(Payment.findOneAndUpdate).toHaveBeenCalledWith(
       { orderId, status: 'PENDING' },
       { $set: { status: 'PAID', paidAt: expect.any(Date), confirmedBy: user._id } },
       { session: 'SESSION' }
     );
+    // Delivered + cash collected, announced after the commit (docs/12 §5).
+    expect(notifications.notifyCustomerOfOrderStatus).toHaveBeenCalledWith(expect.anything(), 'DELIVERED');
+    expect(notifications.notifyPaymentReceived).toHaveBeenCalledTimes(1);
   });
 
   it('FAILED records the reason and leaves order and payment untouched', async () => {
@@ -226,6 +238,8 @@ describe('PATCH /api/v1/deliveries/:id/status', () => {
     });
     expect(Order.findOneAndUpdate).not.toHaveBeenCalled();
     expect(Payment.updateOne).not.toHaveBeenCalled();
+    // A failed attempt tells the customer nothing.
+    expect(notifications.notifyCustomerOfOrderStatus).not.toHaveBeenCalled();
   });
 
   it('a re-attempt after FAILED does not touch the order again', async () => {
@@ -235,6 +249,8 @@ describe('PATCH /api/v1/deliveries/:id/status', () => {
 
     expect((await patch(cookie, previous._id, { status: 'OUT_FOR_DELIVERY' })).status).toBe(200);
     expect(Order.findOneAndUpdate).not.toHaveBeenCalled();
+    // No re-announcement of a status the order never left (docs/12 §16).
+    expect(notifications.notifyCustomerOfOrderStatus).not.toHaveBeenCalled();
   });
 
   it('409 INVALID_TRANSITION with allowed steps; nothing else is touched', async () => {

@@ -5,6 +5,7 @@ const { hashPassword } = require('../utils/password');
 const { runInTransaction } = require('../utils/transaction');
 const { ROLES } = require('../config/roles');
 const { ALL_PERMISSIONS } = require('../config/permissions');
+const { notifyEmployeeCreated, notifyEmployeePermissionsChanged } = require('./notification.service');
 
 const DEFAULT_LIMIT = 20;
 
@@ -107,7 +108,7 @@ async function createEmployee({ brandId, actorPermissions, data }) {
   const passwordHash = await hashPassword(data.password); // slow: outside the transaction
 
   try {
-    return await runInTransaction(async (session) => {
+    const created = await runInTransaction(async (session) => {
       if (await User.findOne({ email: data.email }).session(session)) {
         throw new EmployeeError(409, 'Email is already registered.');
       }
@@ -121,6 +122,15 @@ async function createEmployee({ brandId, actorPermissions, data }) {
       );
       return serialize(employee, user);
     });
+    // The new login learns about their account once it truly exists
+    // (post-commit); failures are swallowed inside the notification service.
+    await notifyEmployeeCreated({
+      userId: created.user._id,
+      brandId,
+      brandName: brand.name,
+      jobTitle: created.jobTitle,
+    });
+    return created;
   } catch (err) {
     if (err.code === 11000) {
       throw new EmployeeError(409, 'Email is already registered.');
@@ -202,6 +212,7 @@ async function setEmployeePermissions({ brandId, id, actorUserId, actorPermissio
       code: 'EMPLOYEE_CHANGED',
     });
   }
+  await notifyEmployeePermissionsChanged({ userId: updated.userId, brandId, added, removed });
   return serialize(updated, await User.findById(updated.userId));
 }
 

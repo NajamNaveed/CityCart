@@ -11,10 +11,12 @@ jest.mock('../src/utils/password', () => ({
 jest.mock('../src/utils/transaction', () => ({
   runInTransaction: (work) => work('SESSION'),
 }));
+jest.mock('../src/services/notification.service');
 
 const User = require('../src/models/user.model');
 const Employee = require('../src/models/employee.model');
 const Brand = require('../src/models/brand.model');
+const notifications = require('../src/services/notification.service');
 const app = require('../src/app');
 const { ROLES } = require('../src/config/roles');
 const { PERMISSIONS, ALL_PERMISSIONS } = require('../src/config/permissions');
@@ -156,6 +158,11 @@ describe('POST /api/v1/employees', () => {
     expect(opts).toEqual({ session: 'SESSION' });
     expect(Employee.create.mock.calls[0][0][0]).toMatchObject({ brandId: brandId.toString(), permissions: ['products.view'], jobTitle: 'Cashier' });
     expect(JSON.stringify(res.body)).not.toMatch(/HASHED|secret123|passwordHash/);
+    // The new employee is welcomed once the account truly exists (docs/12 §7).
+    expect(notifications.notifyEmployeeCreated).toHaveBeenCalledTimes(1);
+    const welcomed = notifications.notifyEmployeeCreated.mock.calls[0][0];
+    expect(welcomed).toMatchObject({ brandId: brandId.toString(), jobTitle: 'Cashier' });
+    expect(String(welcomed.userId)).toBeTruthy();
   });
 
   it('409 for an existing email, and on a duplicate-key race', async () => {
@@ -272,6 +279,14 @@ describe('PATCH /api/v1/employees/:id/permissions', () => {
       added: [PERMISSIONS.INVENTORY_VIEW],
       removed: [PERMISSIONS.ORDERS_VIEW],
     });
+    // The employee is told what changed (docs/12 §7).
+    expect(notifications.notifyEmployeePermissionsChanged).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: target.userId,
+        added: [PERMISSIONS.INVENTORY_VIEW],
+        removed: [PERMISSIONS.ORDERS_VIEW],
+      })
+    );
   });
 
   it.each([

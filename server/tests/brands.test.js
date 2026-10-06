@@ -4,10 +4,12 @@ const mongoose = require('mongoose');
 jest.mock('../src/models/user.model');
 jest.mock('../src/models/brand.model');
 jest.mock('../src/models/city.model');
+jest.mock('../src/services/notification.service');
 
 const User = require('../src/models/user.model');
 const Brand = require('../src/models/brand.model');
 const City = require('../src/models/city.model');
+const notifications = require('../src/services/notification.service');
 const app = require('../src/app');
 const { ROLES } = require('../src/config/roles');
 const { getAuthCookie } = require('./helpers/testAuth');
@@ -289,6 +291,8 @@ describe('PATCH /api/v1/brands/:id/status (Super Admin only)', () => {
 
     expect(res.status).toBe(200);
     expect(save).toHaveBeenCalled();
+    // Staff learn their brand's status changed (docs/12 §8).
+    expect(notifications.notifyBrandStatusChanged).toHaveBeenCalledWith(expect.anything(), 'ACTIVE');
   });
 
   it('denies a BRAND_ADMIN (even for their own brand) with 403', async () => {

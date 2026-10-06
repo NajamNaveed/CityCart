@@ -939,15 +939,21 @@ title
 message
 data
 isRead
+readAt
 createdAt
 ```
+
+`readAt` (docs/12 §9-§10) is set when the recipient opens the notification.
+The `type` values are governed by docs/12 §4; besides that initial list,
+`NEW_REVIEW` was added per §4's "additional types may be added later" (§6
+lists "New review received" as a brand notification).
 
 Example:
 
 ```json
 {
   "userId": "user123",
-  "type": "ORDER_STATUS_CHANGED",
+  "type": "ORDER_SHIPPED",
   "title": "Order Updated",
   "message": "Your order has been shipped.",
   "isRead": false

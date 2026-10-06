@@ -4,6 +4,7 @@ const Delivery = require('../models/delivery.model');
 const { runInTransaction } = require('../utils/transaction');
 const { restockStock } = require('./inventory.service');
 const { OrderError } = require('./order.service');
+const { notifyCustomerOfOrderStatus } = require('./notification.service');
 const { legalSourcesFor, brandNextStatuses } = require('../config/orderTransitions');
 
 const DEFAULT_LIMIT = 20;
@@ -54,7 +55,7 @@ async function getBrandOrder(brandId, orderId) {
  * the same transaction (docs/09 §14).
  */
 async function updateBrandOrderStatus({ brandId, orderId, status, userId }) {
-  return runInTransaction(async (session) => {
+  const order = await runInTransaction(async (session) => {
     const update = {
       $set: { orderStatus: status },
       $push: { statusHistory: { status, by: userId, at: new Date() } },
@@ -117,6 +118,13 @@ async function updateBrandOrderStatus({ brandId, orderId, status, userId }) {
     }
     return order;
   });
+
+  // CONFIRMED/PROCESSING/REJECTED reach the buyer (docs/12 §5);
+  // READY_FOR_SHIPMENT is internal brand workflow and announces nothing.
+  if (status !== 'READY_FOR_SHIPMENT') {
+    await notifyCustomerOfOrderStatus(order, status);
+  }
+  return order;
 }
 
 module.exports = { listBrandOrders, getBrandOrder, updateBrandOrderStatus };

@@ -28,6 +28,9 @@ jest.mock('../src/models/product.model', () => {
 jest.mock('../src/utils/transaction', () => ({
   runInTransaction: (work) => work('SESSION'),
 }));
+// Notification triggers are asserted via this automock; the real writes are
+// covered in tests/integration/notifications.integration.test.js.
+jest.mock('../src/services/notification.service');
 
 const User = require('../src/models/user.model');
 const Brand = require('../src/models/brand.model');
@@ -37,6 +40,7 @@ const Payment = require('../src/models/payment.model');
 const Counter = require('../src/models/counter.model');
 const Product = require('../src/models/product.model');
 const Inventory = require('../src/models/inventory.model');
+const notifications = require('../src/services/notification.service');
 const app = require('../src/app');
 const { ROLES } = require('../src/config/roles');
 const { getAuthCookie } = require('./helpers/testAuth');
@@ -161,6 +165,11 @@ describe('POST /api/v1/orders (checkout)', () => {
     expect(orderB.total).toBe(15);
     expect(orderB.orderNumber).toMatch(/-000002$/);
     expect(orderA.shippingAddress).toMatchObject({ name: 'John Doe', address: 'Example Street', state: 'Punjab', country: 'Pakistan' });
+
+    // Each brand's staff learn about their new order (docs/12 §6), after commit.
+    expect(notifications.notifyBrandOfNewOrders).toHaveBeenCalledTimes(1);
+    const notified = notifications.notifyBrandOfNewOrders.mock.calls[0][0];
+    expect(notified.map((o) => String(o.brandId))).toEqual([String(brandA._id), String(brandB._id)]);
   });
 
   it('deducts stock per line inside the session, in productId order', async () => {
@@ -211,6 +220,8 @@ describe('POST /api/v1/orders (checkout)', () => {
     expect(Inventory.findOneAndUpdate).not.toHaveBeenCalled();
     expect(Order.create).not.toHaveBeenCalled();
     expect(Cart.updateOne).not.toHaveBeenCalled();
+    // A failed checkout announces nothing.
+    expect(notifications.notifyBrandOfNewOrders).not.toHaveBeenCalled();
   });
 
   it('409 when the atomic deduction loses a race for the last unit', async () => {
@@ -374,6 +385,10 @@ describe('PATCH /api/v1/orders/:id/cancel', () => {
       { session: 'SESSION' }
     );
     expect(Payment.updateMany).toHaveBeenCalled();
+    // The brand's order viewers learn about the cancellation (docs/12 §6).
+    expect(notifications.notifyBrandOfCancelledOrder).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: id })
+    );
   });
 
   it('409 (no restock) when the order is no longer PENDING', async () => {

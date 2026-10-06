@@ -402,7 +402,13 @@ function buildDataset({ now = new Date(), hashes }) {
 
   // ── notifications ──
   const note = (userId, type, title, message, data, at) => {
-    ds.notifications.push({ _id: new ObjectId(), userId, type, title, message, data, isRead: now - at > 3 * DAY, createdAt: at });
+    const isRead = now - at > 3 * DAY;
+    ds.notifications.push({
+      _id: new ObjectId(), userId, type, title, message, data, isRead,
+      // Read notifications also carry readAt (docs/12 §10), a moment after arrival.
+      ...(isRead && { readAt: new Date(at.getTime() + 60 * 1000) }),
+      createdAt: at,
+    });
   };
   const brandReaders = (brand) => {
     const staff = brand.staff.find((s) => s.employee.isActive && s.employee.permissions.includes('orders.view'));
@@ -459,6 +465,16 @@ function buildDataset({ now = new Date(), hashes }) {
     } else if (inv.quantity <= inv.lowStockThreshold) {
       note(brand.owner._id, 'LOW_STOCK', `Low stock: ${product.name}`, `Only ${inv.quantity} left, and your warning level is ${inv.lowStockThreshold}.`, { productId: product._id, brandId: brand.doc._id }, ago(between(4, 40) * HOUR));
     }
+  }
+  // Brand staff hear about new reviews (docs/12 §6) — one notification per review.
+  for (const r of ds.reviews) {
+    const brand = brands.find((b) => String(b.doc._id) === String(r.brandId));
+    if (!brand) continue;
+    const product = productById.get(String(r.productId));
+    note(brand.owner._id, 'NEW_REVIEW', `New ${r.rating}-star review`,
+      `A customer reviewed ${product ? product.name : 'a product'}: "${r.title}".`,
+      { productId: r.productId, brandId: r.brandId, rating: r.rating },
+      new Date(r.createdAt.getTime() + 60 * 1000));
   }
   for (const brand of brands) {
     for (const s of brand.staff) {

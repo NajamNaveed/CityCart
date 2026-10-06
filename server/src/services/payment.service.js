@@ -2,6 +2,7 @@ const Payment = require('../models/payment.model');
 const Order = require('../models/order.model');
 const { runInTransaction } = require('../utils/transaction');
 const { OrderError } = require('./order.service');
+const { notifyPaymentReceived, notifyRefundIssued } = require('./notification.service');
 
 const toCents = (amount) => Math.round(amount * 100);
 const fromCents = (cents) => cents / 100;
@@ -43,7 +44,10 @@ async function getPaymentForOrder(user, tenantBrandId, orderId) {
  * the same transaction. `tenantBrandId` is null for SUPER_ADMIN.
  */
 async function updatePaymentStatus({ userId, tenantBrandId, paymentId, status, refundAmount, refundReason }) {
-  return runInTransaction(async (session) => {
+  // The customer notification the committed transaction produced (if any).
+  let event = null;
+
+  const updated = await runInTransaction(async (session) => {
     const payment = await Payment.findById(paymentId).session(session);
     if (!payment) {
       throw new OrderError(404, 'Payment not found.');
@@ -75,6 +79,9 @@ async function updatePaymentStatus({ userId, tenantBrandId, paymentId, status, r
       }
       finalStatus = 'PAID';
       update = { $set: { status: 'PAID', paidAt: new Date(), confirmedBy: userId } };
+      // Only the request that wins the PENDING -> PAID guard reaches here,
+      // so the announcement can't repeat (docs/12 §16).
+      event = { kind: 'PAID', order };
     } else {
       if (!['PAID', 'PARTIALLY_REFUNDED'].includes(payment.status)) {
         throw new OrderError(409, `A ${payment.status} payment cannot be refunded.`, { code: 'INVALID_TRANSITION', from: payment.status, to: status });
@@ -101,6 +108,7 @@ async function updatePaymentStatus({ userId, tenantBrandId, paymentId, status, r
         $set: { status: status, refundedAmount: fromCents(refundedCents + requestedCents) },
         $push: { refunds: { amount: fromCents(requestedCents), reason: refundReason, by: userId, at: new Date() } },
       };
+      event = { kind: 'REFUND', order, amount: fromCents(requestedCents), reason: refundReason };
     }
 
     const updated = await Payment.findOneAndUpdate(guard, update, { new: true, session });
@@ -110,6 +118,13 @@ async function updatePaymentStatus({ userId, tenantBrandId, paymentId, status, r
     await Order.updateOne({ _id: order._id }, { $set: { paymentStatus: finalStatus } }, { session });
     return updated;
   });
+
+  if (event && event.kind === 'PAID') {
+    await notifyPaymentReceived(event.order);
+  } else if (event && event.kind === 'REFUND') {
+    await notifyRefundIssued(event.order, { amount: event.amount, reason: event.reason });
+  }
+  return updated;
 }
 
 module.exports = { getPaymentForOrder, updatePaymentStatus };

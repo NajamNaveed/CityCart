@@ -1,6 +1,9 @@
+const http = require('http');
+
 const app = require('./app');
 const env = require('./config/env');
 const { connectDB, disconnectDB, describeConnectionError } = require('./config/db');
+const { initSockets, closeSockets } = require('./sockets');
 
 let httpServer;
 
@@ -26,7 +29,11 @@ async function start() {
     return;
   }
 
-  httpServer = app.listen(env.port, () => {
+  // Socket.IO shares the HTTP server (docs/12 §13): same port, same CORS
+  // policy, cookie-authenticated handshakes (see src/sockets/index.js).
+  httpServer = http.createServer(app);
+  initSockets(httpServer);
+  httpServer.listen(env.port, () => {
     // eslint-disable-next-line no-console
     console.log(
       `CityCart server running in ${env.nodeEnv} mode on http://localhost:${env.port}`
@@ -55,6 +62,10 @@ async function shutdown(signal) {
         httpServer.close((err) => (err ? reject(err) : resolve()));
       });
     }
+
+    // Drops every connected socket client. Resolves even if the server was
+    // already closed above.
+    await closeSockets();
 
     await disconnectDB();
 

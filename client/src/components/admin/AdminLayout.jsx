@@ -1,5 +1,6 @@
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
+import NotificationBell from '../NotificationBell'
 import { wrap } from '../../ui'
 
 const NAV = [
@@ -29,6 +30,7 @@ export default function AdminLayout() {
             <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted">administration</span>
           </Link>
           <div className="ml-auto flex items-center gap-5 text-[13px]">
+            <NotificationBell />
             <span className="hidden text-muted sm:inline">{user.name}</span>
             <button type="button" onClick={logout} className="font-medium hover:text-clay">
               Sign out

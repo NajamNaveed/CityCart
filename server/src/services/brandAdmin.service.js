@@ -10,6 +10,7 @@ const { BrandError } = require('./brand.service');
 const { ROLES } = require('../config/roles');
 const env = require('../config/env');
 const { DELIVERY_FINAL_STATUSES } = require('../config/deliveryTransitions');
+const { notifyBrandTerminated } = require('./notification.service');
 
 const DEFAULT_LIMIT = 20;
 // Orders that have not left the brand yet: safe to cancel on termination.
@@ -100,6 +101,9 @@ async function rejectOrderForTermination({ orderId, brandId, adminId }) {
 async function terminateBrand({ brandId, reason, adminId, graceHours }) {
   const hours = graceHours === undefined ? env.terminationGraceHours : graceHours;
   const accessEndsAt = new Date(Date.now() + hours * 60 * 60 * 1000);
+  // True only when THIS call performed the TERMINATED transition — the
+  // idempotent re-run path must not re-announce the termination.
+  let transitioned = false;
 
   const brand = await runInTransaction(async (session) => {
     const updated = await Brand.findOneAndUpdate(
@@ -122,6 +126,7 @@ async function terminateBrand({ brandId, reason, adminId, graceHours }) {
       }
       return existing; // already terminated: only retry the cleanup below
     }
+    transitioned = true;
     await Store.updateMany({ brandId }, { $set: { isActive: false } }, { session });
     // Staff are NOT deactivated: until accessEndsAt they keep a read-only
     // account (they can still finish in-transit deliveries); after it,
@@ -147,6 +152,10 @@ async function terminateBrand({ brandId, reason, adminId, graceHours }) {
     }
   }
   const inTransitOrders = await Order.countDocuments({ brandId, orderStatus: { $in: IN_TRANSIT } });
+
+  if (transitioned) {
+    await notifyBrandTerminated({ brandId, brandName: brand.name, reason });
+  }
 
   return { brand, rejectedOrders, failedOrders, inTransitOrders };
 }

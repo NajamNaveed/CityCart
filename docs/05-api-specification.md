@@ -1108,6 +1108,16 @@ The notification must belong to the authenticated user.
 PATCH /api/v1/notifications/read-all
 ```
 
+## Delete Notification
+
+```text
+DELETE /api/v1/notifications/:id
+```
+
+The notification must belong to the authenticated user. Deleting a
+notification never affects the underlying order, product or payment
+(docs/12-notification-system.md §24).
+
 ---
 
 # 22. Payment Endpoints

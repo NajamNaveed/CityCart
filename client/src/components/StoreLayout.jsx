@@ -2,6 +2,7 @@ import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useCart } from '../hooks/useCart'
 import { useCity } from '../hooks/useCity'
+import NotificationBell from './NotificationBell'
 import { homeFor } from '../utils/nav'
 import { wrap } from '../ui'
 
@@ -79,6 +80,7 @@ export default function StoreLayout() {
 
             {user ? (
               <>
+                <NotificationBell />
                 {user.role !== 'CUSTOMER' && (
                   <NavLink to={homeFor(user.role)} className={navLink}>
                     Dashboard

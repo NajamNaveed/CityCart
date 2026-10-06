@@ -9,6 +9,7 @@ const { slugify } = require('../utils/slugify');
 const { runInTransaction } = require('../utils/transaction');
 const { ROLES } = require('../config/roles');
 const { BrandError } = require('./brand.service');
+const { notifySuperAdminsOfNewBrand, notifyBrandOwnerWelcome } = require('./notification.service');
 
 /**
  * Names are unique platform-wide and compared case-insensitively through
@@ -68,7 +69,7 @@ async function applyForBrand({ owner, brand, store }) {
   const brandId = new mongoose.Types.ObjectId();
 
   try {
-    return await runInTransaction(async (session) => {
+    const result = await runInTransaction(async (session) => {
       const [createdBrand] = await Brand.create(
         [{ ...brand, _id: brandId, slug: brandSlug, status: 'ACTIVE' }],
         { session }
@@ -80,6 +81,15 @@ async function applyForBrand({ owner, brand, store }) {
       const [createdStore] = await Store.create([{ ...store, brandId, slug: storeSlug }], { session });
       return { brand: createdBrand, store: createdStore, user };
     });
+    // docs/12 §6/§8: the new owner is welcomed, and platform staff learn a
+    // brand registered. Post-commit and best-effort (like every trigger).
+    await notifySuperAdminsOfNewBrand({
+      brandId: result.brand._id,
+      brandName: result.brand.name,
+      ownerName: result.user.name,
+    });
+    await notifyBrandOwnerWelcome({ userId: result.user._id, brandName: result.brand.name });
+    return result;
   } catch (err) {
     if (err.code === 11000) {
       throw duplicateError(err);

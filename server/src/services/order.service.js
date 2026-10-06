@@ -8,7 +8,12 @@ const Inventory = require('../models/inventory.model');
 const Counter = require('../models/counter.model');
 const { runInTransaction } = require('../utils/transaction');
 const { evaluateLine } = require('./cart.service');
-const { deductStock, restockStock, InventoryError } = require('./inventory.service');
+const { deductStock, restockStock, getStockStatus, InventoryError } = require('./inventory.service');
+const {
+  notifyBrandOfNewOrders,
+  notifyBrandOfCancelledOrder,
+  notifyStockTransitions,
+} = require('./notification.service');
 
 const CURRENCY = 'PKR';
 const CANCELLABLE_BY_CUSTOMER = ['PENDING']; // docs/08 §21 (confirmed policy)
@@ -72,8 +77,11 @@ function toAddressSnapshot(a) {
  */
 async function checkout(userId, { shippingAddress, paymentMethod }) {
   const address = toAddressSnapshot(shippingAddress);
+  // Stock states that flipped to LOW/OUT during deduction, for the staff
+  // alert after the transaction commits.
+  const stockTransitions = [];
 
-  return runInTransaction(async (session) => {
+  const orders = await runInTransaction(async (session) => {
     const cart = await Cart.findOne({ userId }).session(session);
     if (!cart || cart.items.length === 0) {
       throw new OrderError(400, 'Your cart is empty.', { code: 'CART_EMPTY' });
@@ -125,7 +133,20 @@ async function checkout(userId, { shippingAddress, paymentMethod }) {
     const sorted = [...lines].sort((a, b) => String(a.product._id).localeCompare(String(b.product._id)));
     for (const { product, quantity } of sorted) {
       try {
-        await deductStock(product._id, quantity, { session });
+        const result = await deductStock(product._id, quantity, { session });
+        // Capture the transition (pre-checkout state from the in-transaction
+        // inventory read vs post-deduction) so staff can be alerted after
+        // the commit — the deduction itself must stay notification-free.
+        if (result.deducted) {
+          const before = getStockStatus(inventoryById.get(String(product._id)));
+          stockTransitions.push({
+            brandId: product.brandId,
+            productId: product._id,
+            productName: product.name,
+            from: before,
+            to: getStockStatus(result.inventory),
+          });
+        }
       } catch (err) {
         if (err instanceof InventoryError) {
           throw new OrderError(409, 'Some items in your cart are no longer available.', {
@@ -201,6 +222,15 @@ async function checkout(userId, { shippingAddress, paymentMethod }) {
 
     return orders;
   });
+
+  // Notifications go out only after the checkout has committed (docs/12
+  // §28.2): inside the transaction a rollback would leave them orphaned and
+  // a withTransaction retry would duplicate them. They are best-effort —
+  // failures are logged, never surfaced to the buyer.
+  await notifyBrandOfNewOrders(orders);
+  await notifyStockTransitions(stockTransitions);
+
+  return orders;
 }
 
 async function listMyOrders(userId, { status, page, limit } = {}) {
@@ -298,7 +328,7 @@ async function getOrderForUser(user, orderId) {
  * together or not at all.
  */
 async function cancelMyOrder(userId, orderId) {
-  return runInTransaction(async (session) => {
+  const order = await runInTransaction(async (session) => {
     const order = await Order.findOneAndUpdate(
       { _id: orderId, customerId: userId, orderStatus: { $in: CANCELLABLE_BY_CUSTOMER } },
       {
@@ -330,6 +360,9 @@ async function cancelMyOrder(userId, orderId) {
     );
     return order;
   });
+
+  await notifyBrandOfCancelledOrder(order);
+  return order;
 }
 
 module.exports = {

@@ -7,11 +7,13 @@ jest.mock('../src/models/review.model');
 jest.mock('../src/models/order.model');
 jest.mock('../src/models/product.model');
 jest.mock('../src/models/brand.model');
+jest.mock('../src/services/notification.service');
 
 const User = require('../src/models/user.model');
 const Employee = require('../src/models/employee.model');
 const Review = require('../src/models/review.model');
 const Order = require('../src/models/order.model');
+const notifications = require('../src/services/notification.service');
 const Product = require('../src/models/product.model');
 const Brand = require('../src/models/brand.model');
 const app = require('../src/app');
@@ -149,6 +151,9 @@ describe('POST /api/v1/reviews', () => {
     expect(saved.isApproved).toBe(true);
     expect(saved.customerId).toBe(user._id);
     expect(saved).toMatchObject({ rating: 5, title: 'Great', comment: 'Really good cloth.' });
+    // The brand's product viewers learn about the new review (docs/12 §6).
+    expect(notifications.notifyBrandOfNewReview).toHaveBeenCalledTimes(1);
+    expect(notifications.notifyBrandOfNewReview.mock.calls[0][0]).toMatchObject({ brandId, rating: 5 });
   });
 
   it('refuses an order that is not the customer\'s own (404)', async () => {

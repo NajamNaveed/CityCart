@@ -3,6 +3,7 @@ const Order = require('../models/order.model');
 const Payment = require('../models/payment.model');
 const { runInTransaction } = require('../utils/transaction');
 const { OrderError } = require('./order.service');
+const { notifyCustomerOfOrderStatus, notifyPaymentReceived } = require('./notification.service');
 const {
   DELIVERY_FINAL_STATUSES,
   ORDER_STATUS_FOR_DELIVERY,
@@ -75,7 +76,15 @@ async function getDeliveryForUser(user, tenantBrandId, deliveryId) {
  * status the delivery step requires, everything is rolled back.
  */
 async function updateDeliveryStatus({ brandId, deliveryId, status, failureReason, userId }) {
-  return runInTransaction(async (session) => {
+  // Customer notifications collected inside the transaction, delivered after
+  // it commits — a rollback then leaves nothing behind, and a withTransaction
+  // retry only leaves the entries of the run that actually committed.
+  const events = [];
+
+  const delivery = await runInTransaction(async (session) => {
+    // withTransaction may re-run this callback after a transient error;
+    // entries from a rolled-back attempt must never survive.
+    events.length = 0;
     const update = { $set: { status } };
     if (status === 'FAILED') {
       update.$set.failureReason = failureReason;
@@ -121,20 +130,37 @@ async function updateDeliveryStatus({ brandId, deliveryId, status, failureReason
         });
       }
 
+      events.push({ kind: 'ORDER_STATUS', order, status: orderTarget });
+
       if (status === 'DELIVERED' && order.paymentMethod === 'COD') {
         // Cash collected on delivery (docs/10 §6, §11). Conditional on
         // PENDING so it can only ever flip once.
         await Order.updateOne({ _id: order._id }, { $set: { paymentStatus: 'PAID' } }, { session });
-        await Payment.updateOne(
+        const cod = await Payment.findOneAndUpdate(
           { orderId: order._id, status: 'PENDING' },
           { $set: { status: 'PAID', paidAt: new Date(), confirmedBy: userId } },
           { session }
         );
+        // The notification only accompanies the request that actually won
+        // the payment flip, so a duplicate DELIVERED can't double-announce.
+        if (cod) {
+          events.push({ kind: 'PAYMENT_RECEIVED', order });
+        }
       }
     }
 
-    return Delivery.findById(previous._id).session(session);
+    const updated = await Delivery.findById(previous._id).session(session);
+    return { updated, events };
   });
+
+  for (const event of delivery.events) {
+    if (event.kind === 'ORDER_STATUS') {
+      await notifyCustomerOfOrderStatus(event.order, event.status);
+    } else if (event.kind === 'PAYMENT_RECEIVED') {
+      await notifyPaymentReceived(event.order);
+    }
+  }
+  return delivery.updated;
 }
 
 // trackingReference / assignedAgent only; ownership + not-yet-final enforced

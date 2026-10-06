@@ -2,6 +2,7 @@ const Brand = require('../models/brand.model');
 const City = require('../models/city.model');
 const { slugify } = require('../utils/slugify');
 const { escapeRegex } = require('../utils/escapeRegex');
+const { notifyBrandStatusChanged } = require('./notification.service');
 
 class BrandError extends Error {
   constructor(status, message) {
@@ -110,7 +111,10 @@ async function updateBrandStatus(id, status) {
     throw new BrandError(409, 'A terminated brand cannot be changed.');
   }
   brand.status = status;
-  return brand.save();
+  const updated = await brand.save();
+  // Staff learn their brand was suspended/reactivated/rejected (docs/12 §8).
+  await notifyBrandStatusChanged(updated, status);
+  return updated;
 }
 
 module.exports = {
