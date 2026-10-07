@@ -205,6 +205,72 @@ function DrawerCityList() {
   )
 }
 
+// The navbar's city picker (large screens): same choices as the drawer's list,
+// as a dropdown so it stays compact next to the search field.
+function CityMenu() {
+  const { cities, city, cityId, setCityId } = useCity()
+  return (
+    <Menu
+      width="w-60"
+      trigger={({ open, toggle }) => (
+        <button
+          type="button"
+          onClick={toggle}
+          aria-expanded={open}
+          aria-label={`City: ${city ? city.name : 'All cities'}`}
+          className="flex h-9 max-w-36 items-center gap-1.5 rounded-md px-2 text-[13px] font-medium text-ink transition hover:bg-paper"
+        >
+          <MapPin className="h-4 w-4 shrink-0 text-clay" aria-hidden="true" />
+          <span className="truncate">{city ? city.name : 'All cities'}</span>
+          <ChevronDown
+            className={`h-3.5 w-3.5 shrink-0 text-muted transition-transform ${open ? 'rotate-180' : ''}`}
+            aria-hidden="true"
+          />
+        </button>
+      )}
+    >
+      {({ close }) => (
+        <div className="max-h-72 space-y-1 overflow-y-auto p-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <button
+            type="button"
+            onClick={() => {
+              setCityId('')
+              close()
+            }}
+            className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-[13.5px] transition ${
+              !cityId ? 'bg-paper font-semibold text-ink' : 'text-ink/70 hover:bg-paper hover:text-ink'
+            }`}
+          >
+            All cities
+            {!cityId && <Check className="h-3.5 w-3.5 text-clay" aria-hidden="true" />}
+          </button>
+          {cities.map((c) => (
+            <button
+              key={c._id}
+              type="button"
+              onClick={() => {
+                setCityId(c._id)
+                close()
+              }}
+              className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-[13.5px] transition ${
+                cityId === c._id
+                  ? 'bg-paper font-semibold text-ink'
+                  : 'text-ink/70 hover:bg-paper hover:text-ink'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <MapPin className="h-3.5 w-3.5 text-muted" aria-hidden="true" />
+                {c.name}
+              </span>
+              {cityId === c._id && <Check className="h-3.5 w-3.5 text-clay" aria-hidden="true" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </Menu>
+  )
+}
+
 // Bell / orders / cart as tiles inside the drawer (small screens only reach them here).
 function QuickAccess() {
   const { user } = useAuth()
@@ -264,6 +330,11 @@ export default function StoreNavbar() {
           <Link to="/" className="text-[22px] font-semibold tracking-tight text-ink">
             citycart<span className="text-clay">.</span>
           </Link>
+          {/* Mirrors DrawerCityList above lg; small screens pick a city in the drawer.
+              Lives beside the logo because the right cluster has no room to spare. */}
+          <div className="ml-2 hidden lg:block">
+            <CityMenu />
+          </div>
         </div>
 
         {/* Centred between the two side clusters; drops to the drawer below lg */}
@@ -299,13 +370,16 @@ export default function StoreNavbar() {
               <AccountMenu user={user} logout={logout} />
             </div>
           ) : (
-            <div className="hidden items-center gap-1 sm:flex">
-              <Link to="/login" className="rounded-md px-3.5 py-2 text-[13.5px] font-medium text-ink transition hover:bg-paper">
+            <div className="hidden shrink-0 items-center gap-1 sm:flex">
+              <Link
+                to="/login"
+                className="whitespace-nowrap rounded-md px-3.5 py-2 text-[13.5px] font-medium text-ink transition hover:bg-paper"
+              >
                 Sign in
               </Link>
               <Link
                 to="/register"
-                className="ml-1 inline-flex h-9 items-center rounded-md bg-ink px-4 text-[12.5px] font-medium tracking-wide text-white transition hover:bg-ink-soft"
+                className="ml-1 inline-flex h-9 items-center whitespace-nowrap rounded-md bg-ink px-4 text-[12.5px] font-medium tracking-wide text-white transition hover:bg-ink-soft"
               >
                 Get started
               </Link>
