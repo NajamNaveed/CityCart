@@ -179,7 +179,10 @@ describe('notify() — persistence and push (docs/12 §2)', () => {
 
   it('is best-effort: a storage failure never throws into the business operation', async () => {
     Notification.insertMany.mockRejectedValue(new Error('storage down'));
+    // The catch deliberately logs; silence it so the suite stays free of console noise.
+    const errorLog = jest.spyOn(console, 'error').mockImplementation(() => {});
     await expect(notify({ userIds: [oid()], type: 'LOW_STOCK', title: 'T', message: 'M' })).resolves.toEqual([]);
+    errorLog.mockRestore();
     expect(emitToUser).not.toHaveBeenCalled();
   });
 

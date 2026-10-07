@@ -90,6 +90,10 @@ function mockInventoryFind(items) {
 
 beforeEach(() => {
   jest.resetAllMocks();
+  // Empty staff queries so notify() short-circuits on an empty audience instead of
+  // the automocked find() returning undefined inside brandStaffIds' .select() chain.
+  User.find.mockReturnValue({ select: jest.fn().mockResolvedValue([]) });
+  Employee.find.mockReturnValue({ select: jest.fn().mockResolvedValue([]) });
 });
 
 // ---------------------------------------------------------------------
