@@ -1,0 +1,90 @@
+# CityCart CI/CD
+#
+# Runs on every push to main and every pull request:
+#   - server: lint + full unit suite
+#   - client: lint + production build
+#   - integration: the real-database test suite (transactions, concurrency)
+#
+# Deployment (Vercel for the client, Render for the server) can be attached
+# to this workflow later via environment secrets — see docs/17-deployment.md.
+# Until then, this file is the CI gate: a red run blocks a merge.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  server:
+    name: Server — lint & unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Lint
+        working-directory: server
+        run: npm run lint
+
+      - name: Unit tests
+        working-directory: server
+        run: npm test
+
+  client:
+    name: Client — lint & build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install dependencies
+        working-directory: client
+        run: npm ci
+
+      - name: Lint
+        working-directory: client
+        run: npm run lint
+
+      - name: Production build
+        working-directory: client
+        run: npm run build
+
+  integration:
+    name: Server — integration tests (real MongoDB)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        working-directory: server
+        run: npm ci
+
+      # The suite spins up an in-memory MongoDB replica set itself
+      # (mongodb-memory-server), which is what makes the transactional
+      # checkout/order flows testable in CI without provisioning a database.
+      - name: Integration tests
+        working-directory: server
+        run: npm run test:integration

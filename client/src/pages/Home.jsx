@@ -152,7 +152,7 @@ export default function Home() {
         {brandsLoading ? (
           <div className="flex gap-5 overflow-hidden px-5">
             {[0, 1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-60 w-60 shrink-0 animate-pulse rounded-xl bg-sand" />
+              <div key={i} className="h-[19rem] w-60 shrink-0 animate-pulse rounded-2xl bg-sand" />
             ))}
           </div>
         ) : brands.length === 0 ? (

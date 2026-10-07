@@ -351,7 +351,7 @@ export default function StoreNavbar() {
         </nav>
 
         <div className="flex items-center justify-end gap-1.5">
-          <SearchForm className="hidden w-48 lg:block" />
+          <SearchForm className="hidden w-44 lg:block" />
           <span className="mx-1 hidden h-5 w-px bg-line lg:block" aria-hidden="true" />
           {/* On small screens these three live inside the menu drawer instead. */}
           <div className="hidden items-center gap-1.5 lg:flex">
