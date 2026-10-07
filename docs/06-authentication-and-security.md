@@ -228,6 +228,13 @@ admin_token / auth_token
 
 The final cookie name should be standardized during implementation.
 
+Two cookie lifetimes exist on the same standardized name:
+
+* Shoppers (customers): the full session length.
+* Dashboard staff (brand admin, employees, platform admin): a short-lived cookie — see §9.
+
+The lifetime is selected per role at the moment the cookie is set; the configuration itself stays centralized.
+
 ---
 
 # 9. Token Lifecycle
@@ -258,6 +265,35 @@ If refresh tokens are introduced, they must be:
 * Revocable
 * Stored securely
 * Protected against replay attacks
+
+### Staff Session Security (added October 2026)
+
+Dashboard staff — brand admins, brand employees and the platform admin — have
+stricter session rules than shoppers. A shopper's session persists for the
+standard configured lifetime; a staff member's session is short-lived,
+renewed on activity, and bound to their browser tab.
+
+* Short-lived staff cookie: the brand and platform admin logins (and brand
+  employee sign-ins) set the auth cookie with a short lifetime
+  (`STAFF_SESSION_HOURS`, default 8 hours). The JWT expiry matches the
+  cookie. Shoppers keep the full-length cookie.
+* Sliding renewal: every authenticated staff request re-issues the staff
+  cookie and token with a fresh lifetime, so an active staff member is never
+  logged out mid-work. An idle or stolen staff cookie still expires within
+  hours. Customer responses never re-issue their cookie.
+* Per-tab binding: the dashboards keep a marker in the browser's
+  `sessionStorage` (which lives and dies with the tab) from the moment a
+  staff member signs in. When a staff session is restored into a tab that
+  never signed in — the tab was closed and reopened, or the cookie was used
+  from another tab — the client signs the session out server-side and asks
+  for credentials again. Closing the dashboard tab therefore always ends the
+  session.
+* Shoppers are unaffected: their cookie is never re-issued mid-session and
+  no per-tab marker applies to them.
+
+The server-side short cookie is the security backstop (a stolen staff cookie
+expires in hours); the client-side tab marker is what enforces "close the
+tab, sign in again". Both were added together and must stay in sync.
 
 ---
 

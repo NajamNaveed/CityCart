@@ -1,6 +1,7 @@
 const User = require('../models/user.model');
-const { verifyToken } = require('../utils/jwt');
-const { AUTH_COOKIE_NAME } = require('../config/cookie');
+const { signToken, verifyToken } = require('../utils/jwt');
+const { AUTH_COOKIE_NAME, staffAuthCookieOptions } = require('../config/cookie');
+const { STAFF_ROLES } = require('../config/roles');
 const { isAllowedWhenRestricted } = require('../config/restrictedAccess');
 
 /**
@@ -62,6 +63,19 @@ async function authenticate(req, res, next) {
     }
 
     req.user = user;
+
+    // Sliding renewal (docs/06 §9 — staff session security): every
+    // authenticated staff request re-issues the short-lived cookie, so an
+    // active staff member never hits the expiry mid-work, while an idle or
+    // stolen one still expires within hours. Shoppers keep their
+    // full-length session untouched.
+    if (STAFF_ROLES.includes(user.role)) {
+      const renewed = signToken(
+        { userId: user._id, role: user.role, brandId: user.brandId },
+        { expiresIn: `${require('../config/env').staffSessionHours}h` },
+      );
+      res.cookie(AUTH_COOKIE_NAME, renewed, staffAuthCookieOptions);
+    }
 
     return next();
   } catch (err) {

@@ -40,14 +40,14 @@ export default function Login() {
       title="Good to see you again."
       intro="Sign in to add to your cart, place orders and follow them to your door."
     >
-      <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
+      <h1 className="font-display text-[28px] font-semibold tracking-tight text-ink">Sign in</h1>
       <p className="mt-1.5 text-sm text-muted">
         {next ? 'Sign in to pick up where you left off.' : 'Use the email you registered with.'}
       </p>
 
       <form onSubmit={onSubmit} className="mt-8 space-y-5" noValidate>
         {error && (
-          <p role="alert" className="border-l-2 border-clay bg-sand px-3 py-2 text-sm">
+          <p role="alert" className="rounded-md bg-clay/5 px-3.5 py-2.5 text-sm text-clay">
             {error}
           </p>
         )}

@@ -20,4 +20,8 @@ const ALL_ROLES = Object.values(ROLES);
 // docs/04-database-design.md §6 — User Constraints).
 const BRAND_SCOPED_ROLES = Object.freeze([ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE]);
 
-module.exports = { ROLES, ALL_ROLES, BRAND_SCOPED_ROLES };
+// Roles whose sessions are short-lived and per-tab (docs/06 §9 — staff
+// session security): the brand dashboard and the platform admin panel.
+const STAFF_ROLES = Object.freeze([ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE, ROLES.SUPER_ADMIN]);
+
+module.exports = { ROLES, ALL_ROLES, BRAND_SCOPED_ROLES, STAFF_ROLES };

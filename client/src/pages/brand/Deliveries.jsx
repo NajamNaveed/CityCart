@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { Truck } from 'lucide-react'
 import api, { getErrorMessage } from '../../services/api'
-import { PageHeader, Pager, StatusBadge, selectClass } from '../../components/brand/Bits'
+import { PageHeader, Pager, StatusBadge, selectClass, tableHead, tableRow, tableShell } from '../../components/brand/Bits'
+import { EmptyState, Skeleton } from '../../components/ui'
 import { humanize } from '../../ui'
 
 const STATUSES = ['READY_FOR_PICKUP', 'PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED', 'FAILED', 'CANCELLED', 'RETURNED']
@@ -56,41 +58,47 @@ export default function Deliveries() {
       />
 
       {loading ? (
-        <div className="h-48 animate-pulse bg-sand" />
+        <div className="space-y-2.5">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-16 w-full rounded-lg" />
+          ))}
+        </div>
       ) : state.error ? (
         <p className="text-clay">{state.error}</p>
       ) : state.items.length === 0 ? (
-        <div className="border border-dashed border-line py-16 text-center">
-          <p className="font-medium">{status ? 'No deliveries with that status.' : 'No deliveries yet.'}</p>
-          {!status && <p className="mt-1 text-sm text-muted">A delivery appears here when you mark an order ready for shipment.</p>}
-        </div>
+        <EmptyState
+          icon={Truck}
+          title={status ? 'No deliveries with that status.' : 'No deliveries yet.'}
+          message={!status ? 'A delivery appears here when you mark an order ready for shipment.' : undefined}
+          className="rounded-lg border border-dashed border-line bg-white"
+        />
       ) : (
-        <div className="overflow-x-auto">
+        <div className={tableShell}>
           <table className="w-full min-w-[40rem] text-left text-sm">
             <thead>
-              <tr className="border-b border-ink text-[11px] font-medium uppercase tracking-[0.14em] text-muted">
-                <th className="py-3 pr-4 font-medium">Order</th>
+              <tr className={tableHead}>
+                <th className="px-5 py-3 font-medium">Order</th>
                 <th className="py-3 pr-4 font-medium">Deliver to</th>
                 <th className="py-3 pr-4 font-medium">Status</th>
-                <th className="py-3 font-medium">Tracking / agent</th>
+                <th className="py-3 pr-5 font-medium">Tracking / agent</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-line">
+            <tbody>
               {state.items.map((d) => (
-                <tr key={d._id} className="hover:bg-sand/60">
-                  <td className="py-3 pr-4">
-                    <Link to={`/brand/orders/${d.orderId}`} className="font-medium text-pine hover:underline">
+                <tr key={d._id} className={tableRow}>
+                  <td className="px-5 py-3.5">
+                    <Link to={`/brand/orders/${d.orderId}`} className="font-medium text-ink transition hover:text-pine">
                       {d.orderNumber || 'View order'}
                     </Link>
                   </td>
-                  <td className="py-3 pr-4">
+                  <td className="py-3.5 pr-4 text-ink">
                     {d.address?.name}
                     <span className="block text-xs text-muted">{[d.address?.address, d.address?.city].filter(Boolean).join(', ')}</span>
                   </td>
-                  <td className="py-3 pr-4">
+                  <td className="py-3.5 pr-4">
                     <StatusBadge value={d.status} />
                   </td>
-                  <td className="py-3 text-muted">{[d.trackingReference, d.assignedAgent].filter(Boolean).join(' · ') || '—'}</td>
+                  <td className="py-3.5 pr-5 text-muted">{[d.trackingReference, d.assignedAgent].filter(Boolean).join(' · ') || '—'}</td>
                 </tr>
               ))}
             </tbody>

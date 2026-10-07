@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { Star } from 'lucide-react'
 import api, { getErrorMessage } from '../../services/api'
 import Stars from '../../components/Stars'
 import { PageHeader, Pager, selectClass } from '../../components/brand/Bits'
+import { EmptyState, Skeleton } from '../../components/ui'
 import { formatDate } from '../../ui'
 
 export default function Reviews() {
@@ -56,9 +58,9 @@ export default function Reviews() {
       />
 
       {summary && summary.count > 0 && (
-        <div className="mb-10 flex flex-wrap items-center gap-x-10 gap-y-4 border border-line bg-paper p-6">
+        <div className="mb-8 flex flex-wrap items-center gap-x-10 gap-y-4 rounded-lg border border-line bg-white p-6">
           <div>
-            <p className="text-4xl font-semibold">{summary.average.toFixed(1)}</p>
+            <p className="font-display text-4xl font-semibold text-ink">{summary.average.toFixed(1)}</p>
             <Stars value={summary.average} className="mt-1" />
           </div>
           <p className="text-sm text-muted">
@@ -68,7 +70,7 @@ export default function Reviews() {
             {[5, 4, 3, 2, 1].map((n) => (
               <div key={n} className="text-center">
                 <dt className="text-muted">{n} ★</dt>
-                <dd className="font-medium">{summary.distribution[n]}</dd>
+                <dd className="font-medium text-ink">{summary.distribution[n]}</dd>
               </div>
             ))}
           </dl>
@@ -76,28 +78,37 @@ export default function Reviews() {
       )}
 
       {loading ? (
-        <div className="h-48 animate-pulse bg-sand" />
+        <div className="space-y-2.5">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-24 w-full rounded-lg" />
+          ))}
+        </div>
       ) : state.error ? (
         <p className="text-clay">{state.error}</p>
       ) : state.reviews.length === 0 ? (
-        <div className="border border-dashed border-line py-16 text-center">
-          <p className="font-medium">{rating ? 'No reviews with that rating.' : 'No reviews yet.'}</p>
-          {!rating && <p className="mt-1 text-sm text-muted">Customers can review a product once their order is delivered.</p>}
-        </div>
+        <EmptyState
+          icon={Star}
+          title={rating ? 'No reviews with that rating.' : 'No reviews yet.'}
+          message={!rating ? 'Customers can review a product once their order is delivered.' : undefined}
+          className="rounded-lg border border-dashed border-line bg-white"
+        />
       ) : (
-        <ul className="divide-y divide-line border-y border-line">
+        <ul className="space-y-3">
           {state.reviews.map((r) => (
-            <li key={r._id} className="py-6">
+            <li key={r._id} className="rounded-lg border border-line bg-white p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <Stars value={r.rating} />
                 <span className="text-xs text-muted">
                   {r.reviewerName} · {formatDate(r.createdAt)}
                 </span>
               </div>
-              {r.title && <p className="mt-2 font-medium">{r.title}</p>}
-              {r.comment && <p className="mt-1 text-[15px] leading-relaxed text-muted">{r.comment}</p>}
+              {r.title && <p className="mt-2 font-medium text-ink">{r.title}</p>}
+              {r.comment && <p className="mt-1 text-[14px] leading-relaxed text-muted">{r.comment}</p>}
               <p className="mt-3 text-xs">
-                <Link to={`/brand/products/${r.productId}`} className="font-medium text-pine hover:underline">
+                <Link
+                  to={`/brand/products/${r.productId}`}
+                  className="inline-flex items-center gap-1 rounded-md bg-paper px-2.5 py-1 font-medium text-ink transition hover:text-pine"
+                >
                   {r.productName}
                 </Link>
               </p>

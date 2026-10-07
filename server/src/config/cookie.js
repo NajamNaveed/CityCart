@@ -32,4 +32,15 @@ const authCookieOptions = {
   maxAge: parseDurationToMs(env.jwtExpiresIn, SEVEN_DAYS_MS),
 };
 
-module.exports = { AUTH_COOKIE_NAME, authCookieOptions };
+// Staff of the dashboards (brand admin/employees, platform admin) get a
+// short-lived cookie (docs/06 §9 — staff session security): closing the tab
+// ends their session, and a stolen cookie expires within hours instead of
+// days. Renewed automatically on every authenticated staff request, so an
+// active staff member is never logged out mid-work. Shoppers keep the
+// full-length session above.
+const staffAuthCookieOptions = {
+  ...authCookieOptions,
+  maxAge: env.staffSessionHours * 60 * 60 * 1000,
+};
+
+module.exports = { AUTH_COOKIE_NAME, authCookieOptions, staffAuthCookieOptions };

@@ -21,9 +21,9 @@ const NEXT = {
 
 const FINAL = ['DELIVERED', 'CANCELLED', 'RETURNED']
 
-const primaryClass =
-  'inline-flex h-10 items-center rounded-sm bg-pine px-5 text-[12px] font-medium uppercase tracking-[0.08em] text-cream hover:bg-[#162b22] disabled:opacity-50'
-const labelClass = 'mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-muted'
+const primaryBtn =
+  'inline-flex h-10 items-center rounded-md bg-pine px-5 text-[12px] font-medium uppercase tracking-[0.08em] text-white transition hover:bg-pine-dark disabled:opacity-50'
+const labelClass = 'mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted'
 
 export default function DeliveryPanel({ delivery, onChanged }) {
   const [busy, setBusy] = useState(false)
@@ -75,9 +75,9 @@ export default function DeliveryPanel({ delivery, onChanged }) {
   }
 
   return (
-    <section className="mb-10 border border-line bg-paper p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Delivery</h2>
+    <section className="mb-8 rounded-lg border border-line bg-white p-5 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3.5">
+        <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">Delivery</h2>
         <StatusBadge value={delivery.status} />
       </div>
 
@@ -86,7 +86,9 @@ export default function DeliveryPanel({ delivery, onChanged }) {
       </div>
 
       {delivery.status === 'FAILED' && delivery.failureReason && (
-        <p className="mb-4 border-l-2 border-clay bg-sand px-3 py-2 text-sm">Last attempt failed: {delivery.failureReason}</p>
+        <p className="mb-4 rounded-md bg-danger-soft px-3.5 py-2.5 text-[13px] text-danger">
+          Last attempt failed: {delivery.failureReason}
+        </p>
       )}
 
       {actions.length > 0 && (
@@ -94,34 +96,55 @@ export default function DeliveryPanel({ delivery, onChanged }) {
           {actions.map(([status, label, kind]) => {
             if (kind === 'danger') {
               return (
-                <button key={status} type="button" disabled={busy} onClick={() => setFailing(true)} className="text-[13px] font-medium text-clay hover:underline">
+                <button
+                  key={status}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setFailing(true)}
+                  className="inline-flex h-10 items-center rounded-md border border-danger/40 bg-white px-4 text-[12.5px] font-medium text-danger transition hover:border-danger"
+                >
                   {label}
                 </button>
               )
             }
             if (status === 'DELIVERED') {
               return confirmDelivered ? (
-                <span key={status} className="flex flex-wrap items-center gap-3 text-sm">
-                  Cash collected and order delivered?
-                  <button type="button" disabled={busy} onClick={() => move(status)} className="font-medium text-pine hover:underline">
+                <span key={status} className="flex flex-wrap items-center gap-3 rounded-md bg-success-soft px-3.5 py-2 text-sm">
+                  <span className="text-ink">Cash collected and order delivered?</span>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => move(status)}
+                    className="inline-flex h-8 items-center rounded-md bg-success px-3 text-[12.5px] font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+                  >
                     Yes, delivered
                   </button>
-                  <button type="button" onClick={() => setConfirmDelivered(false)} className="text-muted hover:underline">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDelivered(false)}
+                    className="inline-flex h-8 items-center rounded-md border border-line bg-white px-3 text-[12.5px] font-medium text-ink transition hover:border-ink"
+                  >
                     Not yet
                   </button>
                 </span>
               ) : (
-                <button key={status} type="button" disabled={busy} onClick={() => setConfirmDelivered(true)} className={primaryClass}>
+                <button key={status} type="button" disabled={busy} onClick={() => setConfirmDelivered(true)} className={primaryBtn}>
                   {label}
                 </button>
               )
             }
             return kind === 'primary' ? (
-              <button key={status} type="button" disabled={busy} onClick={() => move(status)} className={primaryClass}>
+              <button key={status} type="button" disabled={busy} onClick={() => move(status)} className={primaryBtn}>
                 {label}
               </button>
             ) : (
-              <button key={status} type="button" disabled={busy} onClick={() => move(status)} className="text-[13px] font-medium text-pine hover:underline">
+              <button
+                key={status}
+                type="button"
+                disabled={busy}
+                onClick={() => move(status)}
+                className="inline-flex h-10 items-center rounded-md border border-line bg-white px-4 text-[12.5px] font-medium text-ink transition hover:border-ink"
+              >
                 {label}
               </button>
             )
@@ -135,18 +158,34 @@ export default function DeliveryPanel({ delivery, onChanged }) {
             e.preventDefault()
             move('FAILED', reason.trim())
           }}
-          className="mt-4 flex flex-wrap items-end gap-3"
+          className="mt-4 flex flex-wrap items-end gap-3 rounded-md border border-line bg-paper p-4"
         >
-          <div className="flex-1 basis-64">
+          <div className="min-w-0 flex-1 basis-64">
             <label htmlFor="failure-reason" className={labelClass}>
               What went wrong?
             </label>
-            <input id="failure-reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Customer not reachable" className={`h-10 ${inputClass}`} required autoFocus />
+            <input
+              id="failure-reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="e.g. Customer not reachable"
+              className={`h-10 ${inputClass}`}
+              required
+              autoFocus
+            />
           </div>
-          <button type="submit" disabled={busy || !reason.trim()} className="h-10 text-[13px] font-medium text-clay hover:underline">
+          <button
+            type="submit"
+            disabled={busy || !reason.trim()}
+            className="inline-flex h-10 items-center rounded-md bg-danger px-4 text-[12.5px] font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+          >
             Record failed delivery
           </button>
-          <button type="button" onClick={() => setFailing(false)} className="h-10 text-[13px] text-muted hover:underline">
+          <button
+            type="button"
+            onClick={() => setFailing(false)}
+            className="inline-flex h-10 items-center rounded-md border border-line bg-white px-4 text-[12.5px] font-medium text-ink transition hover:border-ink"
+          >
             Cancel
           </button>
         </form>
@@ -168,7 +207,11 @@ export default function DeliveryPanel({ delivery, onChanged }) {
             </label>
             <input id="agent" value={agent} onChange={(e) => setAgent(e.target.value)} placeholder="Name or number" className={`h-10 ${inputClass}`} />
           </div>
-          <button type="submit" disabled={busy} className="h-10 text-[13px] font-medium text-pine hover:underline">
+          <button
+            type="submit"
+            disabled={busy}
+            className="inline-flex h-10 items-center justify-center rounded-md border border-pine bg-white px-4 text-[12.5px] font-medium text-pine transition hover:bg-pine hover:text-white"
+          >
             Save details
           </button>
         </form>
@@ -178,13 +221,13 @@ export default function DeliveryPanel({ delivery, onChanged }) {
             {delivery.trackingReference && (
               <div>
                 <dt className="text-muted">Tracking reference</dt>
-                <dd>{delivery.trackingReference}</dd>
+                <dd className="font-medium text-ink">{delivery.trackingReference}</dd>
               </div>
             )}
             {delivery.assignedAgent && (
               <div>
                 <dt className="text-muted">Delivery agent</dt>
-                <dd>{delivery.assignedAgent}</dd>
+                <dd className="font-medium text-ink">{delivery.assignedAgent}</dd>
               </div>
             )}
           </dl>

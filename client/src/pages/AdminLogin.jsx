@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ShieldCheck } from 'lucide-react'
 import Field from '../components/Field'
 import { useAuth } from '../hooks/useAuth'
 import { getErrorMessage, getFieldErrors } from '../services/api'
@@ -30,23 +31,29 @@ export default function AdminLogin() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-5">
-      <form onSubmit={onSubmit} className="w-full max-w-sm space-y-5" noValidate>
-        <div>
-          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted">citycart. administration</p>
-          <h1 className="mt-3 text-2xl font-semibold tracking-tight">Sign in</h1>
-        </div>
-        {error && (
-          <p role="alert" className="border-l-2 border-clay bg-sand px-3 py-2 text-sm">
-            {error}
+    <div className="flex min-h-screen items-center justify-center bg-paper px-5">
+      <div className="w-full max-w-sm rounded-xl border border-line bg-white p-8 shadow-lg shadow-ink/5">
+        <div className="mb-7">
+          <p className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.18em] text-muted">
+            <ShieldCheck className="h-4 w-4 text-clay" aria-hidden="true" />
+            citycart. administration
           </p>
-        )}
-        <Field label="Email" id="email" name="email" type="email" autoComplete="email" value={form.email} onChange={onChange} error={fieldErrors.email} required />
-        <Field label="Password" id="password" name="password" type="password" autoComplete="current-password" value={form.password} onChange={onChange} error={fieldErrors.password} required />
-        <button type="submit" disabled={submitting} className={`${btnDark} w-full`}>
-          {submitting ? 'Signing in…' : 'Sign in'}
-        </button>
-      </form>
+          <h1 className="font-display mt-3 text-[28px] font-semibold tracking-tight text-ink">Sign in</h1>
+          <p className="mt-1 text-sm text-muted">Platform staff only.</p>
+        </div>
+        <form onSubmit={onSubmit} className="space-y-5" noValidate>
+          {error && (
+            <p role="alert" className="rounded-md bg-clay/5 px-3.5 py-2.5 text-sm text-clay">
+              {error}
+            </p>
+          )}
+          <Field label="Email" id="email" name="email" type="email" autoComplete="email" value={form.email} onChange={onChange} error={fieldErrors.email} required />
+          <Field label="Password" id="password" name="password" type="password" autoComplete="current-password" value={form.password} onChange={onChange} error={fieldErrors.password} required />
+          <button type="submit" disabled={submitting} className={`${btnDark} w-full`}>
+            {submitting ? 'Signing in…' : 'Sign in'}
+          </button>
+        </form>
+      </div>
     </div>
   )
 }

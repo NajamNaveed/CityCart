@@ -11,11 +11,11 @@ const labelClass = 'mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1
 
 function Section({ number, title, children }) {
   return (
-    <fieldset className="border-t border-ink pt-6">
+    <fieldset className="rounded-lg border border-line bg-white p-6">
       <legend className="sr-only">{title}</legend>
-      <div className="flex items-baseline gap-4">
-        <span className="text-sm font-medium text-pine">0{number}</span>
-        <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
+      <div className="flex items-baseline gap-3">
+        <span className="font-display text-lg font-semibold text-pine">0{number}</span>
+        <h2 className="text-[17px] font-semibold tracking-tight text-ink">{title}</h2>
       </div>
       <div className="mt-6 grid gap-5 sm:grid-cols-2">{children}</div>
     </fieldset>
@@ -108,10 +108,12 @@ export default function Apply() {
     <div className={`${wrap} grid gap-14 py-14 lg:grid-cols-[1fr_2fr] lg:py-20`}>
       <aside className="lg:sticky lg:top-28 lg:h-fit">
         <p className={sectionLabel}>Open your brand</p>
-        <h1 className="mt-4 text-4xl font-semibold leading-[1.1] tracking-tight">Tell us about your brand.</h1>
+        <h1 className="font-display mt-4 text-4xl font-semibold leading-[1.1] tracking-tight text-ink">
+          Tell us about your brand.
+        </h1>
         <p className="mt-5 text-[15px] leading-relaxed text-muted">
-          One form creates your owner account, your brand and your first store. You are signed in straight
-          away, and the store goes live when you submit.
+          One form creates your owner account, your brand and your first store. You are signed in straight away, and
+          the store goes live when you submit.
         </p>
         <p className="mt-8 text-sm text-muted">
           Already have a brand?{' '}
@@ -121,9 +123,9 @@ export default function Apply() {
         </p>
       </aside>
 
-      <form onSubmit={onSubmit} className="space-y-12" noValidate>
+      <form onSubmit={onSubmit} className="space-y-5" noValidate>
         {error && (
-          <p role="alert" className="border-l-2 border-clay bg-sand px-3 py-2 text-sm">
+          <p role="alert" className="rounded-md bg-clay/5 px-3.5 py-2.5 text-sm text-clay">
             {error}
           </p>
         )}
@@ -219,11 +221,11 @@ export default function Apply() {
           )}
         </Section>
 
-        <div className="border-t border-line pt-8">
+        <div className="flex flex-wrap items-center gap-4 pt-2">
           <button type="submit" disabled={submitting} className={`${btnPine} w-full sm:w-auto sm:min-w-64`}>
             {submitting ? 'Opening your brand…' : 'Open your brand'}
           </button>
-          <p className="mt-4 text-xs text-muted">
+          <p className="text-xs text-muted">
             By continuing you agree to sell through CityCart and to deliver the orders you accept.
           </p>
         </div>

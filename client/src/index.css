@@ -2,19 +2,36 @@
 
 @theme {
   --font-sans: "Poppins", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
 
-  /* Warm neutrals built around the brand cream #FDF5ED */
-  --color-cream: #fdf5ed;
-  --color-paper: #fffbf6;
-  --color-sand: #f4e7d8;
-  --color-line: #e8d8c4;
-  --color-ink: #231c16;
-  --color-muted: #6f6256;
+  /* Surfaces: cool paper whites carry the page now; the brand cream is an
+     accent wash used sparingly (section tints, hovers, highlights). */
+  --color-paper: #f8f9fa; /* page background, quiet panels */
+  --color-surface: #ffffff; /* cards, sheets, bars */
+  --color-cream: #fdf5ed; /* warm accent tint */
+  --color-sand: #f0e9df; /* warm fill: image placeholders, quiet wells */
+  --color-line: #e7e5e4; /* hairlines (stone-200) */
 
-  /* One accent (clay) for the shop, one deep green (pine) reserved for the seller side */
+  /* Ink: deep slate instead of the old warm black */
+  --color-ink: #020617; /* primary text, dark sections, solid buttons */
+  --color-ink-soft: #0f172a; /* raised dark surfaces, hovers on ink */
+  --color-muted: #64748b; /* secondary text (slate-500) */
+
+  /* Brand accents: clay leads the shop, pine is reserved for the seller side */
   --color-clay: #b6472a;
   --color-clay-dark: #98381f;
   --color-pine: #1e3a2f;
+  --color-pine-dark: #14261f;
+
+  /* Semantic status colors (dashboards, badges) */
+  --color-success: #15803d;
+  --color-success-soft: #ecfdf3;
+  --color-warning: #b45309;
+  --color-warning-soft: #fff8eb;
+  --color-danger: #b42318;
+  --color-danger-soft: #fef3f2;
+  --color-info: #175cd3;
+  --color-info-soft: #eff6ff;
 }
 
 @layer base {
@@ -23,17 +40,35 @@
   }
   body {
     margin: 0;
-    background: var(--color-cream);
+    background: var(--color-paper);
     color: var(--color-ink);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
   ::selection {
     background: var(--color-clay);
-    color: var(--color-cream);
+    color: #fff;
   }
   :focus-visible {
     outline: 2px solid var(--color-clay);
     outline-offset: 2px;
   }
+  /* Motion is a preference, not a requirement. */
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@utility text-balance {
+  text-wrap: balance;
 }

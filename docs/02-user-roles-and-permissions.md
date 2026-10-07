@@ -67,6 +67,14 @@ For example:
 * A `CUSTOMER` cannot access administrative resources.
 * A `BRAND_EMPLOYEE` cannot automatically perform every action available to a `BRAND_ADMIN`.
 
+### Session behaviour per role
+
+`CUSTOMER` sessions are persistent in the usual way. Dashboard staff —
+`BRAND_ADMIN`, `BRAND_EMPLOYEE` and `SUPER_ADMIN` — have short-lived,
+per-tab sessions: closing the dashboard tab ends the session and signing in
+again is required. See `06-authentication-and-security.md` §9 (Staff Session
+Security).
+
 ---
 
 # 4. Scope Model

@@ -1,7 +1,8 @@
 const User = require('../models/user.model');
 const { hashPassword, comparePassword } = require('../utils/password');
 const { signToken } = require('../utils/jwt');
-const { ROLES } = require('../config/roles');
+const { ROLES, STAFF_ROLES } = require('../config/roles');
+const env = require('../config/env');
 
 /**
  * Auth business logic, per docs/06-authentication-and-security.md §4
@@ -117,7 +118,13 @@ async function loginUser({ email, password }, portal = 'customer') {
     throw new AuthError(401, GENERIC_LOGIN_ERROR);
   }
 
-  const token = signToken({ userId: user._id, role: user.role, brandId: user.brandId });
+  // Staff sessions are short-lived (docs/06 §9 — staff session security):
+  // the token expires with the short staff cookie and is re-issued on every
+  // authenticated staff request, so an active staff member never notices.
+  const token = signToken(
+    { userId: user._id, role: user.role, brandId: user.brandId },
+    STAFF_ROLES.includes(user.role) ? { expiresIn: `${env.staffSessionHours}h` } : undefined,
+  );
 
   return { user: toSafeUser(user), token };
 }

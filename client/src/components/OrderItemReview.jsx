@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Star } from 'lucide-react'
 import api, { getErrorMessage } from '../services/api'
 import Stars from './Stars'
 import { btnPrimary, formatDate, inputClass } from '../ui'
@@ -60,10 +61,10 @@ export default function OrderItemReview({ orderId, item, review, onSaved, onDele
 
   if (editing) {
     return (
-      <form onSubmit={save} className="mt-4 space-y-4 border border-line bg-paper p-5" noValidate>
+      <form onSubmit={save} className="mt-4 space-y-4 rounded-lg border border-line bg-white p-5" noValidate>
         <div>
-          <p className="mb-1.5 text-[12px] font-medium uppercase tracking-[0.1em] text-muted">Your rating</p>
-          <div role="radiogroup" aria-label="Rating" className="flex gap-1">
+          <p className="mb-2 text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">Your rating</p>
+          <div role="radiogroup" aria-label="Rating" className="flex gap-1.5">
             {[1, 2, 3, 4, 5].map((n) => (
               <button
                 key={n}
@@ -72,27 +73,30 @@ export default function OrderItemReview({ orderId, item, review, onSaved, onDele
                 aria-checked={rating === n}
                 aria-label={`${n} ${n === 1 ? 'star' : 'stars'}`}
                 onClick={() => setRating(n)}
-                className={`text-3xl leading-none transition hover:text-clay ${n <= rating ? 'text-clay' : 'text-line'}`}
+                className="transition-transform hover:scale-110"
               >
-                ★
+                <Star
+                  className={`h-7 w-7 ${n <= rating ? 'fill-clay text-clay' : 'fill-transparent text-line'}`}
+                  aria-hidden="true"
+                />
               </button>
             ))}
           </div>
         </div>
         <div>
-          <label htmlFor={`title-${item.productId}`} className="mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-muted">
+          <label htmlFor={`title-${item.productId}`} className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">
             Headline
           </label>
           <input id={`title-${item.productId}`} value={title} maxLength={100} onChange={(e) => setTitle(e.target.value)} placeholder="Optional, e.g. Soft cloth, true colours" className={`h-11 ${inputClass}`} />
         </div>
         <div>
-          <label htmlFor={`comment-${item.productId}`} className="mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-muted">
+          <label htmlFor={`comment-${item.productId}`} className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">
             Your review
           </label>
           <textarea id={`comment-${item.productId}`} rows={4} maxLength={2000} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Optional. What did you like or dislike?" className={`${inputClass} py-3`} />
         </div>
         {error && (
-          <p role="alert" className="text-sm text-clay">
+          <p role="alert" className="rounded-md bg-clay/5 px-3 py-2 text-sm text-clay">
             {error}
           </p>
         )}
@@ -100,7 +104,7 @@ export default function OrderItemReview({ orderId, item, review, onSaved, onDele
           <button type="submit" disabled={busy} className={btnPrimary}>
             {busy ? 'Saving…' : review ? 'Save changes' : 'Post review'}
           </button>
-          <button type="button" onClick={() => setEditing(false)} className="text-[13px] text-muted hover:underline">
+          <button type="button" onClick={() => setEditing(false)} className="text-[13px] text-muted transition hover:text-ink">
             Cancel
           </button>
         </div>
@@ -110,36 +114,41 @@ export default function OrderItemReview({ orderId, item, review, onSaved, onDele
 
   if (!review) {
     return (
-      <button type="button" onClick={open} className="mt-2 text-[13px] font-medium text-clay underline underline-offset-4 hover:no-underline">
+      <button
+        type="button"
+        onClick={open}
+        className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-line bg-white px-3.5 py-1.5 text-[13px] font-medium text-ink transition hover:border-ink"
+      >
+        <Star className="h-3.5 w-3.5 text-clay" aria-hidden="true" />
         Write a review
       </button>
     )
   }
 
   return (
-    <div className="mt-3 border-l-2 border-line pl-4">
+    <div className="mt-3 rounded-lg border border-line bg-white p-4">
       <Stars value={review.rating} />
-      {review.title && <p className="mt-1 font-medium">{review.title}</p>}
-      {review.comment && <p className="mt-1 text-muted">{review.comment}</p>}
+      {review.title && <p className="mt-1.5 font-medium text-ink">{review.title}</p>}
+      {review.comment && <p className="mt-1 text-[14px] text-muted">{review.comment}</p>}
       <p className="mt-2 text-xs text-muted">Reviewed {formatDate(review.createdAt)}</p>
-      {review.isApproved === false && <p className="mt-1 text-xs text-clay">This review is currently hidden by CityCart.</p>}
-      {error && <p className="mt-1 text-xs text-clay">{error}</p>}
-      <div className="mt-2 flex items-center gap-4 text-[13px] font-medium">
-        <button type="button" onClick={open} className="text-clay hover:underline">
+      {review.isApproved === false && <p className="mt-1.5 text-xs text-clay">This review is currently hidden by CityCart.</p>}
+      {error && <p className="mt-1.5 text-xs text-clay">{error}</p>}
+      <div className="mt-2.5 flex items-center gap-4 text-[13px] font-medium">
+        <button type="button" onClick={open} className="text-clay transition hover:text-clay-dark">
           Edit
         </button>
         {confirmDelete ? (
-          <span className="flex items-center gap-3 font-normal">
+          <span className="flex items-center gap-3 font-normal text-muted">
             Delete this review?
-            <button type="button" disabled={busy} onClick={remove} className="font-medium text-clay hover:underline">
+            <button type="button" disabled={busy} onClick={remove} className="font-medium text-danger">
               Yes
             </button>
-            <button type="button" onClick={() => setConfirmDelete(false)} className="text-muted hover:underline">
+            <button type="button" onClick={() => setConfirmDelete(false)} className="hover:text-ink">
               No
             </button>
           </span>
         ) : (
-          <button type="button" onClick={() => setConfirmDelete(true)} className="text-muted hover:text-clay hover:underline">
+          <button type="button" onClick={() => setConfirmDelete(true)} className="text-muted transition hover:text-danger">
             Delete
           </button>
         )}

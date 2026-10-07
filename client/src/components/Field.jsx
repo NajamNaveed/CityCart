@@ -4,7 +4,7 @@ import { inputClass } from '../ui'
 export default function Field({ label, id, error, hint, ...inputProps }) {
   return (
     <div>
-      <label htmlFor={id} className="mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-muted">
+      <label htmlFor={id} className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">
         {label}
       </label>
       <input id={id} {...inputProps} className={`h-11 ${inputClass} ${error ? 'border-clay' : ''}`} />

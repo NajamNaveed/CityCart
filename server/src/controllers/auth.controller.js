@@ -1,9 +1,13 @@
 const { registerSchema, loginSchema } = require('../validators/auth.validator');
 const { registerUser, loginUser, toSafeUser, AuthError } = require('../services/auth.service');
-const { AUTH_COOKIE_NAME, authCookieOptions } = require('../config/cookie');
-const { ROLES } = require('../config/roles');
+const { AUTH_COOKIE_NAME, authCookieOptions, staffAuthCookieOptions } = require('../config/cookie');
+const { ROLES, STAFF_ROLES } = require('../config/roles');
 const Employee = require('../models/employee.model');
 const { formatZodError } = require('../utils/formatZodError');
+
+// Staff sessions use the short-lived cookie (docs/06 §9); shoppers the
+// full-length one. The cookie options must match the token's expiry.
+const cookieOptionsFor = (role) => (STAFF_ROLES.includes(role) ? staffAuthCookieOptions : authCookieOptions);
 
 /**
  * Auth controllers for the endpoints in
@@ -57,7 +61,7 @@ const loginFor = (portal) =>
     try {
       const { user, token } = await loginUser(parsed.data, portal);
 
-      res.cookie(AUTH_COOKIE_NAME, token, authCookieOptions);
+      res.cookie(AUTH_COOKIE_NAME, token, cookieOptionsFor(user.role));
       return res.status(200).json({
         success: true,
         message: 'Login successful',

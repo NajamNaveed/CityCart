@@ -877,3 +877,68 @@ Maintainability
 ```
 
 Once these foundations are stable, CityCart can safely expand into payments, commissions, advanced search, courier integrations, recommendations, and other future capabilities.
+
+---
+
+# Addendum — UI Upgrade & Hardening Programme (October 2026)
+
+With the MVP commerce core and review system complete, the project moves into a
+dedicated improvement programme. The phases below supersede the remaining
+original numbering for planning purposes; the dependency and security rules of
+this document still apply to every phase. Documentation is updated as part of
+each phase, not after the programme.
+
+```text
+Phase 1  Design System & App Shell
+         New theme tokens (#020617 ink, neutral surfaces, #FDF5ED as a
+         sparing accent), Poppins + Fraunces typography, lucide-react +
+         Framer Motion, rebuilt shared components (buttons, inputs, cards,
+         badges, modal, drawer, toasts, skeletons), professional navbar
+         (no promotional banner, no seller link) and footer, product card
+         and image presentation standard.
+
+Phase 2  Customer Storefront
+         Home, shop, product detail (gallery), cart, checkout, orders,
+         auth pages, 404 — responsive with scroll and page transitions.
+
+Phase 3  Seller Pages & Brand Dashboard
+         /sell landing, seller login, application form, brand dashboard
+         layout and all brand pages on the new design system.
+
+Phase 4  Super Admin Panel & Notifications UI
+         Admin layout and pages, notification bell and inbox restyle,
+         global responsive and accessibility sweep.
+
+Phase 5  Staff Session Security
+         Tab-close re-authentication for BRAND_ADMIN/BRAND_EMPLOYEE and
+         SUPER_ADMIN portals (per-tab gate + short-lived staff cookie);
+         customers keep standard persistent sessions. doc06 updated.
+
+Phase 6  Email OTP Verification
+         Account creation (customer and brand) requires an emailed,
+         expiring, attempt-limited OTP. Nodemailer + SMTP. doc02/06/07 and
+         the API spec updated.
+
+Phase 7  Documentation & Deployment Readiness
+         Full docs sync (README checklist, product requirements status,
+         API spec), production configuration audit, deployment checklists
+         for the documented stack (Vercel/Render/Atlas).
+
+Phase 8  Backend Cleanup & Hardening
+         Dead code removal (with human approval per item), dependency and
+         security audit, query/index efficiency review, lint cleanliness.
+
+Phase 9  Mobile Application
+         React Native (Expo) client on the shared /api/v1 backend. Requires
+         a small, separately-approved authentication addition for native
+         clients. Planned in detail only when Phase 8 is complete.
+```
+
+Rules for this programme:
+
+* New dependencies are limited to those named in a phase and approved by the
+  human before installation (Phase 1: lucide-react, framer-motion; Phase 6:
+  nodemailer).
+* The backend is untouched in Phases 1-4; the API contract must remain stable
+  so the Phase 9 client and the deployed web app share one surface.
+* Every phase ends with tests, lint and the production build green.

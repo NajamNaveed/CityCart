@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Banknote, Minus, Plus, ShoppingBag, Trash2 } from 'lucide-react'
 import api, { getErrorMessage } from '../services/api'
 import { useCart } from '../hooks/useCart'
 import ProductImage from '../components/ProductImage'
+import { EmptyState, Skeleton } from '../components/ui'
 import { btnPrimary, formatPrice, wrap } from '../ui'
 
 const MAX_QTY = 99
@@ -61,59 +63,80 @@ export default function Cart() {
 
   return (
     <div className={`${wrap} py-10`}>
-      <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Your cart</h1>
+      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted">Your cart</p>
+      <h1 className="font-display mt-2 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+        {cart ? `${cart.itemCount} ${cart.itemCount === 1 ? 'item' : 'items'}` : 'Review your items'}
+      </h1>
 
-      {loading && <div className="mt-8 h-40 animate-pulse bg-sand" />}
+      {loading && (
+        <div className="mt-8 space-y-4">
+          <Skeleton className="h-40 w-full rounded-lg" />
+          <Skeleton className="h-40 w-full rounded-lg" />
+        </div>
+      )}
       {error && <p className="mt-6 text-clay">{error}</p>}
       {notice && (
-        <p role="alert" className="mt-6 border-l-2 border-clay bg-sand px-3 py-2 text-sm">
+        <p role="alert" className="mt-6 rounded-md bg-clay/5 px-3.5 py-2.5 text-sm text-clay">
           {notice}
         </p>
       )}
 
       {cart && cart.groups.length === 0 && (
-        <div className="py-20 text-center">
-          <p className="text-lg font-medium">Your cart is empty.</p>
-          <Link to="/shop" className={`${btnPrimary} mt-6`}>
-            Start shopping
-          </Link>
-        </div>
+        <EmptyState
+          icon={ShoppingBag}
+          title="Your cart is empty."
+          message="Browse the marketplace and add products from the brands in your city."
+          className="py-20"
+          action={
+            <Link to="/shop" className={btnPrimary}>
+              Start shopping
+            </Link>
+          }
+        />
       )}
 
       {cart && cart.groups.length > 0 && (
-        <div className="mt-8 grid gap-12 lg:grid-cols-[1fr_20rem]">
-          <div className="space-y-10">
+        <div className="mt-8 grid gap-10 lg:grid-cols-[1fr_20rem]">
+          <div className="space-y-6">
             {cart.groups.map((group) => (
-              <section key={group.brand._id}>
-                <h2 className="border-b border-line pb-2 text-[11px] font-medium uppercase tracking-[0.18em] text-muted">
+              <section key={group.brand._id} className="overflow-hidden rounded-lg border border-line bg-white">
+                <h2 className="border-b border-line bg-paper px-5 py-3 text-[11px] font-medium uppercase tracking-[0.18em] text-muted">
                   {group.brand.name || 'Brand'}
                 </h2>
                 <ul className="divide-y divide-line">
                   {group.items.map((item) => (
-                    <li key={item.productId} className="flex gap-4 py-5">
-                      <Link to={`/product/${item.productId}`} className="block w-20 shrink-0 overflow-hidden bg-sand">
+                    <li key={item.productId} className="flex gap-4 p-5">
+                      <Link
+                        to={`/product/${item.productId}`}
+                        className="block w-20 shrink-0 overflow-hidden rounded-md bg-sand"
+                      >
                         <ProductImage src={item.image} name={item.name || ''} className="aspect-[4/5] w-full" />
                       </Link>
                       <div className="flex flex-1 flex-col justify-between gap-3">
                         <div>
-                          <Link to={`/product/${item.productId}`} className="text-[15px] font-medium hover:text-clay">
+                          <Link
+                            to={`/product/${item.productId}`}
+                            className="text-[15px] font-medium text-ink transition hover:text-clay"
+                          >
                             {item.name || 'Unavailable product'}
                           </Link>
-                          <p className="mt-1 text-sm text-muted">{item.unitPrice != null ? formatPrice(item.unitPrice) : '—'} each</p>
-                          {item.issue && <p className="mt-1 text-sm text-clay">{issueText(item)}</p>}
+                          <p className="mt-1 text-[13px] text-muted">
+                            {item.unitPrice != null ? formatPrice(item.unitPrice) : '—'} each
+                          </p>
+                          {item.issue && <p className="mt-1 text-[13px] font-medium text-clay">{issueText(item)}</p>}
                         </div>
-                        <div className="flex items-center gap-5">
-                          <div className="inline-flex h-9 items-center border border-line bg-paper">
+                        <div className="flex items-center gap-4">
+                          <div className="inline-flex h-9 items-center rounded-md border border-line">
                             <button
                               type="button"
                               aria-label={`Decrease quantity of ${item.name}`}
                               disabled={busyId === item.productId || item.quantity <= 1}
                               onClick={() => setQuantity(item.productId, item.quantity - 1)}
-                              className="h-full w-9 hover:bg-sand disabled:text-muted disabled:hover:bg-transparent"
+                              className="flex h-full w-9 items-center justify-center text-muted transition hover:text-ink disabled:text-muted/40"
                             >
-                              −
+                              <Minus className="h-3.5 w-3.5" aria-hidden="true" />
                             </button>
-                            <span className="w-9 text-center text-sm font-medium" aria-live="polite">
+                            <span className="w-8 text-center text-sm font-semibold text-ink" aria-live="polite">
                               {item.quantity}
                             </span>
                             <button
@@ -121,49 +144,54 @@ export default function Cart() {
                               aria-label={`Increase quantity of ${item.name}`}
                               disabled={busyId === item.productId || item.quantity >= MAX_QTY}
                               onClick={() => setQuantity(item.productId, item.quantity + 1)}
-                              className="h-full w-9 hover:bg-sand disabled:text-muted disabled:hover:bg-transparent"
+                              className="flex h-full w-9 items-center justify-center text-muted transition hover:text-ink disabled:text-muted/40"
                             >
-                              +
+                              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                             </button>
                           </div>
                           <button
                             type="button"
                             disabled={busyId === item.productId}
                             onClick={() => remove(item.productId)}
-                            className="text-[13px] text-muted underline underline-offset-4 hover:text-clay"
+                            aria-label={`Remove ${item.name}`}
+                            className="flex h-9 w-9 items-center justify-center rounded-md text-muted transition hover:bg-clay/5 hover:text-danger disabled:opacity-40"
                           >
-                            Remove
+                            <Trash2 className="h-4 w-4" aria-hidden="true" />
                           </button>
                         </div>
                       </div>
-                      <p className="text-[15px] font-semibold">{formatPrice(item.lineTotal)}</p>
+                      <p className="text-[15px] font-semibold text-ink">{formatPrice(item.lineTotal)}</p>
                     </li>
                   ))}
                 </ul>
-                <p className="text-right text-sm text-muted">
-                  {group.brand.name} subtotal <span className="ml-2 font-medium text-ink">{formatPrice(group.subtotal)}</span>
+                <p className="border-t border-line px-5 py-3 text-right text-[13px] text-muted">
+                  {group.brand.name} subtotal{' '}
+                  <span className="ml-2 font-semibold text-ink">{formatPrice(group.subtotal)}</span>
                 </p>
               </section>
             ))}
           </div>
 
-          <aside className="h-fit border border-line bg-paper p-6">
-            <h2 className="text-lg font-semibold">Summary</h2>
+          <aside className="h-fit rounded-lg border border-line bg-white p-6 lg:sticky lg:top-24">
+            <h2 className="font-display text-lg font-semibold text-ink">Summary</h2>
             <dl className="mt-5 space-y-3 text-sm">
               <div className="flex justify-between">
                 <dt className="text-muted">Items</dt>
-                <dd>{cart.itemCount}</dd>
+                <dd className="text-ink">{cart.itemCount}</dd>
               </div>
               <div className="flex justify-between border-t border-line pt-3 text-base font-semibold">
-                <dt>Subtotal</dt>
-                <dd>{formatPrice(cart.subtotal)}</dd>
+                <dt className="text-ink">Subtotal</dt>
+                <dd className="text-ink">{formatPrice(cart.subtotal)}</dd>
               </div>
             </dl>
-            <p className="mt-4 text-xs leading-relaxed text-muted">
+            <p className="mt-4 flex items-start gap-2 text-xs leading-relaxed text-muted">
+              <Banknote className="mt-0.5 h-4 w-4 shrink-0 text-ink/60" aria-hidden="true" />
               Each brand prepares and delivers its own order. You pay in cash on delivery.
             </p>
             {hasIssues ? (
-              <p className="mt-5 text-sm text-clay">Remove or fix the items marked above to continue.</p>
+              <p className="mt-5 rounded-md bg-clay/5 px-3.5 py-2.5 text-[13px] text-clay">
+                Remove or fix the items marked above to continue.
+              </p>
             ) : (
               <Link to="/checkout" className={`${btnPrimary} mt-5 w-full`}>
                 Checkout

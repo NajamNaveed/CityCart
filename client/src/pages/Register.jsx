@@ -39,12 +39,12 @@ export default function Register() {
       title="Your city’s brands, one account."
       intro="Registering takes a minute. You will come straight back to what you were looking at."
     >
-      <h1 className="text-2xl font-semibold tracking-tight">Create your account</h1>
+      <h1 className="font-display text-[28px] font-semibold tracking-tight text-ink">Create your account</h1>
       <p className="mt-1.5 text-sm text-muted">For shoppers. Selling on CityCart uses a separate brand account.</p>
 
       <form onSubmit={onSubmit} className="mt-8 space-y-5" noValidate>
         {error && (
-          <p role="alert" className="border-l-2 border-clay bg-sand px-3 py-2 text-sm">
+          <p role="alert" className="rounded-md bg-clay/5 px-3.5 py-2.5 text-sm text-clay">
             {error}
           </p>
         )}

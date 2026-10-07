@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import api, { getErrorMessage, getFieldErrors } from '../../services/api'
 import { useCity } from '../../hooks/useCity'
 import { Notice, PageHeader, StatusBadge, selectClass } from '../../components/brand/Bits'
+import { Skeleton } from '../../components/ui'
 import { btnDark, formatDateTime, humanize, inputClass } from '../../ui'
 
 const SETTABLE = ['PENDING', 'ACTIVE', 'SUSPENDED', 'REJECTED']
@@ -96,7 +97,13 @@ export default function BrandDetail() {
     }
   }
 
-  if (state.id !== id) return <div className="h-64 animate-pulse bg-sand" />
+  if (state.id !== id)
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-10 w-56" />
+        <Skeleton className="h-64 w-full rounded-lg" />
+      </div>
+    )
   if (!state.data) {
     return (
       <>
@@ -118,17 +125,20 @@ export default function BrandDetail() {
         title={brand.name}
         intro={`Joined ${formatDateTime(brand.createdAt)}`}
         action={
-          <Link to="/admin/brands" className="text-[13px] font-medium text-clay hover:underline">
+          <Link
+            to="/admin/brands"
+            className="inline-flex items-center gap-1 rounded-md border border-line bg-white px-3.5 py-2 text-[13px] font-medium text-ink transition hover:border-ink"
+          >
             Back to brands
           </Link>
         }
       />
       <Notice tone={message.tone}>{message.text}</Notice>
 
-      <div className="grid gap-12 lg:grid-cols-[1fr_20rem]">
-        <div className="space-y-10">
-          <section>
-            <h2 className="border-b border-ink pb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Brand</h2>
+      <div className="grid gap-10 lg:grid-cols-[1fr_20rem]">
+        <div className="space-y-6">
+          <section className="rounded-lg border border-line bg-white p-6">
+            <h2 className="border-b border-line pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-muted">Brand</h2>
             <dl className="divide-y divide-line text-sm">
               <Row label="Status">
                 <StatusBadge value={brand.status} />
@@ -140,8 +150,8 @@ export default function BrandDetail() {
           </section>
 
           {store && (
-            <section>
-              <h2 className="border-b border-ink pb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted">First store</h2>
+            <section className="rounded-lg border border-line bg-white p-6">
+              <h2 className="border-b border-line pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-muted">First store</h2>
               <dl className="divide-y divide-line text-sm">
                 <Row label="Name">{store.name}</Row>
                 <Row label="Address">{[store.address?.addressLine, store.address?.city].filter(Boolean).join(', ')}</Row>
@@ -151,8 +161,8 @@ export default function BrandDetail() {
             </section>
           )}
 
-          <section>
-            <h2 className="border-b border-ink pb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Owners</h2>
+          <section className="rounded-lg border border-line bg-white p-6">
+            <h2 className="border-b border-line pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-muted">Owners</h2>
             {owners.length === 0 ? (
               <p className="py-3 text-sm text-muted">No owner accounts.</p>
             ) : (
@@ -160,7 +170,7 @@ export default function BrandDetail() {
                 {owners.map((o) => (
                   <li key={o._id} className="flex flex-wrap justify-between gap-3 py-3">
                     <span>
-                      <span className="font-medium">{o.name}</span>
+                      <span className="font-medium text-ink">{o.name}</span>
                       <span className="block text-muted">{o.email}</span>
                     </span>
                     <span className="text-muted">{o.phone}</span>
@@ -171,9 +181,11 @@ export default function BrandDetail() {
           </section>
 
           {terminated && (
-            <section>
-              <h2 className="border-b border-ink pb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-clay">Termination</h2>
-              <dl className="divide-y divide-line text-sm">
+            <section className="rounded-lg border border-danger/25 bg-danger-soft/40 p-6">
+              <h2 className="border-b border-danger/25 pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-danger">
+                Termination
+              </h2>
+              <dl className="divide-y divide-danger/15 text-sm">
                 <Row label="Terminated">{formatDateTime(brand.terminatedAt)}</Row>
                 <Row label="Staff access ends">{formatDateTime(brand.accessEndsAt)}</Row>
                 <Row label="Reason">{brand.terminationReason}</Row>
@@ -182,10 +194,10 @@ export default function BrandDetail() {
           )}
         </div>
 
-        <aside className="space-y-10 text-sm">
+        <aside className="space-y-6 text-sm">
           {!terminated && (
-            <section>
-              <h2 className="border-b border-ink pb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Status</h2>
+            <section className="rounded-lg border border-line bg-white p-6">
+              <h2 className="border-b border-line pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-muted">Status</h2>
               <p className="mt-3 text-muted">Only active brands appear in the shop.</p>
               <label htmlFor="status" className="sr-only">
                 New status
@@ -204,32 +216,56 @@ export default function BrandDetail() {
           )}
 
           {!terminated && (
-            <section>
-              <h2 className="border-b border-clay pb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-clay">Terminate brand</h2>
+            <section className="rounded-lg border border-danger/30 bg-white p-6">
+              <h2 className="border-b border-danger/25 pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-danger">
+                Terminate brand
+              </h2>
               {!danger ? (
                 <>
                   <p className="mt-3 leading-relaxed text-muted">
-                    Closes the brand permanently. Its unshipped orders are rejected and restocked, and its staff lose access after a grace period.
-                    This cannot be undone.
+                    Closes the brand permanently. Its unshipped orders are rejected and restocked, and its staff lose access after a
+                    grace period. This cannot be undone.
                   </p>
-                  <button type="button" onClick={() => setDanger(true)} className="mt-3 font-medium text-clay hover:underline">
+                  <button
+                    type="button"
+                    onClick={() => setDanger(true)}
+                    className="mt-3 inline-flex h-10 items-center rounded-md border border-danger/40 bg-white px-4 text-[12.5px] font-medium text-danger transition hover:border-danger"
+                  >
                     Start termination
                   </button>
                 </>
               ) : (
-                <form onSubmit={terminate} noValidate className="mt-3 space-y-4">
+                <form onSubmit={terminate} noValidate className="mt-4 space-y-4">
                   <div>
                     <label htmlFor="reason" className={labelClass}>
                       Reason
                     </label>
-                    <textarea id="reason" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} className={`${inputClass} py-3 ${fieldErrors.reason ? 'border-clay' : ''}`} placeholder="At least 10 characters. Staff may see this." required />
+                    <textarea
+                      id="reason"
+                      rows={3}
+                      value={reason}
+                      onChange={(e) => setReason(e.target.value)}
+                      className={`${inputClass} py-3 ${fieldErrors.reason ? 'border-clay' : ''}`}
+                      placeholder="At least 10 characters. Staff may see this."
+                      required
+                    />
                     {fieldErrors.reason && <p className="mt-1.5 text-xs text-clay">{fieldErrors.reason}</p>}
                   </div>
                   <div>
                     <label htmlFor="grace" className={labelClass}>
                       Staff access after termination (hours)
                     </label>
-                    <input id="grace" type="number" min="0" max="168" step="1" value={grace} onChange={(e) => setGrace(e.target.value)} placeholder="Default 24; 0 cuts access now" className={`h-10 ${inputClass}`} />
+                    <input
+                      id="grace"
+                      type="number"
+                      min="0"
+                      max="168"
+                      step="1"
+                      value={grace}
+                      onChange={(e) => setGrace(e.target.value)}
+                      placeholder="Default 24; 0 cuts access now"
+                      className={`h-10 ${inputClass}`}
+                    />
                     {fieldErrors.graceHours && <p className="mt-1.5 text-xs text-clay">{fieldErrors.graceHours}</p>}
                   </div>
                   <div>
@@ -238,11 +274,19 @@ export default function BrandDetail() {
                     </label>
                     <input id="typed" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={brand.name} className={`h-10 ${inputClass}`} autoComplete="off" />
                   </div>
-                  <div className="flex items-center gap-4">
-                    <button type="submit" disabled={busy || typed !== brand.name || reason.trim().length < 10} className="inline-flex h-10 items-center rounded-sm bg-clay px-5 text-[12px] font-medium uppercase tracking-[0.08em] text-cream hover:bg-clay-dark disabled:cursor-not-allowed disabled:opacity-50">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="submit"
+                      disabled={busy || typed !== brand.name || reason.trim().length < 10}
+                      className="inline-flex h-10 items-center rounded-md bg-danger px-5 text-[12px] font-medium uppercase tracking-[0.08em] text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
                       {busy ? 'Terminating…' : 'Terminate brand'}
                     </button>
-                    <button type="button" onClick={() => setDanger(false)} className="text-muted hover:underline">
+                    <button
+                      type="button"
+                      onClick={() => setDanger(false)}
+                      className="inline-flex h-10 items-center rounded-md border border-line bg-white px-4 text-[12.5px] font-medium text-ink transition hover:border-ink"
+                    >
                       Cancel
                     </button>
                   </div>

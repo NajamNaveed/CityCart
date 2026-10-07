@@ -67,15 +67,15 @@ export default function Categories() {
       <Notice tone={message.tone}>{message.text}</Notice>
 
       {can('categories.create') && (
-      <form onSubmit={onAdd} className="mb-10 flex flex-wrap items-end gap-3 border border-line bg-paper p-5">
-        <div className="flex-1 basis-56">
-          <label htmlFor="cat-name" className="mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-muted">
+      <form onSubmit={onAdd} className="mb-8 flex flex-wrap items-end gap-3 rounded-lg border border-line bg-white p-5">
+        <div className="min-w-0 flex-1 basis-56">
+          <label htmlFor="cat-name" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">
             New category
           </label>
           <input id="cat-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Printed fabric" className={`h-11 ${inputClass}`} required />
         </div>
         <div>
-          <label htmlFor="cat-parent" className="mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-muted">
+          <label htmlFor="cat-parent" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">
             Inside
           </label>
           <select id="cat-parent" value={parentId} onChange={(e) => setParentId(e.target.value)} className={`${selectClass} h-11`}>
@@ -96,35 +96,49 @@ export default function Categories() {
       {loadError ? (
         <p className="text-clay">{loadError}</p>
       ) : !categories ? (
-        <div className="h-32 animate-pulse bg-sand" />
+        <div className="h-32 animate-pulse rounded-lg bg-sand" />
       ) : categories.length === 0 ? (
-        <p className="text-sm text-muted">No categories yet. Add one above, then you can add products to it.</p>
+        <p className="rounded-lg border border-dashed border-line bg-white p-8 text-center text-sm text-muted">
+          No categories yet. Add one above, then you can add products to it.
+        </p>
       ) : (
-        <ul className="divide-y divide-line border-y border-line">
+        <ul className="divide-y divide-line rounded-lg border border-line bg-white">
           {categories.map((c) => (
-            <li key={c._id} className="flex flex-wrap items-center justify-between gap-3 py-4">
+            <li key={c._id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
               {editing?.id === c._id ? (
                 <form onSubmit={onRename} className="flex flex-1 flex-wrap items-center gap-3">
                   <label htmlFor={`rename-${c._id}`} className="sr-only">
                     Category name
                   </label>
-                  <input id={`rename-${c._id}`} value={editing.name} onChange={(e) => setEditing({ id: c._id, name: e.target.value })} className={`h-10 flex-1 basis-48 ${inputClass}`} required autoFocus />
-                  <button type="submit" disabled={busy} className="text-[13px] font-medium text-pine hover:underline">
+                  <input id={`rename-${c._id}`} value={editing.name} onChange={(e) => setEditing({ id: c._id, name: e.target.value })} className={`h-10 min-w-0 flex-1 basis-48 ${inputClass}`} required autoFocus />
+                  <button
+                    type="submit"
+                    disabled={busy}
+                    className="inline-flex h-9 items-center rounded-md bg-pine px-4 text-[12.5px] font-medium text-white transition hover:bg-pine-dark disabled:opacity-50"
+                  >
                     Save
                   </button>
-                  <button type="button" onClick={() => setEditing(null)} className="text-[13px] text-muted hover:underline">
+                  <button
+                    type="button"
+                    onClick={() => setEditing(null)}
+                    className="inline-flex h-9 items-center rounded-md border border-line bg-white px-4 text-[12.5px] font-medium text-ink transition hover:border-ink"
+                  >
                     Cancel
                   </button>
                 </form>
               ) : (
                 <>
                   <span>
-                    <span className="font-medium">{c.name}</span>
+                    <span className="font-medium text-ink">{c.name}</span>
                     {c.parentId && <span className="ml-3 text-xs text-muted">inside {nameOf[c.parentId] || 'another category'}</span>}
                   </span>
-                  <span className="flex gap-5 text-[13px] font-medium">
+                  <span className="flex gap-2.5 text-[12.5px] font-medium">
                     {can('categories.update') && (
-                      <button type="button" onClick={() => setEditing({ id: c._id, name: c.name })} className="text-pine hover:underline">
+                      <button
+                        type="button"
+                        onClick={() => setEditing({ id: c._id, name: c.name })}
+                        className="rounded-md border border-line px-3 py-1.5 text-ink transition hover:border-ink"
+                      >
                         Rename
                       </button>
                     )}
@@ -133,7 +147,7 @@ export default function Categories() {
                         type="button"
                         disabled={busy}
                         onClick={() => run(() => api.delete(`/categories/${c._id}`), 'Category removed.')}
-                        className="text-clay hover:underline"
+                        className="rounded-md border border-danger/40 px-3 py-1.5 text-danger transition hover:border-danger"
                       >
                         Remove
                       </button>

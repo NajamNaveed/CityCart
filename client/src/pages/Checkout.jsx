@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { Banknote, ShoppingBag } from 'lucide-react'
 import api, { getErrorMessage, getFieldErrors } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import { useCart } from '../hooks/useCart'
@@ -7,7 +8,7 @@ import { useCity } from '../hooks/useCity'
 import Field from '../components/Field'
 import { btnPrimary, formatPrice, inputClass, wrap } from '../ui'
 
-const labelClass = 'mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-muted'
+const labelClass = 'mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted'
 
 export default function Checkout() {
   const { user } = useAuth()
@@ -73,7 +74,12 @@ export default function Checkout() {
     }
   }
 
-  if (cart.loading) return <div className={`${wrap} py-10`}><div className="h-64 animate-pulse bg-sand" /></div>
+  if (cart.loading)
+    return (
+      <div className={`${wrap} py-10`}>
+        <div className="h-64 animate-pulse rounded-lg bg-sand" />
+      </div>
+    )
   if (cart.error) return <p className={`${wrap} py-10 text-clay`}>{cart.error}</p>
   if (cart.data.groups.length === 0) return <Navigate to="/cart" replace />
 
@@ -82,10 +88,11 @@ export default function Checkout() {
 
   return (
     <div className={`${wrap} py-10`}>
-      <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Checkout</h1>
+      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted">Almost there</p>
+      <h1 className="font-display mt-2 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">Checkout</h1>
 
       {hasIssues && (
-        <p role="alert" className="mt-6 border-l-2 border-clay bg-sand px-3 py-2 text-sm">
+        <p role="alert" className="mt-6 rounded-md bg-clay/5 px-3.5 py-2.5 text-sm text-clay">
           Some items in your cart are unavailable.{' '}
           <Link to="/cart" className="font-medium underline underline-offset-4">
             Review your cart
@@ -93,10 +100,10 @@ export default function Checkout() {
         </p>
       )}
 
-      <div className="mt-8 grid gap-12 lg:grid-cols-[1fr_22rem]">
-        <form onSubmit={onSubmit} noValidate className="space-y-10">
+      <div className="mt-8 grid gap-10 lg:grid-cols-[1fr_22rem]">
+        <form onSubmit={onSubmit} noValidate className="space-y-6">
           {error && (
-            <p role="alert" className="border-l-2 border-clay bg-sand px-3 py-2 text-sm">
+            <p role="alert" className="rounded-md bg-clay/5 px-3.5 py-2.5 text-sm text-clay">
               {error}{' '}
               {error.includes('review your cart') && (
                 <Link to="/cart" className="font-medium underline underline-offset-4">
@@ -106,66 +113,80 @@ export default function Checkout() {
             </p>
           )}
 
-          <fieldset className="grid gap-5 sm:grid-cols-2">
-            <legend className="mb-5 text-xl font-semibold tracking-tight">Delivery address</legend>
-            <Field label="Full name" id="fullName" name="fullName" autoComplete="name" value={form.fullName} onChange={onChange} error={fieldErrors['shippingAddress.fullName']} required />
-            <Field label="Phone" id="phone" name="phone" type="tel" autoComplete="tel" placeholder="+92 300 1234567" value={form.phone} onChange={onChange} error={fieldErrors['shippingAddress.phone']} required />
-            <div className="sm:col-span-2">
-              <Field label="Street address" id="addressLine" name="addressLine" autoComplete="street-address" value={form.addressLine} onChange={onChange} error={fieldErrors['shippingAddress.addressLine']} required />
-            </div>
-            <Field label="City" id="city" name="city" autoComplete="address-level2" value={cityValue} onChange={onChange} error={fieldErrors['shippingAddress.city']} required />
-            <Field label="Postal code" id="postalCode" name="postalCode" autoComplete="postal-code" value={form.postalCode} onChange={onChange} error={fieldErrors['shippingAddress.postalCode']} hint="Optional." />
-            <div className="sm:col-span-2">
-              <label htmlFor="additionalInstructions" className={labelClass}>
-                Delivery notes
-              </label>
-              <textarea
-                id="additionalInstructions"
-                name="additionalInstructions"
-                rows={3}
-                value={form.additionalInstructions}
-                onChange={onChange}
-                placeholder="Landmark, gate number, best time to call. Optional."
-                className={`${inputClass} py-3`}
-              />
-            </div>
-          </fieldset>
-
-          <fieldset>
-            <legend className="mb-4 text-xl font-semibold tracking-tight">Payment</legend>
-            <div className="border border-ink bg-paper p-5">
-              <p className="text-sm font-medium">Cash on delivery</p>
-              <p className="mt-1 text-sm text-muted">Pay in cash when each order arrives. Nothing is charged online.</p>
+          <fieldset className="rounded-lg border border-line bg-white p-6">
+            <legend className="font-display px-1.5 text-lg font-semibold tracking-tight text-ink">
+              Delivery address
+            </legend>
+            <div className="grid gap-5 pt-2 sm:grid-cols-2">
+              <Field label="Full name" id="fullName" name="fullName" autoComplete="name" value={form.fullName} onChange={onChange} error={fieldErrors['shippingAddress.fullName']} required />
+              <Field label="Phone" id="phone" name="phone" type="tel" autoComplete="tel" placeholder="+92 300 1234567" value={form.phone} onChange={onChange} error={fieldErrors['shippingAddress.phone']} required />
+              <div className="sm:col-span-2">
+                <Field label="Street address" id="addressLine" name="addressLine" autoComplete="street-address" value={form.addressLine} onChange={onChange} error={fieldErrors['shippingAddress.addressLine']} required />
+              </div>
+              <Field label="City" id="city" name="city" autoComplete="address-level2" value={cityValue} onChange={onChange} error={fieldErrors['shippingAddress.city']} required />
+              <Field label="Postal code" id="postalCode" name="postalCode" autoComplete="postal-code" value={form.postalCode} onChange={onChange} error={fieldErrors['shippingAddress.postalCode']} hint="Optional." />
+              <div className="sm:col-span-2">
+                <label htmlFor="additionalInstructions" className={labelClass}>
+                  Delivery notes
+                </label>
+                <textarea
+                  id="additionalInstructions"
+                  name="additionalInstructions"
+                  rows={3}
+                  value={form.additionalInstructions}
+                  onChange={onChange}
+                  placeholder="Landmark, gate number, best time to call. Optional."
+                  className={`${inputClass} py-3`}
+                />
+              </div>
             </div>
           </fieldset>
 
-          <button type="submit" disabled={placing || hasIssues} className={`${btnPrimary} w-full sm:w-auto sm:min-w-64`}>
+          <fieldset className="rounded-lg border border-line bg-white p-6">
+            <legend className="font-display px-1.5 text-lg font-semibold tracking-tight text-ink">Payment</legend>
+            <div className="mt-2 flex items-start gap-3.5 rounded-md border-2 border-ink bg-paper p-5">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-cream text-clay">
+                <Banknote className="h-5 w-5" aria-hidden="true" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-ink">Cash on delivery</p>
+                <p className="mt-1 text-[13px] leading-relaxed text-muted">
+                  Pay in cash when each order arrives. Nothing is charged online.
+                </p>
+              </div>
+            </div>
+          </fieldset>
+
+          <button type="submit" disabled={placing || hasIssues} className={`${btnPrimary} h-12 w-full sm:w-auto sm:min-w-64`}>
             {placing ? 'Placing order…' : `Place order · ${formatPrice(subtotal)}`}
           </button>
         </form>
 
-        <aside className="h-fit border border-line bg-paper p-6">
-          <h2 className="text-lg font-semibold">
+        <aside className="h-fit rounded-lg border border-line bg-white p-6 lg:sticky lg:top-24">
+          <h2 className="font-display text-lg font-semibold text-ink">
             Order summary <span className="text-sm font-normal text-muted">({itemCount} items)</span>
           </h2>
           <div className="mt-5 space-y-5">
             {groups.map((g) => (
               <div key={g.brand._id}>
-                <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted">{g.brand.name}</p>
+                <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-muted">
+                  <ShoppingBag className="h-3 w-3" aria-hidden="true" />
+                  {g.brand.name}
+                </p>
                 <ul className="mt-2 space-y-1.5 text-sm">
                   {g.items.map((i) => (
                     <li key={i.productId} className="flex justify-between gap-3">
-                      <span>
+                      <span className="text-ink/80">
                         {i.name} <span className="text-muted">× {i.quantity}</span>
                       </span>
-                      <span>{formatPrice(i.lineTotal)}</span>
+                      <span className="text-ink">{formatPrice(i.lineTotal)}</span>
                     </li>
                   ))}
                 </ul>
               </div>
             ))}
           </div>
-          <div className="mt-6 flex justify-between border-t border-line pt-4 text-base font-semibold">
+          <div className="mt-6 flex justify-between border-t border-line pt-4 text-base font-semibold text-ink">
             <span>Total</span>
             <span>{formatPrice(subtotal)}</span>
           </div>

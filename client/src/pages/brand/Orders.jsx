@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { PackageSearch } from 'lucide-react'
 import api, { getErrorMessage } from '../../services/api'
-import { PageHeader, Pager, StatusBadge, selectClass } from '../../components/brand/Bits'
+import { PageHeader, Pager, StatusBadge, selectClass, tableHead, tableRow, tableShell } from '../../components/brand/Bits'
+import { EmptyState, Skeleton } from '../../components/ui'
 import { formatDateTime, formatPrice, humanize } from '../../ui'
 
 const STATUSES = ['PENDING', 'CONFIRMED', 'PROCESSING', 'READY_FOR_SHIPMENT', 'SHIPPED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'REJECTED', 'CANCELLED', 'RETURN_REQUESTED', 'RETURNED', 'REFUNDED']
@@ -56,43 +58,49 @@ export default function Orders() {
       />
 
       {loading ? (
-        <div className="h-48 animate-pulse bg-sand" />
+        <div className="space-y-2.5">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-16 w-full rounded-lg" />
+          ))}
+        </div>
       ) : state.error ? (
         <p className="text-clay">{state.error}</p>
       ) : state.orders.length === 0 ? (
-        <div className="border border-dashed border-line py-16 text-center">
-          <p className="font-medium">{status ? 'No orders with that status.' : 'No orders yet.'}</p>
-          {!status && <p className="mt-1 text-sm text-muted">They will appear here as customers place them.</p>}
-        </div>
+        <EmptyState
+          icon={PackageSearch}
+          title={status ? 'No orders with that status.' : 'No orders yet.'}
+          message={!status ? 'They will appear here as customers place them.' : undefined}
+          className="rounded-lg border border-dashed border-line bg-white"
+        />
       ) : (
-        <div className="overflow-x-auto">
+        <div className={tableShell}>
           <table className="w-full min-w-[40rem] text-left text-sm">
             <thead>
-              <tr className="border-b border-ink text-[11px] font-medium uppercase tracking-[0.14em] text-muted">
-                <th className="py-3 pr-4 font-medium">Order</th>
+              <tr className={tableHead}>
+                <th className="px-5 py-3 font-medium">Order</th>
                 <th className="py-3 pr-4 font-medium">Customer</th>
                 <th className="py-3 pr-4 font-medium">Status</th>
                 <th className="py-3 pr-4 font-medium">Payment</th>
-                <th className="py-3 text-right font-medium">Total</th>
+                <th className="py-3 pr-5 text-right font-medium">Total</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-line">
+            <tbody>
               {state.orders.map((o) => (
-                <tr key={o._id} className="hover:bg-sand/60">
-                  <td className="py-3 pr-4">
-                    <Link to={`/brand/orders/${o._id}`} className="font-medium text-pine hover:underline">
+                <tr key={o._id} className={tableRow}>
+                  <td className="px-5 py-3.5">
+                    <Link to={`/brand/orders/${o._id}`} className="font-medium text-ink transition hover:text-pine">
                       {o.orderNumber}
                     </Link>
                     <span className="block text-xs text-muted">{formatDateTime(o.createdAt)}</span>
                   </td>
-                  <td className="py-3 pr-4">{o.shippingAddress?.name}</td>
-                  <td className="py-3 pr-4">
+                  <td className="py-3.5 pr-4 text-ink">{o.shippingAddress?.name}</td>
+                  <td className="py-3.5 pr-4">
                     <StatusBadge value={o.orderStatus} />
                   </td>
-                  <td className="py-3 pr-4">
+                  <td className="py-3.5 pr-4">
                     <StatusBadge value={o.paymentStatus} />
                   </td>
-                  <td className="py-3 text-right font-semibold">{formatPrice(o.total)}</td>
+                  <td className="py-3.5 pr-5 text-right font-semibold text-ink">{formatPrice(o.total)}</td>
                 </tr>
               ))}
             </tbody>

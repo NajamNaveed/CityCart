@@ -11,7 +11,7 @@ const env = require('../config/env');
  * passwords, password hashes, or other sensitive data in the token.
  */
 
-function signToken({ userId, role, brandId }) {
+function signToken({ userId, role, brandId }, { expiresIn } = {}) {
   if (!env.jwtSecret) {
     throw new Error(
       'JWT_SECRET is not set. Add it to server/.env (see .env.example).'
@@ -19,7 +19,9 @@ function signToken({ userId, role, brandId }) {
   }
 
   return jwt.sign({ userId, role, brandId: brandId || null }, env.jwtSecret, {
-    expiresIn: env.jwtExpiresIn,
+    // Staff sessions pass a shorter lifetime here (docs/06 §9); everyone
+    // else uses the standard configured expiry.
+    expiresIn: expiresIn || env.jwtExpiresIn,
   });
 }
 

@@ -30,6 +30,14 @@ const env = {
     .filter(Boolean),
   jwtSecret: process.env.JWT_SECRET || '',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  // Staff (brand dashboard + platform admin) sessions are short-lived and
+  // renewed on activity; shoppers keep the full-length session. Hours,
+  // capped at 7 days.
+  staffSessionHours: (() => {
+    const raw = (process.env.STAFF_SESSION_HOURS || '').trim();
+    const hours = Number(raw);
+    return raw !== '' && Number.isFinite(hours) && hours > 0 ? Math.min(hours, 168) : 8;
+  })(),
   // Image hosting (Cloudinary). Optional: without all three, image upload
   // answers 503 and the dashboard falls back to "add an image by link".
   cloudinary: {

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { Search, SearchX } from 'lucide-react'
 import api, { getErrorMessage } from '../../services/api'
 import { useCity } from '../../hooks/useCity'
-import { PageHeader, Pager, StatusBadge, selectClass } from '../../components/brand/Bits'
-import { formatDateTime, humanize, inputClass } from '../../ui'
+import { PageHeader, Pager, StatusBadge, selectClass, tableHead, tableRow, tableShell } from '../../components/brand/Bits'
+import { EmptyState, Skeleton } from '../../components/ui'
+import { formatDateTime, humanize } from '../../ui'
 
 const STATUSES = ['PENDING', 'ACTIVE', 'SUSPENDED', 'REJECTED', 'TERMINATED']
 
@@ -41,10 +43,10 @@ export default function Brands() {
     <>
       <PageHeader title="Brands" intro="Every brand on the platform, whatever its status." />
 
-      <div className="mb-6 flex flex-wrap gap-3">
+      <div className="mb-5 flex flex-wrap gap-2.5">
         <form
           role="search"
-          className="flex flex-1 basis-60 gap-2"
+          className="relative min-w-0 flex-1 basis-56"
           onSubmit={(e) => {
             e.preventDefault()
             update({ search: new FormData(e.currentTarget).get('q').toString().trim() })
@@ -53,10 +55,15 @@ export default function Brands() {
           <label htmlFor="q" className="sr-only">
             Search brands
           </label>
-          <input key={search} id="q" name="q" defaultValue={search} placeholder="Search by name" className={`h-10 min-w-0 flex-1 ${inputClass}`} />
-          <button type="submit" className="h-10 rounded-sm bg-ink px-4 text-[12px] font-medium uppercase tracking-[0.1em] text-cream hover:bg-black">
-            Search
-          </button>
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden="true" />
+          <input
+            key={search}
+            id="q"
+            name="q"
+            defaultValue={search}
+            placeholder="Search by name"
+            className="h-10 w-full rounded-md border border-line bg-white pl-9 pr-3 text-[13px] text-ink outline-none transition focus:border-ink"
+          />
         </form>
         <label htmlFor="status" className="sr-only">
           Status
@@ -72,37 +79,39 @@ export default function Brands() {
       </div>
 
       {loading ? (
-        <div className="h-48 animate-pulse bg-sand" />
+        <div className="space-y-2.5">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-16 w-full rounded-lg" />
+          ))}
+        </div>
       ) : state.error ? (
         <p className="text-clay">{state.error}</p>
       ) : state.brands.length === 0 ? (
-        <div className="border border-dashed border-line py-16 text-center">
-          <p className="font-medium">No brands match.</p>
-        </div>
+        <EmptyState icon={SearchX} title="No brands match." className="rounded-lg border border-dashed border-line bg-white" />
       ) : (
-        <div className="overflow-x-auto">
+        <div className={tableShell}>
           <table className="w-full min-w-[36rem] text-left text-sm">
             <thead>
-              <tr className="border-b border-ink text-[11px] font-medium uppercase tracking-[0.14em] text-muted">
-                <th className="py-3 pr-4 font-medium">Brand</th>
+              <tr className={tableHead}>
+                <th className="px-5 py-3 font-medium">Brand</th>
                 <th className="py-3 pr-4 font-medium">City</th>
                 <th className="py-3 pr-4 font-medium">Status</th>
-                <th className="py-3 font-medium">Joined</th>
+                <th className="py-3 pr-5 font-medium">Joined</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-line">
+            <tbody>
               {state.brands.map((b) => (
-                <tr key={b._id} className="hover:bg-sand/60">
-                  <td className="py-3 pr-4">
-                    <Link to={`/admin/brands/${b._id}`} className="font-medium text-clay hover:underline">
+                <tr key={b._id} className={tableRow}>
+                  <td className="px-5 py-3.5">
+                    <Link to={`/admin/brands/${b._id}`} className="font-medium text-ink transition hover:text-clay">
                       {b.name}
                     </Link>
                   </td>
-                  <td className="py-3 pr-4 text-muted">{cityName[b.cityId] || '—'}</td>
-                  <td className="py-3 pr-4">
+                  <td className="py-3.5 pr-4 text-muted">{cityName[b.cityId] || '—'}</td>
+                  <td className="py-3.5 pr-4">
                     <StatusBadge value={b.status} />
                   </td>
-                  <td className="py-3 text-muted">{formatDateTime(b.createdAt)}</td>
+                  <td className="py-3.5 pr-5 text-muted">{formatDateTime(b.createdAt)}</td>
                 </tr>
               ))}
             </tbody>

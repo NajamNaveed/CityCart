@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { toast } from '../components/ui/toast'
 
 // VITE_API_URL is documented in .env.example, e.g. http://localhost:5000/api/v1
 // A missing "/api/v1" on the end is added, so "http://localhost:5000" works too.
@@ -12,11 +13,16 @@ const api = axios.create({
   withCredentials: true, // required for the HTTP-only auth cookie
 })
 
-// Lets the app tell the person when the server is refusing them for sending too much.
+// Rate limiting surfaces as a toast instead of a page banner.
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 429) window.dispatchEvent(new Event('citycart:rate-limited'))
+    if (error.response?.status === 429) {
+      toast('Too many requests were sent from this device. Wait a few minutes, then try again.', {
+        type: 'error',
+        duration: 6000,
+      })
+    }
     return Promise.reject(error)
   },
 )

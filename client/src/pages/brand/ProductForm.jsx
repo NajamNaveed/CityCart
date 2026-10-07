@@ -6,6 +6,7 @@ import { useCan } from '../../hooks/useCan'
 import Field from '../../components/Field'
 import ImageUploader from '../../components/brand/ImageUploader'
 import { Notice, PageHeader } from '../../components/brand/Bits'
+import { Skeleton } from '../../components/ui'
 import { btnPine, inputClass } from '../../ui'
 
 const labelClass = 'mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-muted'
@@ -117,7 +118,10 @@ function FormBody({ id, product, inventory, categories }) {
         title={id ? 'Edit product' : 'Add product'}
         intro={archived ? 'This product is archived and hidden from the shop.' : undefined}
         action={
-          <Link to="/brand/products" className="text-[13px] font-medium text-pine hover:underline">
+          <Link
+            to="/brand/products"
+            className="inline-flex items-center gap-1 rounded-md border border-line bg-white px-3.5 py-2 text-[13px] font-medium text-ink transition hover:border-ink"
+          >
             Back to products
           </Link>
         }
@@ -125,18 +129,18 @@ function FormBody({ id, product, inventory, categories }) {
       <Notice tone={location.state?.tone}>{location.state?.notice}</Notice>
 
       {!canSave && (
-        <p className="mb-6 border-l-2 border-line bg-sand px-3 py-2 text-sm">You can view this product but not change it.</p>
+        <p className="mb-6 rounded-md bg-paper px-3.5 py-2.5 text-sm text-muted">You can view this product but not change it.</p>
       )}
 
-      <form onSubmit={onSubmit} className="max-w-3xl space-y-10" noValidate>
+      <form onSubmit={onSubmit} className="max-w-3xl space-y-5" noValidate>
         {error && (
-          <p role="alert" className="border-l-2 border-clay bg-sand px-3 py-2 text-sm">
+          <p role="alert" className="rounded-md bg-clay/5 px-3.5 py-2.5 text-sm text-clay">
             {error}
           </p>
         )}
 
-        <fieldset disabled={!canSave} className="min-w-0 space-y-10">
-        <fieldset className="grid gap-5 sm:grid-cols-2">
+        <fieldset disabled={!canSave} className="min-w-0 space-y-5">
+        <fieldset className="grid gap-5 rounded-lg border border-line bg-white p-6">
           <legend className="sr-only">Details</legend>
           <div className="sm:col-span-2">
             <Field label="Name" id="name" name="name" value={form.name} onChange={onChange} error={fieldErrors.name} required />
@@ -183,44 +187,57 @@ function FormBody({ id, product, inventory, categories }) {
           </div>
         </fieldset>
 
-        <fieldset className="grid gap-5 border-t border-line pt-8 sm:grid-cols-3">
+        <fieldset className="grid gap-5 rounded-lg border border-line bg-white p-6 sm:grid-cols-3">
           <legend className="sr-only">Pricing</legend>
           <Field label="Price (PKR)" id="price" name="price" type="number" min="0" step="0.01" value={form.price} onChange={onChange} error={fieldErrors.price} required />
           <Field label="Compare-at price" id="compareAtPrice" name="compareAtPrice" type="number" min="0" step="0.01" value={form.compareAtPrice} onChange={onChange} error={fieldErrors.compareAtPrice} hint="Optional. Shows a discount." />
           <Field label="SKU" id="sku" name="sku" value={form.sku} onChange={onChange} error={fieldErrors.sku} hint="Optional." />
         </fieldset>
 
-        <fieldset className="grid gap-5 border-t border-line pt-8 sm:grid-cols-2">
+        <fieldset className="grid gap-5 rounded-lg border border-line bg-white p-6 sm:grid-cols-2">
           <legend className="sr-only">Stock</legend>
           <Field label="Quantity in stock" id="quantity" name="quantity" type="number" min="0" step="1" value={form.quantity} onChange={onChange} />
           <Field label="Low stock warning at" id="lowStockThreshold" name="lowStockThreshold" type="number" min="0" step="1" value={form.lowStockThreshold} onChange={onChange} hint="Flagged as low stock at or below this number." />
         </fieldset>
 
-        <div className="border-t border-line pt-8">
+        <div className="rounded-lg border border-line bg-white p-6">
           <p className={labelClass}>Photos</p>
           <ImageUploader images={images} onChange={setImages} name={form.name || 'Product'} />
         </div>
 
         </fieldset>
 
-        <div className="flex flex-wrap items-center gap-4 border-t border-line pt-8">
+        <div className="flex flex-wrap items-center gap-3">
           {canSave && (
             <button type="submit" disabled={saving} className={btnPine}>
               {saving ? 'Saving…' : id ? 'Save changes' : 'Add product'}
             </button>
           )}
           {id && !archived && canArchive && !confirmArchive && (
-            <button type="button" onClick={() => setConfirmArchive(true)} className="text-[13px] font-medium text-clay hover:underline">
+            <button
+              type="button"
+              onClick={() => setConfirmArchive(true)}
+              className="inline-flex h-11 items-center rounded-md border border-danger/40 bg-white px-5 text-[13px] font-medium text-danger transition hover:border-danger"
+            >
               Archive product
             </button>
           )}
           {id && !archived && canArchive && confirmArchive && (
-            <span className="flex items-center gap-3 text-sm">
-              Hide this product from the shop?
-              <button type="button" onClick={archive} disabled={saving} className="font-medium text-clay hover:underline">
+            <span className="flex flex-wrap items-center gap-3 rounded-md bg-danger-soft px-3.5 py-2 text-sm">
+              <span className="text-ink">Hide this product from the shop?</span>
+              <button
+                type="button"
+                onClick={archive}
+                disabled={saving}
+                className="inline-flex h-8 items-center rounded-md bg-danger px-3 text-[12.5px] font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+              >
                 Yes, archive
               </button>
-              <button type="button" onClick={() => setConfirmArchive(false)} className="text-muted hover:underline">
+              <button
+                type="button"
+                onClick={() => setConfirmArchive(false)}
+                className="inline-flex h-8 items-center rounded-md border border-line bg-white px-3 text-[12.5px] font-medium text-ink transition hover:border-ink"
+              >
                 Cancel
               </button>
             </span>
@@ -254,7 +271,13 @@ export default function ProductForm() {
     }
   }, [id, key, user.brandId])
 
-  if (data.key !== key) return <div className="h-64 animate-pulse bg-sand" />
+  if (data.key !== key)
+    return (
+      <div className="max-w-3xl space-y-4">
+        <Skeleton className="h-10 w-56" />
+        <Skeleton className="h-72 w-full rounded-lg" />
+      </div>
+    )
   if (data.error) return <p className="text-clay">{data.error}</p>
   return <FormBody key={key} id={id} product={data.product} inventory={data.inventory} categories={data.categories} />
 }

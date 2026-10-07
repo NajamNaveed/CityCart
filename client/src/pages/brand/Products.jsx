@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
+import { Plus, Search } from 'lucide-react'
 import api, { getErrorMessage } from '../../services/api'
 import ProductImage from '../../components/ProductImage'
-import { Notice, PageHeader, Pager, StatusBadge, selectClass } from '../../components/brand/Bits'
+import { Notice, PageHeader, Pager, StatusBadge, selectClass, tableHead, tableRow, tableShell } from '../../components/brand/Bits'
 import { useCan } from '../../hooks/useCan'
-import { btnPine, formatPrice, inputClass } from '../../ui'
+import { EmptyState, Skeleton } from '../../components/ui'
+import { btnPine, formatPrice } from '../../ui'
 
 const STATUSES = ['ACTIVE', 'DRAFT', 'INACTIVE', 'ARCHIVED']
 
@@ -62,6 +64,7 @@ export default function Products() {
         action={
           canCreate && (
             <Link to="/brand/products/new" className={btnPine}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
               Add product
             </Link>
           )
@@ -69,10 +72,10 @@ export default function Products() {
       />
       <Notice>{location.state?.notice}</Notice>
 
-      <div className="mb-6 flex flex-wrap gap-3">
+      <div className="mb-5 flex flex-wrap gap-2.5">
         <form
           role="search"
-          className="flex flex-1 basis-60 gap-2"
+          className="relative min-w-0 flex-1 basis-56"
           onSubmit={(e) => {
             e.preventDefault()
             update({ search: new FormData(e.currentTarget).get('q').toString().trim() })
@@ -81,10 +84,15 @@ export default function Products() {
           <label htmlFor="q" className="sr-only">
             Search products
           </label>
-          <input key={search} id="q" name="q" defaultValue={search} placeholder="Search by name" className={`h-10 min-w-0 flex-1 ${inputClass}`} />
-          <button type="submit" className="h-10 rounded-sm bg-ink px-4 text-[12px] font-medium uppercase tracking-[0.1em] text-cream hover:bg-black">
-            Search
-          </button>
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden="true" />
+          <input
+            key={search}
+            id="q"
+            name="q"
+            defaultValue={search}
+            placeholder="Search by name"
+            className="h-10 w-full rounded-md border border-line bg-white pl-9 pr-3 text-[13px] text-ink outline-none transition focus:border-ink"
+          />
         </form>
         <label htmlFor="status" className="sr-only">
           Status
@@ -100,50 +108,64 @@ export default function Products() {
       </div>
 
       {loading ? (
-        <div className="h-48 animate-pulse bg-sand" />
+        <div className="space-y-2.5">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-16 w-full rounded-lg" />
+          ))}
+        </div>
       ) : state.error ? (
         <p className="text-clay">{state.error}</p>
       ) : state.items.length === 0 ? (
-        <div className="border border-dashed border-line py-16 text-center">
-          <p className="font-medium">{search || status ? 'No products match.' : 'You have not added any products yet.'}</p>
-          {!search && !status && canCreate && (
-            <Link to="/brand/products/new" className={`${btnPine} mt-5`}>
-              Add your first product
-            </Link>
-          )}
-        </div>
+        <EmptyState
+          icon={Search}
+          title={search || status ? 'No products match.' : 'You have not added any products yet.'}
+          message={!search && !status ? 'Create your first product with photos, price and stock.' : undefined}
+          className="rounded-lg border border-dashed border-line bg-white"
+          action={
+            !search && !status && canCreate ? (
+              <Link to="/brand/products/new" className={btnPine}>
+                Add your first product
+              </Link>
+            ) : undefined
+          }
+        />
       ) : (
-        <div className="overflow-x-auto">
+        <div className={tableShell}>
           <table className="w-full min-w-[40rem] text-left text-sm">
             <thead>
-              <tr className="border-b border-ink text-[11px] font-medium uppercase tracking-[0.14em] text-muted">
-                <th className="py-3 pr-4 font-medium">Product</th>
+              <tr className={tableHead}>
+                <th className="px-5 py-3 font-medium">Product</th>
                 <th className="py-3 pr-4 font-medium">Status</th>
                 <th className="py-3 pr-4 text-right font-medium">Price</th>
                 <th className="py-3 pr-4 font-medium">In stock</th>
-                <th className="py-3 text-right font-medium">
+                <th className="py-3 pr-5 text-right font-medium">
                   <span className="sr-only">Actions</span>
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-line">
+            <tbody>
               {state.items.map((p) => (
-                <tr key={p._id}>
-                  <td className="py-3 pr-4">
+                <tr key={p._id} className={tableRow}>
+                  <td className="px-5 py-3">
                     <div className="flex items-center gap-3">
-                      <ProductImage src={p.images?.[0]} name={p.name} className="size-12 shrink-0 text-sm" />
-                      <span className="font-medium">{p.name}</span>
+                      <ProductImage src={p.images?.[0]} name={p.name} className="size-11 shrink-0 rounded-md text-sm" />
+                      <Link to={`/brand/products/${p._id}`} className="font-medium text-ink transition hover:text-pine">
+                        {p.name}
+                      </Link>
                     </div>
                   </td>
                   <td className="py-3 pr-4">
                     <StatusBadge value={p.status} />
                   </td>
-                  <td className="py-3 pr-4 text-right">{formatPrice(p.price)}</td>
+                  <td className="py-3 pr-4 text-right text-ink">{formatPrice(p.price)}</td>
                   <td className="py-3 pr-4">
                     <Stock inventory={p.inventory} />
                   </td>
-                  <td className="py-3 text-right">
-                    <Link to={`/brand/products/${p._id}`} className="font-medium text-pine hover:underline">
+                  <td className="py-3 pr-5 text-right">
+                    <Link
+                      to={`/brand/products/${p._id}`}
+                      className="rounded-md border border-line px-3 py-1.5 text-[12.5px] font-medium text-ink transition hover:border-ink"
+                    >
                       Edit
                     </Link>
                   </td>

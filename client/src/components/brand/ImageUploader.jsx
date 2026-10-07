@@ -114,9 +114,11 @@ export default function ImageUploader({ images, onChange, name = 'product' }) {
           setDragging(false)
           addFiles(e.dataTransfer.files)
         }}
-        className={`border border-dashed px-5 py-8 text-center transition ${dragging ? 'border-pine bg-pine/5' : 'border-line bg-paper'}`}
+        className={`rounded-lg border border-dashed px-5 py-8 text-center transition ${
+          dragging ? 'border-pine bg-pine/5' : 'border-line bg-paper'
+        }`}
       >
-        <p className="text-sm">Drag photos here, or</p>
+        <p className="text-sm text-ink">Drag photos here, or</p>
         <button
           type="button"
           disabled={room <= 0}

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { Star } from 'lucide-react'
 import api, { getErrorMessage } from '../../services/api'
 import Stars from '../../components/Stars'
 import { Notice, PageHeader, Pager, StatusBadge, selectClass } from '../../components/brand/Bits'
+import { EmptyState, Skeleton } from '../../components/ui'
 import { formatDate } from '../../ui'
 
 export default function Reviews() {
@@ -101,17 +103,19 @@ export default function Reviews() {
       </div>
 
       {loading ? (
-        <div className="h-48 animate-pulse bg-sand" />
+        <div className="space-y-2.5">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-24 w-full rounded-lg" />
+          ))}
+        </div>
       ) : state.error ? (
         <p className="text-clay">{state.error}</p>
       ) : state.reviews.length === 0 ? (
-        <div className="border border-dashed border-line py-16 text-center">
-          <p className="font-medium">No reviews match.</p>
-        </div>
+        <EmptyState icon={Star} title="No reviews match." className="rounded-lg border border-dashed border-line bg-white" />
       ) : (
-        <ul className="divide-y divide-line border-y border-line">
+        <ul className="space-y-3">
           {state.reviews.map((r) => (
-            <li key={r._id} className="py-6">
+            <li key={r._id} className="rounded-lg border border-line bg-white p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <span className="flex items-center gap-3">
                   <Stars value={r.rating} />
@@ -121,13 +125,15 @@ export default function Reviews() {
                   type="button"
                   disabled={busyId === r._id}
                   onClick={() => toggle(r)}
-                  className={`text-[13px] font-medium hover:underline ${r.isApproved ? 'text-clay' : 'text-ink'}`}
+                  className={`inline-flex h-9 items-center rounded-md border px-3.5 text-[12.5px] font-medium transition ${
+                    r.isApproved ? 'border-danger/40 text-danger hover:border-danger' : 'border-pine text-pine hover:bg-pine hover:text-white'
+                  }`}
                 >
                   {r.isApproved ? 'Hide review' : 'Show review'}
                 </button>
               </div>
-              {r.title && <p className="mt-2 font-medium">{r.title}</p>}
-              {r.comment && <p className="mt-1 text-[15px] leading-relaxed text-muted">{r.comment}</p>}
+              {r.title && <p className="mt-2 font-medium text-ink">{r.title}</p>}
+              {r.comment && <p className="mt-1 text-[14px] leading-relaxed text-muted">{r.comment}</p>}
               <p className="mt-3 text-xs text-muted">
                 {r.customerName} on {r.productName} ({r.brandName}) · {formatDate(r.createdAt)}
               </p>

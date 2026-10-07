@@ -1,14 +1,16 @@
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { lazy, Suspense, useEffect } from 'react'
 import { AuthProvider } from './context/AuthProvider'
 import { CityProvider } from './context/CityProvider'
 import { CartProvider } from './context/CartProvider'
 import { NotificationProvider } from './context/NotificationProvider'
-import ServerBanner from './components/ServerBanner'
+import { Toaster } from './components/ui'
 import StoreLayout from './components/StoreLayout'
 import SellerLayout from './components/SellerLayout'
 import { GuestRoute, ProtectedRoute } from './components/RouteGuards'
 import Home from './pages/Home'
 import Shop from './pages/Shop'
+import Brands from './pages/Brands'
 import ProductDetail from './pages/ProductDetail'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -20,44 +22,63 @@ import MyOrderDetail from './pages/MyOrderDetail'
 import Sell from './pages/Sell'
 import SellerLogin from './pages/SellerLogin'
 import Apply from './pages/Apply'
-import BrandLayout from './components/brand/BrandLayout'
-import Overview from './pages/brand/Overview'
-import BrandProducts from './pages/brand/Products'
-import ProductForm from './pages/brand/ProductForm'
-import Categories from './pages/brand/Categories'
-import Orders from './pages/brand/Orders'
-import OrderDetail from './pages/brand/OrderDetail'
-import Deliveries from './pages/brand/Deliveries'
-import Team from './pages/brand/Team'
-import BrandReviews from './pages/brand/Reviews'
 import AdminLogin from './pages/AdminLogin'
-import AdminLayout from './components/admin/AdminLayout'
-import AdminOverview from './pages/admin/Overview'
-import AdminBrands from './pages/admin/Brands'
-import AdminBrandDetail from './pages/admin/BrandDetail'
-import AdminOrders from './pages/admin/Orders'
-import AdminOrderDetail from './pages/admin/OrderDetail'
-import AdminCities from './pages/admin/Cities'
-import AdminReviews from './pages/admin/Reviews'
 import Notifications from './pages/Notifications'
 import NotFound from './pages/NotFound'
 
+// The two dashboards load on demand — shoppers never download them.
+const BrandLayout = lazy(() => import('./components/brand/BrandLayout'))
+const Overview = lazy(() => import('./pages/brand/Overview'))
+const BrandProducts = lazy(() => import('./pages/brand/Products'))
+const ProductForm = lazy(() => import('./pages/brand/ProductForm'))
+const Categories = lazy(() => import('./pages/brand/Categories'))
+const BrandOrders = lazy(() => import('./pages/brand/Orders'))
+const BrandOrderDetail = lazy(() => import('./pages/brand/OrderDetail'))
+const Deliveries = lazy(() => import('./pages/brand/Deliveries'))
+const Team = lazy(() => import('./pages/brand/Team'))
+const BrandReviews = lazy(() => import('./pages/brand/Reviews'))
+const AdminLayout = lazy(() => import('./components/admin/AdminLayout'))
+const AdminOverview = lazy(() => import('./pages/admin/Overview'))
+const AdminBrands = lazy(() => import('./pages/admin/Brands'))
+const AdminBrandDetail = lazy(() => import('./pages/admin/BrandDetail'))
+const AdminOrders = lazy(() => import('./pages/admin/Orders'))
+const AdminOrderDetail = lazy(() => import('./pages/admin/OrderDetail'))
+const AdminCities = lazy(() => import('./pages/admin/Cities'))
+const AdminReviews = lazy(() => import('./pages/admin/Reviews'))
+
+function RouteFallback() {
+  return <div className="flex min-h-[60vh] items-center justify-center text-sm text-muted">Loading…</div>
+}
+
 const BRAND_ROLES = ['BRAND_ADMIN', 'BRAND_EMPLOYEE']
+
+// Every navigation starts at the top of the new page. 'instant' overrides the
+// site's smooth-scroll CSS, which would otherwise animate the jump.
+function ScrollToTop() {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+  }, [pathname])
+  return null
+}
 
 function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <AuthProvider>
         {/* Notifications need the signed-in user only; its socket lives as long as the session. */}
         <NotificationProvider>
           <CityProvider>
             <CartProvider>
-              <ServerBanner />
-              <Routes>
+              <Toaster />
+              <Suspense fallback={<RouteFallback />}>
+                <Routes>
                 {/* Shoppers */}
                 <Route element={<StoreLayout />}>
                   <Route index element={<Home />} />
                   <Route path="shop" element={<Shop />} />
+                  <Route path="brands" element={<Brands />} />
                   <Route path="product/:id" element={<ProductDetail />} />
 
                   <Route element={<GuestRoute />}>
@@ -98,8 +119,8 @@ function App() {
                     <Route path="products/new" element={<ProductForm />} />
                     <Route path="products/:id" element={<ProductForm />} />
                     <Route path="categories" element={<Categories />} />
-                    <Route path="orders" element={<Orders />} />
-                    <Route path="orders/:id" element={<OrderDetail />} />
+                    <Route path="orders" element={<BrandOrders />} />
+                    <Route path="orders/:id" element={<BrandOrderDetail />} />
                     <Route path="deliveries" element={<Deliveries />} />
                     <Route path="reviews" element={<BrandReviews />} />
                     <Route path="team" element={<Team />} />
@@ -124,6 +145,7 @@ function App() {
                   </Route>
                 </Route>
               </Routes>
+              </Suspense>
             </CartProvider>
           </CityProvider>
         </NotificationProvider>
