@@ -1,0 +1,41 @@
+# Render blueprint for the CityCart API.
+#
+# Deploy: Render dashboard -> New -> Blueprint -> point at this repository.
+# Render creates the service from this file; you only fill in the marked
+# secrets in the dashboard (sync: false means "ask at deploy time").
+#
+# The client deploys separately on Vercel (framework auto-detected, SPA
+# rewrites in client/vercel.json). After both are live, set each side's
+# origin: CLIENT_URL on this service, VITE_API_URL in the Vercel build.
+
+services:
+  - type: web
+    name: citycart-server
+    runtime: node
+    rootDir: server
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CLIENT_URL
+        sync: false # e.g. https://citycart.vercel.app
+      - key: MONGODB_URI
+        sync: false # MongoDB Atlas connection string
+      - key: JWT_SECRET
+        sync: false # long random string — required
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: STAFF_SESSION_HOURS
+        value: 8
+      - key: TERMINATION_GRACE_HOURS
+        value: 24
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false # optional; without them image upload falls back to links
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false

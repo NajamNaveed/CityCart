@@ -1,0 +1,21 @@
+{
+  "name": "citycart",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CityCart — multi-tenant, multi-vendor, city-based e-commerce marketplace (root workspace scripts).",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "build": "npm run build --prefix client",
+    "start": "npm run start --prefix server",
+    "lint": "npm run lint --prefix server && npm run lint --prefix client",
+    "test": "npm test --prefix server",
+    "test:integration": "npm run test:integration --prefix server",
+    "sync-indexes": "npm run sync-indexes --prefix server",
+    "seed": "npm run seed --prefix server",
+    "seed:demo": "npm run seed:demo --prefix server"
+  }
+}

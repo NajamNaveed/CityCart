@@ -637,3 +637,30 @@ Any infrastructure change must preserve:
 * Tenant isolation.
 * Recoverability.
 * Reproducibility.
+
+---
+
+# 15. Current Deployment Wiring (October 2026)
+
+The repository now carries the deployment plumbing described above:
+
+* `client/vercel.json` — SPA rewrites so deep links (`/product/:id`,
+  `/brand/orders/:id`, a page refresh) serve `index.html` instead of 404.
+* `render.yaml` (repository root) — Render Blueprint for the API: Node
+  runtime, `server/` as root, `npm ci` build, `npm start` launch,
+  `/health` as the health check. Secrets are marked `sync: false` — Render
+  prompts for them when the Blueprint is applied.
+* Root `package.json` — convenience scripts (`npm run build`, `npm test`,
+  `npm run lint`, `npm run dev:server` / `dev:client`) that delegate into
+  `client/` and `server/`, so CI and deployment hooks need no path juggling.
+* Both packages pin `engines.node >= 22` (matches the server's runtime
+  requirement and the CI runner).
+
+Remaining manual steps when deploying (nothing here needs code changes):
+
+1. Push the repository to GitHub; in Vercel create a project rooted at
+   `client/` (framework: Vite) and set `VITE_API_URL` to the API URL.
+2. In Render, apply the Blueprint and fill in `MONGODB_URI` (Atlas),
+   `JWT_SECRET`, and `CLIENT_URL` (the Vercel URL).
+3. Optionally enable Render's auto-deploy-on-push (already `true` in the
+   Blueprint) and Vercel's Git integration so CI + deploy run together.
