@@ -270,6 +270,11 @@ This should be a snapshot rather than relying entirely on the customer's current
 
 If the customer changes their address later, historical orders must remain unchanged.
 
+`additionalInstructions` (delivery notes) is **required** at checkout — the
+courier relies on it to reach the customer. The backend validates it as
+1–200 words (word-counted, matching the counter shown in the checkout form);
+an order without delivery notes is rejected at validation.
+
 ---
 
 # 11. Pricing

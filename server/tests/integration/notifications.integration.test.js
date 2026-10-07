@@ -223,7 +223,7 @@ describe('business events persist notifications (docs/12 §5-§6)', () => {
     await Cart.create({ userId: customer._id, items: [{ productId: product._id, brandId: brand._id, quantity: 2 }] });
 
     const orders = await checkout(customer._id, {
-      shippingAddress: { fullName: 'A B', phone: '+923001234567', addressLine: 'St 1', city: 'Lahore' },
+      shippingAddress: { fullName: 'A B', phone: '+923001234567', addressLine: 'St 1', city: 'Lahore', additionalInstructions: 'Gate 2, ring the bell.' },
       paymentMethod: 'COD',
     });
     expect(orders).toHaveLength(1);

@@ -10,6 +10,14 @@ import { btnPrimary, formatPrice, inputClass, wrap } from '../ui'
 
 const labelClass = 'mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted'
 
+// Delivery notes are required and word-counted — the server enforces the
+// same limit, so the two numbers must stay in sync.
+const MAX_NOTE_WORDS = 200
+const countWords = (value) => {
+  const trimmed = value.trim()
+  return trimmed ? trimmed.split(/\s+/).filter(Boolean).length : 0
+}
+
 export default function Checkout() {
   const { user } = useAuth()
   const { setCount } = useCart()
@@ -42,6 +50,10 @@ export default function Checkout() {
 
   const onChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }))
   const cityValue = form.city ?? city?.name ?? ''
+  const noteWords = countWords(form.additionalInstructions)
+  const notesMissing = noteWords < 1
+  const notesTooLong = noteWords > MAX_NOTE_WORDS
+  const notesInvalid = notesMissing || notesTooLong
 
   async function onSubmit(e) {
     e.preventDefault()
@@ -127,7 +139,7 @@ export default function Checkout() {
               <Field label="Postal code" id="postalCode" name="postalCode" autoComplete="postal-code" value={form.postalCode} onChange={onChange} error={fieldErrors['shippingAddress.postalCode']} hint="Optional." />
               <div className="sm:col-span-2">
                 <label htmlFor="additionalInstructions" className={labelClass}>
-                  Delivery notes
+                  Delivery notes <span className="text-clay">*</span>
                 </label>
                 <textarea
                   id="additionalInstructions"
@@ -135,9 +147,28 @@ export default function Checkout() {
                   rows={3}
                   value={form.additionalInstructions}
                   onChange={onChange}
-                  placeholder="Landmark, gate number, best time to call. Optional."
-                  className={`${inputClass} py-3`}
+                  placeholder="Landmark, gate number, best time to call. The courier needs this to reach you."
+                  className={`${inputClass} py-3 ${fieldErrors['shippingAddress.additionalInstructions'] || (notesInvalid && (notesMissing || notesTooLong)) ? 'border-clay' : ''}`}
+                  required
                 />
+                <div className="mt-1.5 flex items-start justify-between gap-4">
+                  {fieldErrors['shippingAddress.additionalInstructions'] ? (
+                    <p className="text-xs text-clay">{fieldErrors['shippingAddress.additionalInstructions']}</p>
+                  ) : notesMissing ? (
+                    <p className="text-xs text-clay">Delivery notes are required to place your order.</p>
+                  ) : notesTooLong ? (
+                    <p className="text-xs text-clay">That is over the {MAX_NOTE_WORDS}-word limit.</p>
+                  ) : (
+                    <span />
+                  )}
+                  <p
+                    className={`shrink-0 text-xs tabular-nums ${
+                      notesTooLong ? 'font-semibold text-clay' : 'text-muted'
+                    }`}
+                  >
+                    {noteWords} / {MAX_NOTE_WORDS} words
+                  </p>
+                </div>
               </div>
             </div>
           </fieldset>
@@ -157,7 +188,7 @@ export default function Checkout() {
             </div>
           </fieldset>
 
-          <button type="submit" disabled={placing || hasIssues} className={`${btnPrimary} h-12 w-full sm:w-auto sm:min-w-64`}>
+          <button type="submit" disabled={placing || hasIssues || notesInvalid} className={`${btnPrimary} h-12 w-full sm:w-auto sm:min-w-64`}>
             {placing ? 'Placing order…' : `Place order · ${formatPrice(subtotal)}`}
           </button>
         </form>

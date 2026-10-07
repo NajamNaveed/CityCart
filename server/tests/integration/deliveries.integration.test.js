@@ -22,7 +22,7 @@ let n = 0;
 
 const input = {
   shippingAddress: {
-    fullName: 'John Doe', phone: '+923001234567', addressLine: 'Street 1',
+    fullName: 'John Doe', phone: '+923001234567', addressLine: 'Street 1', additionalInstructions: 'Gate 2, ring the bell.',
     city: 'Lahore', state: 'Punjab', country: 'Pakistan',
   },
   paymentMethod: 'COD',

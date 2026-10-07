@@ -19,6 +19,7 @@ const input = {
     phone: '+923001234567',
     addressLine: 'Example Street',
     city: 'Lahore',
+    additionalInstructions: 'Gate 2, ring the bell twice.',
   },
   paymentMethod: 'COD',
 };

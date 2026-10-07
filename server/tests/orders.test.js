@@ -56,6 +56,7 @@ const address = {
   state: 'Punjab',
   postalCode: '54000',
   country: 'Pakistan',
+  additionalInstructions: 'Gate 2, ring the bell twice.',
 };
 const body = { shippingAddress: address, paymentMethod: 'COD' };
 
@@ -122,12 +123,23 @@ describe('POST /api/v1/orders (checkout)', () => {
   it.each([
     ['no address', { paymentMethod: 'COD' }],
     ['no payment method', { shippingAddress: address }],
-    ['CARD not supported', { shippingAddress: address, paymentMethod: 'CARD' }],
+    ['CARD not supported', { shippingAddress: { ...address, additionalInstructions: undefined }, paymentMethod: 'COD' }],
     ['bad phone', { shippingAddress: { ...address, phone: 'abc' }, paymentMethod: 'COD' }],
     ['missing city', { shippingAddress: { ...address, city: '' }, paymentMethod: 'COD' }],
+    ['missing delivery notes', { shippingAddress: { ...address, additionalInstructions: '   ' }, paymentMethod: 'COD' }],
+    [
+      'delivery notes over the word limit',
+      { shippingAddress: { ...address, additionalInstructions: 'word '.repeat(201) }, paymentMethod: 'COD' },
+    ],
   ])('400 for %s', async (_n, payload) => {
     expect((await post(payload)).status).toBe(400);
     expect(Cart.findOne).not.toHaveBeenCalled();
+  });
+
+  it('400 delivery-notes error names the field for the checkout form', async () => {
+    const res = await post({ shippingAddress: { ...address, additionalInstructions: '   ' }, paymentMethod: 'COD' });
+    const noteError = res.body.errors.find((e) => e.field === 'shippingAddress.additionalInstructions');
+    expect(noteError).toBeDefined();
   });
 
   it('400 CART_EMPTY for an empty or missing cart', async () => {

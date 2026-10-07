@@ -10,6 +10,12 @@ const mongoose = require('mongoose');
  */
 const text = (max) => z.string().trim().min(1).max(max);
 
+// Delivery notes are required on every order — the courier needs them — and
+// are counted in WORDS, not characters (the checkout UI shows the same
+// counter; keep the two limits in sync).
+const MAX_NOTE_WORDS = 200;
+const countWords = (value) => value.trim().split(/\s+/).filter(Boolean).length;
+
 const shippingAddressSchema = z.object({
   fullName: text(100),
   phone: z
@@ -21,7 +27,14 @@ const shippingAddressSchema = z.object({
   state: text(100).optional(),
   postalCode: text(20).optional(),
   country: text(100).optional(),
-  additionalInstructions: z.string().trim().max(500).optional(),
+  additionalInstructions: z
+    .string()
+    .trim()
+    .max(2000, 'Delivery notes are too long.')
+    .refine((value) => countWords(value) >= 1, { message: 'Delivery notes are required.' })
+    .refine((value) => countWords(value) <= MAX_NOTE_WORDS, {
+      message: `Delivery notes must be at most ${MAX_NOTE_WORDS} words.`,
+    }),
 });
 
 // COD is the only method implemented in the MVP (docs/08 §25).
@@ -56,4 +69,5 @@ module.exports = {
   listOrdersQuerySchema,
   adminListOrdersQuerySchema,
   updateOrderStatusSchema,
+  MAX_NOTE_WORDS,
 };

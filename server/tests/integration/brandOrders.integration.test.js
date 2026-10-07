@@ -16,7 +16,7 @@ const oid = () => new mongoose.Types.ObjectId();
 let n = 0;
 
 const input = {
-  shippingAddress: { fullName: 'John Doe', phone: '+923001234567', addressLine: 'Street 1', city: 'Lahore' },
+  shippingAddress: { fullName: 'John Doe', phone: '+923001234567', addressLine: 'Street 1', city: 'Lahore', additionalInstructions: 'Gate 2, ring the bell.' },
   paymentMethod: 'COD',
 };
 

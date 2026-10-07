@@ -155,7 +155,7 @@ describe('applyForBrand (real MongoDB)', () => {
 
 describe('terminateBrand (real MongoDB)', () => {
   const input = {
-    shippingAddress: { fullName: 'John', phone: '+923001234567', addressLine: 'Street 1', city: 'Lahore' },
+    shippingAddress: { fullName: 'John', phone: '+923001234567', addressLine: 'Street 1', city: 'Lahore', additionalInstructions: 'Gate 2, ring the bell.' },
     paymentMethod: 'COD',
   };
 
