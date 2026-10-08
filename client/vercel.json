@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "$RENDER_API_URL/api/:path*"
+    },
+    {
+      "source": "/socket.io/:path*",
+      "destination": "$RENDER_API_URL/socket.io/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
