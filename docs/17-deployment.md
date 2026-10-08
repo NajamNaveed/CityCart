@@ -664,3 +664,37 @@ Remaining manual steps when deploying (nothing here needs code changes):
    `JWT_SECRET`, and `CLIENT_URL` (the Vercel URL).
 3. Optionally enable Render's auto-deploy-on-push (already `true` in the
    Blueprint) and Vercel's Git integration so CI + deploy run together.
+
+### Cross-domain cookies (October 2026 update)
+
+The first production deployment showed `Authentication required.` on every
+login: the client on `*.vercel.app` and the API on `*.onrender.com` are
+separate domains, so the auth cookie the API set was a **third-party
+cookie**, which modern browsers refuse to store — even with
+`SameSite=None; Secure`.
+
+Two fixes ship together; use BOTH:
+
+1. **Same-origin proxying (the durable fix).** `client/vercel.json` proxies
+   `/api/*` and `/socket.io/*` to the API, so the browser only ever talks to
+   the Vercel domain and the auth cookie is first-party (works in Safari
+   too). Setup:
+   - Vercel → project → Settings → Environment Variables → add
+     `RENDER_API_URL` = the Render API URL (e.g. `https://citycart-api.onrender.com`),
+     and set `VITE_API_URL` to EMPTY (the client then calls `/api/v1`
+     same-origin).
+   - **Turn OFF Vercel Deployment Protection** (Settings → Deployment
+     Protection) — with it on, every request 302s to a Vercel login page,
+     including API calls.
+2. **SameSite=None in production** — `config/cookie.js` already defaults to
+   it (`COOKIE_SAMESITE` overrides). Necessary for direct cross-domain
+   calls; harmless with the proxy.
+
+Known limitation with direct (un-proxied) cross-domain calls: Safari blocks
+third-party cookies entirely, so logins fail there regardless of SameSite.
+The same-origin proxy removes the problem instead of fighting it.
+
+The CI workflow's gated deploy job (`.github/workflows/ci.yml`) triggers
+Render and Vercel deploy hooks after all tests pass — add
+`RENDER_DEPLOY_HOOK` and `VERCEL_DEPLOY_HOOK` as GitHub repo secrets, then
+disable both platforms' Git auto-deploy so CI is the only deploy trigger.

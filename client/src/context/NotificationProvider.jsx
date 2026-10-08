@@ -8,10 +8,12 @@ import { NotificationContext } from './contexts'
 // through the API itself.
 const BELL_LIMIT = 10
 
-// The socket connects to the API origin (VITE_API_URL without its /api/v1 tail).
+// The socket connects to the API origin (VITE_API_URL without its /api/v1
+// tail). Empty VITE_API_URL means the API is same-origin — io() with no URL
+// connects to the current host, matching the proxy setup in docs/17 §15.
 function resolveSocketUrl() {
-  const raw = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1').trim().replace(/\/+$/, '')
-  return raw.replace(/\/api\/v\d+$/, '')
+  const raw = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '')
+  return raw.replace(/\/api\/v\d+$/, '') || undefined
 }
 
 /**

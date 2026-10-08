@@ -1,10 +1,15 @@
 import axios from 'axios'
 import { toast } from '../components/ui/toast'
 
-// VITE_API_URL is documented in .env.example, e.g. http://localhost:5000/api/v1
+// VITE_API_URL is documented in .env.example, e.g. http://localhost:5000/api/v1.
 // A missing "/api/v1" on the end is added, so "http://localhost:5000" works too.
+// Left EMPTY, the API is assumed same-origin — requests go to /api/v1 on the
+// site serving this app (the Vercel deployment proxies them to Render). This
+// keeps the auth cookie first-party, which is what makes cross-domain
+// deployments survive browser third-party-cookie blocking (docs/17 §15).
 function resolveBaseURL(raw) {
-  const trimmed = (raw || 'http://localhost:5000/api/v1').trim().replace(/\/+$/, '')
+  const trimmed = (raw || '').trim().replace(/\/+$/, '')
+  if (!trimmed) return '/api/v1'
   return /\/api\/v\d+$/.test(trimmed) ? trimmed : `${trimmed}/api/v1`
 }
 
