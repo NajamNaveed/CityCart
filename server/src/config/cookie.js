@@ -24,11 +24,10 @@ const authCookieOptions = {
   // §8: "During local development, secure may need to be disabled when
   // using plain HTTP." Only forced on in production.
   secure: env.nodeEnv === 'production',
-  // 'lax' assumes the frontend and API are same-site in production (e.g.
-  // subdomains of the same domain). If they end up on fully separate
-  // domains, this would need to become 'none' (with secure: true) — the
-  // docs only say "appropriate production setting" without specifics.
-  sameSite: 'lax',
+  // Production defaults to 'none' because the documented deployment splits
+  // client and API across domains — browsers only store cross-domain auth
+  // cookies with SameSite=None; Secure (docs/06 §8, docs/17 §15).
+  sameSite: env.cookieSameSite,
   maxAge: parseDurationToMs(env.jwtExpiresIn, SEVEN_DAYS_MS),
 };
 

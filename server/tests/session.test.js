@@ -116,6 +116,16 @@ describe('cookie lifetime by role (docs/06 §9 — staff session security)', () 
     const maxAge = authCookieMaxAge(res);
     expect(maxAge).toBeGreaterThan(CUSTOMER_MAX_AGE_S - 60);
   });
+
+  it('sets SameSite=Lax outside production (test env is same-site)', async () => {
+    const user = await makeHashedUser();
+    User.findOne.mockReturnValue({ select: jest.fn().mockResolvedValue(user) });
+
+    const res = await request(app).post('/api/v1/auth/login').send({ email: user.email, password: PASSWORD });
+
+    const setCookie = res.headers['set-cookie'].find((c) => c.startsWith(`${AUTH_COOKIE_NAME}=`));
+    expect(setCookie).toMatch(/SameSite=Lax/i);
+  });
 });
 
 describe('sliding renewal for staff (docs/06 §9)', () => {

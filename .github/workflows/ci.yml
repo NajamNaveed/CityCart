@@ -88,3 +88,28 @@ jobs:
       - name: Integration tests
         working-directory: server
         run: npm run test:integration
+
+  deploy:
+    name: Deploy — trigger Render & Vercel (main only, after CI)
+    needs: [server, client, integration]
+    # Deploys only from pushes to main, never from pull requests.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy (API)
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        if: ${{ env.HOOK != '' }}
+        run: curl -sf -X POST "$HOOK"
+
+      - name: Trigger Vercel deploy (client)
+        env:
+          HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        if: ${{ env.HOOK != '' }}
+        run: curl -sf -X POST "$HOOK"
+
+      # Each step skips itself silently when its secret is not configured —
+      # add the secrets (Settings → Secrets and variables → Actions) and the
+      # steps start firing. While a platform's own Git auto-deploy is still
+      # on, disable it in that dashboard once this job is confirmed working,
+      # so CI becomes the only thing that can trigger a deployment.

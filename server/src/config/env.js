@@ -30,6 +30,18 @@ const env = {
     .filter(Boolean),
   jwtSecret: process.env.JWT_SECRET || '',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  // Auth cookie SameSite policy. The documented deployment architecture
+  // (docs/17) puts the client on Vercel and the API on Render — separate
+  // domains — so production defaults to 'none' (browsers only store
+  // cross-domain auth cookies with SameSite=None; Secure, which production
+  // always sets). Localhost development is same-site, so it stays 'lax'.
+  // Override with COOKIE_SAMESITE=lax|strict|none when client and API end
+  // up on the same domain.
+  cookieSameSite: (() => {
+    const raw = (process.env.COOKIE_SAMESITE || '').trim().toLowerCase();
+    if (raw === 'none' || raw === 'lax' || raw === 'strict') return raw;
+    return process.env.NODE_ENV === 'production' ? 'none' : 'lax';
+  })(),
   // Staff (brand dashboard + platform admin) sessions are short-lived and
   // renewed on activity; shoppers keep the full-length session. Hours,
   // capped at 7 days.
