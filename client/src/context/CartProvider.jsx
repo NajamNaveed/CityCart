@@ -14,7 +14,9 @@ export function CartProvider({ children }) {
     let active = true
     api
       .get('/cart')
-      .then((res) => active && setLoadedCount(res.data.cart.itemCount))
+      // Number check guards a misconfigured deployment answering with the
+      // SPA page — the badge just stays at zero instead of crashing.
+      .then((res) => active && setLoadedCount(Number(res.data?.cart?.itemCount) || 0))
       .catch(() => {})
     return () => {
       active = false

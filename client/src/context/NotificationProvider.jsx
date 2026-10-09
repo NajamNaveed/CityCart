@@ -40,8 +40,11 @@ export function NotificationProvider({ children }) {
   const refresh = useCallback(async () => {
     try {
       const res = await api.get('/notifications', { params: { page: 1, limit: BELL_LIMIT } })
+      // Array.isArray guards a misconfigured deployment answering with the
+      // SPA page — an unusable API must not break the bell or the layout.
+      if (!Array.isArray(res.data?.notifications)) return
       setItems(res.data.notifications)
-      setUnreadCount(res.data.unreadCount)
+      setUnreadCount(Number(res.data.unreadCount) || 0)
       setSessionKey(user.id)
     } catch {
       // The bell simply keeps whatever it had (e.g. momentary network loss).

@@ -25,13 +25,20 @@ export function AuthProvider({ children }) {
   // Restore the session from the HTTP-only cookie on first load. A staff
   // session restored into a tab that never logged in (new tab, or this tab
   // reopened after close) is signed out server-side immediately.
+  // The response shape is checked — a misconfigured deployment can answer
+  // API routes with the SPA page (HTML), which must read as signed-out,
+  // not crash the app.
   useEffect(() => {
     let active = true
     api
       .get('/auth/me')
       .then((res) => {
         if (!active) return
-        const restored = res.data.user
+        const restored = res.data?.user
+        if (!restored || typeof restored.role !== 'string') {
+          setUser(null)
+          return
+        }
         if (isStaff(restored.role) && !sessionStorage.getItem(STAFF_TAB_KEY)) {
           api.post('/auth/logout').catch(() => {})
           setUser(null)

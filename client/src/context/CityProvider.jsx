@@ -21,7 +21,9 @@ export function CityProvider({ children }) {
     let active = true
     api
       .get('/cities', { params: { isActive: true } })
-      .then((res) => active && setCities(res.data.cities))
+      // Array.isArray guards a misconfigured deployment answering with the
+      // SPA page — that must read as "no cities", not crash the navbar.
+      .then((res) => active && setCities(Array.isArray(res.data?.cities) ? res.data.cities : []))
       .catch(() => {})
     return () => {
       active = false
