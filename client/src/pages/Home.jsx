@@ -150,9 +150,19 @@ export default function Home() {
           </Reveal>
         </div>
         {brandsLoading ? (
-          <div className="flex gap-5 overflow-hidden px-5">
+          <div className="flex gap-6 overflow-hidden px-5 py-5">
             {[0, 1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-[19rem] w-60 shrink-0 animate-pulse rounded-2xl bg-sand" />
+              <div
+                key={i}
+                className="h-[23.5rem] w-80 shrink-0 animate-pulse rounded-2xl border border-line/70 bg-white p-3"
+              >
+                <div className="h-44 w-full rounded-xl bg-sand/60" />
+                <div className="space-y-3 p-4">
+                  <div className="h-5 w-2/3 rounded bg-sand/80" />
+                  <div className="h-3.5 w-full rounded bg-sand/50" />
+                  <div className="h-3.5 w-4/5 rounded bg-sand/40" />
+                </div>
+              </div>
             ))}
           </div>
         ) : brands.length === 0 ? (

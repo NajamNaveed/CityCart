@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowUpRight, MapPin } from 'lucide-react'
+import { ArrowUpRight, MapPin, Sparkles } from 'lucide-react'
 import { useCity } from '../../hooks/useCity'
 
 function monogram(name = '') {
@@ -15,9 +15,26 @@ function monogram(name = '') {
 // Backdrop moods cycled by brand name, so neighbours never share one and the
 // strip reads as a row of related-but-distinct shopfronts.
 const BACKDROPS = [
-  { base: 'bg-gradient-to-br from-cream via-sand to-paper', blobA: 'bg-clay/25', blobB: 'bg-white/70' },
-  { base: 'bg-gradient-to-bl from-sand via-cream to-paper', blobA: 'bg-clay/20', blobB: 'bg-white/60' },
-  { base: 'bg-gradient-to-tr from-paper via-cream to-sand', blobA: 'bg-clay/30', blobB: 'bg-white/50' },
+  {
+    base: 'bg-gradient-to-br from-[#fbf8f5] via-[#f5ebe0] to-[#ebdccb]',
+    blobA: 'bg-clay/20',
+    blobB: 'bg-white/70',
+  },
+  {
+    base: 'bg-gradient-to-bl from-[#f6f9f7] via-[#ebf2ec] to-[#dce6dc]',
+    blobA: 'bg-pine/20',
+    blobB: 'bg-white/70',
+  },
+  {
+    base: 'bg-gradient-to-tr from-[#fbf7f4] via-[#f7e8dc] to-[#ecd7c7]',
+    blobA: 'bg-[#c86a4b]/20',
+    blobB: 'bg-white/60',
+  },
+  {
+    base: 'bg-gradient-to-br from-[#f8f9fa] via-[#eef2f6] to-[#dfe5ee]',
+    blobA: 'bg-slate-300/40',
+    blobB: 'bg-white/70',
+  },
 ]
 
 function backdropFor(name = '') {
@@ -34,45 +51,101 @@ function backdropFor(name = '') {
 function BrandCard({ brand, cityName, duplicate = false }) {
   const backdrop = backdropFor(brand.name)
   return (
-    <div data-brand-card className="w-72 shrink-0 will-change-transform">
+    <div data-brand-card className="w-80 shrink-0 will-change-transform">
       <Link
         to={`/shop?brandId=${brand._id}`}
         tabIndex={duplicate ? -1 : undefined}
         aria-hidden={duplicate || undefined}
-        className="group flex h-[21.5rem] flex-col overflow-hidden rounded-2xl border border-line bg-white transition-colors duration-300 hover:border-ink/25"
+        className="group relative flex h-[23.5rem] flex-col overflow-hidden rounded-2xl border border-line/80 bg-white shadow-xs transition-all duration-300 hover:border-clay/40 hover:shadow-lg hover:shadow-clay/5"
       >
-        <div className={`relative flex h-52 shrink-0 items-center justify-center overflow-hidden ${backdrop.base}`}>
-          <div aria-hidden="true" className={`absolute -left-8 -top-10 h-40 w-40 rounded-full ${backdrop.blobA} blur-2xl`} />
-          <div aria-hidden="true" className={`absolute -bottom-12 -right-6 h-44 w-44 rounded-full ${backdrop.blobB} blur-2xl`} />
-          {brand.logo ? (
-            <img
-              src={brand.logo}
-              alt=""
-              className="relative max-h-20 max-w-[65%] object-contain drop-shadow-sm transition-transform duration-500 group-hover:scale-105"
-            />
+        {/* Top ambient highlight on hover */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 z-20 h-0.5 bg-gradient-to-r from-transparent via-clay to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+        />
+
+        {/* Showcase Banner */}
+        <div className="relative flex h-48 shrink-0 items-center justify-center overflow-hidden">
+          {brand.coverImage ? (
+            <>
+              <img
+                src={brand.coverImage}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+              />
+              <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-ink/60 via-ink/20 to-black/10" />
+            </>
           ) : (
-            <span className="relative flex h-20 w-20 items-center justify-center rounded-full border border-clay/15 bg-white/95 font-display text-2xl font-semibold tracking-tight text-clay shadow-lg shadow-ink/10 transition-transform duration-500 group-hover:scale-105">
-              {monogram(brand.name)}
-            </span>
+            <div className={`absolute inset-0 ${backdrop.base}`}>
+              <div
+                aria-hidden="true"
+                className={`absolute -left-10 -top-10 h-44 w-44 rounded-full ${backdrop.blobA} blur-2xl`}
+              />
+              <div
+                aria-hidden="true"
+                className={`absolute -bottom-10 -right-6 h-48 w-48 rounded-full ${backdrop.blobB} blur-2xl`}
+              />
+              {/* Subtle micro-texture */}
+              <div
+                aria-hidden="true"
+                className="absolute inset-0 bg-[radial-gradient(#0000000a_1px,transparent_1px)] [background-size:16px_16px] opacity-70"
+              />
+            </div>
           )}
-          {cityName && (
-            <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/85 px-2.5 py-1 text-[10.5px] font-semibold text-ink backdrop-blur-sm">
-              <MapPin className="h-3 w-3 text-clay" aria-hidden="true" />
-              {cityName}
+
+          {/* Floating Badges */}
+          <div className="pointer-events-none absolute inset-x-3.5 top-3.5 z-10 flex items-center justify-between">
+            {cityName ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/70 bg-white/90 px-2.5 py-1 text-[11px] font-medium text-ink shadow-xs backdrop-blur-md">
+                <MapPin className="h-3 w-3 text-clay" aria-hidden="true" />
+                {cityName}
+              </span>
+            ) : (
+              <div />
+            )}
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/70 bg-white/90 px-2.5 py-1 text-[10.5px] font-semibold text-muted shadow-xs backdrop-blur-md">
+              <Sparkles className="h-3 w-3 text-clay" aria-hidden="true" />
+              Official
             </span>
-          )}
+          </div>
+
+          {/* Centerpiece: Elevated Emblem Podium */}
+          <div className="relative z-10 flex h-24 w-28 items-center justify-center rounded-2xl border border-white/85 bg-white/95 p-3 shadow-md shadow-ink/5 backdrop-blur-md transition-all duration-500 ease-out group-hover:scale-105 group-hover:border-white group-hover:shadow-xl group-hover:shadow-clay/10">
+            {brand.logo ? (
+              <img
+                src={brand.logo}
+                alt={`${brand.name} logo`}
+                className="max-h-16 max-w-full object-contain drop-shadow-xs transition-transform duration-500 group-hover:scale-105"
+              />
+            ) : (
+              <span className="flex h-14 w-14 items-center justify-center rounded-xl border border-clay/15 bg-gradient-to-br from-cream via-sand to-paper font-display text-2xl font-semibold tracking-tight text-clay shadow-inner transition-transform duration-500 group-hover:scale-105">
+                {monogram(brand.name)}
+              </span>
+            )}
+          </div>
         </div>
-        <div className="flex flex-1 flex-col px-5 pb-5 pt-4">
-          <p className="font-display truncate text-[17px] font-semibold tracking-tight text-ink">{brand.name}</p>
-          {brand.description && (
-            <p className="mt-1.5 line-clamp-2 text-[12.5px] leading-relaxed text-muted">{brand.description}</p>
-          )}
-          <div className="mt-auto flex items-center justify-between pt-3">
-            <span className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted transition-colors duration-300 group-hover:text-ink">
+
+        {/* Brand Information */}
+        <div className="flex flex-1 flex-col bg-white p-5">
+          <div>
+            <h3 className="font-display truncate text-[17.5px] font-semibold tracking-tight text-ink transition-colors duration-200 group-hover:text-clay">
+              {brand.name}
+            </h3>
+            <p className="mt-1.5 line-clamp-2 min-h-[2.4rem] text-[12.5px] leading-relaxed text-muted">
+              {brand.description || 'Authentic local brand offering verified goods and seamless delivery.'}
+            </p>
+          </div>
+
+          <div className="mt-auto flex items-center justify-between border-t border-line/60 pt-3.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted transition-colors duration-200 group-hover:text-ink">
               Visit shop
             </span>
-            <span className="flex h-8 w-8 items-center justify-center rounded-full border border-line text-muted transition-all duration-300 group-hover:rotate-45 group-hover:border-clay group-hover:bg-clay group-hover:text-white">
-              <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-paper px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink transition-all duration-300 group-hover:border-clay group-hover:bg-clay group-hover:text-white group-hover:shadow-xs">
+              <span>View</span>
+              <ArrowUpRight
+                className="h-3.5 w-3.5 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+                aria-hidden="true"
+              />
             </span>
           </div>
         </div>
@@ -193,9 +266,9 @@ export default function BrandMarquee({ brands }) {
 
   return (
     <div className="relative">
-      {/* Edge fades so cards dissolve at both ends of the viewport */}
-      <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 z-20 w-20 bg-gradient-to-r from-paper to-transparent" />
-      <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 z-20 w-20 bg-gradient-to-l from-paper to-transparent" />
+      {/* Edge fades so cards dissolve gently at both ends of the viewport */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 z-20 w-24 sm:w-36 bg-gradient-to-r from-paper via-paper/80 to-transparent" />
+      <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 z-20 w-24 sm:w-36 bg-gradient-to-l from-paper via-paper/80 to-transparent" />
 
       <div
         ref={containerRef}
