@@ -137,24 +137,26 @@ export default function BrandLayout() {
     <div className="flex min-h-screen flex-col bg-paper">
       {/* Top bar */}
       <header className="sticky top-0 z-40 border-b border-line bg-white/95 backdrop-blur-md">
-        <div className="flex h-16 items-center gap-3 px-5 lg:px-8">
-          <button
-            type="button"
-            aria-label="Open menu"
-            onClick={() => setDrawerOpen(true)}
-            className="-ml-2 flex h-9 w-9 items-center justify-center rounded-md text-ink transition hover:bg-paper lg:hidden"
-          >
-            <MenuIcon className="h-5 w-5" />
-          </button>
+        <div className="flex h-16 items-center justify-between gap-2 px-4 sm:gap-3 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              aria-label="Open menu"
+              onClick={() => setDrawerOpen(true)}
+              className="-ml-1.5 flex h-9 w-9 items-center justify-center rounded-md text-ink transition hover:bg-paper lg:hidden"
+            >
+              <MenuIcon className="h-5 w-5" />
+            </button>
 
-          <Link to="/brand" className="flex items-baseline gap-2">
-            <span className="text-[21px] font-semibold tracking-tight text-ink">
-              citycart<span className="text-pine">.</span>
-            </span>
-            <span className="hidden text-[11px] font-medium uppercase tracking-[0.18em] text-pine sm:inline">
-              dashboard
-            </span>
-          </Link>
+            <Link to="/brand" className="flex shrink-0 items-baseline gap-2">
+              <span className="text-[20px] font-semibold tracking-tight text-ink sm:text-[21px]">
+                citycart<span className="text-pine">.</span>
+              </span>
+              <span className="hidden text-[11px] font-medium uppercase tracking-[0.18em] text-pine sm:inline">
+                dashboard
+              </span>
+            </Link>
+          </div>
 
           <div className="ml-auto flex items-center gap-1.5">
             <Link
