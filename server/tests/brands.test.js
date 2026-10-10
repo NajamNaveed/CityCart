@@ -275,6 +275,75 @@ describe('PATCH /api/v1/brands/:id (own-brand update)', () => {
     // reach Object.assign in applyBrandUpdate.
     expect(brandDoc.status).toBe('ACTIVE');
   });
+
+  it('validates known contact and fulfillment settings fields', async () => {
+    const brandId = new mongoose.Types.ObjectId();
+    const brandAdmin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
+    Brand.findById.mockResolvedValue({ _id: brandId, save: jest.fn() });
+
+    const res = await request(app)
+      .patch(`/api/v1/brands/${brandId.toString()}`)
+      .set(...asUser(brandAdmin))
+      .send({ contact: { supportEmail: 'not-an-email' }, settings: { deliveryFee: -2 } });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('accepts empty operating times when the brand has not set hours', async () => {
+    const brandId = new mongoose.Types.ObjectId();
+    const brandAdmin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
+    const brand = { _id: brandId, contact: {}, save: jest.fn().mockResolvedValue(true) };
+    Brand.findById.mockResolvedValue(brand);
+
+    const res = await request(app)
+      .patch(`/api/v1/brands/${brandId.toString()}`)
+      .set(...asUser(brandAdmin))
+      .send({ contact: { operatingHours: { opensAt: '', closesAt: '', closedDays: [] } } });
+
+    expect(res.status).toBe(200);
+    expect(brand.contact.operatingHours).toEqual({ opensAt: '', closesAt: '', closedDays: [] });
+  });
+
+  it('rejects a slug already owned by another brand', async () => {
+    const brandId = new mongoose.Types.ObjectId();
+    const otherBrandId = new mongoose.Types.ObjectId();
+    const brandAdmin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
+    const save = jest.fn();
+    Brand.findById.mockResolvedValue({ _id: brandId, slug: 'current-name', save });
+    Brand.findOne.mockResolvedValue({ _id: otherBrandId, slug: 'taken-name' });
+
+    const res = await request(app)
+      .patch(`/api/v1/brands/${brandId.toString()}`)
+      .set(...asUser(brandAdmin))
+      .send({ slug: 'taken-name' });
+
+    expect(res.status).toBe(409);
+    expect(save).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/v1/brands/me', () => {
+  it('returns the authenticated brand admin own brand', async () => {
+    const brandId = new mongoose.Types.ObjectId();
+    const brandAdmin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
+    const brand = { _id: brandId, name: 'My Brand', status: 'PENDING' };
+    Brand.findById.mockResolvedValue(brand);
+
+    const res = await request(app).get('/api/v1/brands/me').set(...asUser(brandAdmin));
+
+    expect(res.status).toBe(200);
+    expect(res.body.brand).toMatchObject({ name: 'My Brand', status: 'PENDING' });
+    expect(Brand.findById).toHaveBeenCalledWith(brandId);
+  });
+
+  it('does not expose settings to brand employees', async () => {
+    const employee = makeFakeUser({ role: ROLES.BRAND_EMPLOYEE, brandId: new mongoose.Types.ObjectId() });
+
+    const res = await request(app).get('/api/v1/brands/me').set(...asUser(employee));
+
+    expect(res.status).toBe(403);
+    expect(Brand.findById).not.toHaveBeenCalled();
+  });
 });
 
 describe('PATCH /api/v1/brands/:id/status (Super Admin only)', () => {

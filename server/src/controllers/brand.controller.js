@@ -8,6 +8,7 @@ const { objectIdParamSchema } = require('../validators/common.validator');
 const {
   listPublicBrands,
   getPublicBrandById,
+  getBrandByIdRaw,
   createBrand,
   applyBrandUpdate,
   updateBrandStatus,
@@ -51,6 +52,16 @@ async function getById(req, res, next) {
     if (err instanceof BrandError) {
       return res.status(err.status).json({ success: false, message: err.message });
     }
+    return next(err);
+  }
+}
+
+async function getCurrentBrand(req, res, next) {
+  try {
+    const brand = await getBrandByIdRaw(req.user.brandId);
+    if (!brand) return res.status(404).json({ success: false, message: 'Brand not found.' });
+    return res.status(200).json({ success: true, brand });
+  } catch (err) {
     return next(err);
   }
 }
@@ -165,4 +176,4 @@ async function storefront(req, res, next) {
 }
 
 module.exports = {
-  storefront, list, getById, create, update, updateStatus };
+  storefront, list, getById, getCurrentBrand, create, update, updateStatus };

@@ -388,6 +388,25 @@ SUPER_ADMIN
 BRAND_ADMIN → own brand only
 ```
 
+Brand administrators can read their own full profile and settings through:
+
+```text
+GET /api/v1/brands/me
+```
+
+The server derives the brand from the authenticated account. Brand profile updates may include validated contact and fulfillment settings.
+
+## Platform Settings
+
+Super Admin only:
+
+```text
+GET   /api/v1/admin/settings
+PATCH /api/v1/admin/settings
+```
+
+Settings are persisted in the singleton platform settings document. The API validates supported fields and does not accept a client-supplied tenant or singleton key.
+
 ---
 
 ## Suspend Brand

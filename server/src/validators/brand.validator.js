@@ -17,14 +17,50 @@ const objectIdString = z.string().refine((value) => mongoose.Types.ObjectId.isVa
   message: 'Invalid id.',
 });
 
+const timeString = z.union([z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), z.literal('')]);
+const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const contactSchema = z
+  .object({
+    address: z
+      .object({
+        street: z.string().trim().max(200),
+        area: z.string().trim().max(100),
+        city: z.string().trim().max(100),
+      })
+      .partial()
+      .passthrough(),
+    supportPhone: z.string().trim().max(40),
+    supportEmail: z.union([z.string().email(), z.literal('')]),
+    operatingHours: z
+      .object({
+        opensAt: timeString,
+        closesAt: timeString,
+        closedDays: z.array(z.enum(dayNames)),
+      })
+      .partial()
+      .passthrough(),
+  })
+  .partial()
+  .passthrough();
+const brandSettingsSchema = z
+  .object({
+    deliveryFee: z.number().min(0).nullable(),
+    estimatedDeliveryTime: z.string().trim().max(100),
+    minimumOrderValue: z.number().min(0).nullable(),
+    deliveryNote: z.string().trim().max(500),
+  })
+  .partial()
+  .passthrough();
+
 const createBrandSchema = z.object({
   name: z.string().trim().min(1, 'name is required'),
   description: z.string().trim().optional(),
+  slug: z.string().trim().toLowerCase().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional(),
   logo: z.string().trim().optional(),
   coverImage: z.string().trim().optional(),
   cityId: objectIdString,
-  contact: z.record(z.string(), z.unknown()).optional(),
-  settings: z.record(z.string(), z.unknown()).optional(),
+  contact: contactSchema.optional(),
+  settings: brandSettingsSchema.optional(),
 });
 
 // Profile-only fields. Deliberately excludes status (own endpoint below)
@@ -36,11 +72,12 @@ const createBrandSchema = z.object({
 const updateBrandSchema = z
   .object({
     name: z.string().trim().min(1, 'name is required'),
+    slug: z.string().trim().toLowerCase().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
     description: z.string().trim(),
     logo: z.string().trim(),
     coverImage: z.string().trim(),
-    contact: z.record(z.string(), z.unknown()),
-    settings: z.record(z.string(), z.unknown()),
+    contact: contactSchema,
+    settings: brandSettingsSchema,
   })
   .partial()
   .refine((data) => Object.keys(data).length > 0, {

@@ -92,8 +92,21 @@ async function createBrand(data) {
  * validators/brand.validator.js (updateBrandSchema).
  */
 async function applyBrandUpdate(brand, data) {
+  if (data.slug && data.slug !== brand.slug) {
+    const existing = await Brand.findOne({ slug: data.slug });
+    if (existing && existing._id.toString() !== brand._id.toString()) {
+      throw new BrandError(409, 'A brand with this address already exists.');
+    }
+  }
   Object.assign(brand, data);
-  return brand.save();
+  try {
+    return await brand.save();
+  } catch (err) {
+    if (err.code === 11000) {
+      throw new BrandError(409, 'A brand with this address already exists.');
+    }
+    throw err;
+  }
 }
 
 /**

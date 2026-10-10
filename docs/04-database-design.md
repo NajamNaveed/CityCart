@@ -132,6 +132,8 @@ reviews
 notifications
 ```
 
+Platform-wide configuration is stored in a singleton `platformSettings` collection. It is not tenant-owned.
+
 `deliveries` is part of the MVP (see `11-delivery-system.md`), not a future addition — it is required for brand fulfillment and customer tracking as described in `01-product-requirements.md` and `18-development-roadmap.md` (Phase 10).
 
 Additional collections may be introduced later for:

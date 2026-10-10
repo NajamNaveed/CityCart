@@ -8,6 +8,7 @@ import {
   Menu as MenuIcon,
   Package,
   ShoppingBag,
+  Settings,
   Star,
   Truck,
   Users,
@@ -28,6 +29,7 @@ const NAV = [
   ['/brand/deliveries', 'Deliveries', false, 'delivery.view', Truck],
   ['/brand/reviews', 'Reviews', false, 'products.view', Star],
   ['/brand/team', 'Team', false, 'employees.view', Users],
+  ['/brand/settings', 'Settings', false, 'brand.update', Settings],
 ]
 
 function initials(name = '') {
@@ -46,9 +48,10 @@ const sideLink = ({ isActive }) =>
 
 function SidebarNav({ onNavigate }) {
   const can = useCan()
+  const { user } = useAuth()
   return (
     <nav aria-label="Dashboard" className="space-y-1">
-      {NAV.filter(([, , , permission]) => !permission || can(permission)).map(([to, label, end, , Icon]) => (
+      {NAV.filter(([to, , , permission]) => (!permission || can(permission)) && (to !== '/brand/settings' || user.role === 'BRAND_ADMIN')).map(([to, label, end, , Icon]) => (
         <NavLink key={to} to={to} end={end} className={sideLink} onClick={onNavigate}>
           {({ isActive }) => (
             <>

@@ -27,6 +27,7 @@ const uploadRoutes = require('./routes/upload.routes');
 const reviewRoutes = require('./routes/review.routes');
 const adminReviewRoutes = require('./routes/adminReview.routes');
 const notificationRoutes = require('./routes/notification.routes');
+const adminSettingsRoutes = require('./routes/adminSettings.routes');
 
 const requestLogger = require('./middleware/requestLogger');
 const { apiLimiter } = require('./middleware/rateLimiters');
@@ -85,6 +86,7 @@ app.use('/api/v1/uploads', uploadRoutes);
 app.use('/api/v1/reviews', reviewRoutes);
 app.use('/api/v1/admin/reviews', adminReviewRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/admin', adminSettingsRoutes);
 
 // Must stay LAST: unmatched routes -> 404, then the global error handler.
 app.use(notFound);
