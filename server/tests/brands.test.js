@@ -304,6 +304,25 @@ describe('PATCH /api/v1/brands/:id (own-brand update)', () => {
     expect(brand.contact.operatingHours).toEqual({ opensAt: '', closesAt: '', closedDays: [] });
   });
 
+  it('accepts nullable legacy contact and fulfillment values', async () => {
+    const brandId = new mongoose.Types.ObjectId();
+    const brandAdmin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
+    const brand = { _id: brandId, contact: {}, settings: {}, save: jest.fn().mockResolvedValue(true) };
+    Brand.findById.mockResolvedValue(brand);
+
+    const res = await request(app)
+      .patch(`/api/v1/brands/${brandId.toString()}`)
+      .set(...asUser(brandAdmin))
+      .send({
+        contact: { address: { street: null }, supportPhone: null, supportEmail: null },
+        settings: { estimatedDeliveryTime: null, deliveryNote: null },
+      });
+
+    expect(res.status).toBe(200);
+    expect(brand.contact).toMatchObject({ supportPhone: null, supportEmail: null, address: { street: null } });
+    expect(brand.settings).toMatchObject({ estimatedDeliveryTime: null, deliveryNote: null });
+  });
+
   it('rejects a slug already owned by another brand', async () => {
     const brandId = new mongoose.Types.ObjectId();
     const otherBrandId = new mongoose.Types.ObjectId();

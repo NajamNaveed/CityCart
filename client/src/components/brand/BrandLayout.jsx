@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
   ChevronDown,
+  ChartLine,
   ExternalLink,
   LayoutDashboard,
   LogOut,
@@ -28,6 +29,7 @@ const NAV = [
   ['/brand/orders', 'Orders', false, 'orders.view', Package],
   ['/brand/deliveries', 'Deliveries', false, 'delivery.view', Truck],
   ['/brand/reviews', 'Reviews', false, 'products.view', Star],
+  ['/brand/analytics', 'Analytics', false, 'analytics.view', ChartLine],
   ['/brand/team', 'Team', false, 'employees.view', Users],
   ['/brand/settings', 'Settings', false, 'brand.update', Settings],
 ]

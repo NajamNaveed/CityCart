@@ -18,24 +18,25 @@ const objectIdString = z.string().refine((value) => mongoose.Types.ObjectId.isVa
 });
 
 const timeString = z.union([z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), z.literal('')]);
+const optionalText = (max) => z.union([z.string().trim().max(max), z.null()]);
 const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const contactSchema = z
   .object({
     address: z
       .object({
-        street: z.string().trim().max(200),
-        area: z.string().trim().max(100),
-        city: z.string().trim().max(100),
+        street: optionalText(200),
+        area: optionalText(100),
+        city: optionalText(100),
       })
       .partial()
       .passthrough(),
-    supportPhone: z.string().trim().max(40),
-    supportEmail: z.union([z.string().email(), z.literal('')]),
+    supportPhone: optionalText(40),
+    supportEmail: z.union([z.string().email(), z.literal(''), z.null()]),
     operatingHours: z
       .object({
         opensAt: timeString,
         closesAt: timeString,
-        closedDays: z.array(z.enum(dayNames)),
+        closedDays: z.union([z.array(z.enum(dayNames)), z.null()]),
       })
       .partial()
       .passthrough(),
@@ -45,9 +46,9 @@ const contactSchema = z
 const brandSettingsSchema = z
   .object({
     deliveryFee: z.number().min(0).nullable(),
-    estimatedDeliveryTime: z.string().trim().max(100),
+    estimatedDeliveryTime: optionalText(100),
     minimumOrderValue: z.number().min(0).nullable(),
-    deliveryNote: z.string().trim().max(500),
+    deliveryNote: optionalText(500),
   })
   .partial()
   .passthrough();

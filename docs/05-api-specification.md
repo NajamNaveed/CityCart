@@ -407,6 +407,10 @@ PATCH /api/v1/admin/settings
 
 Settings are persisted in the singleton platform settings document. The API validates supported fields and does not accept a client-supplied tenant or singleton key.
 
+## Analytics
+
+Brand analytics is available at `GET /api/v1/brand/analytics` (also `GET /api/v1/analytics/brand` for the analytics module convention) to `BRAND_ADMIN` and employees with `analytics.view`. Scope is derived from the authenticated user's brand. Super Admin platform analytics is available at `GET /api/v1/admin/analytics` (also `GET /api/v1/analytics/admin`). Both endpoints accept optional UTC date-only `from` and `to` query parameters in `YYYY-MM-DD` format; the default is the last 30 days.
+
 ---
 
 ## Suspend Brand

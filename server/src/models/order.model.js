@@ -181,6 +181,8 @@ const orderSchema = new mongoose.Schema(
 // Compound index example from §34, for the common
 // "a brand's orders by status" query pattern.
 orderSchema.index({ brandId: 1, orderStatus: 1 });
+orderSchema.index({ brandId: 1, createdAt: 1 });
+orderSchema.index({ createdAt: 1 });
 // Compound index example from §34, for "a customer's orders, newest
 // first" query pattern.
 orderSchema.index({ customerId: 1, createdAt: -1 });

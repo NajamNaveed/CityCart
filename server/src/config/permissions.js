@@ -61,6 +61,7 @@ const PERMISSIONS = Object.freeze({
   EMPLOYEES_MANAGE_PERMISSIONS: 'employees.manage_permissions',
 
   STORE_UPDATE: 'store.update',
+  ANALYTICS_VIEW: 'analytics.view',
 });
 
 const ALL_PERMISSIONS = Object.values(PERMISSIONS);

@@ -80,6 +80,8 @@ const brandSchema = new mongoose.Schema(
   }
 );
 
+brandSchema.index({ createdAt: 1 });
+
 const Brand = mongoose.model('Brand', brandSchema);
 
 module.exports = Brand;

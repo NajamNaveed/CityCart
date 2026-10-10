@@ -44,6 +44,10 @@ export const PERMISSION_GROUPS = [
     ],
   },
   {
+    title: 'Analytics',
+    items: [['analytics.view', 'View brand analytics']],
+  },
+  {
     title: 'Deliveries',
     items: [
       ['delivery.view', 'See deliveries'],

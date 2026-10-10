@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Upload } from 'lucide-react'
-import api, { getErrorMessage } from '../../services/api'
+import api, { getErrorMessage, getFieldErrors } from '../../services/api'
 import { ACCEPTED_TYPES, checkImageFile, uploadProductImage } from '../../services/uploads'
 import Field from '../../components/Field'
 import { Notice, PageHeader } from '../../components/brand/Bits'
@@ -109,6 +109,7 @@ export default function BrandSettings() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState({ text: '', tone: 'ok' })
+  const [fieldErrors, setFieldErrors] = useState({})
 
   useEffect(() => {
     let active = true
@@ -121,13 +122,26 @@ export default function BrandSettings() {
         setForm({
           ...EMPTY,
           ...saved,
+          name: saved.name ?? '',
+          slug: saved.slug ?? '',
+          description: saved.description ?? '',
+          logo: saved.logo ?? '',
+          coverImage: saved.coverImage ?? '',
           contact: {
             ...EMPTY.contact,
             ...saved.contact,
-            address: { ...EMPTY.contact.address, ...saved.contact?.address },
-            operatingHours: { ...EMPTY.contact.operatingHours, ...saved.contact?.operatingHours },
+            address: Object.fromEntries(Object.entries({ ...EMPTY.contact.address, ...saved.contact?.address }).map(([key, value]) => [key, value ?? ''])),
+            supportPhone: saved.contact?.supportPhone ?? '',
+            supportEmail: saved.contact?.supportEmail ?? '',
+            operatingHours: {
+              ...EMPTY.contact.operatingHours,
+              ...saved.contact?.operatingHours,
+              opensAt: saved.contact?.operatingHours?.opensAt ?? '',
+              closesAt: saved.contact?.operatingHours?.closesAt ?? '',
+              closedDays: saved.contact?.operatingHours?.closedDays ?? [],
+            },
           },
-          settings: { ...EMPTY.settings, ...saved.settings },
+          settings: Object.fromEntries(Object.entries({ ...EMPTY.settings, ...saved.settings }).map(([key, value]) => [key, value ?? ''])),
         })
       })
       .catch((err) => active && setMessage({ text: getErrorMessage(err), tone: 'warn' }))
@@ -161,6 +175,7 @@ export default function BrandSettings() {
 
   async function save(event) {
     event.preventDefault()
+    setFieldErrors({})
     setSaving(true)
     setMessage({ text: '', tone: 'ok' })
     let changes
@@ -183,6 +198,7 @@ export default function BrandSettings() {
       setBrand(data.brand)
       setMessage({ text: 'Settings saved.', tone: 'ok' })
     } catch (err) {
+      setFieldErrors(getFieldErrors(err))
       setMessage({ text: getErrorMessage(err), tone: 'warn' })
     } finally {
       setSaving(false)
@@ -195,6 +211,11 @@ export default function BrandSettings() {
     <>
       <PageHeader title="Store settings" intro="Brand identity, customer contact details, and fulfillment defaults." />
       <Notice tone={message.tone}>{message.text}</Notice>
+      {Object.keys(fieldErrors).length > 0 && (
+        <ul className="mb-5 space-y-1 text-xs text-clay" role="alert">
+          {Object.entries(fieldErrors).map(([field, error]) => <li key={field}>{field}: {error}</li>)}
+        </ul>
+      )}
       {brand && (
         <>
           <Tabs active={tab} onChange={setTab} />

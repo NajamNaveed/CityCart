@@ -558,6 +558,9 @@ Analytics is complete when:
 
 * Super Admin can view platform-level metrics.
 * Authorized brand users can view their brand metrics.
+* Both dashboards validate UTC date-only ranges and display backend-generated metrics and trends.
+* Brand order, delivery, and inventory aggregates are scoped to the authenticated brand; employee access requires `analytics.view`.
+* Platform GMV and the current-rate commission estimate are clearly distinguished; the estimate does not represent booked historical commission.
 * Tenant isolation is enforced.
 * Core sales/order/customer/product/inventory metrics work.
 * Date filtering works correctly.

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import api, { getErrorMessage } from '../../services/api'
+import api, { getErrorMessage, getFieldErrors } from '../../services/api'
 import Field from '../../components/Field'
 import { Notice, PageHeader } from '../../components/brand/Bits'
 import { Skeleton } from '../../components/ui'
@@ -45,6 +45,7 @@ export default function AdminSettings() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState({ text: '', tone: 'ok' })
+  const [fieldErrors, setFieldErrors] = useState({})
 
   useEffect(() => {
     let active = true
@@ -75,6 +76,7 @@ export default function AdminSettings() {
 
   async function save(event) {
     event.preventDefault()
+    setFieldErrors({})
     setSaving(true)
     setMessage({ text: '', tone: 'ok' })
     let changes
@@ -100,6 +102,7 @@ export default function AdminSettings() {
       setForm((current) => ({ ...current, ...data.settings, announcement: { ...current.announcement, ...data.settings.announcement } }))
       setMessage({ text: 'Platform settings saved.', tone: 'ok' })
     } catch (err) {
+      setFieldErrors(getFieldErrors(err))
       setMessage({ text: getErrorMessage(err), tone: 'warn' })
     } finally {
       setSaving(false)
@@ -112,6 +115,11 @@ export default function AdminSettings() {
     <>
       <PageHeader title="Platform settings" intro="Marketplace identity, policies, and system controls." />
       <Notice tone={message.tone}>{message.text}</Notice>
+      {Object.keys(fieldErrors).length > 0 && (
+        <ul className="mb-5 space-y-1 text-xs text-clay" role="alert">
+          {Object.entries(fieldErrors).map(([field, error]) => <li key={field}>{field}: {error}</li>)}
+        </ul>
+      )}
       <Tabs active={tab} onChange={setTab} />
       <form onSubmit={save} className="space-y-7 rounded-lg border border-line bg-white p-5 sm:p-7">
         {tab === 'Commercial' && (

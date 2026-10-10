@@ -37,6 +37,7 @@ const BrandOrderDetail = lazy(() => import('./pages/brand/OrderDetail'))
 const Deliveries = lazy(() => import('./pages/brand/Deliveries'))
 const Team = lazy(() => import('./pages/brand/Team'))
 const BrandSettings = lazy(() => import('./pages/brand/Settings'))
+const BrandAnalytics = lazy(() => import('./pages/brand/Analytics'))
 const BrandReviews = lazy(() => import('./pages/brand/Reviews'))
 const AdminLayout = lazy(() => import('./components/admin/AdminLayout'))
 const AdminOverview = lazy(() => import('./pages/admin/Overview'))
@@ -46,6 +47,7 @@ const AdminOrders = lazy(() => import('./pages/admin/Orders'))
 const AdminOrderDetail = lazy(() => import('./pages/admin/OrderDetail'))
 const AdminCities = lazy(() => import('./pages/admin/Cities'))
 const AdminSettings = lazy(() => import('./pages/admin/Settings'))
+const AdminAnalytics = lazy(() => import('./pages/admin/Analytics'))
 const AdminReviews = lazy(() => import('./pages/admin/Reviews'))
 
 function RouteFallback() {
@@ -126,6 +128,7 @@ function App() {
                     <Route path="deliveries" element={<Deliveries />} />
                     <Route path="reviews" element={<BrandReviews />} />
                     <Route path="team" element={<Team />} />
+                    <Route path="analytics" element={<BrandAnalytics />} />
                     <Route element={<ProtectedRoute roles={['BRAND_ADMIN']} loginPath="/sell/login" />}>
                       <Route path="settings" element={<BrandSettings />} />
                     </Route>
@@ -147,6 +150,7 @@ function App() {
                     <Route path="reviews" element={<AdminReviews />} />
                     <Route path="cities" element={<AdminCities />} />
                     <Route path="settings" element={<AdminSettings />} />
+                    <Route path="analytics" element={<AdminAnalytics />} />
                     <Route path="notifications" element={<Notifications />} />
                   </Route>
                 </Route>
