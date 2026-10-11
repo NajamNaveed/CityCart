@@ -109,11 +109,11 @@ async function createEmployee({ brandId, actorPermissions, data }) {
 
   try {
     const created = await runInTransaction(async (session) => {
-      if (await User.findOne({ email: data.email }).session(session)) {
+      if (await User.findOne({ email: data.email, accountType: 'BRAND' }).session(session)) {
         throw new EmployeeError(409, 'Email is already registered.');
       }
       const [user] = await User.create(
-        [{ name: data.name, email: data.email, passwordHash, role: ROLES.BRAND_EMPLOYEE, brandId, phone: data.phone }],
+        [{ name: data.name, email: data.email, passwordHash, role: ROLES.BRAND_EMPLOYEE, accountType: 'BRAND', brandId, phone: data.phone }],
         { session }
       );
       const [employee] = await Employee.create(

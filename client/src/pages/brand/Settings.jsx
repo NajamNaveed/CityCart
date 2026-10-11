@@ -7,7 +7,7 @@ import { Notice, PageHeader } from '../../components/brand/Bits'
 import { Skeleton } from '../../components/ui'
 import { btnPine, inputClass } from '../../ui'
 
-const TABS = ['Profile', 'Contact', 'Fulfillment']
+const TABS = ['Profile', 'Contact', 'Fulfillment', 'Password']
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 const EMPTY = {
   name: '',
@@ -99,6 +99,52 @@ function Tabs({ active, onChange }) {
         </button>
       ))}
     </div>
+  )
+}
+
+function PasswordSettings() {
+  const [form, setForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState({ text: '', tone: 'ok' })
+  const [fieldErrors, setFieldErrors] = useState({})
+
+  async function submit(event) {
+    event.preventDefault()
+    setSaving(true)
+    setMessage({ text: '', tone: 'ok' })
+    setFieldErrors({})
+    try {
+      const { currentPassword, newPassword, confirmPassword } = form
+      const { data } = await api.patch('/auth/password', { currentPassword, newPassword, confirmPassword })
+      setForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
+      setMessage({ text: data.message || 'Password changed successfully.', tone: 'ok' })
+    } catch (err) {
+      setFieldErrors(getFieldErrors(err))
+      setMessage({ text: getErrorMessage(err), tone: 'warn' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="max-w-xl space-y-6 rounded-lg border border-line bg-white p-5 sm:p-7">
+      <div>
+        <h2 className="text-base font-semibold text-ink">Change password</h2>
+        <p className="mt-1 text-sm text-muted">Enter your current password, then choose a new one.</p>
+      </div>
+      <Notice tone={message.tone}>{message.text}</Notice>
+      {Object.keys(fieldErrors).length > 0 && (
+        <ul className="space-y-1 text-xs text-clay" role="alert">
+          {Object.entries(fieldErrors).map(([field, error]) => <li key={field}>{field}: {error}</li>)}
+        </ul>
+      )}
+      <div className="space-y-5">
+        <Field label="Current password" id="current-password" name="currentPassword" type="password" autoComplete="current-password" value={form.currentPassword} onChange={(event) => setForm((current) => ({ ...current, currentPassword: event.target.value }))} error={fieldErrors.currentPassword} required />
+        <Field label="New password" id="new-password" name="newPassword" type="password" autoComplete="new-password" minLength={8} value={form.newPassword} onChange={(event) => setForm((current) => ({ ...current, newPassword: event.target.value }))} error={fieldErrors.newPassword} hint="At least 8 characters." required />
+        <Field label="Confirm new password" id="confirm-password" name="confirmPassword" type="password" autoComplete="new-password" minLength={8} value={form.confirmPassword} onChange={(event) => setForm((current) => ({ ...current, confirmPassword: event.target.value }))} error={fieldErrors.confirmPassword} required />
+      </div>
+      <button type="submit" disabled={saving} className={btnPine}>{saving ? 'Updating…' : 'Update password'}</button>
+    </form>
   )
 }
 
@@ -219,6 +265,7 @@ export default function BrandSettings() {
       {brand && (
         <>
           <Tabs active={tab} onChange={setTab} />
+          {tab === 'Password' ? <PasswordSettings /> : (
           <form onSubmit={save} className="space-y-7 rounded-lg border border-line bg-white p-5 sm:p-7">
             {tab === 'Profile' && (
               <>
@@ -279,6 +326,7 @@ export default function BrandSettings() {
 
             <button type="submit" disabled={saving} className={btnPine}>{saving ? 'Saving…' : 'Save settings'}</button>
           </form>
+          )}
         </>
       )}
     </>

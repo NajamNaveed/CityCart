@@ -40,6 +40,10 @@ async function authenticate(req, res, next) {
       return res.status(401).json({ success: false, message: 'Invalid or expired session.' });
     }
 
+    if ((payload.passwordVersion || 0) !== (user.passwordVersion || 0)) {
+      return res.status(401).json({ success: false, message: 'Invalid or expired session.' });
+    }
+
     // Conceptual shape from §11 (req.user = { id, role, brandId }),
     // extended with the full user document so downstream handlers (e.g.
     // GET /auth/me) can read safe profile fields without a second query.
@@ -69,9 +73,14 @@ async function authenticate(req, res, next) {
     // active staff member never hits the expiry mid-work, while an idle or
     // stolen one still expires within hours. Shoppers keep their
     // full-length session untouched.
-    if (STAFF_ROLES.includes(user.role)) {
+    if (STAFF_ROLES.includes(user.role) && !req.skipStaffSessionRenewal) {
       const renewed = signToken(
-        { userId: user._id, role: user.role, brandId: user.brandId },
+        {
+          userId: user._id,
+          role: user.role,
+          brandId: user.brandId,
+          passwordVersion: user.passwordVersion,
+        },
         { expiresIn: `${require('../config/env').staffSessionHours}h` },
       );
       res.cookie(AUTH_COOKIE_NAME, renewed, staffAuthCookieOptions);

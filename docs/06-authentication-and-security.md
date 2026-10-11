@@ -122,6 +122,8 @@ The original password must never be stored or logged.
 
 Password requirements should enforce a reasonable minimum length and reject obviously invalid credentials.
 
+Authenticated Brand Admins can change their password by proving the current password. Password changes update the bcrypt hash and increment a server-side password version carried in signed sessions; older sessions fail authentication. This current-password flow is separate from future email verification and password-reset links, which must use one-time, expiring tokens and must not reuse the authenticated change-password endpoint.
+
 Future improvements may include:
 
 * Password strength scoring

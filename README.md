@@ -628,6 +628,8 @@ cd server
 npm run dev
 ```
 
+For an existing development database, run `npm run sync-indexes --prefix server` once after updating. It backfills portal account types and replaces the old global email index; the script refuses to run when `NODE_ENV=production`.
+
 Backend:
 
 ```text

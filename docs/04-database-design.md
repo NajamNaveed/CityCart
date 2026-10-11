@@ -163,7 +163,9 @@ The User model represents authentication and identity.
 _id
 name
 email
+accountType
 passwordHash
+passwordVersion
 role
 brandId
 phone
@@ -206,7 +208,7 @@ A customer is not a tenant member merely because they purchase from a brand.
 
 # 7. User Constraints
 
-Email addresses should be unique.
+Email addresses are unique within an account type (`CUSTOMER`, `BRAND`, or `PLATFORM_ADMIN`). A customer and brand account may share an email address; accounts in the same login portal may not.
 
 Recommended:
 

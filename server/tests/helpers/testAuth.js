@@ -12,7 +12,12 @@ const { AUTH_COOKIE_NAME } = require('../../src/config/cookie');
  * the user by id on every request).
  */
 function getAuthCookie(user) {
-  const token = signToken({ userId: user._id, role: user.role, brandId: user.brandId });
+  const token = signToken({
+    userId: user._id,
+    role: user.role,
+    brandId: user.brandId,
+    passwordVersion: user.passwordVersion,
+  });
   return `${AUTH_COOKIE_NAME}=${token}`;
 }
 

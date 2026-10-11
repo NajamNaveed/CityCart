@@ -37,7 +37,7 @@ const GENERIC_LOGIN_ERROR = 'Invalid email or password.';
  * other role (§4) — the role is hardcoded here, never taken from input.
  */
 async function registerUser({ name, email, password }) {
-  const existing = await User.findOne({ email });
+  const existing = await User.findOne({ email, accountType: 'CUSTOMER' });
   if (existing) {
     throw new AuthError(409, 'Email is already registered.');
   }
@@ -51,10 +51,11 @@ async function registerUser({ name, email, password }) {
       email,
       passwordHash,
       role: 'CUSTOMER',
+      accountType: 'CUSTOMER',
     });
   } catch (err) {
     // Defense-in-depth against a race between the findOne check above and
-    // this create() call — the unique index on email is the real
+    // this create() call — the compound unique index is the real
     // guarantee (Mongo duplicate-key error code 11000).
     if (err.code === 11000) {
       throw new AuthError(409, 'Email is already registered.');
@@ -62,7 +63,12 @@ async function registerUser({ name, email, password }) {
     throw err;
   }
 
-  const token = signToken({ userId: user._id, role: user.role, brandId: user.brandId });
+  const token = signToken({
+    userId: user._id,
+    role: user.role,
+    brandId: user.brandId,
+    passwordVersion: user.passwordVersion,
+  });
 
   return { user: toSafeUser(user), token };
 }
@@ -80,6 +86,12 @@ const PORTAL_ROLES = Object.freeze({
   admin: [ROLES.SUPER_ADMIN],
 });
 
+const PORTAL_ACCOUNT_TYPES = Object.freeze({
+  customer: 'CUSTOMER',
+  brand: 'BRAND',
+  admin: 'PLATFORM_ADMIN',
+});
+
 /**
  * Authenticates a user by email/password for one portal (see PORTAL_ROLES).
  */
@@ -90,7 +102,7 @@ async function loginUser({ email, password }, portal = 'customer') {
   }
   // select('+passwordHash') is required: the User schema sets
   // passwordHash to select: false by default.
-  const user = await User.findOne({ email }).select('+passwordHash');
+  const user = await User.findOne({ email, accountType: PORTAL_ACCOUNT_TYPES[portal] }).select('+passwordHash');
 
   if (!user) {
     throw new AuthError(401, GENERIC_LOGIN_ERROR);
@@ -122,7 +134,12 @@ async function loginUser({ email, password }, portal = 'customer') {
   // the token expires with the short staff cookie and is re-issued on every
   // authenticated staff request, so an active staff member never notices.
   const token = signToken(
-    { userId: user._id, role: user.role, brandId: user.brandId },
+    {
+      userId: user._id,
+      role: user.role,
+      brandId: user.brandId,
+      passwordVersion: user.passwordVersion,
+    },
     STAFF_ROLES.includes(user.role) ? { expiresIn: `${env.staffSessionHours}h` } : undefined,
   );
 
@@ -150,4 +167,4 @@ function toSafeUser(user) {
   };
 }
 
-module.exports = { registerUser, loginUser, toSafeUser, AuthError, PORTAL_ROLES };
+module.exports = { registerUser, loginUser, toSafeUser, AuthError, PORTAL_ROLES, PORTAL_ACCOUNT_TYPES };

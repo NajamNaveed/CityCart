@@ -145,6 +145,21 @@ describe('POST /api/v1/auth/register', () => {
       true
     );
   });
+
+  it('checks email uniqueness only within the customer account type', async () => {
+    User.findOne.mockResolvedValue(null);
+    User.create.mockImplementation(async (data) => makeFakeUser(data));
+
+    const res = await request(app).post('/api/v1/auth/register').send({
+      name: 'Same Email Customer',
+      email: 'owner@example.com',
+      password: 'correcthorse123',
+    });
+
+    expect(res.status).toBe(201);
+    expect(User.findOne).toHaveBeenCalledWith({ email: 'owner@example.com', accountType: 'CUSTOMER' });
+    expect(User.create).toHaveBeenCalledWith(expect.objectContaining({ accountType: 'CUSTOMER' }));
+  });
 });
 
 describe('password hashing utility', () => {
@@ -237,6 +252,10 @@ describe('login portals: each role can only use its own door', () => {
       expect(res.status).toBe(200);
       expect(res.body.user.role).toBe(role);
       expect(getCookieValue(res, AUTH_COOKIE_NAME)).toBeTruthy();
+      expect(User.findOne).toHaveBeenCalledWith({
+        email: 'jane@example.com',
+        accountType: role === 'CUSTOMER' ? 'CUSTOMER' : role === 'SUPER_ADMIN' ? 'PLATFORM_ADMIN' : 'BRAND',
+      });
     });
   }
 

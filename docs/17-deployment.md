@@ -151,6 +151,8 @@ Production configuration must use:
 
 The production database must never be committed to Git.
 
+User email uniqueness is scoped by `accountType`; existing databases require an account-type backfill and compound-index migration before deploying this change. The development helper is `npm run sync-indexes --prefix server` and refuses production. Production must use a reviewed migration plan: backfill roles to account types, confirm no duplicate `(accountType, email)` values, then replace the global email index with the compound unique index without running the broad development sync script.
+
 ---
 
 ## 7. Cloudinary

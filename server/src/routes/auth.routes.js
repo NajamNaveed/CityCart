@@ -1,7 +1,9 @@
 const express = require('express');
 
-const { register, login, brandLogin, adminLogin, logout, me } = require('../controllers/auth.controller');
+const { register, login, brandLogin, adminLogin, logout, me, changePassword } = require('../controllers/auth.controller');
 const authenticate = require('../middleware/authenticate');
+const requireRole = require('../middleware/requireRole');
+const { ROLES } = require('../config/roles');
 const { authLimiter } = require('../middleware/rateLimiters');
 
 const router = express.Router();
@@ -12,5 +14,16 @@ router.post('/brand/login', authLimiter, brandLogin); // BRAND_ADMIN / BRAND_EMP
 router.post('/admin/login', authLimiter, adminLogin); // SUPER_ADMIN only
 router.post('/logout', logout);
 router.get('/me', authenticate, me);
+router.patch(
+	'/password',
+	authLimiter,
+	(req, res, next) => {
+		req.skipStaffSessionRenewal = true;
+		next();
+	},
+	authenticate,
+	requireRole(ROLES.BRAND_ADMIN),
+	changePassword
+);
 
 module.exports = router;

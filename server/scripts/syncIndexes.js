@@ -3,8 +3,9 @@
  *
  *   npm run sync-indexes
  *
- * Needed once after upgrading an EXISTING database: some indexes changed
- * from plain to UNIQUE (stores.slug, stores.brandId, employees.userId).
+ * Needed once after upgrading an EXISTING database: this backfills User.accountType
+ * for existing accounts and updates the portal-scoped email index, along with
+ * indexes changed from plain to UNIQUE (stores.slug, stores.brandId, employees.userId).
  * MongoDB refuses to change an index's options in place, so Mongoose keeps
  * the old non-unique one and uniqueness is NOT enforced until it is
  * rebuilt. syncIndexes() drops indexes that differ from the schema and
@@ -36,6 +37,14 @@ async function main() {
     throw new Error('MONGODB_URI is not set (server/.env).');
   }
   await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 10000 });
+
+  const User = mongoose.model('User');
+  await Promise.all([
+    User.updateMany({ role: 'CUSTOMER', accountType: { $exists: false } }, { $set: { accountType: 'CUSTOMER' } }),
+    User.updateMany({ role: { $in: ['BRAND_ADMIN', 'BRAND_EMPLOYEE'] }, accountType: { $exists: false } }, { $set: { accountType: 'BRAND' } }),
+    User.updateMany({ role: 'SUPER_ADMIN', accountType: { $exists: false } }, { $set: { accountType: 'PLATFORM_ADMIN' } }),
+  ]);
+  console.log('User account types backfilled.');
 
   for (const name of mongoose.modelNames()) {
     try {

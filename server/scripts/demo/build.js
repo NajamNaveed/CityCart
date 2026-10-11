@@ -77,8 +77,10 @@ function buildDataset({ now = new Date(), hashes }) {
 
   // ── users ──
   const userDoc = ({ name, email, phone, role, passwordHash, brandId, createdAt, isActive = true, restrictedUntil }) => ({
-    _id: new ObjectId(), name, email, passwordHash, role, ...(brandId && { brandId }), phone,
-    avatar: monogram(name, 240), isActive,
+    _id: new ObjectId(), name, email, passwordHash, role,
+    accountType: role === 'CUSTOMER' ? 'CUSTOMER' : role === 'SUPER_ADMIN' ? 'PLATFORM_ADMIN' : 'BRAND',
+    ...(brandId && { brandId }), phone,
+    avatar: monogram(name, 240), isActive, passwordVersion: 0,
     ...(restrictedUntil && { accessRestricted: true, accessExpiresAt: restrictedUntil }),
     createdAt, updatedAt: createdAt,
   });

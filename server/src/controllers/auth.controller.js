@@ -4,6 +4,10 @@ const { AUTH_COOKIE_NAME, authCookieOptions, staffAuthCookieOptions } = require(
 const { ROLES, STAFF_ROLES } = require('../config/roles');
 const Employee = require('../models/employee.model');
 const { formatZodError } = require('../utils/formatZodError');
+const { changePasswordSchema } = require('../validators/password.validator');
+const { changePassword: changePasswordForUser, PasswordError } = require('../services/password.service');
+const { signToken } = require('../utils/jwt');
+const env = require('../config/env');
 
 // Staff sessions use the short-lived cookie (docs/06 §9); shoppers the
 // full-length one. The cookie options must match the token's expiry.
@@ -110,4 +114,35 @@ async function me(req, res, next) {
   }
 }
 
-module.exports = { register, login, brandLogin, adminLogin, logout, me };
+async function changePassword(req, res, next) {
+  const parsed = changePasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsed.error),
+    });
+  }
+
+  try {
+    const user = await changePasswordForUser(req.user._id, parsed.data);
+    const token = signToken(
+      {
+        userId: user._id,
+        role: user.role,
+        brandId: user.brandId,
+        passwordVersion: user.passwordVersion,
+      },
+      { expiresIn: `${env.staffSessionHours}h` }
+    );
+    res.cookie(AUTH_COOKIE_NAME, token, staffAuthCookieOptions);
+    return res.status(200).json({ success: true, message: 'Password changed successfully.' });
+  } catch (err) {
+    if (err instanceof PasswordError) {
+      return res.status(err.status).json({ success: false, message: err.message });
+    }
+    return next(err);
+  }
+}
+
+module.exports = { register, login, brandLogin, adminLogin, logout, me, changePassword };

@@ -119,6 +119,7 @@ POST /api/v1/auth/register
 ```
 
 Public registration creates a `CUSTOMER` by default.
+Customer and brand accounts use separate email namespaces and authenticate through their respective login portals. The same normalized email may be used once in each portal.
 
 Users must not be allowed to register themselves as:
 
@@ -181,6 +182,14 @@ GET /api/v1/auth/me
 ```
 
 Returns the authenticated user's safe profile information.
+
+## Change Password
+
+```text
+PATCH /api/v1/auth/password
+```
+
+Currently available to authenticated `BRAND_ADMIN` accounts. The request requires the current password, a new password, and its confirmation. Successful changes rotate the password version, invalidating other sessions while issuing a fresh cookie for the current staff tab.
 
 ---
 

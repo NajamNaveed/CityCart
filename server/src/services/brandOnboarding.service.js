@@ -55,7 +55,7 @@ async function applyForBrand({ owner, brand, store }) {
   }
 
   // Friendly pre-checks; the unique indexes below are the real guarantee.
-  if (await User.findOne({ email: owner.email })) {
+  if (await User.findOne({ email: owner.email, accountType: 'BRAND' })) {
     throw new BrandError(409, 'Email is already registered.');
   }
   if (!(await isBrandNameAvailable(brand.name))) {
@@ -75,7 +75,7 @@ async function applyForBrand({ owner, brand, store }) {
         { session }
       );
       const [user] = await User.create(
-        [{ name: owner.name, email: owner.email, phone: owner.phone, passwordHash, role: ROLES.BRAND_ADMIN, brandId }],
+        [{ name: owner.name, email: owner.email, phone: owner.phone, passwordHash, role: ROLES.BRAND_ADMIN, accountType: 'BRAND', brandId }],
         { session }
       );
       const [createdStore] = await Store.create([{ ...store, brandId, slug: storeSlug }], { session });

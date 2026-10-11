@@ -122,6 +122,16 @@ describe('POST /api/v1/brands/apply', () => {
     );
   });
 
+  it('allows a brand account to use an email already registered as a customer', async () => {
+    applyWorld();
+
+    const res = await post(application());
+
+    expect(res.status).toBe(201);
+    expect(User.findOne).toHaveBeenCalledWith({ email: 'sara@shop.com', accountType: 'BRAND' });
+    expect(User.create.mock.calls[0][0][0]).toMatchObject({ accountType: 'BRAND', role: ROLES.BRAND_ADMIN });
+  });
+
   it('status, role and brandId can never be set by the client', async () => {
     applyWorld();
     const body = application();

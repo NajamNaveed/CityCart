@@ -18,6 +18,11 @@ const { ALL_ROLES, BRAND_SCOPED_ROLES } = require('../config/roles');
  */
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const accountTypeForRole = (role) => {
+  if (role === 'CUSTOMER') return 'CUSTOMER';
+  if (role === 'SUPER_ADMIN') return 'PLATFORM_ADMIN';
+  return 'BRAND';
+};
 
 const userSchema = new mongoose.Schema(
   {
@@ -29,7 +34,6 @@ const userSchema = new mongoose.Schema(
     email: {
       type: String,
       required: true,
-      unique: true,
       lowercase: true,
       trim: true,
       match: EMAIL_REGEX,
@@ -42,10 +46,29 @@ const userSchema = new mongoose.Schema(
       required: true,
       select: false,
     },
+    passwordVersion: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     role: {
       type: String,
       enum: ALL_ROLES,
       required: true,
+    },
+    accountType: {
+      type: String,
+      enum: ['CUSTOMER', 'BRAND', 'PLATFORM_ADMIN'],
+      required: true,
+      default: function defaultAccountType() {
+        return accountTypeForRole(this.role);
+      },
+      validate: {
+        validator(value) {
+          return value === accountTypeForRole(this.role);
+        },
+        message: 'accountType must match the account role.',
+      },
     },
     brandId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -101,6 +124,11 @@ const userSchema = new mongoose.Schema(
 );
 
 userSchema.index({ role: 1, createdAt: 1 });
+userSchema.index(
+  { role: 1 },
+  { unique: true, partialFilterExpression: { role: 'SUPER_ADMIN' }, name: 'single_super_admin' }
+);
+userSchema.index({ accountType: 1, email: 1 }, { unique: true, name: 'accountType_email_unique' });
 
 const User = mongoose.model('User', userSchema);
 
