@@ -29,6 +29,7 @@ const adminReviewRoutes = require('./routes/adminReview.routes');
 const notificationRoutes = require('./routes/notification.routes');
 const adminSettingsRoutes = require('./routes/adminSettings.routes');
 const analyticsRoutes = require('./routes/analytics.routes');
+const adminUsersRoutes = require('./routes/adminUsers.routes');
 
 const requestLogger = require('./middleware/requestLogger');
 const { apiLimiter } = require('./middleware/rateLimiters');
@@ -88,6 +89,7 @@ app.use('/api/v1/reviews', reviewRoutes);
 app.use('/api/v1/admin/reviews', adminReviewRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/admin', adminSettingsRoutes);
+app.use('/api/v1/admin', adminUsersRoutes);
 app.use('/api/v1', analyticsRoutes);
 
 // Must stay LAST: unmatched routes -> 404, then the global error handler.

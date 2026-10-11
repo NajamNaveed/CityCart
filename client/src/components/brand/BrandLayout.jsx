@@ -13,6 +13,7 @@ import {
   Star,
   Truck,
   Users,
+  Warehouse,
   UtensilsCrossed,
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
@@ -31,6 +32,7 @@ const NAV = [
   ['/brand/reviews', 'Reviews', false, 'products.view', Star],
   ['/brand/analytics', 'Analytics', false, 'analytics.view', ChartLine],
   ['/brand/team', 'Team', false, 'employees.view', Users],
+  ['/brand/inventory', 'Quick inventory', false, 'inventory.manage', Warehouse],
   ['/brand/settings', 'Settings', false, 'brand.update', Settings],
 ]
 
@@ -53,7 +55,7 @@ function SidebarNav({ onNavigate }) {
   const { user } = useAuth()
   return (
     <nav aria-label="Dashboard" className="space-y-1">
-      {NAV.filter(([to, , , permission]) => (!permission || can(permission)) && (to !== '/brand/settings' || user.role === 'BRAND_ADMIN')).map(([to, label, end, , Icon]) => (
+      {NAV.filter(([to, , , permission]) => (!permission || can(permission)) && ((to !== '/brand/settings' && to !== '/brand/inventory') || user.role === 'BRAND_ADMIN')).map(([to, label, end, , Icon]) => (
         <NavLink key={to} to={to} end={end} className={sideLink} onClick={onNavigate}>
           {({ isActive }) => (
             <>

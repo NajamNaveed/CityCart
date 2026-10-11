@@ -1,4 +1,5 @@
 const Inventory = require('../models/inventory.model');
+const Product = require('../models/product.model');
 const { DEFAULT_ADJUSTMENT_REASON } = require('../config/inventoryReasons');
 const { notifyStockTransitions } = require('./notification.service');
 
@@ -337,6 +338,43 @@ async function updateInventory(product, data) {
   throw new InventoryError(409, 'Inventory was modified by another request. Please retry.');
 }
 
+/**
+ * Batch stock-setting operations. Product ownership is checked as a group
+ * before any writes; each row then uses the same atomic set-stock logic as
+ * PATCH /inventory/:productId. Inventory conflicts are returned per row so
+ * successful rows are explicit and retryable rows are not silently lost.
+ */
+async function batchUpdateInventory(updates, brandId) {
+  const productIds = updates.map(({ productId }) => productId);
+  const filter = { _id: { $in: productIds }, ...(brandId && { brandId }) };
+  const products = await Product.find(filter);
+  if (products.length !== updates.length) {
+    throw new InventoryError(404, 'One or more products were not found in this brand.');
+  }
+
+  const productById = new Map(products.map((product) => [String(product._id), product]));
+  const results = [];
+  for (const update of updates) {
+    const product = productById.get(String(update.productId));
+    try {
+      const inventory = await updateInventory(product, {
+        ...(update.quantity !== undefined && { quantity: update.quantity }),
+        ...(update.lowStockThreshold !== undefined && { lowStockThreshold: update.lowStockThreshold }),
+      });
+      results.push({ productId: update.productId, success: true, inventory: serializeInventory(inventory) });
+    } catch (err) {
+      if (!(err instanceof InventoryError)) throw err;
+      results.push({ productId: update.productId, success: false, message: err.message, status: err.status });
+    }
+  }
+
+  return {
+    results,
+    updatedCount: results.filter((result) => result.success).length,
+    failedCount: results.filter((result) => !result.success).length,
+  };
+}
+
 function assertPositiveInteger(value) {
   if (!Number.isInteger(value) || value <= 0) {
     throw new InventoryError(400, 'quantity must be a positive integer.');
@@ -478,6 +516,7 @@ module.exports = {
   ensureInventory,
   adjustStock,
   updateInventory,
+  batchUpdateInventory,
   reserveStock,
   releaseStock,
   deductStock,

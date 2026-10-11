@@ -48,6 +48,29 @@ const updateInventorySchema = z
     message: 'At least one field must be provided.',
   });
 
+const batchUpdateInventorySchema = z
+  .object({
+    updates: z
+      .array(
+        z
+          .object({
+            productId: objectIdString,
+            quantity: quantityField.optional(),
+            lowStockThreshold: quantityField.optional(),
+          })
+          .strict()
+          .refine((data) => data.quantity !== undefined || data.lowStockThreshold !== undefined, {
+            message: 'Provide a quantity or lowStockThreshold to update.',
+          })
+      )
+      .min(1)
+      .max(100)
+      .refine((items) => new Set(items.map((item) => item.productId)).size === items.length, {
+        message: 'Each product may only appear once in a batch.',
+      }),
+  })
+  .strict();
+
 /**
  * POST /inventory/:productId/adjust — docs/09 §5 ("Add stock / Remove stock
  * / Adjust stock") and §6-7. `change` is a signed, non-zero integer:
@@ -75,6 +98,7 @@ const listInventoryQuerySchema = z.object({
 module.exports = {
   productIdParamSchema,
   updateInventorySchema,
+  batchUpdateInventorySchema,
   adjustInventorySchema,
   listInventoryQuerySchema,
   MAX_STOCK_QUANTITY,

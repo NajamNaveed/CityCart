@@ -38,6 +38,7 @@ const Deliveries = lazy(() => import('./pages/brand/Deliveries'))
 const Team = lazy(() => import('./pages/brand/Team'))
 const BrandSettings = lazy(() => import('./pages/brand/Settings'))
 const BrandAnalytics = lazy(() => import('./pages/brand/Analytics'))
+const InventoryHub = lazy(() => import('./pages/brand/InventoryHub'))
 const BrandReviews = lazy(() => import('./pages/brand/Reviews'))
 const AdminLayout = lazy(() => import('./components/admin/AdminLayout'))
 const AdminOverview = lazy(() => import('./pages/admin/Overview'))
@@ -48,6 +49,7 @@ const AdminOrderDetail = lazy(() => import('./pages/admin/OrderDetail'))
 const AdminCities = lazy(() => import('./pages/admin/Cities'))
 const AdminSettings = lazy(() => import('./pages/admin/Settings'))
 const AdminAnalytics = lazy(() => import('./pages/admin/Analytics'))
+const AdminUsers = lazy(() => import('./pages/admin/Users'))
 const AdminReviews = lazy(() => import('./pages/admin/Reviews'))
 
 function RouteFallback() {
@@ -131,6 +133,7 @@ function App() {
                     <Route path="analytics" element={<BrandAnalytics />} />
                     <Route element={<ProtectedRoute roles={['BRAND_ADMIN']} loginPath="/sell/login" />}>
                       <Route path="settings" element={<BrandSettings />} />
+                      <Route path="inventory" element={<InventoryHub />} />
                     </Route>
                     <Route path="notifications" element={<Notifications />} />
                   </Route>
@@ -151,6 +154,7 @@ function App() {
                     <Route path="cities" element={<AdminCities />} />
                     <Route path="settings" element={<AdminSettings />} />
                     <Route path="analytics" element={<AdminAnalytics />} />
+                    <Route path="users" element={<AdminUsers />} />
                     <Route path="notifications" element={<Notifications />} />
                   </Route>
                 </Route>

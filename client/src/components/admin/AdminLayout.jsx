@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
-import { ChartLine, LayoutDashboard, LogOut, MapPin, Menu as MenuIcon, Package, Settings, ShieldCheck, Star, Store } from 'lucide-react'
+import { ChartLine, LayoutDashboard, LogOut, MapPin, Menu as MenuIcon, Package, Settings, ShieldCheck, Star, Store, UsersRound } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import NotificationBell from '../NotificationBell'
 import Drawer from '../ui/Drawer'
@@ -12,6 +12,7 @@ const NAV = [
   ['/admin/reviews', 'Reviews', false, Star],
   ['/admin/cities', 'Cities', false, MapPin],
   ['/admin/analytics', 'Analytics', false, ChartLine],
+  ['/admin/users', 'Users', false, UsersRound],
   ['/admin/settings', 'Settings', false, Settings],
 ]
 

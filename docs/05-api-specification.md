@@ -239,6 +239,14 @@ PATCH  /api/v1/users/:id
 
 These endpoints must not expose password hashes or sensitive authentication data.
 
+The searchable directory is available at:
+
+```text
+GET /api/v1/admin/users?search=&role=&isActive=&page=1&limit=20
+```
+
+It returns safe user profiles, brand/staff labels, order counts, and pagination. Password hashes and authentication fields are never returned.
+
 ---
 
 # 8. City Endpoints
@@ -715,6 +723,14 @@ The server must validate:
 * Product belongs to user's brand
 * Quantity is valid
 * User has permission
+
+## Batch Update Inventory
+
+```text
+PATCH /api/v1/inventory/batch
+```
+
+Required permission: `inventory.manage`. The request contains an `updates` array of unique product IDs and a quantity and/or low-stock threshold for each row. The backend derives brand scope from the authenticated account, verifies all products belong to that scope before writing, and returns per-row results so stock conflicts can be retried.
 
 ---
 

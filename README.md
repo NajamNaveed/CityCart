@@ -613,6 +613,8 @@ Example:
 VITE_API_URL=http://localhost:5000/api/v1
 ```
 
+When `VITE_API_URL` is unset, the Vite development server proxies `/api/v1` and `/socket.io` to `http://localhost:5000`. Set `CITYCART_API_PROXY_TARGET` before starting the client to use another backend URL.
+
 Never commit `.env` files containing secrets.
 
 ---

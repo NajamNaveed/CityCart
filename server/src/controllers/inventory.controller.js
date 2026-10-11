@@ -1,12 +1,14 @@
 const {
   updateInventorySchema,
   adjustInventorySchema,
+  batchUpdateInventorySchema,
   listInventoryQuerySchema,
 } = require('../validators/inventory.validator');
 const {
   listInventory,
   getInventoryForProduct,
   updateInventory,
+  batchUpdateInventory,
   adjustStock,
   serializeInventory,
   InventoryError,
@@ -113,4 +115,22 @@ async function adjust(req, res, next) {
   }
 }
 
-module.exports = { list, getByProduct, update, adjust };
+async function batchUpdate(req, res, next) {
+  const parsedBody = batchUpdateInventorySchema.safeParse(req.body);
+  if (!parsedBody.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsedBody.error),
+    });
+  }
+
+  try {
+    const result = await batchUpdateInventory(parsedBody.data.updates, req.tenantBrandId);
+    return res.status(200).json({ success: true, message: 'Inventory batch processed', ...result });
+  } catch (err) {
+    return sendError(err, res, next);
+  }
+}
+
+module.exports = { list, getByProduct, update, adjust, batchUpdate };

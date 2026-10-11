@@ -1,13 +1,15 @@
 const express = require('express');
 
-const { list, getByProduct, update, adjust } = require('../controllers/inventory.controller');
+const { list, getByProduct, update, adjust, batchUpdate } = require('../controllers/inventory.controller');
 const { getProductByIdRaw } = require('../services/product.service');
 const authenticate = require('../middleware/authenticate');
+const requireRole = require('../middleware/requireRole');
 const requirePermission = require('../middleware/requirePermission');
 const requireTenant = require('../middleware/requireTenant');
 const requireBrandOwnership = require('../middleware/requireBrandOwnership');
 const validateProductIdParam = require('../middleware/validateProductIdParam');
 const { PERMISSIONS } = require('../config/permissions');
+const { ROLES } = require('../config/roles');
 
 const router = express.Router();
 
@@ -28,6 +30,15 @@ router.get(
   requirePermission(PERMISSIONS.INVENTORY_VIEW),
   requireTenant,
   list
+);
+
+router.patch(
+  '/batch',
+  authenticate,
+  requireRole(ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE),
+  requirePermission(PERMISSIONS.INVENTORY_MANAGE),
+  requireTenant,
+  batchUpdate
 );
 
 router.get(
