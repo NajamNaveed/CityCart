@@ -7,7 +7,7 @@
 const mongoose = require('mongoose');
 
 const { slugify } = require('../../src/utils/slugify');
-const { CITIES, BRANDS, CUSTOMERS, ADMIN, CARTS, REMARKS } = require('./catalog');
+const { CITIES, BLOCKS, BRANCHES, BRANDS, CUSTOMERS, ADMIN, CARTS, REMARKS } = require('./catalog');
 
 const { ObjectId } = mongoose.Types;
 const HOUR = 3600 * 1000;
@@ -59,7 +59,7 @@ function buildDataset({ now = new Date(), hashes }) {
   const ago = (ms) => new Date(now.getTime() - ms);
 
   const ds = {
-    cities: [], users: [], brands: [], stores: [], categories: [], products: [], inventories: [],
+    cities: [], blocks: [], branches: [], users: [], brands: [], stores: [], categories: [], products: [], inventories: [],
     employees: [], carts: [], orders: [], payments: [], deliveries: [], reviews: [], notifications: [], counters: [],
   };
 
@@ -73,6 +73,19 @@ function buildDataset({ now = new Date(), hashes }) {
     };
     cityByKey[c.key] = doc;
     ds.cities.push(doc);
+  }
+
+  // ── blocks (neighbourhoods, all in Faisalabad) ──
+  const faisalabad = cityByKey.faisalabad;
+  const blockBySlug = {};
+  for (const blk of BLOCKS) {
+    const doc = {
+      _id: new ObjectId(), cityId: faisalabad._id, name: blk.name, slug: slugify(blk.name),
+      center: { type: 'Point', coordinates: [blk.longitude, blk.latitude] }, isActive: true,
+      createdAt: ago(290 * DAY), updatedAt: ago(290 * DAY),
+    };
+    blockBySlug[doc.slug] = doc;
+    ds.blocks.push(doc);
   }
 
   // ── users ──
@@ -130,6 +143,22 @@ function buildDataset({ now = new Date(), hashes }) {
     };
     ds.stores.push(storeDoc);
 
+    // Branches: each shop of the brand, in one block, with its own pin.
+    const branchDefs = BRANCHES[b.key] || [];
+    const branchDocs = branchDefs.map((br, i) => {
+      const block = blockBySlug[br.block];
+      const [dLat, dLng] = br.off;
+      const [lng, lat] = block.center.coordinates;
+      const made = new Date(createdAt.getTime() + (1 + i) * DAY);
+      const doc = {
+        _id: new ObjectId(), brandId, blockId: block._id, name: br.name, address: br.address, phone: br.phone,
+        location: { type: 'Point', coordinates: [Math.round((lng + dLng) * 1e6) / 1e6, Math.round((lat + dLat) * 1e6) / 1e6] },
+        isActive: br.isActive !== false, createdAt: made, updatedAt: made,
+      };
+      ds.branches.push(doc);
+      return { def: br, doc };
+    });
+
     const categoryByKey = {};
     for (const c of b.categories) {
       const doc = {
@@ -144,11 +173,15 @@ function buildDataset({ now = new Date(), hashes }) {
     const products = b.products.map((p, i) => {
       const status = p.st || 'ACTIVE';
       const made = new Date(createdAt.getTime() + (2 + i) * DAY * (b.ageDays > 30 ? 1 : 0.1));
+      // Which branches carry it: a branch lists category keys (a parent covers its children).
+      const parentKey = (b.categories.find((c) => c.key === p.c) || {}).parent;
+      const carriers = branchDocs.filter(({ def }) => !def.only || def.only.includes(p.c) || (parentKey && def.only.includes(parentKey)));
+      const branchIds = carriers.length === branchDocs.length ? [] : carriers.map(({ doc: br }) => br._id);
       const doc = {
         _id: new ObjectId(), brandId, categoryId: categoryByKey[p.c]._id, name: p.n, slug: slugify(p.n), description: p.d,
         images: [photo(p.kw, 1), photo(p.kw, 2), photo(p.kw, 3)], price: p.p,
         ...(p.cmp && { compareAtPrice: p.cmp }), sku: `${b.skuPrefix}-${pad(i + 1, 3)}`,
-        isActive: status === 'ACTIVE' || status === 'DRAFT', status, attributes: p.a, createdAt: made, updatedAt: made,
+        isActive: status === 'ACTIVE' || status === 'DRAFT', status, attributes: p.a, branchIds, createdAt: made, updatedAt: made,
       };
       ds.products.push(doc);
       ds.inventories.push({

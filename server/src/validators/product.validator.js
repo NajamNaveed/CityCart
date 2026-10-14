@@ -34,6 +34,7 @@ const createProductSchema = z.object({
   sku: z.string().trim().optional(),
   categoryId: objectIdString,
   attributes: z.record(z.string(), z.unknown()).optional(),
+  branchIds: z.array(objectIdString).max(50).optional(),
   status: z.enum(Product.STATUSES).optional(),
   isActive: z.boolean().optional(),
 });
@@ -48,6 +49,7 @@ const updateProductSchema = z
     sku: z.string().trim(),
     categoryId: objectIdString,
     attributes: z.record(z.string(), z.unknown()),
+    branchIds: z.array(objectIdString).max(50),
     status: z.enum(Product.STATUSES),
     isActive: z.boolean(),
   })

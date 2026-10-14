@@ -8,6 +8,7 @@ jest.mock('../src/models/block.model');
 jest.mock('../src/models/branch.model');
 
 const User = require('../src/models/user.model');
+const Employee = require('../src/models/employee.model');
 const Brand = require('../src/models/brand.model');
 const Block = require('../src/models/block.model');
 const Branch = require('../src/models/branch.model');
@@ -254,5 +255,35 @@ describe('PATCH/DELETE /api/v1/brand/branches/:id', () => {
     expect(res.status).toBe(200);
     expect(branch.isActive).toBe(false);
     expect(branch.save).toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/v1/branches/mine (read-only, any staff who can view products)', () => {
+  it('lets an employee with products.view list their own brand branches', async () => {
+    const brandId = oid();
+    const user = makeFakeUser({ role: ROLES.BRAND_EMPLOYEE, brandId });
+    const [h, v] = asUser(user);
+    Employee.findOne.mockResolvedValue({ userId: user._id, brandId, isActive: true, permissions: ['products.view'] });
+    const block = makeBlock(oid());
+    Branch.find.mockReturnValue({ sort: jest.fn().mockResolvedValue([makeBranch(brandId, block._id)]) });
+    Block.find.mockResolvedValue([block]);
+
+    const res = await request(app).get('/api/v1/branches/mine').set(h, v);
+
+    expect(res.status).toBe(200);
+    expect(Branch.find).toHaveBeenCalledWith({ brandId: brandId.toString() });
+    expect(res.body.branches).toHaveLength(1);
+  });
+
+  it('refuses employees without products.view and customers', async () => {
+    const brandId = oid();
+    const user = makeFakeUser({ role: ROLES.BRAND_EMPLOYEE, brandId });
+    const [h, v] = asUser(user);
+    Employee.findOne.mockResolvedValue({ userId: user._id, brandId, isActive: true, permissions: ['orders.view'] });
+    expect((await request(app).get('/api/v1/branches/mine').set(h, v)).status).toBe(403);
+
+    const [h2, v2] = asUser(makeFakeUser({ role: ROLES.CUSTOMER }));
+    expect((await request(app).get('/api/v1/branches/mine').set(h2, v2)).status).toBe(403);
+    expect((await request(app).get('/api/v1/branches/mine')).status).toBe(401);
   });
 });

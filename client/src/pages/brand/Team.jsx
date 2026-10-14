@@ -4,7 +4,7 @@ import api, { getErrorMessage, getFieldErrors } from '../../services/api'
 import { useCan } from '../../hooks/useCan'
 import Field from '../../components/Field'
 import PermissionPicker from '../../components/brand/PermissionPicker'
-import { Notice, PageHeader, StatusBadge } from '../../components/brand/Bits'
+import { Notice, PageHeader, Pager, StatusBadge } from '../../components/brand/Bits'
 import { EmptyState, Skeleton } from '../../components/ui'
 import { btnPine } from '../../ui'
 
@@ -13,6 +13,8 @@ const EMPTY = { name: '', email: '', password: '', phone: '', jobTitle: '' }
 export default function Team() {
   const can = useCan()
   const [members, setMembers] = useState(null)
+  const [pagination, setPagination] = useState(null)
+  const [page, setPage] = useState(1)
   const [loadError, setLoadError] = useState('')
   const [reload, setReload] = useState(0)
   const [message, setMessage] = useState({ text: '', tone: 'ok' })
@@ -31,13 +33,17 @@ export default function Team() {
   useEffect(() => {
     let active = true
     api
-      .get('/employees', { params: { limit: 50 } })
-      .then((res) => active && setMembers(res.data.employees))
+      .get('/employees', { params: { limit: 10, page } })
+      .then((res) => {
+        if (!active) return
+        setMembers(res.data.employees)
+        setPagination(res.data.pagination)
+      })
       .catch((err) => active && setLoadError(getErrorMessage(err)))
     return () => {
       active = false
     }
-  }, [reload])
+  }, [reload, page])
 
   const onChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }))
 
@@ -148,7 +154,8 @@ export default function Team() {
           className="rounded-lg border border-dashed border-line bg-white"
         />
       ) : (
-        <ul className="space-y-3">
+        <>
+          <ul className="space-y-3">
           {members.map((m) => (
             <li key={m._id} className="rounded-lg border border-line bg-white p-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
@@ -232,6 +239,8 @@ export default function Team() {
             </li>
           ))}
         </ul>
+          <Pager pagination={pagination} onPage={setPage} />
+        </>
       )}
     </>
   )

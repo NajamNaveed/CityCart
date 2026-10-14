@@ -20,16 +20,6 @@ const P = {
 const CITIES = [
   { key: 'faisalabad', name: 'Faisalabad', state: 'Punjab', country: 'Pakistan', isActive: true,
     description: 'The Manchester of Pakistan: a textile city of looms, dye houses and bustling cloth markets.' },
-  { key: 'lahore', name: 'Lahore', state: 'Punjab', country: 'Pakistan', isActive: true,
-    description: 'The cultural capital, known for its food, its old-city bazaars and its menswear and home-decor makers.' },
-  { key: 'karachi', name: 'Karachi', state: 'Sindh', country: 'Pakistan', isActive: true,
-    description: 'Pakistan\'s largest city and port, home to leather workshops, footwear makers and fast-moving trade.' },
-  { key: 'islamabad', name: 'Islamabad', state: 'Islamabad Capital Territory', country: 'Pakistan', isActive: true,
-    description: 'The planned capital, with a growing scene of independent jewellery and design studios.' },
-  { key: 'multan', name: 'Multan', state: 'Punjab', country: 'Pakistan', isActive: true,
-    description: 'The City of Saints, famous for blue pottery, handloom weaving and Multani sweets.' },
-  { key: 'peshawar', name: 'Peshawar', state: 'Khyber Pakhtunkhwa', country: 'Pakistan', isActive: false,
-    description: 'Coming soon: Peshawar is not open for orders yet.' },
 ]
 
 const BRANDS = [
@@ -124,7 +114,7 @@ const BRANDS = [
         d: 'Mud-resist dabu printing gives this mustard cloth its soft, cracked-ink texture. Each metre is a little different.',
         a: { fabric: 'Cotton', width: '44 inches', color: 'Mustard', technique: 'Dabu mud resist', sold: 'Per metre' } },
       { n: 'Floral Digital Lawn, per metre', c: 'digital', p: 480, s: 320, low: 50, kw: 'floral,print',
-        d: 'A large-scale floral photographed from a Lahore garden, printed on soft lawn. Good for kameez, scarves and lining.',
+        d: 'A large-scale floral photographed in a Faisalabad garden, printed on soft lawn. Good for kameez, scarves and lining.',
         a: { fabric: 'Lawn', width: '52 inches', color: 'Multicolour floral', technique: 'Digital print', sold: 'Per metre' } },
       { n: 'Geometric Digital Cambric, per metre', c: 'digital', p: 430, s: 4, low: 25, kw: 'geometric,cloth',
         d: 'A sharp geometric repeat in navy and white on firm cambric. Holds pleats and stitches cleanly for shirts and cushions.',
@@ -146,15 +136,15 @@ const BRANDS = [
 
   // ───────────────────────────────────────────────────────── 3. Mehr Menswear
   {
-    key: 'mehr', name: 'Mehr Menswear', city: 'lahore', status: 'ACTIVE', ageDays: 150, skuPrefix: 'MEHR',
-    description: 'Stitched shalwar kameez, kurtas and waistcoats for men, cut to a clean modern fit by our tailors in Gulberg, Lahore.',
-    contact: { email: 'care@mehrmenswear.pk', phone: '+92 42 3577 2210', whatsapp: '+92 322 8841207', website: 'https://mehrmenswear.pk', instagram: '@mehr.menswear' },
+    key: 'mehr', name: 'Mehr Menswear', city: 'faisalabad', status: 'ACTIVE', ageDays: 150, skuPrefix: 'MEHR',
+    description: 'Stitched shalwar kameez, kurtas and waistcoats for men, cut to a clean modern fit by our tailors in Gulberg, Faisalabad.',
+    contact: { email: 'care@mehrmenswear.pk', phone: '+92 41 8733 2210', whatsapp: '+92 322 8841207', website: 'https://mehrmenswear.pk', instagram: '@mehr.menswear' },
     settings: { currency: 'PKR', freeDeliveryAbove: 6000, processingTime: '1 working day', returnWindowDays: 7, sizeExchange: true },
     owner: { name: 'Hamza Sheikh', email: 'hamza.sheikh@citycart.demo', phone: '+92 322 8841207', pw: 'demo' },
     store: {
       name: 'Mehr Menswear Gulberg', description: 'Ready-to-wear and made-to-measure menswear. Alterations are free on the first purchase.',
-      address: { addressLine: '47-B, MM Alam Road, Gulberg III', city: 'Lahore', state: 'Punjab', country: 'Pakistan', postalCode: '54660' },
-      contact: { phone: '+92 42 3577 2210', email: 'gulberg@mehrmenswear.pk' }, hours: { open: '11:00', close: '22:00', closed: [] }, isActive: true,
+      address: { addressLine: 'Shop 14, Main Boulevard, Gulberg', city: 'Faisalabad', state: 'Punjab', country: 'Pakistan', postalCode: '38000' },
+      contact: { phone: '+92 41 8733 2210', email: 'gulberg@mehrmenswear.pk' }, hours: { open: '11:00', close: '22:00', closed: [] }, isActive: true,
     },
     staff: [{ name: 'Rafay Anwar', email: 'rafay.anwar@citycart.demo', phone: '+92 345 2210986', jobTitle: 'Sales Associate', permissions: P.viewOnly, isActive: false }],
     categories: [
@@ -192,15 +182,15 @@ const BRANDS = [
 
   // ───────────────────────────────────────────────────────── 4. Sukoon Home
   {
-    key: 'sukoon', name: 'Sukoon Home', city: 'lahore', status: 'ACTIVE', ageDays: 120, skuPrefix: 'SKN',
+    key: 'sukoon', name: 'Sukoon Home', city: 'faisalabad', status: 'ACTIVE', ageDays: 120, skuPrefix: 'SKN',
     description: 'Calm, handmade pieces for the home: bedding, cushions, ceramics and woven decor from small workshops across Punjab.',
-    contact: { email: 'hello@sukoonhome.pk', phone: '+92 42 3591 8830', whatsapp: '+92 333 5509142', website: 'https://sukoonhome.pk', instagram: '@sukoon.home' },
+    contact: { email: 'hello@sukoonhome.pk', phone: '+92 41 8791 8830', whatsapp: '+92 333 5509142', website: 'https://sukoonhome.pk', instagram: '@sukoon.home' },
     settings: { currency: 'PKR', freeDeliveryAbove: 7000, processingTime: '2 working days', returnWindowDays: 7, giftWrap: true, taxRatePercent: 5 },
     owner: { name: 'Sana Mirza', email: 'sana.mirza@citycart.demo', phone: '+92 333 5509142', pw: 'demo' },
     store: {
-      name: 'Sukoon Home Studio', description: 'A small studio and showroom in Model Town with the full range on display.',
-      address: { addressLine: '12, Block C, Model Town Link Road', city: 'Lahore', state: 'Punjab', country: 'Pakistan', postalCode: '54700' },
-      contact: { phone: '+92 42 3591 8830', email: 'studio@sukoonhome.pk' }, hours: { open: '10:00', close: '19:00', closed: ['sun'] }, isActive: true,
+      name: 'Sukoon Home Studio', description: 'A small studio and showroom in Madina Town with the full range on display.',
+      address: { addressLine: '12, Block C, Susan Road, Madina Town', city: 'Faisalabad', state: 'Punjab', country: 'Pakistan', postalCode: '38000' },
+      contact: { phone: '+92 41 8791 8830', email: 'studio@sukoonhome.pk' }, hours: { open: '10:00', close: '19:00', closed: ['sun'] }, isActive: true,
     },
     staff: [{ name: 'Maryam Javed', email: 'maryam.javed@citycart.demo', phone: '+92 300 4417762', jobTitle: 'Catalogue Assistant', permissions: ['products.view', 'products.create', 'products.update', 'categories.view', 'inventory.view', 'inventory.manage'] }],
     categories: [
@@ -223,7 +213,7 @@ const BRANDS = [
         d: 'A natural jute rug woven by hand in Bahawalpur. Sturdy under a coffee table and kind to bare feet.',
         a: { size: '4 x 6 feet', material: 'Jute', color: 'Natural', care: 'Shake out, spot clean' } },
       { n: 'Hand-Painted Ceramic Mug Set of 4', c: 'kitchen', p: 2400, cmp: 2900, s: 30, low: 6, kw: 'ceramic,mug',
-        d: 'Four stoneware mugs painted by hand with a different blue pattern each, from a studio in Multan.',
+        d: 'Four stoneware mugs painted by hand with a different blue pattern each, from a studio in Faisalabad.',
         a: { pieces: '4 mugs', capacity: '300 ml each', material: 'Stoneware', care: 'Dishwasher safe' } },
       { n: 'Embroidered Table Runner, Cream', c: 'kitchen', p: 2100, s: 24, low: 5, kw: 'table,linen',
         d: 'A cream cotton table runner with tonal embroidery along both ends. Dresses a plain table for dinner.',
@@ -242,15 +232,15 @@ const BRANDS = [
 
   // ───────────────────────────────────────────────────────── 5. Zaitoon Footwear
   {
-    key: 'zaitoon', name: 'Zaitoon Footwear', city: 'karachi', status: 'ACTIVE', ageDays: 130, skuPrefix: 'ZTN',
-    description: 'Handmade leather chappals, khussas and everyday shoes from our workshop in Korangi, Karachi. Real leather, stitched not glued.',
-    contact: { email: 'sales@zaitoonfootwear.pk', phone: '+92 21 3511 6402', whatsapp: '+92 315 7720091', website: 'https://zaitoonfootwear.pk', instagram: '@zaitoon.footwear' },
+    key: 'zaitoon', name: 'Zaitoon Footwear', city: 'faisalabad', status: 'ACTIVE', ageDays: 130, skuPrefix: 'ZTN',
+    description: 'Handmade leather chappals, khussas and everyday shoes from our workshop in Millat Town, Faisalabad. Real leather, stitched not glued.',
+    contact: { email: 'sales@zaitoonfootwear.pk', phone: '+92 41 8511 6402', whatsapp: '+92 315 7720091', website: 'https://zaitoonfootwear.pk', instagram: '@zaitoon.footwear' },
     settings: { currency: 'PKR', freeDeliveryAbove: 5500, processingTime: '1 to 2 working days', returnWindowDays: 7, sizeExchange: true },
     owner: { name: 'Imran Qureshi', email: 'imran.qureshi@citycart.demo', phone: '+92 315 7720091', pw: 'demo' },
     store: {
       name: 'Zaitoon Workshop & Outlet', description: 'Factory outlet next to the workshop. Seconds and samples at lower prices.',
-      address: { addressLine: 'Plot 31, Sector 6-A, Korangi Industrial Area', city: 'Karachi', state: 'Sindh', country: 'Pakistan', postalCode: '74900' },
-      contact: { phone: '+92 21 3511 6402', email: 'outlet@zaitoonfootwear.pk' }, hours: { open: '10:00', close: '21:00', closed: [] }, isActive: true,
+      address: { addressLine: 'Plot 31, Millat Town Industrial Area', city: 'Faisalabad', state: 'Punjab', country: 'Pakistan', postalCode: '38000' },
+      contact: { phone: '+92 41 8511 6402', email: 'outlet@zaitoonfootwear.pk' }, hours: { open: '10:00', close: '21:00', closed: [] }, isActive: true,
     },
     staff: [{ name: 'Danish Memon', email: 'danish.memon@citycart.demo', phone: '+92 312 4458803', jobTitle: 'Warehouse Lead', permissions: [...P.stock, ...P.orders, 'products.view', ...P.delivery] }],
     categories: [
@@ -292,15 +282,15 @@ const BRANDS = [
 
   // ───────────────────────────────────────────────────────── 6. Naqsh Jewellery
   {
-    key: 'naqsh', name: 'Naqsh Jewellery', city: 'islamabad', status: 'ACTIVE', ageDays: 100, skuPrefix: 'NQS',
-    description: 'Artificial jewellery that looks like heirlooms: kundan, meenakari and oxidised silver pieces designed in our F-7 studio.',
-    contact: { email: 'studio@naqshjewellery.pk', phone: '+92 51 2655 981', whatsapp: '+92 332 6014488', website: 'https://naqshjewellery.pk', instagram: '@naqsh.jewellery' },
+    key: 'naqsh', name: 'Naqsh Jewellery', city: 'faisalabad', status: 'ACTIVE', ageDays: 100, skuPrefix: 'NQS',
+    description: 'Artificial jewellery that looks like heirlooms: kundan, meenakari and oxidised silver pieces designed in our Peoples Colony studio.',
+    contact: { email: 'studio@naqshjewellery.pk', phone: '+92 41 8553 981', whatsapp: '+92 332 6014488', website: 'https://naqshjewellery.pk', instagram: '@naqsh.jewellery' },
     settings: { currency: 'PKR', freeDeliveryAbove: 4000, processingTime: '1 to 2 working days', returnWindowDays: 5, giftWrap: true },
     owner: { name: 'Hira Aslam', email: 'hira.aslam@citycart.demo', phone: '+92 332 6014488', pw: 'demo' },
     store: {
-      name: 'Naqsh Studio F-7', description: 'Appointment-friendly studio with a bridal corner and a repair desk.',
-      address: { addressLine: 'Shop 9, Jinnah Super Market, F-7 Markaz', city: 'Islamabad', state: 'Islamabad Capital Territory', country: 'Pakistan', postalCode: '44000' },
-      contact: { phone: '+92 51 2655 981', email: 'f7@naqshjewellery.pk' }, hours: { open: '12:00', close: '21:00', closed: ['mon'] }, isActive: true,
+      name: 'Naqsh Studio Peoples Colony', description: 'Appointment-friendly studio with a bridal corner and a repair desk.',
+      address: { addressLine: 'Shop 9, Peoples Colony No. 1 Market', city: 'Faisalabad', state: 'Punjab', country: 'Pakistan', postalCode: '38000' },
+      contact: { phone: '+92 41 8553 981', email: 'studio@naqshjewellery.pk' }, hours: { open: '12:00', close: '21:00', closed: ['mon'] }, isActive: true,
     },
     staff: [{ name: 'Komal Shahid', email: 'komal.shahid@citycart.demo', phone: '+92 301 8832006', jobTitle: 'Studio Manager', permissions: [...P.productsAll, ...P.categoriesAll, ...P.stock, ...P.orders, ...P.delivery, 'employees.view'] }],
     categories: [
@@ -335,15 +325,15 @@ const BRANDS = [
 
   // ───────────────────────────────────────────────────────── 7. Chenab Handlooms (PENDING)
   {
-    key: 'chenab', name: 'Chenab Handlooms', city: 'multan', status: 'PENDING', ageDays: 3, skuPrefix: 'CHN',
-    description: 'Handloom khes and Multani blue pottery from family workshops in Multan. New on CityCart and waiting for approval.',
-    contact: { email: 'chenabhandlooms@gmail.com', phone: '+92 61 4512 077', whatsapp: '+92 306 1193420' },
+    key: 'chenab', name: 'Chenab Handlooms', city: 'faisalabad', status: 'PENDING', ageDays: 3, skuPrefix: 'CHN',
+    description: 'Handloom khes and Multani blue pottery from family workshops in Faisalabad. New on CityCart and waiting for approval.',
+    contact: { email: 'chenabhandlooms@gmail.com', phone: '+92 41 2631 077', whatsapp: '+92 306 1193420' },
     settings: { currency: 'PKR', processingTime: '3 to 5 working days' },
     owner: { name: 'Rukhsana Bibi', email: 'rukhsana.bibi@citycart.demo', phone: '+92 306 1193420', pw: 'demo' },
     store: {
-      name: 'Chenab Handloom House', description: 'A family workshop with a small shop front on Hussain Agahi Road.',
-      address: { addressLine: 'Shop 3, Hussain Agahi Road', city: 'Multan', state: 'Punjab', country: 'Pakistan', postalCode: '60000' },
-      contact: { phone: '+92 61 4512 077', email: 'chenabhandlooms@gmail.com' }, hours: { open: '09:30', close: '19:30', closed: ['fri'] }, isActive: true,
+      name: 'Chenab Handloom House', description: 'A family workshop with a small shop front in Jhang Bazaar.',
+      address: { addressLine: 'Shop 3, Jhang Bazaar', city: 'Faisalabad', state: 'Punjab', country: 'Pakistan', postalCode: '38000' },
+      contact: { phone: '+92 41 2631 077', email: 'chenabhandlooms@gmail.com' }, hours: { open: '09:30', close: '19:30', closed: ['fri'] }, isActive: true,
     },
     staff: [],
     categories: [{ key: 'khes', name: 'Khes & Pottery', description: 'Handloom khes blankets and blue pottery.' }],
@@ -359,15 +349,15 @@ const BRANDS = [
 
   // ───────────────────────────────────────────────────────── 8. Gulberg Gadgets (SUSPENDED)
   {
-    key: 'gadgets', name: 'Gulberg Gadgets', city: 'lahore', status: 'SUSPENDED', ageDays: 90, skuPrefix: 'GGD',
+    key: 'gadgets', name: 'Gulberg Gadgets', city: 'faisalabad', status: 'SUSPENDED', ageDays: 90, skuPrefix: 'GGD',
     description: 'Phone accessories and small gadgets. Temporarily suspended while a customer complaint is investigated.',
-    contact: { email: 'support@gulberggadgets.pk', phone: '+92 42 3588 1190', whatsapp: '+92 324 5578160' },
+    contact: { email: 'support@gulberggadgets.pk', phone: '+92 41 8714 1190', whatsapp: '+92 324 5578160' },
     settings: { currency: 'PKR', freeDeliveryAbove: 3000, processingTime: '1 working day' },
     owner: { name: 'Taimoor Butt', email: 'taimoor.butt@citycart.demo', phone: '+92 324 5578160', pw: 'demo' },
     store: {
       name: 'Gulberg Gadgets Outlet', description: 'Phone cases, chargers and small electronics.',
-      address: { addressLine: '15, Hafeez Centre, Main Boulevard Gulberg', city: 'Lahore', state: 'Punjab', country: 'Pakistan', postalCode: '54660' },
-      contact: { phone: '+92 42 3588 1190', email: 'outlet@gulberggadgets.pk' }, hours: { open: '11:00', close: '21:00', closed: [] }, isActive: true,
+      address: { addressLine: 'Shop 15, Main Boulevard, Gulberg', city: 'Faisalabad', state: 'Punjab', country: 'Pakistan', postalCode: '38000' },
+      contact: { phone: '+92 41 8714 1190', email: 'outlet@gulberggadgets.pk' }, hours: { open: '11:00', close: '21:00', closed: [] }, isActive: true,
     },
     staff: [],
     categories: [{ key: 'acc', name: 'Phone Accessories', description: 'Cases, chargers and cables.' }],
@@ -383,17 +373,17 @@ const BRANDS = [
 
   // ───────────────────────────────────────────────────────── 9. Quick Cart Deals (TERMINATED)
   {
-    key: 'quick', name: 'Quick Cart Deals', city: 'karachi', status: 'TERMINATED', ageDays: 80, skuPrefix: 'QCD',
+    key: 'quick', name: 'Quick Cart Deals', city: 'faisalabad', status: 'TERMINATED', ageDays: 80, skuPrefix: 'QCD',
     terminationReason: 'Repeated reports of items not matching their listings, and orders accepted but never shipped.',
     terminatedDaysAgo: 2, graceHours: 168,
     description: 'Discount household and fashion items. Terminated by CityCart for breaking the seller rules.',
-    contact: { email: 'quickcartdeals@gmail.com', phone: '+92 21 3499 7712', whatsapp: '+92 333 1109004' },
+    contact: { email: 'quickcartdeals@gmail.com', phone: '+92 41 8499 7712', whatsapp: '+92 333 1109004' },
     settings: { currency: 'PKR', processingTime: '2 working days' },
     owner: { name: 'Faraz Siddiqui', email: 'faraz.siddiqui@citycart.demo', phone: '+92 333 1109004', pw: 'demo' },
     store: {
       name: 'Quick Cart Warehouse', description: 'Closed.',
-      address: { addressLine: 'Warehouse 4, SITE Area, Mauripur Road', city: 'Karachi', state: 'Sindh', country: 'Pakistan', postalCode: '75700' },
-      contact: { phone: '+92 21 3499 7712', email: 'quickcartdeals@gmail.com' }, hours: { open: '10:00', close: '18:00', closed: ['sun'] }, isActive: false,
+      address: { addressLine: 'Warehouse 4, Sargodha Road Industrial Estate', city: 'Faisalabad', state: 'Punjab', country: 'Pakistan', postalCode: '38000' },
+      contact: { phone: '+92 41 8499 7712', email: 'quickcartdeals@gmail.com' }, hours: { open: '10:00', close: '18:00', closed: ['sun'] }, isActive: false,
     },
     staff: [{ name: 'Adeel Raza', email: 'adeel.raza@citycart.demo', phone: '+92 340 2285917', jobTitle: 'Packer', permissions: [...P.orders, ...P.delivery] }],
     categories: [{ key: 'misc', name: 'Fashion & Household', description: 'Assorted discount goods.' }],
@@ -409,15 +399,15 @@ const BRANDS = [
 
   // ───────────────────────────────────────────────────────── 10. Silk Route Imports (REJECTED)
   {
-    key: 'silkroute', name: 'Silk Route Imports', city: 'islamabad', status: 'REJECTED', ageDays: 20, skuPrefix: 'SRI',
+    key: 'silkroute', name: 'Silk Route Imports', city: 'faisalabad', status: 'REJECTED', ageDays: 20, skuPrefix: 'SRI',
     description: 'Imported silks and scarves. Application rejected: the supplier documents could not be verified.',
-    contact: { email: 'silkrouteimports@outlook.com', phone: '+92 51 2290 645' },
+    contact: { email: 'silkrouteimports@outlook.com', phone: '+92 41 2290 645' },
     settings: { currency: 'PKR' },
     owner: { name: 'Nadia Farooq', email: 'nadia.farooq@citycart.demo', phone: '+92 336 7745519', pw: 'demo' },
     store: {
       name: 'Silk Route Showroom', description: 'Application rejected.',
-      address: { addressLine: 'Office 12, Blue Area, Jinnah Avenue', city: 'Islamabad', state: 'Islamabad Capital Territory', country: 'Pakistan', postalCode: '44000' },
-      contact: { phone: '+92 51 2290 645', email: 'silkrouteimports@outlook.com' }, hours: { open: '10:00', close: '17:00', closed: ['sat', 'sun'] }, isActive: false,
+      address: { addressLine: 'Office 12, Kohinoor City, Susan Road', city: 'Faisalabad', state: 'Punjab', country: 'Pakistan', postalCode: '38000' },
+      contact: { phone: '+92 41 2290 645', email: 'silkrouteimports@outlook.com' }, hours: { open: '10:00', close: '17:00', closed: ['sat', 'sun'] }, isActive: false,
     },
     staff: [],
     categories: [{ key: 'silk', name: 'Silks & Scarves', description: 'Imported silks.' }],
@@ -429,21 +419,68 @@ const BRANDS = [
   },
 ]
 
+
+// Blocks (neighbourhoods) come from the same JSON the standalone block seed uses.
+// Their centre points are APPROXIMATE: verify them in Admin -> Blocks.
+const BLOCKS = require('../data/faisalabad-blocks.json')
+
+/**
+ * Branches per brand. `block` is the slug of a block name, `off` nudges the pin
+ * [lat, lng] away from the block centre so shops do not stack on one point, and
+ * `only` lists the category keys a branch carries (null = the whole catalogue;
+ * a parent category covers its children). Products carried by every branch get
+ * no branch list, so they keep showing at any branch added later.
+ */
+const BRANCHES = {
+  loom: [
+    { name: 'Loom & Co. Flagship', block: 'clock-tower', address: 'Shop 22, Kachehri Bazaar, Clock Tower Chowk', phone: '+92 41 2617 480', off: [0.0006, 0.0004], only: null },
+    { name: 'Loom & Co. D Ground', block: 'd-ground', address: 'Shop 7, Main Boulevard, D Ground', phone: '+92 41 8541 220', off: [-0.0004, 0.0006], only: ['women', 'dupattas'] },
+    { name: 'Loom & Co. Gulberg', block: 'gulberg', address: 'Plot 31, Main Boulevard, Gulberg', phone: '+92 41 8714 305', off: [0.0008, -0.0005], only: ['men', 'dupattas'] },
+    { name: 'Loom & Co. Madina Town', block: 'madina-town', address: 'Shop 4, Susan Road, Madina Town', phone: '+92 41 8556 770', off: [-0.0007, -0.0003], only: null, isActive: false },
+  ],
+  rangrez: [
+    { name: 'Rangrez Print House', block: 'samanabad', address: 'Plot 8, Jaranwala Road, Small Industrial Estate', phone: '+92 41 8723 119', off: [0.0005, 0.0007], only: null },
+    { name: 'Rangrez Studio Peoples Colony', block: 'peoples-colony', address: 'Shop 12, Peoples Colony No. 1 Market', phone: '+92 41 8559 440', off: [-0.0006, 0.0003], only: ['block', 'digital'] },
+  ],
+  mehr: [
+    { name: 'Mehr Menswear Gulberg', block: 'gulberg', address: 'Shop 14, Main Boulevard, Gulberg', phone: '+92 41 8733 2210', off: [-0.0005, 0.0006], only: null },
+    { name: 'Mehr Menswear D Ground', block: 'd-ground', address: 'Shop 3, D Ground Market', phone: '+92 41 8544 9012', off: [0.0007, -0.0004], only: ['sk', 'kurta'] },
+    { name: 'Mehr Menswear Jinnah Colony', block: 'jinnah-colony', address: 'Shop 9, Jinnah Colony Chowk', phone: '+92 41 2640 118', off: [0.0003, 0.0005], only: ['kurta', 'waistcoat'] },
+  ],
+  sukoon: [
+    { name: 'Sukoon Home Studio', block: 'madina-town', address: '12, Block C, Susan Road, Madina Town', phone: '+92 41 8791 8830', off: [0.0004, 0.0006], only: null },
+    { name: 'Sukoon Home Samanabad', block: 'samanabad', address: 'Shop 6, Samanabad Main Market', phone: '+92 41 2630 551', off: [-0.0003, -0.0006], only: ['bedding', 'cushions'] },
+  ],
+  zaitoon: [
+    { name: 'Zaitoon Workshop & Outlet', block: 'millat-town', address: 'Plot 31, Millat Town Industrial Area', phone: '+92 41 8511 6402', off: [0.0005, -0.0004], only: null },
+    { name: 'Zaitoon Clock Tower Outlet', block: 'clock-tower', address: 'Shop 41, Railway Road, near Clock Tower', phone: '+92 41 2623 905', off: [-0.0006, 0.0005], only: ['chappal', 'khussa'] },
+    { name: 'Zaitoon Susan Road', block: 'susan-road', address: 'Shop 2, Susan Road Market', phone: '+92 41 8558 120', off: [0.0006, 0.0003], only: ['sneakers', 'bags'] },
+  ],
+  naqsh: [
+    { name: 'Naqsh Studio Peoples Colony', block: 'peoples-colony', address: 'Shop 9, Peoples Colony No. 1 Market', phone: '+92 41 8553 981', off: [0.0004, -0.0005], only: null },
+    { name: 'Naqsh D Ground Shop', block: 'd-ground', address: 'Shop 18, D Ground Market', phone: '+92 41 8546 330', off: [-0.0005, -0.0003], only: ['earrings', 'bangles'] },
+  ],
+  chenab: [{ name: 'Chenab Handloom House', block: 'clock-tower', address: 'Shop 3, Jhang Bazaar', phone: '+92 41 2631 077', off: [0.0009, -0.0006], only: null }],
+  gadgets: [{ name: 'Gulberg Gadgets Outlet', block: 'gulberg', address: 'Shop 15, Main Boulevard, Gulberg', phone: '+92 41 8714 1190', off: [0.0002, 0.0009], only: null }],
+  quick: [{ name: 'Quick Cart Warehouse', block: 'millat-town', address: 'Warehouse 4, Sargodha Road Industrial Estate', phone: '+92 41 8499 7712', off: [-0.0009, 0.0002], only: null, isActive: false }],
+  silkroute: [{ name: 'Silk Route Showroom', block: 'susan-road', address: 'Office 12, Kohinoor City, Susan Road', phone: '+92 41 2290 645', off: [0.0001, -0.0008], only: null, isActive: false }],
+}
+
 const CUSTOMERS = [
   { name: 'Sana Iqbal', email: 'sana.iqbal@citycart.demo', phone: '+92 300 1182047', city: 'Faisalabad', state: 'Punjab', address: 'House 41, Street 5, Peoples Colony No. 1', postalCode: '38000', note: 'Please call before arriving.' },
-  { name: 'Ali Raza', email: 'ali.raza@citycart.demo', phone: '+92 321 4476098', city: 'Lahore', state: 'Punjab', address: 'House 18-A, Block F, Johar Town', postalCode: '54782' },
-  { name: 'Mahnoor Tariq', email: 'mahnoor.tariq@citycart.demo', phone: '+92 333 9005512', city: 'Karachi', state: 'Sindh', address: 'Flat 203, Saima Pearl, Block 13-D, Gulshan-e-Iqbal', postalCode: '75300', note: 'Leave with the guard if no one answers.' },
-  { name: 'Hassan Mehmood', email: 'hassan.mehmood@citycart.demo', phone: '+92 345 7702831', city: 'Islamabad', state: 'Islamabad Capital Territory', address: 'House 7, Street 22, F-10/3', postalCode: '44000' },
-  { name: 'Zoya Khan', email: 'zoya.khan@citycart.demo', phone: '+92 302 5589410', city: 'Lahore', state: 'Punjab', address: '27 Askari 10, Sarfraz Rafiqui Road', postalCode: '54810', note: 'Gate code 4471.' },
+  { name: 'Ali Raza', email: 'ali.raza@citycart.demo', phone: '+92 321 4476098', city: 'Faisalabad', state: 'Punjab', address: 'House 18-A, Block F, Gulberg', postalCode: '38000' },
+  { name: 'Mahnoor Tariq', email: 'mahnoor.tariq@citycart.demo', phone: '+92 333 9005512', city: 'Faisalabad', state: 'Punjab', address: 'Flat 203, Al-Noor Apartments, D Ground', postalCode: '38000', note: 'Leave with the guard if no one answers.' },
+  { name: 'Hassan Mehmood', email: 'hassan.mehmood@citycart.demo', phone: '+92 345 7702831', city: 'Faisalabad', state: 'Punjab', address: 'House 7, Street 22, Samanabad', postalCode: '38000' },
+  { name: 'Zoya Khan', email: 'zoya.khan@citycart.demo', phone: '+92 302 5589410', city: 'Faisalabad', state: 'Punjab', address: 'House 27, Susan Road, Madina Town', postalCode: '38000', note: 'Gate code 4471.' },
   { name: 'Faisal Chaudhry', email: 'faisal.chaudhry@citycart.demo', phone: '+92 311 3347760', city: 'Faisalabad', state: 'Punjab', address: 'Plot 112, Canal Road, near Satiana Road', postalCode: '38000' },
-  { name: 'Areeba Siddiqui', email: 'areeba.siddiqui@citycart.demo', phone: '+92 334 2268091', city: 'Karachi', state: 'Sindh', address: 'House 56, Phase 5, DHA', postalCode: '75500' },
-  { name: 'Waqar Ahmed', email: 'waqar.ahmed@citycart.demo', phone: '+92 301 6619248', city: 'Multan', state: 'Punjab', address: 'House 9, Street 3, Shah Rukn-e-Alam Colony', postalCode: '60000' },
-  { name: 'Hina Malik', email: 'hina.malik@citycart.demo', phone: '+92 322 0874416', city: 'Islamabad', state: 'Islamabad Capital Territory', address: 'Apartment 5B, Silver Oaks, F-10 Markaz', postalCode: '44000', note: 'Call on arrival.' },
-  { name: 'Umar Farooq', email: 'umar.farooq@citycart.demo', phone: '+92 315 9983027', city: 'Lahore', state: 'Punjab', address: 'House 301, Street 14, Wapda Town Phase 1', postalCode: '54770' },
+  { name: 'Areeba Siddiqui', email: 'areeba.siddiqui@citycart.demo', phone: '+92 334 2268091', city: 'Faisalabad', state: 'Punjab', address: 'House 56, Street 3, Jinnah Colony', postalCode: '38000' },
+  { name: 'Waqar Ahmed', email: 'waqar.ahmed@citycart.demo', phone: '+92 301 6619248', city: 'Faisalabad', state: 'Punjab', address: 'House 9, Street 3, Millat Town', postalCode: '38000' },
+  { name: 'Hina Malik', email: 'hina.malik@citycart.demo', phone: '+92 322 0874416', city: 'Faisalabad', state: 'Punjab', address: 'Apartment 5B, Silver Oaks, Susan Road', postalCode: '38000', note: 'Call on arrival.' },
+  { name: 'Umar Farooq', email: 'umar.farooq@citycart.demo', phone: '+92 315 9983027', city: 'Faisalabad', state: 'Punjab', address: 'House 301, Street 14, Gulistan Colony', postalCode: '38000' },
   { name: 'Iqra Nadeem', email: 'iqra.nadeem@citycart.demo', phone: '+92 303 4410582', city: 'Faisalabad', state: 'Punjab', address: 'House 66, Street 9, Gulistan Colony', postalCode: '38000' },
-  { name: 'Shahzaib Ali', email: 'shahzaib.ali@citycart.demo', phone: '+92 336 1127745', city: 'Karachi', state: 'Sindh', address: 'B-24, Block 2, Nazimabad', postalCode: '74600' },
-  { name: 'Laiba Rehman', email: 'laiba.rehman@citycart.demo', phone: '+92 340 6671390', city: 'Lahore', state: 'Punjab', address: 'House 5, Lane 3, Cavalry Ground', postalCode: '54800' },
-  { name: 'Dawood Hussain', email: 'dawood.hussain@citycart.demo', phone: '+92 344 8825163', city: 'Multan', state: 'Punjab', address: 'House 23, Block B, Gulgasht Colony', postalCode: '60000', inactive: true },
+  { name: 'Shahzaib Ali', email: 'shahzaib.ali@citycart.demo', phone: '+92 336 1127745', city: 'Faisalabad', state: 'Punjab', address: 'House B-24, Street 2, Madina Town', postalCode: '38000' },
+  { name: 'Laiba Rehman', email: 'laiba.rehman@citycart.demo', phone: '+92 340 6671390', city: 'Faisalabad', state: 'Punjab', address: 'House 5, Lane 3, Civil Lines', postalCode: '38000' },
+  { name: 'Dawood Hussain', email: 'dawood.hussain@citycart.demo', phone: '+92 344 8825163', city: 'Faisalabad', state: 'Punjab', address: 'House 23, Block B, Millat Town', postalCode: '38000', inactive: true },
 ]
 
 const ADMIN = { name: 'Super Admin', email: 'admin@citycart.local', phone: '+92 300 0000001' }
@@ -486,4 +523,4 @@ const REMARKS = {
   quick: { good: ['It arrived as described.'], bad: ['Not as pictured.', 'The quality was poor for the price.'] },
 }
 
-module.exports = { P, CITIES, BRANDS, CUSTOMERS, ADMIN, CARTS, REMARKS }
+module.exports = { P, CITIES, BLOCKS, BRANCHES, BRANDS, CUSTOMERS, ADMIN, CARTS, REMARKS }

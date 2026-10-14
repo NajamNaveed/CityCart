@@ -103,7 +103,7 @@ export default function AdminLayout() {
 
       <div className="flex flex-1">
         {/* Desktop sidebar */}
-        <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-60 shrink-0 border-r border-line bg-white px-4 py-6 lg:block">
+        <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-60 shrink-0 overflow-y-auto overscroll-contain border-r border-line bg-white px-4 py-6 lg:block">
           <SidebarNav />
           <p className="mt-6 flex items-center gap-2 rounded-md bg-paper px-3 py-2.5 text-[11.5px] leading-relaxed text-muted">
             <ShieldCheck className="h-4 w-4 shrink-0 text-ink/60" aria-hidden="true" />

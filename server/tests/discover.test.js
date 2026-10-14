@@ -124,6 +124,7 @@ describe('GET /api/v1/discover — city scope', () => {
     expect(res.body.items.map((b) => b.name)).toEqual(['Near Co', 'Far Co']);
     expect(res.body.items[0].nearestKm).toBeLessThan(res.body.items[1].nearestKm);
     expect(res.body.items[0].branches[0].blockName).toBe('Gulberg');
+    expect(res.body.items[0].branches[0]).toMatchObject({ latitude: 31.401, longitude: 73.101 });
     expect(res.body.items[0].products[0]).toMatchObject({ name: 'Kurta', availability: 'IN_STOCK' });
     expect(res.body.meta).toMatchObject({ scope: 'city', totalBranches: 2 });
     expect(res.body.pagination.total).toBe(2);
@@ -284,5 +285,56 @@ describe('GET /api/v1/discover — pagination', () => {
 
     expect(res.body.items.map((b) => b.name)).toEqual(['C']);
     expect(res.body.pagination).toMatchObject({ page: 2, limit: 2, total: 3, pages: 2 });
+  });
+});
+
+
+describe('GET /api/v1/discover — per-branch catalogues', () => {
+  function setup() {
+    const brand = makeBrand('Split Co');
+    const gulberg = makeBlock('Gulberg', 31.4, 73.1);
+    const dground = makeBlock('D Ground', 31.43, 73.09);
+    const bGulberg = makeBranch(brand, gulberg, 31.4, 73.1, 'Gulberg shop');
+    const bDground = makeBranch(brand, dground, 31.43, 73.09, 'D Ground shop');
+    Brand.find.mockResolvedValue([brand]);
+    Branch.find.mockResolvedValue([bGulberg, bDground]);
+    Block.find.mockResolvedValue([gulberg, dground]);
+    return { brand, bGulberg, bDground };
+  }
+
+  it('shows where a product is sold when only some branches carry it', async () => {
+    const { brand, bGulberg } = setup();
+    mockProducts({
+      fetched: [
+        { ...makeProduct(brand, 'Everywhere Kurta') }, // no branchIds: every branch
+        { ...makeProduct(brand, 'Gulberg Exclusive'), branchIds: [bGulberg._id] },
+      ],
+    });
+
+    const res = await request(app).get(`/api/v1/discover?scope=city&cityId=${cityId}&lat=31.4&lng=73.1`);
+
+    const products = Object.fromEntries(res.body.items[0].products.map((p) => [p.name, p.availableAt]));
+    expect(products['Everywhere Kurta']).toBeNull();
+    expect(products['Gulberg Exclusive']).toEqual(['Gulberg']);
+  });
+
+  it('hides a product when none of the branches in range carry it', async () => {
+    const { brand } = setup();
+    const elsewhere = oid(); // a branch that is not in this search
+    mockProducts({ fetched: [{ ...makeProduct(brand, 'Far Away Item'), branchIds: [elsewhere] }, makeProduct(brand, 'Local Item')] });
+
+    const res = await request(app).get(`/api/v1/discover?scope=city&cityId=${cityId}`);
+
+    expect(res.body.items[0].products.map((p) => p.name)).toEqual(['Local Item']);
+  });
+
+  it('drops a brand found only through a product its in-range branches do not carry', async () => {
+    const { brand } = setup();
+    const elsewhere = oid();
+    mockProducts({ hits: [{ brandId: brand._id, branchIds: [elsewhere] }] });
+
+    const res = await request(app).get(`/api/v1/discover?scope=city&cityId=${cityId}&q=kurta`);
+
+    expect(res.body.items).toEqual([]);
   });
 });

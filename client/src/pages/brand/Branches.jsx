@@ -3,7 +3,8 @@ import { MapPin } from 'lucide-react'
 import api, { getErrorMessage, getFieldErrors } from '../../services/api'
 import Field from '../../components/Field'
 import CoordinatesField from '../../components/CoordinatesField'
-import { Notice, PageHeader, selectClass, StatusBadge } from '../../components/brand/Bits'
+import { Notice, PageHeader, Pager, selectClass, StatusBadge } from '../../components/brand/Bits'
+import { usePaged } from '../../hooks/usePaged'
 import { EmptyState, Skeleton } from '../../components/ui'
 import { parseLatLng } from '../../utils/geo'
 import { btnPine } from '../../ui'
@@ -13,6 +14,7 @@ const COORDS_ERROR = 'Enter latitude and longitude, like 31.4186, 73.0790.'
 
 export default function Branches() {
   const [branches, setBranches] = useState(null)
+  const paged = usePaged(branches, 8)
   const [blocks, setBlocks] = useState([])
   const [loadError, setLoadError] = useState('')
   const [reload, setReload] = useState(0)
@@ -181,8 +183,9 @@ export default function Branches() {
       ) : branches.length === 0 ? (
         <EmptyState icon={MapPin} title="No branches yet." message="Add your first shop above so nearby shoppers can find your brand." className="rounded-lg border border-dashed border-line bg-white" />
       ) : (
-        <ul className="divide-y divide-line rounded-lg border border-line bg-white">
-          {branches.map((b) => (
+        <>
+          <ul className="divide-y divide-line rounded-lg border border-line bg-white">
+          {paged.items.map((b) => (
             <li key={b._id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
               <span className="min-w-0">
                 <span className="block font-medium text-ink">{b.name}</span>
@@ -207,6 +210,8 @@ export default function Branches() {
             </li>
           ))}
         </ul>
+          <Pager pagination={paged.pagination} onPage={paged.setPage} />
+        </>
       )}
     </>
   )

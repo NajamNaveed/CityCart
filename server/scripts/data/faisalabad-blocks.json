@@ -1,5 +1,5 @@
 [
-  { "name": "Clock Tower (City Centre)", "latitude": 31.4186, "longitude": 73.0790, "approximate": true },
+  { "name": "Clock Tower", "latitude": 31.4186, "longitude": 73.0790, "approximate": true },
   { "name": "D Ground",                  "latitude": 31.4290, "longitude": 73.0930, "approximate": true },
   { "name": "Peoples Colony",            "latitude": 31.4250, "longitude": 73.1010, "approximate": true },
   { "name": "Jinnah Colony",             "latitude": 31.4160, "longitude": 73.0890, "approximate": true },

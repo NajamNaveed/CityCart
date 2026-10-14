@@ -18,6 +18,8 @@ const { buildDataset } = require('./demo/build');
 
 const MODELS = {
   cities: require('../src/models/city.model'),
+  blocks: require('../src/models/block.model'),
+  branches: require('../src/models/branch.model'),
   users: require('../src/models/user.model'),
   brands: require('../src/models/brand.model'),
   stores: require('../src/models/store.model'),

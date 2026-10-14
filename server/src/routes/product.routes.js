@@ -1,6 +1,7 @@
 const express = require('express');
 
 const { list, mine, mineById, getById, create, update, remove } = require('../controllers/product.controller');
+const { exportCsv, importCsv } = require('../controllers/productCsv.controller');
 const { forProduct: reviewsForProduct } = require('../controllers/review.controller');
 const { getProductByIdRaw } = require('../services/product.service');
 const authenticate = require('../middleware/authenticate');
@@ -22,6 +23,14 @@ router.get(
   requirePermission(PERMISSIONS.PRODUCTS_VIEW),
   requireTenant,
   mine
+);
+// CSV export of the brand's products. Must stay above '/mine/:id'.
+router.get(
+  '/mine/export',
+  authenticate,
+  requirePermission(PERMISSIONS.PRODUCTS_VIEW),
+  requireTenant,
+  exportCsv
 );
 router.get(
   '/mine/:id',
@@ -45,6 +54,18 @@ router.post(
   requirePermission(PERMISSIONS.PRODUCTS_CREATE),
   requireTenant,
   create
+);
+
+// CSV import creates new products and updates existing ones (matched by SKU,
+// else name), so it needs both permissions. Only text/csv bodies are parsed.
+router.post(
+  '/import',
+  authenticate,
+  requirePermission(PERMISSIONS.PRODUCTS_CREATE),
+  requirePermission(PERMISSIONS.PRODUCTS_UPDATE),
+  requireTenant,
+  express.text({ type: 'text/csv', limit: '1mb' }),
+  importCsv
 );
 
 router.patch(

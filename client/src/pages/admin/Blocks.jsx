@@ -3,7 +3,8 @@ import { MapPinned } from 'lucide-react'
 import api, { getErrorMessage, getFieldErrors } from '../../services/api'
 import Field from '../../components/Field'
 import CoordinatesField from '../../components/CoordinatesField'
-import { Notice, PageHeader, selectClass, StatusBadge } from '../../components/brand/Bits'
+import { Notice, PageHeader, Pager, selectClass, StatusBadge } from '../../components/brand/Bits'
+import { usePaged } from '../../hooks/usePaged'
 import { EmptyState, Skeleton } from '../../components/ui'
 import { parseLatLng } from '../../utils/geo'
 import { btnDark, inputClass } from '../../ui'
@@ -51,6 +52,7 @@ export default function Blocks() {
   }, [cityId, reload])
 
   const list = blocks && blocks.cityId === cityId ? blocks.list : null
+  const paged = usePaged(list, 10)
 
   async function run(action, success) {
     setBusy(true)
@@ -158,8 +160,9 @@ export default function Blocks() {
           ) : list.length === 0 ? (
             <EmptyState icon={MapPinned} title="No blocks yet." message="Add the first one above. Shoppers and brands pick from these." className="rounded-lg border border-dashed border-line bg-white" />
           ) : (
-            <ul className="divide-y divide-line rounded-lg border border-line bg-white">
-              {list.map((b) => (
+            <>
+          <ul className="divide-y divide-line rounded-lg border border-line bg-white">
+              {paged.items.map((b) => (
                 <li key={b._id} className="px-5 py-4">
                   {editing?.id === b._id ? (
                     <form onSubmit={onSave} className="flex flex-wrap items-center gap-3">
@@ -214,6 +217,8 @@ export default function Blocks() {
                 </li>
               ))}
             </ul>
+          <Pager pagination={paged.pagination} onPage={paged.setPage} />
+        </>
           )}
         </>
       )}

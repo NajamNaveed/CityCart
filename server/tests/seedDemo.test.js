@@ -1,6 +1,8 @@
 const { buildDataset } = require('../scripts/demo/build');
 
 const City = require('../src/models/city.model');
+const Block = require('../src/models/block.model');
+const Branch = require('../src/models/branch.model');
 const User = require('../src/models/user.model');
 const Brand = require('../src/models/brand.model');
 const Store = require('../src/models/store.model');
@@ -18,7 +20,7 @@ const Counter = require('../src/models/counter.model');
 const { ALL_PERMISSIONS } = require('../src/config/permissions');
 
 const MODELS = {
-  cities: City, users: User, brands: Brand, stores: Store, categories: Category, products: Product,
+  cities: City, blocks: Block, branches: Branch, users: User, brands: Brand, stores: Store, categories: Category, products: Product,
   inventories: Inventory, employees: Employee, carts: Cart, orders: Order, payments: Payment,
   deliveries: Delivery, reviews: Review, notifications: Notification, counters: Counter,
 };
@@ -89,6 +91,51 @@ describe('demo dataset', () => {
     expect(unique(ds.carts.map((c) => id(c.userId)))).toBe(true);
     expect(unique(ds.orders.map((o) => o.orderNumber))).toBe(true);
     expect(unique(ds.deliveries.map((d) => id(d.orderId)))).toBe(true);
+  });
+
+  it('is a Faisalabad-only marketplace with blocks, branches and per-branch catalogues', () => {
+    expect(ds.cities.map((c) => c.name)).toEqual(['Faisalabad']);
+    ds.brands.forEach((b) => expect(id(b.cityId)).toBe(id(ds.cities[0]._id)));
+    ds.stores.forEach((st) => expect(st.address.city).toBe('Faisalabad'));
+    ds.users.filter((u) => u.role === 'CUSTOMER').forEach((u) => expect(u.phone).toMatch(/^\+92 3/));
+
+    const blockById = new Map(ds.blocks.map((b) => [id(b._id), b]));
+    const branchById = new Map(ds.branches.map((b) => [id(b._id), b]));
+    expect(ds.blocks.length).toBeGreaterThanOrEqual(8);
+    expect(unique(ds.blocks.map((b) => b.slug))).toBe(true);
+    expect(ds.branches.length).toBeGreaterThanOrEqual(20);
+
+    ds.blocks.forEach((b) => expect(id(b.cityId)).toBe(id(ds.cities[0]._id)));
+    ds.branches.forEach((br) => {
+      expect(blockById.has(id(br.blockId))).toBe(true);
+      expect(ds.brands.some((b) => id(b._id) === id(br.brandId))).toBe(true);
+      // a pin sits close to its block centre (the API rejects anything over 25 km)
+      const [lng, lat] = br.location.coordinates;
+      const [cLng, cLat] = blockById.get(id(br.blockId)).center.coordinates;
+      expect(Math.abs(lat - cLat)).toBeLessThan(0.02);
+      expect(Math.abs(lng - cLng)).toBeLessThan(0.02);
+    });
+    // a brand with several branches has them in different blocks of one city
+    const blocksByBrand = new Map();
+    ds.branches.forEach((br) => blocksByBrand.set(id(br.brandId), [...(blocksByBrand.get(id(br.brandId)) || []), id(br.blockId)]));
+    blocksByBrand.forEach((list) => expect(unique(list)).toBe(true));
+
+    // a product's branch list only names branches of its own brand, and some products are branch-specific
+    ds.products.forEach((p) =>
+      p.branchIds.forEach((bid) => expect(id(branchById.get(id(bid)).brandId)).toBe(id(p.brandId)))
+    );
+    expect(ds.products.some((p) => p.branchIds.length > 0)).toBe(true);
+    expect(ds.products.some((p) => p.branchIds.length === 0)).toBe(true);
+    // every brand that has branches keeps at least one active branch for each of its active products
+    ds.products.filter((p) => p.status === 'ACTIVE').forEach((p) => {
+      const brandBranches = ds.branches.filter((br) => id(br.brandId) === id(p.brandId));
+      if (brandBranches.length === 0) return;
+      const carriers = p.branchIds.length ? brandBranches.filter((br) => p.branchIds.some((x) => id(x) === id(br._id))) : brandBranches;
+      expect(carriers.length).toBeGreaterThan(0);
+    });
+    // mix of open and closed branches
+    expect(ds.branches.some((br) => br.isActive)).toBe(true);
+    expect(ds.branches.some((br) => !br.isActive)).toBe(true);
   });
 
   it('has every reference pointing at something that exists', () => {

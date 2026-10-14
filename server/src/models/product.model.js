@@ -79,6 +79,14 @@ const productSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: {},
     },
+    // Which of the brand's branches carry this product. EMPTY means every
+    // branch (the default), so a product keeps appearing at new branches until
+    // the brand narrows it. Stock stays brand-wide (see Inventory); this only
+    // decides where shoppers can find the product.
+    branchIds: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Branch' }],
+      default: [],
+    },
   },
   {
     timestamps: true,

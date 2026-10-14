@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
-import { Plus, Search } from 'lucide-react'
+import { Download, Plus, Search, Upload } from 'lucide-react'
 import api, { getErrorMessage } from '../../services/api'
 import ProductImage from '../../components/ProductImage'
 import { Notice, PageHeader, Pager, StatusBadge, selectClass, tableHead, tableRow, tableShell } from '../../components/brand/Bits'
 import { useCan } from '../../hooks/useCan'
 import { EmptyState, Skeleton } from '../../components/ui'
-import { btnPine, formatPrice } from '../../ui'
+import ProductImportModal from '../../components/brand/ProductImportModal'
+import { downloadFile } from '../../utils/download'
+import { btnOutline, btnPine, formatPrice } from '../../ui'
 
 const STATUSES = ['ACTIVE', 'DRAFT', 'INACTIVE', 'ARCHIVED']
 
@@ -29,13 +31,19 @@ function Stock({ inventory }) {
 export default function Products() {
   const [params, setParams] = useSearchParams()
   const location = useLocation()
-  const canCreate = useCan()('products.create')
+  const can = useCan()
+  const canCreate = can('products.create')
+  const canImport = canCreate && can('products.update')
+  const [importOpen, setImportOpen] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState('')
+  const [reloadCount, setReloadCount] = useState(0)
   const search = params.get('search') || ''
   const status = params.get('status') || ''
   const page = Math.max(1, Number(params.get('page')) || 1)
 
   const [state, setState] = useState({ key: null, items: [], pagination: null, error: '' })
-  const key = JSON.stringify([search, status, page])
+  const key = JSON.stringify([search, status, page, reloadCount])
 
   useEffect(() => {
     let active = true
@@ -56,21 +64,48 @@ export default function Products() {
 
   const loading = state.key !== key
 
+  async function exportCsv() {
+    setExporting(true)
+    setExportError('')
+    try {
+      const res = await api.get('/products/mine/export', { responseType: 'blob' })
+      downloadFile(res.data, 'products.csv')
+    } catch (err) {
+      setExportError(getErrorMessage(err))
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <>
       <PageHeader
         title="Products"
         intro="Everything you sell, including drafts and archived items."
         action={
-          canCreate && (
-            <Link to="/brand/products/new" className={btnPine}>
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              Add product
-            </Link>
-          )
+          <div className="flex flex-wrap gap-2.5">
+            <button type="button" onClick={exportCsv} disabled={exporting} className={btnOutline}>
+              <Download className="h-4 w-4" aria-hidden="true" />
+              {exporting ? 'Exporting…' : 'Export CSV'}
+            </button>
+            {canImport && (
+              <button type="button" onClick={() => setImportOpen(true)} className={btnOutline}>
+                <Upload className="h-4 w-4" aria-hidden="true" />
+                Import CSV
+              </button>
+            )}
+            {canCreate && (
+              <Link to="/brand/products/new" className={btnPine}>
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Add product
+              </Link>
+            )}
+          </div>
         }
       />
       <Notice>{location.state?.notice}</Notice>
+      <Notice tone="warn">{exportError}</Notice>
+      <ProductImportModal open={importOpen} onClose={() => setImportOpen(false)} onImported={() => setReloadCount((n) => n + 1)} />
 
       <div className="mb-5 flex flex-wrap gap-2.5">
         <form

@@ -1,6 +1,7 @@
 const Product = require('../models/product.model');
 const Category = require('../models/category.model');
 const Brand = require('../models/brand.model');
+const Branch = require('../models/branch.model');
 const { slugify } = require('../utils/slugify');
 const { escapeRegex } = require('../utils/escapeRegex');
 const Inventory = require('../models/inventory.model');
@@ -207,8 +208,28 @@ async function assertCategoryBelongsToBrand(categoryId, brandId) {
  * req.tenantBrandId (derived from the authenticated user) — never from
  * the request body. Slug uniqueness is scoped per brand.
  */
+/**
+ * Every branch id must belong to the product's own brand (a brand can only
+ * place a product in its own shops). Returns the de-duplicated list; an empty
+ * list means "all branches" and needs no lookup.
+ */
+async function normalizeBranchIds(branchIds, brandId) {
+  const unique = [...new Set((branchIds || []).map(String))];
+  if (unique.length === 0) {
+    return [];
+  }
+  const owned = await Branch.countDocuments({ _id: { $in: unique }, brandId });
+  if (owned !== unique.length) {
+    throw new ProductError(400, 'One or more branches do not belong to your brand.');
+  }
+  return unique;
+}
+
 async function createProduct(brandId, data) {
   await assertCategoryBelongsToBrand(data.categoryId, brandId);
+  if (data.branchIds !== undefined) {
+    data = { ...data, branchIds: await normalizeBranchIds(data.branchIds, brandId) };
+  }
 
   const slug = slugify(data.name);
   const existing = await Product.findOne({ brandId, slug });
@@ -235,6 +256,9 @@ async function createProduct(brandId, data) {
 async function applyProductUpdate(product, data) {
   if (data.categoryId) {
     await assertCategoryBelongsToBrand(data.categoryId, product.brandId);
+  }
+  if (data.branchIds !== undefined) {
+    data = { ...data, branchIds: await normalizeBranchIds(data.branchIds, product.brandId) };
   }
 
   Object.assign(product, data);

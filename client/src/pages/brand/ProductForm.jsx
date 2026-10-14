@@ -31,15 +31,19 @@ function toForm(product, inventory) {
   }
 }
 
-function FormBody({ id, product, inventory, categories }) {
+function FormBody({ id, product, inventory, categories, branches }) {
   const navigate = useNavigate()
   const location = useLocation()
+  const { user } = useAuth()
   const can = useCan()
   const canSave = can(id ? 'products.update' : 'products.create')
   const canArchive = can('products.delete')
   const initial = toForm(product, inventory)
   const [form, setForm] = useState(initial)
   const [images, setImages] = useState(product?.images ?? [])
+  // Where the product is sold: every branch (an empty list) or only the chosen ones.
+  const [branchIds, setBranchIds] = useState(product?.branchIds ?? [])
+  const [branchMode, setBranchMode] = useState(product?.branchIds?.length ? 'selected' : 'all')
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
   const [saving, setSaving] = useState(false)
@@ -52,6 +56,11 @@ function FormBody({ id, product, inventory, categories }) {
     e.preventDefault()
     setError('')
     setFieldErrors({})
+    if (branchMode === 'selected' && branchIds.length === 0) {
+      setError('Choose at least one branch, or sell the product at all branches.')
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
     setSaving(true)
 
     const payload = {
@@ -60,6 +69,7 @@ function FormBody({ id, product, inventory, categories }) {
       price: Number(form.price),
       categoryId: form.categoryId,
       images,
+      branchIds: branchMode === 'all' ? [] : branchIds,
       status: form.status,
       // Left out when empty: the API cannot clear these once set.
       ...(form.sku.trim() && { sku: form.sku.trim() }),
@@ -200,6 +210,61 @@ function FormBody({ id, product, inventory, categories }) {
           <Field label="Low stock warning at" id="lowStockThreshold" name="lowStockThreshold" type="number" min="0" step="1" value={form.lowStockThreshold} onChange={onChange} hint="Flagged as low stock at or below this number." />
         </fieldset>
 
+        <fieldset className="rounded-lg border border-line bg-white p-6">
+          <legend className={labelClass}>Where it is sold</legend>
+          {branches.length === 0 ? (
+            <p className="text-sm text-muted">
+              This product is sold wherever your brand is found.
+              {user.role === 'BRAND_ADMIN' && (
+                <>
+                  {' '}
+                  <Link to="/brand/branches" className="font-medium text-pine underline">
+                    Add branches
+                  </Link>{' '}
+                  to sell it at some of them only.
+                </>
+              )}
+            </p>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-x-6 gap-y-2 text-[13.5px] text-ink">
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="branchMode" checked={branchMode === 'all'} onChange={() => setBranchMode('all')} className="accent-[#1e3a2f]" />
+                  All branches
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="branchMode" checked={branchMode === 'selected'} onChange={() => setBranchMode('selected')} className="accent-[#1e3a2f]" />
+                  Only selected branches
+                </label>
+              </div>
+              {branchMode === 'selected' && (
+                <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+                  {branches.map((b) => (
+                    <li key={b._id}>
+                      <label className="flex cursor-pointer items-start gap-2.5 rounded-md border border-line px-3 py-2.5 text-[13.5px] transition hover:border-ink">
+                        <input
+                          type="checkbox"
+                          checked={branchIds.includes(b._id)}
+                          onChange={(e) => setBranchIds((ids) => (e.target.checked ? [...ids, b._id] : ids.filter((x) => x !== b._id)))}
+                          className="mt-0.5 accent-[#1e3a2f]"
+                        />
+                        <span>
+                          <span className="block font-medium text-ink">
+                            {b.name}
+                            {!b.isActive && <span className="ml-1.5 text-xs font-normal text-muted">(inactive)</span>}
+                          </span>
+                          <span className="block text-xs text-muted">{b.blockName}</span>
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="mt-3 text-xs text-muted">Stock is shared by all branches. This only decides where shoppers can find the product.</p>
+            </>
+          )}
+        </fieldset>
+
         <div className="rounded-lg border border-line bg-white p-6">
           <p className={labelClass}>Photos</p>
           <ImageUploader images={images} onChange={setImages} name={form.name || 'Product'} />
@@ -251,7 +316,7 @@ function FormBody({ id, product, inventory, categories }) {
 export default function ProductForm() {
   const { id } = useParams()
   const { user } = useAuth()
-  const [data, setData] = useState({ key: null, product: null, inventory: null, categories: [], error: '' })
+  const [data, setData] = useState({ key: null, product: null, inventory: null, categories: [], branches: [], error: '' })
   const key = id || 'new'
 
   useEffect(() => {
@@ -259,13 +324,15 @@ export default function ProductForm() {
     Promise.all([
       api.get('/categories', { params: { brandId: user.brandId } }),
       id ? api.get(`/products/mine/${id}`) : Promise.resolve(null),
+      // Branches are optional here: a failure just hides the picker.
+      api.get('/branches/mine').catch(() => ({ data: { branches: [] } })),
     ])
-      .then(([cats, prod]) => {
+      .then(([cats, prod, branchRes]) => {
         if (active) {
-          setData({ key, categories: cats.data.categories, product: prod?.data.product ?? null, inventory: prod?.data.inventory ?? null, error: '' })
+          setData({ key, categories: cats.data.categories, branches: branchRes.data.branches, product: prod?.data.product ?? null, inventory: prod?.data.inventory ?? null, error: '' })
         }
       })
-      .catch((err) => active && setData({ key, product: null, inventory: null, categories: [], error: getErrorMessage(err) }))
+      .catch((err) => active && setData({ key, product: null, inventory: null, categories: [], branches: [], error: getErrorMessage(err) }))
     return () => {
       active = false
     }
@@ -279,5 +346,5 @@ export default function ProductForm() {
       </div>
     )
   if (data.error) return <p className="text-clay">{data.error}</p>
-  return <FormBody key={key} id={id} product={data.product} inventory={data.inventory} categories={data.categories} />
+  return <FormBody key={key} id={id} product={data.product} inventory={data.inventory} categories={data.categories} branches={data.branches} />
 }

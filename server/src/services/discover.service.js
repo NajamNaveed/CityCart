@@ -13,8 +13,8 @@ const { withAvailability } = require('./product.service');
  * Public data only: ACTIVE brands, active branches, ACTIVE products. The
  * shopper's coordinates are used for this one query and never stored.
  *
- * v1 rule: a brand's catalogue is brand-wide, so every active branch of a
- * brand "offers" that brand's products (stock stays brand-level).
+ * Catalogue rule: a product with no `branchIds` is sold at every branch of its
+ * brand; one with `branchIds` only at those branches. Stock stays brand-level.
  */
 class DiscoverError extends Error {
   constructor(status, message) {
@@ -29,6 +29,13 @@ const PRODUCTS_PER_BRAND = 4;
 // Upper bounds on the fan-out queries so one broad search stays cheap.
 const PRODUCT_HIT_CAP = 1000;
 const PRODUCT_FETCH_CAP = 400;
+
+// The branches (from `branches`) that carry a product: all of them when the
+// product has no branch list, otherwise only the listed ones.
+function carryingBranches(product, branches) {
+  const ids = (product.branchIds || []).map(String);
+  return ids.length === 0 ? branches : branches.filter((b) => ids.includes(String(b._id)));
+}
 
 async function discover({ q, scope, cityId, blockId, radiusKm, lat, lng, page, limit }) {
   const pageNumber = page || DEFAULT_PAGE;
@@ -58,8 +65,10 @@ async function discover({ q, scope, cityId, blockId, radiusKm, lat, lng, page, l
   const nameRegex = search ? new RegExp(escapeRegex(search), 'i') : null;
 
   let candidateIds = brands.map((b) => String(b._id));
+  const nameMatchedIds = new Set();
+  const hitsByBrand = new Map(); // brand -> products that matched the search text
   if (nameRegex && candidateIds.length > 0) {
-    const nameMatched = brands.filter((b) => nameRegex.test(b.name)).map((b) => String(b._id));
+    brands.filter((b) => nameRegex.test(b.name)).forEach((b) => nameMatchedIds.add(String(b._id)));
     const productHits = await Product.find(
       {
         isActive: true,
@@ -67,9 +76,14 @@ async function discover({ q, scope, cityId, blockId, radiusKm, lat, lng, page, l
         brandId: { $in: candidateIds },
         name: { $regex: escapeRegex(search), $options: 'i' },
       },
-      'brandId'
+      'brandId branchIds'
     ).limit(PRODUCT_HIT_CAP);
-    candidateIds = [...new Set([...nameMatched, ...productHits.map((p) => String(p.brandId))])];
+    for (const hit of productHits) {
+      const key = String(hit.brandId);
+      if (!hitsByBrand.has(key)) hitsByBrand.set(key, []);
+      hitsByBrand.get(key).push(hit);
+    }
+    candidateIds = [...new Set([...nameMatchedIds, ...hitsByBrand.keys()])];
   }
 
   const empty = (extra = {}) => ({
@@ -122,6 +136,9 @@ async function discover({ q, scope, cityId, blockId, radiusKm, lat, lng, page, l
       phone: branch.phone,
       blockId: branch.blockId,
       blockName: blockNameById.get(String(branch.blockId)) || '',
+      // The shop's published pin, for the map view.
+      latitude: latLngFromPoint(branch.location).lat,
+      longitude: latLngFromPoint(branch.location).lng,
       distanceKm: km,
     };
     if (!grouped.has(key)) grouped.set(key, []);
@@ -136,6 +153,13 @@ async function discover({ q, scope, cityId, blockId, radiusKm, lat, lng, page, l
   };
 
   const results = [...grouped.entries()]
+    // A brand found only through a product must have a branch in range that carries it.
+    .filter(
+      ([brandKey, brandBranches]) =>
+        !nameRegex ||
+        nameMatchedIds.has(brandKey) ||
+        (hitsByBrand.get(brandKey) || []).some((hit) => carryingBranches(hit, brandBranches).length > 0)
+    )
     .map(([brandKey, brandBranches]) => {
       const brand = brandById.get(brandKey);
       const sorted = [...brandBranches].sort(byDistance);
@@ -172,12 +196,19 @@ async function discover({ q, scope, cityId, blockId, radiusKm, lat, lng, page, l
     }));
     decorated.sort((a, b) => Number(b.matched) - Number(a.matched));
 
+    const branchesByBrand = new Map(pageItems.map((item) => [String(item._id), item.branches]));
     const picked = new Map();
     for (const { product, matched } of decorated) {
       const key = String(product.brandId);
+      const brandBranches = branchesByBrand.get(key) || [];
+      const carriers = carryingBranches(product, brandBranches);
+      if (carriers.length === 0) continue; // sold only at branches outside this search
+      // null = sold at every branch in range, otherwise the block names that have it
+      const availableAt =
+        carriers.length === brandBranches.length ? null : [...new Set(carriers.map((b) => b.blockName || b.name))];
       if (!picked.has(key)) picked.set(key, []);
       const list = picked.get(key);
-      if (list.length < PRODUCTS_PER_BRAND) list.push({ product, matched });
+      if (list.length < PRODUCTS_PER_BRAND) list.push({ product, matched, availableAt });
     }
 
     const flat = [...picked.values()].flat();
@@ -185,7 +216,7 @@ async function discover({ q, scope, cityId, blockId, radiusKm, lat, lng, page, l
     const stockById = new Map(withStock.map((p) => [String(p._id), p.availability]));
 
     for (const item of pageItems) {
-      item.products = (picked.get(String(item._id)) || []).map(({ product, matched }) => ({
+      item.products = (picked.get(String(item._id)) || []).map(({ product, matched, availableAt }) => ({
         _id: product._id,
         name: product.name,
         price: product.price,
@@ -193,6 +224,7 @@ async function discover({ q, scope, cityId, blockId, radiusKm, lat, lng, page, l
         image: product.images && product.images[0],
         availability: stockById.get(String(product._id)) || 'OUT_OF_STOCK',
         matched,
+        availableAt,
       }));
     }
   }

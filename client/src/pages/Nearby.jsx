@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
-import { LocateFixed, MapPin, Phone, Search, Store } from 'lucide-react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { LayoutList, LocateFixed, Map as MapIcon, MapPin, Phone, Search, Store } from 'lucide-react'
 import api, { getErrorMessage } from '../services/api'
 import { useCity } from '../hooks/useCity'
 import { useNearby } from '../hooks/useNearby'
@@ -11,6 +11,9 @@ import ProductImage from '../components/ProductImage'
 import { EmptyState, Skeleton } from '../components/ui'
 import { formatDistance } from '../utils/geo'
 import { btnDark, btnOutline, card, formatPrice, inputClass, wrap } from '../ui'
+
+// Leaflet is only downloaded when the shopper opens the map view.
+const NearbyMap = lazy(() => import('../components/nearby/NearbyMap'))
 
 const NEXT_RADIUS = [2, 5, 10, 20, 50]
 
@@ -35,6 +38,7 @@ function ProductTile({ product }) {
         {formatPrice(product.price)}
         {soldOut && <span className="ml-1.5 text-danger">Sold out</span>}
       </p>
+      {product.availableAt && <p className="truncate text-[11.5px] text-clay">Only at {product.availableAt.join(', ')}</p>}
     </Link>
   )
 }
@@ -125,6 +129,9 @@ function ResultsSkeleton() {
 
 export default function Nearby() {
   const [params, setParams] = useSearchParams()
+  const navigate = useNavigate()
+  const [view, setView] = useState('list') // 'list' | 'map'
+  const openBrand = useCallback((brand) => navigate(`/shop?brandId=${brand._id}`), [navigate])
   const q = params.get('q') || ''
   const { city, cityId } = useCity()
   const { block, blockId, coords, range, setRange, blocksReady, openPicker, detect, status } = useNearby()
@@ -261,18 +268,44 @@ export default function Nearby() {
           />
         ) : (
           <>
-            <p className="mb-4 text-[13px] text-muted">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-[13px] text-muted">
               {data.pagination.total} {data.pagination.total === 1 ? 'brand' : 'brands'} with {data.meta.totalBranches}{' '}
               {data.meta.totalBranches === 1 ? 'branch' : 'branches'}
               {q && <> for “{q}”</>}
               {range !== 'city' && !needsArea && <> within {rangeLabel(range)}</>}
               {block && range !== 'block' && <> of {block.name}</>}
             </p>
-            <div className="space-y-5">
-              {items.map((brand) => (
-                <BrandResult key={brand._id} brand={brand} />
-              ))}
+              <div role="group" aria-label="Results view" className="inline-flex overflow-hidden rounded-md border border-line bg-white text-[13px] font-medium">
+                {[
+                  ['list', 'List', LayoutList],
+                  ['map', 'Map', MapIcon],
+                ].map(([value, label, Icon]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={view === value}
+                    onClick={() => setView(value)}
+                    className={`inline-flex h-9 items-center gap-1.5 px-3.5 transition ${view === value ? 'bg-ink text-white' : 'text-ink/70 hover:text-ink'}`}
+                  >
+                    <Icon className="h-4 w-4" aria-hidden="true" />
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
+            {view === 'map' ? (
+              <Suspense fallback={<Skeleton className="h-[460px] w-full rounded-lg" />}>
+                <NearbyMap items={items} origin={data.meta.origin} radiusKm={data.meta.radiusKm} onOpenBrand={openBrand} />
+                {data.pagination.pages > 1 && <p className="mt-2 text-xs text-muted">The map shows the shops on this page of results.</p>}
+              </Suspense>
+            ) : (
+              <div className="space-y-5">
+                {items.map((brand) => (
+                  <BrandResult key={brand._id} brand={brand} />
+                ))}
+              </div>
+            )}
             {data.pagination.pages > 1 && (
               <div className="mt-7 flex items-center justify-between text-sm">
                 <button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)} className={`${btnOutline} h-9 px-4`}>

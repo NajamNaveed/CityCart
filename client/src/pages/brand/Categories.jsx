@@ -2,13 +2,15 @@ import { useEffect, useState } from 'react'
 import api, { getErrorMessage } from '../../services/api'
 import { useAuth } from '../../hooks/useAuth'
 import { useCan } from '../../hooks/useCan'
-import { Notice, PageHeader, selectClass } from '../../components/brand/Bits'
+import { Notice, PageHeader, Pager, selectClass } from '../../components/brand/Bits'
+import { usePaged } from '../../hooks/usePaged'
 import { btnPine, inputClass } from '../../ui'
 
 export default function Categories() {
   const { user } = useAuth()
   const can = useCan()
   const [categories, setCategories] = useState(null)
+  const paged = usePaged(categories, 10)
   const [loadError, setLoadError] = useState('')
   const [reload, setReload] = useState(0)
   const [name, setName] = useState('')
@@ -102,8 +104,9 @@ export default function Categories() {
           No categories yet. Add one above, then you can add products to it.
         </p>
       ) : (
-        <ul className="divide-y divide-line rounded-lg border border-line bg-white">
-          {categories.map((c) => (
+        <>
+          <ul className="divide-y divide-line rounded-lg border border-line bg-white">
+          {paged.items.map((c) => (
             <li key={c._id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
               {editing?.id === c._id ? (
                 <form onSubmit={onRename} className="flex flex-1 flex-wrap items-center gap-3">
@@ -158,6 +161,8 @@ export default function Categories() {
             </li>
           ))}
         </ul>
+          <Pager pagination={paged.pagination} onPage={paged.setPage} />
+        </>
       )}
       <p className="mt-4 text-xs text-muted">A category can only be removed once it has no products or subcategories.</p>
     </>

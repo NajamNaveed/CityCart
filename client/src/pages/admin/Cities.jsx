@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { MapPin } from 'lucide-react'
 import api, { getErrorMessage, getFieldErrors } from '../../services/api'
 import Field from '../../components/Field'
-import { Notice, PageHeader, StatusBadge } from '../../components/brand/Bits'
+import { Notice, PageHeader, Pager, StatusBadge } from '../../components/brand/Bits'
+import { usePaged } from '../../hooks/usePaged'
 import { EmptyState, Skeleton } from '../../components/ui'
 import { btnDark, inputClass } from '../../ui'
 
@@ -10,6 +11,7 @@ const EMPTY = { name: '', state: '', country: '' }
 
 export default function Cities() {
   const [cities, setCities] = useState(null)
+  const paged = usePaged(cities, 10)
   const [loadError, setLoadError] = useState('')
   const [reload, setReload] = useState(0)
   const [form, setForm] = useState(EMPTY)
@@ -98,8 +100,9 @@ export default function Cities() {
       ) : cities.length === 0 ? (
         <EmptyState icon={MapPin} title="No cities yet." message="Add one above — brands and shoppers choose from active cities." className="rounded-lg border border-dashed border-line bg-white" />
       ) : (
-        <ul className="divide-y divide-line rounded-lg border border-line bg-white">
-          {cities.map((c) => (
+        <>
+          <ul className="divide-y divide-line rounded-lg border border-line bg-white">
+          {paged.items.map((c) => (
             <li key={c._id} className="px-5 py-4">
               {editing?.id === c._id ? (
                 <form onSubmit={onSave} className="flex flex-wrap items-center gap-3">
@@ -173,6 +176,8 @@ export default function Cities() {
             </li>
           ))}
         </ul>
+          <Pager pagination={paged.pagination} onPage={paged.setPage} />
+        </>
       )}
     </>
   )

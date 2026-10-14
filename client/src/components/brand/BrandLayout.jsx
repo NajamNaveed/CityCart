@@ -189,7 +189,7 @@ export default function BrandLayout() {
 
       <div className="flex flex-1">
         {/* Desktop sidebar */}
-        <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-60 shrink-0 border-r border-line bg-white px-4 py-6 lg:block">
+        <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-60 shrink-0 overflow-y-auto overscroll-contain border-r border-line bg-white px-4 py-6 lg:block">
           <SidebarNav />
         </aside>
 
