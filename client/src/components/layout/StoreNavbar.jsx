@@ -4,6 +4,8 @@ import { Bell, Check, ChevronDown, LayoutDashboard, LogOut, MapPin, Menu as Menu
 import { useAuth } from '../../hooks/useAuth'
 import { useCart } from '../../hooks/useCart'
 import { useCity } from '../../hooks/useCity'
+import { useNearby } from '../../hooks/useNearby'
+import LocationChip from '../nearby/LocationChip'
 import useNotifications from '../../hooks/useNotifications'
 import NotificationBell from '../NotificationBell'
 import Drawer from '../ui/Drawer'
@@ -205,6 +207,30 @@ function DrawerCityList() {
   )
 }
 
+// The drawer's area row: the current block, or an invitation to set one.
+function DrawerArea({ onOpen }) {
+  const { block, openPicker } = useNearby()
+  return (
+    <div>
+      <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Your area</p>
+      <button
+        type="button"
+        onClick={() => {
+          onOpen()
+          openPicker()
+        }}
+        className="flex w-full items-center justify-between rounded-md border border-line bg-white px-3 py-2.5 text-left text-[13.5px] text-ink transition hover:border-ink"
+      >
+        <span className="flex items-center gap-2">
+          <MapPin className="h-3.5 w-3.5 text-clay" aria-hidden="true" />
+          {block ? block.name : 'Set your area'}
+        </span>
+        <span className="text-[12px] text-muted">Change</span>
+      </button>
+    </div>
+  )
+}
+
 // The navbar's city picker (large screens): same choices as the drawer's list,
 // as a dropdown so it stays compact next to the search field.
 function CityMenu() {
@@ -335,6 +361,10 @@ export default function StoreNavbar() {
           <div className="ml-2 hidden lg:block">
             <CityMenu />
           </div>
+          {/* The block/area chip needs the extra width of xl screens; smaller ones use the drawer. */}
+          <div className="hidden xl:block">
+            <LocationChip />
+          </div>
         </div>
 
         {/* Centred between the two side clusters; drops to the drawer below lg */}
@@ -347,6 +377,9 @@ export default function StoreNavbar() {
           </NavLink>
           <NavLink to="/brands" className={navLink}>
             Brands
+          </NavLink>
+          <NavLink to="/nearby" className={navLink}>
+            Nearby
           </NavLink>
         </nav>
 
@@ -392,6 +425,7 @@ export default function StoreNavbar() {
         <div className="space-y-5">
           <SearchForm autoFocus onSubmitted={() => setDrawerOpen(false)} />
           <DrawerCityList />
+          <DrawerArea onOpen={() => setDrawerOpen(false)} />
           {user && <QuickAccess />}
 
           <nav aria-label="Mobile" className="space-y-1 border-t border-line pt-4">
@@ -403,6 +437,9 @@ export default function StoreNavbar() {
             </DrawerLink>
             <DrawerLink to="/brands" onClick={() => setDrawerOpen(false)}>
               Brands
+            </DrawerLink>
+            <DrawerLink to="/nearby" onClick={() => setDrawerOpen(false)}>
+              Nearby
             </DrawerLink>
             {user?.role === 'CUSTOMER' && (
               <DrawerLink to="/orders" onClick={() => setDrawerOpen(false)}>

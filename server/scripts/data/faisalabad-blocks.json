@@ -1,0 +1,11 @@
+[
+  { "name": "Clock Tower (City Centre)", "latitude": 31.4186, "longitude": 73.0790, "approximate": true },
+  { "name": "D Ground",                  "latitude": 31.4290, "longitude": 73.0930, "approximate": true },
+  { "name": "Peoples Colony",            "latitude": 31.4250, "longitude": 73.1010, "approximate": true },
+  { "name": "Jinnah Colony",             "latitude": 31.4160, "longitude": 73.0890, "approximate": true },
+  { "name": "Gulberg",                   "latitude": 31.4390, "longitude": 73.1030, "approximate": true },
+  { "name": "Samanabad",                 "latitude": 31.4330, "longitude": 73.1120, "approximate": true },
+  { "name": "Madina Town",               "latitude": 31.4030, "longitude": 73.0680, "approximate": true },
+  { "name": "Millat Town",               "latitude": 31.3990, "longitude": 73.0610, "approximate": true },
+  { "name": "Susan Road",                "latitude": 31.3990, "longitude": 73.0910, "approximate": true }
+]

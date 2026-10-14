@@ -13,7 +13,8 @@
     "test": "jest",
     "test:integration": "jest --config jest.integration.config.js",
     "sync-indexes": "node scripts/syncIndexes.js",
-    "seed:demo": "node scripts/seedDemo.js"
+    "seed:demo": "node scripts/seedDemo.js",
+    "seed:blocks": "node scripts/seedBlocks.js"
   },
   "jest": {
     "testEnvironment": "node",

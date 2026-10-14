@@ -6,6 +6,7 @@ import {
   ExternalLink,
   LayoutDashboard,
   LogOut,
+  MapPin,
   Menu as MenuIcon,
   Package,
   ShoppingBag,
@@ -33,6 +34,7 @@ const NAV = [
   ['/brand/analytics', 'Analytics', false, 'analytics.view', ChartLine],
   ['/brand/team', 'Team', false, 'employees.view', Users],
   ['/brand/inventory', 'Quick inventory', false, 'inventory.manage', Warehouse],
+  ['/brand/branches', 'Branches', false, 'brand.update', MapPin],
   ['/brand/settings', 'Settings', false, 'brand.update', Settings],
 ]
 

@@ -1,11 +1,17 @@
 import { Outlet } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import { useNearby } from '../hooks/useNearby'
+import { useFirstVisitDetect } from '../hooks/useFirstVisitDetect'
+import LocationPicker from './nearby/LocationPicker'
 import PageTransition from './ui/PageTransition'
 import StoreNavbar from './layout/StoreNavbar'
 import StoreFooter from './layout/StoreFooter'
 
 export default function StoreLayout() {
   const { user } = useAuth()
+  const { autoDetect } = useNearby()
+  // Shoppers (guests and customers) are asked for their location once, on a first visit.
+  useFirstVisitDetect(autoDetect, !user || user.role === 'CUSTOMER')
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -25,6 +31,7 @@ export default function StoreLayout() {
       </main>
 
       <StoreFooter />
+      <LocationPicker />
     </div>
   )
 }

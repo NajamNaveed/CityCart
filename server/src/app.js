@@ -8,6 +8,9 @@ const { corsOptions } = require('./config/cors');
 const healthRoutes = require('./routes/health.routes');
 const authRoutes = require('./routes/auth.routes');
 const cityRoutes = require('./routes/city.routes');
+const blockRoutes = require('./routes/block.routes');
+const branchRoutes = require('./routes/branch.routes');
+const discoverRoutes = require('./routes/discover.routes');
 const brandRoutes = require('./routes/brand.routes');
 const storeRoutes = require('./routes/store.routes');
 
@@ -69,6 +72,9 @@ app.use('/api/v1', apiLimiter);
 
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/cities', cityRoutes);
+app.use('/api/v1/blocks', blockRoutes);
+app.use('/api/v1/brand/branches', branchRoutes);
+app.use('/api/v1/discover', discoverRoutes);
 app.use('/api/v1/brands', brandRoutes);
 app.use('/api/v1/stores', storeRoutes);
 

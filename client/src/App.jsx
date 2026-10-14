@@ -2,6 +2,7 @@ import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { lazy, Suspense, useEffect } from 'react'
 import { AuthProvider } from './context/AuthProvider'
 import { CityProvider } from './context/CityProvider'
+import { NearbyProvider } from './context/NearbyProvider'
 import { CartProvider } from './context/CartProvider'
 import { NotificationProvider } from './context/NotificationProvider'
 import { Toaster } from './components/ui'
@@ -11,6 +12,7 @@ import { GuestRoute, ProtectedRoute } from './components/RouteGuards'
 import Home from './pages/Home'
 import Shop from './pages/Shop'
 import Brands from './pages/Brands'
+import Nearby from './pages/Nearby'
 import ProductDetail from './pages/ProductDetail'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -36,6 +38,7 @@ const BrandOrders = lazy(() => import('./pages/brand/Orders'))
 const BrandOrderDetail = lazy(() => import('./pages/brand/OrderDetail'))
 const Deliveries = lazy(() => import('./pages/brand/Deliveries'))
 const Team = lazy(() => import('./pages/brand/Team'))
+const BrandBranches = lazy(() => import('./pages/brand/Branches'))
 const BrandSettings = lazy(() => import('./pages/brand/Settings'))
 const BrandAnalytics = lazy(() => import('./pages/brand/Analytics'))
 const InventoryHub = lazy(() => import('./pages/brand/InventoryHub'))
@@ -47,6 +50,7 @@ const AdminBrandDetail = lazy(() => import('./pages/admin/BrandDetail'))
 const AdminOrders = lazy(() => import('./pages/admin/Orders'))
 const AdminOrderDetail = lazy(() => import('./pages/admin/OrderDetail'))
 const AdminCities = lazy(() => import('./pages/admin/Cities'))
+const AdminBlocks = lazy(() => import('./pages/admin/Blocks'))
 const AdminSettings = lazy(() => import('./pages/admin/Settings'))
 const AdminAnalytics = lazy(() => import('./pages/admin/Analytics'))
 const AdminUsers = lazy(() => import('./pages/admin/Users'))
@@ -76,6 +80,7 @@ function App() {
         {/* Notifications need the signed-in user only; its socket lives as long as the session. */}
         <NotificationProvider>
           <CityProvider>
+            <NearbyProvider>
             <CartProvider>
               <Toaster />
               <Suspense fallback={<RouteFallback />}>
@@ -85,6 +90,7 @@ function App() {
                   <Route index element={<Home />} />
                   <Route path="shop" element={<Shop />} />
                   <Route path="brands" element={<Brands />} />
+                  <Route path="nearby" element={<Nearby />} />
                   <Route path="product/:id" element={<ProductDetail />} />
 
                   <Route element={<GuestRoute />}>
@@ -133,6 +139,7 @@ function App() {
                     <Route path="analytics" element={<BrandAnalytics />} />
                     <Route element={<ProtectedRoute roles={['BRAND_ADMIN']} loginPath="/sell/login" />}>
                       <Route path="settings" element={<BrandSettings />} />
+                      <Route path="branches" element={<BrandBranches />} />
                       <Route path="inventory" element={<InventoryHub />} />
                     </Route>
                     <Route path="notifications" element={<Notifications />} />
@@ -152,6 +159,7 @@ function App() {
                     <Route path="orders/:id" element={<AdminOrderDetail />} />
                     <Route path="reviews" element={<AdminReviews />} />
                     <Route path="cities" element={<AdminCities />} />
+                    <Route path="blocks" element={<AdminBlocks />} />
                     <Route path="settings" element={<AdminSettings />} />
                     <Route path="analytics" element={<AdminAnalytics />} />
                     <Route path="users" element={<AdminUsers />} />
@@ -161,6 +169,7 @@ function App() {
               </Routes>
               </Suspense>
             </CartProvider>
+            </NearbyProvider>
           </CityProvider>
         </NotificationProvider>
       </AuthProvider>

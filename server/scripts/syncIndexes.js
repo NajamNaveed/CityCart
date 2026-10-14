@@ -28,6 +28,8 @@ require('../src/models/order.model');
 require('../src/models/payment.model');
 require('../src/models/delivery.model');
 require('../src/models/counter.model');
+require('../src/models/block.model');
+require('../src/models/branch.model');
 
 async function main() {
   if (process.env.NODE_ENV === 'production') {
