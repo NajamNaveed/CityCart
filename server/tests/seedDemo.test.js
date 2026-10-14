@@ -3,6 +3,8 @@ const { buildDataset } = require('../scripts/demo/build');
 const City = require('../src/models/city.model');
 const Block = require('../src/models/block.model');
 const Branch = require('../src/models/branch.model');
+const Conversation = require('../src/models/conversation.model');
+const Message = require('../src/models/message.model');
 const User = require('../src/models/user.model');
 const Brand = require('../src/models/brand.model');
 const Store = require('../src/models/store.model');
@@ -20,7 +22,7 @@ const Counter = require('../src/models/counter.model');
 const { ALL_PERMISSIONS } = require('../src/config/permissions');
 
 const MODELS = {
-  cities: City, blocks: Block, branches: Branch, users: User, brands: Brand, stores: Store, categories: Category, products: Product,
+  cities: City, blocks: Block, branches: Branch, conversations: Conversation, messages: Message, users: User, brands: Brand, stores: Store, categories: Category, products: Product,
   inventories: Inventory, employees: Employee, carts: Cart, orders: Order, payments: Payment,
   deliveries: Delivery, reviews: Review, notifications: Notification, counters: Counter,
 };
@@ -136,6 +138,55 @@ describe('demo dataset', () => {
     // mix of open and closed branches
     expect(ds.branches.some((br) => br.isActive)).toBe(true);
     expect(ds.branches.some((br) => !br.isActive)).toBe(true);
+  });
+
+  it('has believable customer conversations that respect who may talk to whom', () => {
+    const userById = new Map(ds.users.map((u) => [id(u._id), u]));
+    const convById = new Map(ds.conversations.map((c) => [id(c._id), c]));
+    expect(ds.conversations.length).toBeGreaterThanOrEqual(8);
+    // one thread per customer and brand
+    expect(unique(ds.conversations.map((c) => `${id(c.customerId)}:${id(c.brandId)}`))).toBe(true);
+
+    ds.conversations.forEach((c) => {
+      expect(userById.get(id(c.customerId)).role).toBe('CUSTOMER');
+      const brand = ds.brands.find((b) => id(b._id) === id(c.brandId));
+      expect(brand.status).toBe('ACTIVE'); // only active brands take messages
+      const msgs = ds.messages.filter((m) => id(m.conversationId) === id(c._id)).sort((a, b) => a.createdAt - b.createdAt);
+      expect(msgs.length).toBeGreaterThan(0);
+      expect(msgs[0].senderRole).toBe('CUSTOMER'); // the customer always writes first
+      expect(c.lastMessageAt.getTime()).toBe(msgs[msgs.length - 1].createdAt.getTime());
+      expect(c.lastMessagePreview).toBe(msgs[msgs.length - 1].body.slice(0, 100));
+      // unread is only ever held by the side that did not write last
+      if (c.lastSenderRole === 'CUSTOMER') expect(c.customerUnread).toBe(0);
+      else expect(c.brandUnread).toBe(0);
+    });
+
+    ds.messages.forEach((m) => {
+      expect(convById.has(id(m.conversationId))).toBe(true);
+      const conv = convById.get(id(m.conversationId));
+      const sender = userById.get(id(m.senderId));
+      if (m.senderRole === 'CUSTOMER') expect(id(sender._id)).toBe(id(conv.customerId));
+      else {
+        // brand replies come from the brand's own owner, or a team member allowed to reply
+        expect(id(sender.brandId)).toBe(id(conv.brandId));
+        if (sender.role === 'BRAND_EMPLOYEE') {
+          const emp = ds.employees.find((e) => id(e.userId) === id(sender._id));
+          expect(emp.isActive && emp.permissions.includes('messages.manage')).toBe(true);
+        }
+      }
+      expect(m.body.length).toBeLessThanOrEqual(1000);
+      if (m.productId) {
+        const product = ds.products.find((p) => id(p._id) === id(m.productId));
+        expect(id(product.brandId)).toBe(id(conv.brandId)); // a product of the same brand
+      }
+    });
+    // message ids sort in time order, which the API's paging relies on
+    const sorted = [...ds.messages].sort((a, b) => a.createdAt - b.createdAt);
+    sorted.slice(1).forEach((m, i) => expect(String(m._id) >= String(sorted[i]._id)).toBe(true));
+    // one long thread (more than one page of 30) and a mix of read and unread
+    expect(ds.conversations.some((c) => ds.messages.filter((m) => id(m.conversationId) === id(c._id)).length > 30)).toBe(true);
+    expect(ds.conversations.some((c) => c.customerUnread > 0)).toBe(true);
+    expect(ds.conversations.some((c) => c.brandUnread > 0)).toBe(true);
   });
 
   it('has every reference pointing at something that exists', () => {

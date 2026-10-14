@@ -31,6 +31,13 @@ export function NotificationProvider({ children }) {
   // user before their first fetch lands) always derives an empty bell.
   const [sessionKey, setSessionKey] = useState(null)
   const itemsRef = useRef([])
+  // Chat shares this one socket connection: ChatProvider subscribes here for
+  // live messages instead of opening a second connection per user.
+  const chatListeners = useRef(new Set())
+  const subscribeChat = useCallback((listener) => {
+    chatListeners.current.add(listener)
+    return () => chatListeners.current.delete(listener)
+  }, [])
 
   // Mirrored through an effect so `remove()` can see the item it deletes.
   useEffect(() => {
@@ -64,9 +71,17 @@ export function NotificationProvider({ children }) {
       setItems((prev) => [notification, ...prev].slice(0, BELL_LIMIT))
       setUnreadCount((count) => count + 1)
     })
+    socket.on('chat:message', (payload) => {
+      if (active) chatListeners.current.forEach((listener) => listener('message', payload))
+    })
     // Catch up after a reconnect or a hidden tab.
+    let connectedBefore = false
     socket.on('connect', () => {
-      if (active) refresh()
+      if (!active) return
+      refresh()
+      // After a dropped connection chat may have missed pushes: tell it to re-read.
+      if (connectedBefore) chatListeners.current.forEach((listener) => listener('resync'))
+      connectedBefore = true
     })
     const onVisible = () => {
       if (active && document.visibilityState === 'visible') refresh()
@@ -122,8 +137,9 @@ export function NotificationProvider({ children }) {
       markRead,
       markAllRead,
       remove,
+      subscribeChat,
     }
-  }, [user, sessionKey, items, unreadCount, refresh, markRead, markAllRead, remove])
+  }, [user, sessionKey, items, unreadCount, refresh, markRead, markAllRead, remove, subscribeChat])
 
   return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>
 }

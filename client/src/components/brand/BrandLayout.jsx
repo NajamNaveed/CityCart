@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   LogOut,
   MapPin,
+  MessageCircle,
   Menu as MenuIcon,
   Package,
   ShoppingBag,
@@ -18,6 +19,7 @@ import {
   UtensilsCrossed,
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
+import { useChat } from '../../hooks/useChat'
 import { useCan } from '../../hooks/useCan'
 import NotificationBell from '../NotificationBell'
 import Drawer from '../ui/Drawer'
@@ -29,6 +31,7 @@ const NAV = [
   ['/brand/products', 'Products', false, 'products.view', ShoppingBag],
   ['/brand/categories', 'Categories', false, 'categories.view', UtensilsCrossed],
   ['/brand/orders', 'Orders', false, 'orders.view', Package],
+  ['/brand/messages', 'Messages', false, 'messages.view', MessageCircle],
   ['/brand/deliveries', 'Deliveries', false, 'delivery.view', Truck],
   ['/brand/reviews', 'Reviews', false, 'products.view', Star],
   ['/brand/analytics', 'Analytics', false, 'analytics.view', ChartLine],
@@ -55,6 +58,7 @@ const sideLink = ({ isActive }) =>
 function SidebarNav({ onNavigate }) {
   const can = useCan()
   const { user } = useAuth()
+  const { unread } = useChat()
   return (
     <nav aria-label="Dashboard" className="space-y-1">
       {NAV.filter(([to, , , permission]) => (!permission || can(permission)) && ((to !== '/brand/settings' && to !== '/brand/inventory') || user.role === 'BRAND_ADMIN')).map(([to, label, end, , Icon]) => (
@@ -69,6 +73,11 @@ function SidebarNav({ onNavigate }) {
                 <Icon className="h-4 w-4" aria-hidden="true" />
               </span>
               {label}
+              {to === '/brand/messages' && unread > 0 && (
+                <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-clay px-1.5 text-[11px] font-semibold text-white">
+                  {unread > 9 ? '9+' : unread}
+                </span>
+              )}
             </>
           )}
         </NavLink>

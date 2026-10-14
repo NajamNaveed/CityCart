@@ -47,4 +47,30 @@ const paymentWriteLimiter = rateLimit({
   message: json429('Too many payment updates. Please try again later.'),
 });
 
-module.exports = { apiLimiter, authLimiter, paymentWriteLimiter };
+// Chat is user-to-user text, so spam is the abuse to stop. Limits are per
+// signed-in user (not per IP, so a shared office or phone network is not
+// punished) and these run after authenticate.
+const perUser = (req) => String(req.user._id);
+
+const chatSendLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 20,
+  keyGenerator: perUser,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  skip,
+  message: json429('You are sending messages too quickly. Please wait a moment.'),
+});
+
+// Opening a NEW conversation with a brand is rarer, so it is capped harder.
+const chatStartLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 15,
+  keyGenerator: perUser,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  skip,
+  message: json429('You have started too many conversations. Please try again later.'),
+});
+
+module.exports = { apiLimiter, authLimiter, paymentWriteLimiter, chatSendLimiter, chatStartLimiter };

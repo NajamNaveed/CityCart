@@ -4,6 +4,7 @@ import {
   Banknote,
   ChevronLeft,
   ChevronRight,
+  MessageCircle,
   Minus,
   Package,
   Plus,
@@ -292,6 +293,17 @@ function ProductView({ product, brand }) {
                 )}
               </button>
             </div>
+
+            {/* The conversation happens on its own page; a visitor is asked to sign in first. */}
+            {brand && (!user || user.role === 'CUSTOMER') && (
+              <Link
+                to={`/chat?product=${product._id}`}
+                className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-md border border-ink text-[13px] font-medium text-ink transition hover:bg-ink hover:text-white"
+              >
+                <MessageCircle className="h-4 w-4" aria-hidden="true" />
+                Chat with seller
+              </Link>
+            )}
 
             {notice.text && (
               <p

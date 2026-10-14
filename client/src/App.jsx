@@ -5,6 +5,7 @@ import { CityProvider } from './context/CityProvider'
 import { NearbyProvider } from './context/NearbyProvider'
 import { CartProvider } from './context/CartProvider'
 import { NotificationProvider } from './context/NotificationProvider'
+import { ChatProvider } from './context/ChatProvider'
 import { Toaster } from './components/ui'
 import StoreLayout from './components/StoreLayout'
 import SellerLayout from './components/SellerLayout'
@@ -20,6 +21,7 @@ import Cart from './pages/Cart'
 import Checkout from './pages/Checkout'
 import OrderPlaced from './pages/OrderPlaced'
 import MyOrders from './pages/MyOrders'
+import Chat from './pages/Chat'
 import MyOrderDetail from './pages/MyOrderDetail'
 import Sell from './pages/Sell'
 import SellerLogin from './pages/SellerLogin'
@@ -35,6 +37,7 @@ const BrandProducts = lazy(() => import('./pages/brand/Products'))
 const ProductForm = lazy(() => import('./pages/brand/ProductForm'))
 const Categories = lazy(() => import('./pages/brand/Categories'))
 const BrandOrders = lazy(() => import('./pages/brand/Orders'))
+const BrandMessages = lazy(() => import('./pages/brand/Messages'))
 const BrandOrderDetail = lazy(() => import('./pages/brand/OrderDetail'))
 const Deliveries = lazy(() => import('./pages/brand/Deliveries'))
 const Team = lazy(() => import('./pages/brand/Team'))
@@ -79,6 +82,7 @@ function App() {
       <AuthProvider>
         {/* Notifications need the signed-in user only; its socket lives as long as the session. */}
         <NotificationProvider>
+          <ChatProvider>
           <CityProvider>
             <NearbyProvider>
             <CartProvider>
@@ -103,6 +107,7 @@ function App() {
                     <Route path="checkout" element={<Checkout />} />
                     <Route path="order-placed" element={<OrderPlaced />} />
                     <Route path="orders" element={<MyOrders />} />
+                    <Route path="chat" element={<Chat />} />
                     <Route path="orders/:id" element={<MyOrderDetail />} />
                   </Route>
 
@@ -132,6 +137,7 @@ function App() {
                     <Route path="products/:id" element={<ProductForm />} />
                     <Route path="categories" element={<Categories />} />
                     <Route path="orders" element={<BrandOrders />} />
+                    <Route path="messages" element={<BrandMessages />} />
                     <Route path="orders/:id" element={<BrandOrderDetail />} />
                     <Route path="deliveries" element={<Deliveries />} />
                     <Route path="reviews" element={<BrandReviews />} />
@@ -171,6 +177,7 @@ function App() {
             </CartProvider>
             </NearbyProvider>
           </CityProvider>
+          </ChatProvider>
         </NotificationProvider>
       </AuthProvider>
     </BrowserRouter>

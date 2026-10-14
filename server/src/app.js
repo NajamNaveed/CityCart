@@ -12,6 +12,7 @@ const blockRoutes = require('./routes/block.routes');
 const branchRoutes = require('./routes/branch.routes');
 const branchMineRoutes = require('./routes/branchMine.routes');
 const discoverRoutes = require('./routes/discover.routes');
+const chatRoutes = require('./routes/chat.routes');
 const brandRoutes = require('./routes/brand.routes');
 const storeRoutes = require('./routes/store.routes');
 
@@ -77,6 +78,7 @@ app.use('/api/v1/blocks', blockRoutes);
 app.use('/api/v1/brand/branches', branchRoutes);
 app.use('/api/v1/branches', branchMineRoutes);
 app.use('/api/v1/discover', discoverRoutes);
+app.use('/api/v1/chats', chatRoutes);
 app.use('/api/v1/brands', brandRoutes);
 app.use('/api/v1/stores', storeRoutes);
 

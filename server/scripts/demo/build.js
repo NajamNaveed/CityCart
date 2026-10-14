@@ -7,7 +7,7 @@
 const mongoose = require('mongoose');
 
 const { slugify } = require('../../src/utils/slugify');
-const { CITIES, BLOCKS, BRANCHES, BRANDS, CUSTOMERS, ADMIN, CARTS, REMARKS } = require('./catalog');
+const { CITIES, BLOCKS, BRANCHES, BRANDS, CHATS, LONG_CHAT, CUSTOMERS, ADMIN, CARTS, REMARKS } = require('./catalog');
 
 const { ObjectId } = mongoose.Types;
 const HOUR = 3600 * 1000;
@@ -59,7 +59,7 @@ function buildDataset({ now = new Date(), hashes }) {
   const ago = (ms) => new Date(now.getTime() - ms);
 
   const ds = {
-    cities: [], blocks: [], branches: [], users: [], brands: [], stores: [], categories: [], products: [], inventories: [],
+    cities: [], blocks: [], branches: [], conversations: [], messages: [], users: [], brands: [], stores: [], categories: [], products: [], inventories: [],
     employees: [], carts: [], orders: [], payments: [], deliveries: [], reviews: [], notifications: [], counters: [],
   };
 
@@ -434,6 +434,42 @@ function buildDataset({ now = new Date(), hashes }) {
       });
     }
   }
+
+  // ── chats: customers asking brands about products ──
+  const customerByEmail = Object.fromEntries(customers.map((c) => [c.email, c.doc]));
+  const idAt = (at) => ObjectId.createFromTime(Math.floor(at.getTime() / 1000)); // message ids sort by time
+  const buildChat = (chat, thread) => {
+    const brand = brandByKey[chat.brand];
+    const customer = customerByEmail[`${chat.customer}@citycart.demo`];
+    const about = ds.products.find((p) => String(p.brandId) === String(brand.doc._id) && p.name.includes(chat.about));
+    const replier = (brand.staff.find((s) => s.user.name === chat.by) || { user: brand.owner }).user;
+    const conversationId = new ObjectId();
+
+    const docs = thread.map(([who, text, minutesAgo], i) => {
+      const at = new Date(now.getTime() - minutesAgo * 60 * 1000);
+      return {
+        _id: idAt(at), conversationId, senderId: who === 'c' ? customer._id : replier._id,
+        senderRole: who === 'c' ? 'CUSTOMER' : 'BRAND', body: text, createdAt: at,
+        ...(i === 0 && { productId: about._id }), // the product page the customer came from
+      };
+    });
+    docs.forEach((d) => ds.messages.push(d));
+
+    const last = docs[docs.length - 1];
+    // The last run of messages from one side is unread by the other, if unseen.
+    let run = 0;
+    for (let i = docs.length - 1; i >= 0 && docs[i].senderRole === last.senderRole; i -= 1) run += 1;
+    const unread = chat.unseen ? run : 0;
+    ds.conversations.push({
+      _id: conversationId, customerId: customer._id, brandId: brand.doc._id,
+      lastMessageAt: last.createdAt, lastMessagePreview: last.body.slice(0, 100), lastSenderRole: last.senderRole,
+      customerUnread: last.senderRole === 'BRAND' ? unread : 0,
+      brandUnread: last.senderRole === 'CUSTOMER' ? unread : 0,
+      createdAt: docs[0].createdAt, updatedAt: last.createdAt,
+    });
+  };
+  CHATS.forEach((chat) => buildChat(chat, chat.thread));
+  buildChat(LONG_CHAT, LONG_CHAT.pairs.flatMap(([ask, answer], i) => [['c', ask, 6000 - i * 90], ['b', answer, 6000 - i * 90 - 40]]));
 
   // ── notifications ──
   const note = (userId, type, title, message, data, at) => {

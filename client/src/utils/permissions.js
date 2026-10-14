@@ -44,6 +44,13 @@ export const PERMISSION_GROUPS = [
     ],
   },
   {
+    title: 'Customer messages',
+    items: [
+      ['messages.view', 'Read customer messages'],
+      ['messages.manage', 'Reply to customers'],
+    ],
+  },
+  {
     title: 'Analytics',
     items: [['analytics.view', 'View brand analytics']],
   },
@@ -73,5 +80,6 @@ export const PRESETS = [
     'Catalogue manager',
     ['products.view', 'products.create', 'products.update', 'categories.view', 'categories.create', 'categories.update', 'inventory.view', 'inventory.manage'],
   ],
+  ['Customer support', ['messages.view', 'messages.manage', 'products.view', 'orders.view']],
   ['View only', ['products.view', 'categories.view', 'inventory.view', 'orders.view', 'delivery.view']],
 ]

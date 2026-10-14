@@ -89,6 +89,14 @@ function emitToUser(userId, payload) {
   io.to(`user:${String(userId)}`).emit('notification', payload);
 }
 
+// Chat push: same private per-user room as notifications, its own event name.
+// Like notifications this is delivery only — the message is already saved, and
+// every write goes through the REST endpoints (routes/chat.routes.js).
+function emitChat(userId, payload) {
+  if (!io) return;
+  io.to(`user:${String(userId)}`).emit('chat:message', payload);
+}
+
 function closeSockets() {
   if (!io) return Promise.resolve();
   const closing = io;
@@ -98,4 +106,4 @@ function closeSockets() {
   return new Promise((resolve) => closing.close(() => resolve()));
 }
 
-module.exports = { initSockets, emitToUser, closeSockets };
+module.exports = { initSockets, emitToUser, emitChat, closeSockets };

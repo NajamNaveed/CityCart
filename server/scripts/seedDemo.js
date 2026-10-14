@@ -20,6 +20,8 @@ const MODELS = {
   cities: require('../src/models/city.model'),
   blocks: require('../src/models/block.model'),
   branches: require('../src/models/branch.model'),
+  conversations: require('../src/models/conversation.model'),
+  messages: require('../src/models/message.model'),
   users: require('../src/models/user.model'),
   brands: require('../src/models/brand.model'),
   stores: require('../src/models/store.model'),

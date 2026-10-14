@@ -14,6 +14,7 @@ const P = {
   orders: ['orders.view', 'orders.manage'],
   delivery: ['delivery.view', 'delivery.manage'],
   stock: ['inventory.view', 'inventory.manage'],
+  messages: ['messages.view', 'messages.manage'],
   viewOnly: ['products.view', 'categories.view', 'inventory.view', 'orders.view', 'delivery.view'],
 }
 
@@ -36,7 +37,7 @@ const BRANDS = [
       contact: { phone: '+92 41 2617 480', email: 'store@loomandco.pk' }, hours: { open: '10:00', close: '20:00', closed: ['sun'] }, isActive: true,
     },
     staff: [
-      { name: 'Usman Tariq', email: 'usman.tariq@citycart.demo', phone: '+92 321 6638120', jobTitle: 'Order Handler', permissions: [...P.orders, ...P.delivery] },
+      { name: 'Usman Tariq', email: 'usman.tariq@citycart.demo', phone: '+92 321 6638120', jobTitle: 'Order Handler', permissions: [...P.orders, ...P.delivery, ...P.messages] },
       { name: 'Fatima Noor', email: 'fatima.noor@citycart.demo', phone: '+92 333 6107754', jobTitle: 'Catalogue Manager', permissions: [...P.productsAll, ...P.categoriesAll, ...P.stock] },
     ],
     categories: [
@@ -96,7 +97,7 @@ const BRANDS = [
       address: { addressLine: 'Plot 8, Jaranwala Road, Small Industrial Estate', city: 'Faisalabad', state: 'Punjab', country: 'Pakistan', postalCode: '38000' },
       contact: { phone: '+92 41 8723 119', email: 'house@rangrezprints.pk' }, hours: { open: '09:00', close: '18:00', closed: ['fri', 'sun'] }, isActive: true,
     },
-    staff: [{ name: 'Zainab Yousaf', email: 'zainab.yousaf@citycart.demo', phone: '+92 302 9917345', jobTitle: 'Dispatch Packer', permissions: [...P.orders, ...P.delivery, 'inventory.view'] }],
+    staff: [{ name: 'Zainab Yousaf', email: 'zainab.yousaf@citycart.demo', phone: '+92 302 9917345', jobTitle: 'Dispatch Packer', permissions: [...P.orders, ...P.delivery, 'inventory.view', ...P.messages] }],
     categories: [
       { key: 'block', name: 'Block Print Cloth', description: 'Hand-stamped with carved wooden blocks and natural-style dyes.' },
       { key: 'digital', name: 'Digital Print Cloth', description: 'Photographic detail and unlimited colours on cotton and lawn.' },
@@ -242,7 +243,7 @@ const BRANDS = [
       address: { addressLine: 'Plot 31, Millat Town Industrial Area', city: 'Faisalabad', state: 'Punjab', country: 'Pakistan', postalCode: '38000' },
       contact: { phone: '+92 41 8511 6402', email: 'outlet@zaitoonfootwear.pk' }, hours: { open: '10:00', close: '21:00', closed: [] }, isActive: true,
     },
-    staff: [{ name: 'Danish Memon', email: 'danish.memon@citycart.demo', phone: '+92 312 4458803', jobTitle: 'Warehouse Lead', permissions: [...P.stock, ...P.orders, 'products.view', ...P.delivery] }],
+    staff: [{ name: 'Danish Memon', email: 'danish.memon@citycart.demo', phone: '+92 312 4458803', jobTitle: 'Warehouse Lead', permissions: ['messages.view', ...P.stock, ...P.orders, 'products.view', ...P.delivery] }],
     categories: [
       { key: 'chappal', name: 'Chappals & Sandals', description: 'Peshawari chappals, kolhapuris and open sandals.' },
       { key: 'khussa', name: 'Khussas', description: 'Traditional pointed and round-toe khussas.' },
@@ -466,6 +467,80 @@ const BRANCHES = {
   silkroute: [{ name: 'Silk Route Showroom', block: 'susan-road', address: 'Office 12, Kohinoor City, Susan Road', phone: '+92 41 2290 645', off: [0.0001, -0.0008], only: null, isActive: false }],
 }
 
+/**
+ * Customer <-> brand conversations. A message is [who, text, minutesAgo], who
+ * being 'c' (the customer) or 'b' (the brand). `about` picks the product the
+ * first message is attached to (a name fragment). `by` names the team member who
+ * answers; omitted means the owner. `unseen` leaves the final run of messages
+ * unread by the other side.
+ */
+const CHATS = [
+  { customer: 'sana.iqbal', brand: 'loom', about: 'Mehrunisa', by: 'Usman Tariq', thread: [
+    ['c', 'Assalam o alaikum! Is the Mehrunisa 3-piece lawn still available in the rose pink?', 4300],
+    ['b', 'Walaikum assalam Sana! Yes, we have it in rose pink right now.', 4270],
+    ['c', 'Lovely. Can I pick it up from D Ground, or is it only at the Clock Tower shop?', 4255],
+    ['b', 'The lawn range is at both the Clock Tower and the D Ground shops. D Ground is open until 9 pm.', 4240],
+    ['c', 'Perfect, I will order online and collect. Thank you!', 4232],
+  ] },
+  { customer: 'ali.raza', brand: 'mehr', about: 'Classic White Cotton', unseen: true, thread: [
+    ['c', 'Hi, I need a size for a 46 inch chest. Which one do you recommend?', 1500],
+    ['b', 'Hello Ali. For a 46 inch chest we suggest Large, it has an extra inch of room at the chest. Medium would be snug.', 1420],
+  ] },
+  { customer: 'mahnoor.tariq', brand: 'sukoon', about: 'Cotton Bedsheet Set', thread: [
+    ['c', 'What is the thread count of the king bedsheet set, and is it fine in a normal wash?', 9800],
+    ['b', 'It is 200 thread count percale. Yes, wash it at 30 to 40 degrees with similar colours and it will soften with every wash.', 9740],
+    ['c', 'Great, thank you for the quick reply.', 9720],
+  ] },
+  { customer: 'hassan.mehmood', brand: 'zaitoon', about: 'Peshawari Chappal', unseen: true, thread: [
+    ['c', 'Do you exchange the chappal if the size is wrong?', 2900],
+    ['b', 'Yes, within 7 days if it is unworn. Send us a message and we will arrange the swap.', 2850],
+    ['c', 'Good to know. If I order today, can it reach Samanabad before Friday?', 95],
+  ] },
+  { customer: 'zoya.khan', brand: 'naqsh', about: 'Kundan Jhumka', thread: [
+    ['c', 'Are these jhumkas hypoallergenic? I have sensitive ears.', 6100],
+    ['b', 'The posts are nickel-free brass with gold plating, so most people wear them without trouble. If you react to metal, we suggest our oxidised silver pair.', 6020],
+    ['c', 'Thank you, I will go with the silver ones.', 5990],
+  ] },
+  { customer: 'faisal.chaudhry', brand: 'rangrez', about: 'Floral Digital Lawn', by: 'Zainab Yousaf', unseen: true, thread: [
+    ['c', 'Do you take custom print runs of around 200 metres? I run a small boutique.', 780],
+    ['b', 'Yes we do. Digital runs start from 100 metres, and we can print your own artwork on lawn or cotton.', 700],
+    ['c', 'What is the turnaround, and can I get a strike-off sample first?', 60],
+  ] },
+  { customer: 'areeba.siddiqui', brand: 'loom', about: 'Gulbahar', unseen: true, thread: [
+    ['c', 'Do you deliver to Jinnah Colony, and how long does it take?', 400],
+    ['b', 'We do. Orders to Jinnah Colony usually arrive within one to two days.', 330],
+  ] },
+  { customer: 'hina.malik', brand: 'sukoon', about: 'Handwoven Jute Rug', thread: [
+    ['c', 'Is the jute rug suitable for a living room with kids?', 12000],
+    ['b', 'Jute is durable but a little rough. For young kids we suggest the cotton dhurrie, or put the jute rug under the seating area.', 11940],
+  ] },
+]
+
+// One long conversation, to show how older messages load in pages.
+const LONG_CHAT = {
+  customer: 'waqar.ahmed', brand: 'mehr', about: 'Wash & Wear Shalwar Kameez',
+  pairs: [
+    ['Which fabric is the wash and wear suit?', 'It is a polyester-viscose blend that keeps its crease and dries quickly.'],
+    ['Does it shrink after washing?', 'No noticeable shrinkage. We pre-shrink the cloth before stitching.'],
+    ['What colours do you have?', 'Slate grey, black, navy and cream at the moment.'],
+    ['Is the grey darker than it looks in the photo?', 'Slightly. It is a charcoal-leaning slate, closer to the photo in daylight.'],
+    ['Can the length be adjusted?', 'Yes, our tailors can adjust sleeve and shalwar length free of charge on the first order.'],
+    ['How long does tailoring take?', 'Alterations take two working days.'],
+    ['Do you stock the kurta in a size 42?', 'Yes, size 42 is Medium in our range, and we have it in all colours.'],
+    ['Is there a loose-fit option?', 'The classic cut is relaxed. The slim cut is the narrower one.'],
+    ['Which one would suit a 40 inch waist?', 'The classic cut. Slim runs a size smaller.'],
+    ['Do you offer a matching waistcoat?', 'Yes, in black and navy. It is listed under Waistcoats and Coats.'],
+    ['Can I try the suit before buying?', 'Please visit the D Ground shop and we will measure you.'],
+    ['What are the shop hours?', 'We are open from 11 am to 9 pm, Saturday to Thursday.'],
+    ['Is Friday closed?', 'We open after Jumma prayers, from 3 pm.'],
+    ['Do you take cash on delivery?', 'Yes, on CityCart you pay in cash when the order arrives.'],
+    ['Can I change the delivery address after ordering?', 'Yes, until the order is marked out for delivery.'],
+    ['Do you have gift packaging?', 'We can add a gift box and remove the price slip. Mention it in the order note.'],
+    ['Great. I am ordering the slate grey in Large now.', 'Thank you Waqar! We will pack it today.'],
+    ['Will you send a message when it ships?', 'You will get a notification on CityCart as soon as it is out for delivery.'],
+  ],
+}
+
 const CUSTOMERS = [
   { name: 'Sana Iqbal', email: 'sana.iqbal@citycart.demo', phone: '+92 300 1182047', city: 'Faisalabad', state: 'Punjab', address: 'House 41, Street 5, Peoples Colony No. 1', postalCode: '38000', note: 'Please call before arriving.' },
   { name: 'Ali Raza', email: 'ali.raza@citycart.demo', phone: '+92 321 4476098', city: 'Faisalabad', state: 'Punjab', address: 'House 18-A, Block F, Gulberg', postalCode: '38000' },
@@ -523,4 +598,4 @@ const REMARKS = {
   quick: { good: ['It arrived as described.'], bad: ['Not as pictured.', 'The quality was poor for the price.'] },
 }
 
-module.exports = { P, CITIES, BLOCKS, BRANCHES, BRANDS, CUSTOMERS, ADMIN, CARTS, REMARKS }
+module.exports = { P, CITIES, BLOCKS, BRANCHES, BRANDS, CHATS, LONG_CHAT, CUSTOMERS, ADMIN, CARTS, REMARKS }

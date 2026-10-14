@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
-import { Bell, Check, ChevronDown, LayoutDashboard, LogOut, MapPin, Menu as MenuIcon, Package, Search, ShoppingBag } from 'lucide-react'
+import { Bell, Check, ChevronDown, LayoutDashboard, LogOut, MapPin, Menu as MenuIcon, MessageCircle, Package, Search, ShoppingBag } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useCart } from '../../hooks/useCart'
 import { useCity } from '../../hooks/useCity'
+import { useChat } from '../../hooks/useChat'
 import { useNearby } from '../../hooks/useNearby'
 import LocationChip from '../nearby/LocationChip'
 import useNotifications from '../../hooks/useNotifications'
@@ -85,6 +86,24 @@ function OrdersLink() {
       className="flex h-9 w-9 items-center justify-center rounded-md text-ink transition hover:bg-paper"
     >
       <Package className="h-[18px] w-[18px]" aria-hidden="true" />
+    </Link>
+  )
+}
+
+function MessagesLink() {
+  const { unread } = useChat()
+  return (
+    <Link
+      to="/chat"
+      aria-label={unread > 0 ? `Messages, ${unread} unread` : 'Messages'}
+      className="relative flex h-9 w-9 items-center justify-center rounded-md text-ink transition hover:bg-paper"
+    >
+      <MessageCircle className="h-[18px] w-[18px]" aria-hidden="true" />
+      {unread > 0 && (
+        <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-clay px-1 text-[10px] font-semibold leading-none text-white">
+          {unread > 9 ? '9+' : unread}
+        </span>
+      )}
     </Link>
   )
 }
@@ -302,13 +321,15 @@ function QuickAccess() {
   const { user } = useAuth()
   const { itemCount } = useCart()
   const { unreadCount } = useNotifications()
+  const { unread: unreadChats } = useChat()
   const isCustomer = user?.role === 'CUSTOMER'
 
   return (
     <div>
       <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Quick access</p>
-      <div className={`grid gap-2.5 ${isCustomer ? 'grid-cols-3' : 'grid-cols-1'}`}>
+      <div className={`grid gap-2.5 ${isCustomer ? 'grid-cols-4' : 'grid-cols-1'}`}>
         <DrawerTile to="/notifications" icon={Bell} label="Alerts" badge={unreadCount} />
+        {isCustomer && <DrawerTile to="/chat" icon={MessageCircle} label="Chat" badge={unreadChats} />}
         {isCustomer && <DrawerTile to="/orders" icon={Package} label="Orders" />}
         {isCustomer && <DrawerTile to="/cart" icon={ShoppingBag} label="Cart" badge={itemCount} />}
       </div>
@@ -391,6 +412,7 @@ export default function StoreNavbar() {
             <NotificationBell />
             {user?.role === 'CUSTOMER' && (
               <>
+                <MessagesLink />
                 <OrdersLink />
                 <CartLink />
               </>

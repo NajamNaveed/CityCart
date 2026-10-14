@@ -54,6 +54,12 @@ const PERMISSIONS = Object.freeze({
 
   CUSTOMERS_VIEW: 'customers.view',
 
+  // Customer chat: messages.view lets a team member read the brand's
+  // conversations, messages.manage also lets them reply. The brand owner
+  // always has both.
+  MESSAGES_VIEW: 'messages.view',
+  MESSAGES_MANAGE: 'messages.manage',
+
   EMPLOYEES_VIEW: 'employees.view',
   EMPLOYEES_CREATE: 'employees.create',
   EMPLOYEES_UPDATE: 'employees.update',
