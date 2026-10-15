@@ -16,21 +16,25 @@ CityCart/
 ├─ server/     the API (unchanged apart from the native-session support below)
 ├─ client/     the web app (unchanged)
 └─ mobile/     the Expo app (plain JavaScript, like the web app)
-   ├─ app/          screens; each file is a route (Expo Router)
-   │  ├─ _layout.jsx        fonts and providers
-   │  ├─ (auth)/            login, register
-   │  ├─ (tabs)/            index (home), shop, nearby, cart, account
-   │  ├─ product/[id].jsx
-   │  ├─ checkout.jsx  order-placed.jsx
-   │  ├─ orders/            index, [id]
-   │  ├─ chat/              index, [id]
-   │  └─ notifications.jsx
+   ├─ app.json  package.json  .env (the API address; see .env.example)
    ├─ src/
-   │  ├─ components/  context/  hooks/
-   │  ├─ services/    api.js (axios + bearer token), socket.js, storage.js
-   │  ├─ utils/       geo, range, chat, formatting (ported from client/src/utils)
-   │  └─ theme.js     colours and the Poppins font
-   └─ assets/
+   │  ├─ app/          screens; each file is a route (Expo Router, SDK 57 puts routes in src/app)
+   │  │  ├─ _layout.jsx        fonts, providers, splash screen
+   │  │  ├─ (auth)/            login, register                     (Phase 2)
+   │  │  ├─ (tabs)/            index (home), shop, nearby, cart, account
+   │  │  ├─ product/[id].jsx                                        (Phase 3)
+   │  │  ├─ checkout.jsx  order-placed.jsx                          (Phase 5)
+   │  │  ├─ orders/            index, [id]                          (Phase 5)
+   │  │  ├─ chat/              index, [id]                          (Phase 6)
+   │  │  └─ notifications.jsx                                       (Phase 6)
+   │  ├─ components/ui/  AppText, Screen, Button, Card, Spinner, EmptyState
+   │  ├─ context/        AuthProvider (more providers arrive with their screens)
+   │  ├─ hooks/
+   │  ├─ services/       api.js (axios + bearer token), storage.js, session.js, config.js
+   │  ├─ utils/          formatting now; geo, range, chat later (ported from client/src/utils)
+   │  └─ theme.js        the web app's colours, Poppins and Fraunces
+   ├─ __tests__/         unit tests (jest-expo)
+   └─ assets/            icon, splash
 ```
 
 Every mobile screen mirrors a web customer page. Context providers, hooks and
@@ -61,12 +65,14 @@ Installed once, inside `mobile/`, each with a stated reason:
 
 | Package | Reason |
 |---|---|
+| react-native-gesture-handler, react-native-reanimated, react-native-worklets, react-dom | required by Expo Router; pinned to the versions SDK 57 expects (npm otherwise picks newer, incompatible ones) |
 | axios | same HTTP client and interceptors as the web app |
 | socket.io-client | live chat and notifications |
 | expo-secure-store | the login token (Keychain / Keystore) |
 | @react-native-async-storage/async-storage | non-secret choices: city, block, range |
 | expo-location | the shopper's position for Nearby |
-| expo-font, @expo-google-fonts/poppins | the brand font |
+| expo-font, @expo-google-fonts/poppins, @expo-google-fonts/fraunces | the brand fonts, importing only the five weights used |
+| @expo/vector-icons | tab and button icons (Feather, the family Lucide came from) |
 | react-native-maps | the Nearby map (Android release builds need a Google Maps key) |
 
 ## 6. Phases
@@ -74,7 +80,7 @@ Installed once, inside `mobile/`, each with a stated reason:
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Server: bearer-token login for shoppers, tests, docs | done |
-| 1 | App foundation: Expo project, theme, API client, navigation shell | |
+| 1 | App foundation: Expo project, theme, API client, token storage, session rules, tab shell | done |
 | 2 | Login and register | |
 | 3 | Browse: home, shop (search, filters, endless scroll), brands, product and reviews | |
 | 4 | Nearby: location permission, block detection, area picker, range, results, map | |
@@ -85,7 +91,21 @@ Installed once, inside `mobile/`, each with a stated reason:
 
 Each phase ends with the server tests, lint and a successful app bundle.
 
-## 7. Known limits
+## 7. Development
+
+```bash
+cd mobile
+cp .env.example .env      # set EXPO_PUBLIC_API_URL
+npx expo start            # scan the QR code with the Expo Go app
+npm run lint
+npm test
+```
+
+The phone must be able to reach the API: use the deployed (https) address, or
+your computer's address on the same Wi-Fi. Plain `http` addresses work while
+developing but not in release builds of Android.
+
+## 8. Known limits
 
 * A bearer token cannot be revoked individually; it ends at expiry, on account
   deactivation, or when the password version changes. A lost phone is

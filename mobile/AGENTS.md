@@ -16,12 +16,14 @@ Use `bunx` instead of `npx` if the project uses bun (`bun.lock` present).
 npx expo install <package>  # ALWAYS use instead of npm/yarn/pnpm/bun add — resolves SDK-compatible versions
 npx expo start              # start the dev server
 npx expo lint               # lint
-npx tsc --noEmit            # typecheck
+npm test                    # unit tests (jest-expo)
 npx expo-doctor             # diagnose dependency and config issues
 npx expo install --fix      # fix incompatible package versions
 ```
 
-Run lint and typecheck before declaring any task done.
+Run lint and tests before declaring any task done. This app is plain JavaScript (`.js`/`.jsx`), like the web client; there is no TypeScript.
+
+The repository-wide rules in `../AGENTS.md` and the plan in `../docs/19-mobile-app.md` apply here too. The API (`../server`) is the source of truth for data; this app never talks to the database directly.
 
 ## Navigation & Routing
 

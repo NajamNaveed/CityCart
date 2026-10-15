@@ -377,6 +377,19 @@ CityCart/
 │   │
 │   └── package.json
 │
+├── mobile/                      # shopper app (React Native + Expo) — docs/19
+│   ├── src/
+│   │   ├── app/                 # screens; each file is a route (Expo Router)
+│   │   ├── components/
+│   │   ├── context/
+│   │   ├── hooks/
+│   │   ├── services/
+│   │   ├── utils/
+│   │   └── theme.js
+│   │
+│   ├── __tests__/
+│   └── package.json
+│
 ├── server/
 │   ├── src/
 │   │   ├── config/
@@ -410,7 +423,8 @@ CityCart/
 │   ├── 15-commission-and-payouts.md
 │   ├── 16-testing-strategy.md
 │   ├── 17-deployment.md
-│   └── 18-development-roadmap.md
+│   ├── 18-development-roadmap.md
+│   └── 19-mobile-app.md
 │
 ├── AGENTS.md
 ├── .gitignore
