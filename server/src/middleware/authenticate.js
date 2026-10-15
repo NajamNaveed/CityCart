@@ -1,7 +1,8 @@
 const User = require('../models/user.model');
 const { signToken, verifyToken } = require('../utils/jwt');
 const { AUTH_COOKIE_NAME, staffAuthCookieOptions } = require('../config/cookie');
-const { STAFF_ROLES } = require('../config/roles');
+const { ROLES, STAFF_ROLES } = require('../config/roles');
+const { readBearerToken } = require('../utils/clientType');
 const { isAllowedWhenRestricted } = require('../config/restrictedAccess');
 
 /**
@@ -17,10 +18,19 @@ const { isAllowedWhenRestricted } = require('../config/restrictedAccess');
  */
 async function authenticate(req, res, next) {
   try {
-    const token = req.cookies && req.cookies[AUTH_COOKIE_NAME];
+    // The session arrives as the HTTP-only cookie (web) or, for the native
+    // app, as `Authorization: Bearer <token>`. A Bearer header with no usable
+    // token is rejected outright, never quietly ignored; other schemes (Basic)
+    // are not ours and are left alone.
+    const bearer = readBearerToken(req);
+    const viaBearer = bearer.present;
+    const token = viaBearer ? bearer.token : req.cookies && req.cookies[AUTH_COOKIE_NAME];
 
     if (!token) {
-      return res.status(401).json({ success: false, message: 'Authentication required.' });
+      return res.status(401).json({
+        success: false,
+        message: viaBearer ? 'Invalid or expired session.' : 'Authentication required.',
+      });
     }
 
     let payload;
@@ -42,6 +52,17 @@ async function authenticate(req, res, next) {
 
     if ((payload.passwordVersion || 0) !== (user.passwordVersion || 0)) {
       return res.status(401).json({ success: false, message: 'Invalid or expired session.' });
+    }
+
+    // Bearer tokens are for the shopper app only. Staff sessions are short-lived
+    // and renewed through the cookie (docs/06 §9), so seller and admin accounts
+    // stay on the web dashboard even if one of their tokens were ever presented here.
+    if (viaBearer && user.role !== ROLES.CUSTOMER) {
+      return res.status(403).json({
+        success: false,
+        message: 'Seller and admin accounts sign in on the web dashboard.',
+        code: 'WEB_ONLY',
+      });
     }
 
     // Conceptual shape from §11 (req.user = { id, role, brandId }),

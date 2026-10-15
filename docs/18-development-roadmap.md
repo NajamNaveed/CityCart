@@ -931,7 +931,9 @@ Phase 8  Backend Cleanup & Hardening
 Phase 9  Mobile Application
          React Native (Expo) client on the shared /api/v1 backend. Requires
          a small, separately-approved authentication addition for native
-         clients. Planned in detail only when Phase 8 is complete.
+         clients (approved and implemented as "Phase 0" of the mobile plan:
+         bearer-token login for shoppers only). The phased plan, folder
+         structure and decisions are in docs/19-mobile-app.md.
 ```
 
 Rules for this programme:

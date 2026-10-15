@@ -297,6 +297,34 @@ The server-side short cookie is the security backstop (a stolen staff cookie
 expires in hours); the client-side tab marker is what enforces "close the
 tab, sign in again". Both were added together and must stay in sync.
 
+### Native App Sessions (added October 2026)
+
+The shopper mobile app (docs/19) cannot use the browser's HTTP-only cookie, so
+it carries its session as a bearer token. The rules keep the web's protection
+intact and keep the native door as narrow as possible:
+
+* The token is returned in the login/registration response **only** when the
+  request carries `X-Client: mobile`. The web app never sends that header, so
+  it never receives a token in a response body; no cookie is set for the app.
+* The app sends the token as `Authorization: Bearer <token>`. It is the same
+  JWT with the same expiry, and it goes through exactly the same checks as the
+  cookie on every request: signature and expiry, the user loaded fresh from the
+  database, `isActive`, and the `passwordVersion` revocation check.
+* **Shoppers only.** `/auth/brand/login` and `/auth/admin/login` refuse
+  `X-Client: mobile` outright (before any credential lookup), and a Bearer
+  token belonging to a brand admin, brand employee or platform admin is
+  refused with `403 WEB_ONLY`. Staff sessions stay on the web, where they are
+  short-lived, renewed and bound to the tab.
+* A `Bearer` header with no usable token is a `401`, never silently ignored.
+  Other schemes (for example `Basic`, which some hosting adds) are not ours
+  and are ignored so the cookie session keeps working.
+* The app stores the token in the device's secure storage (Keychain /
+  Keystore), never in plain storage, and deletes it on sign-out. A token
+  cannot be revoked individually: it ends at its expiry, when the account is
+  deactivated, or when the password version changes.
+* Bearer requests are not vulnerable to CSRF (§25): the token is attached
+  explicitly by the app, never sent automatically by a browser.
+
 ---
 
 # 10. Logout
@@ -685,7 +713,7 @@ when authenticated cookies are involved.
 
 # 25. CSRF Protection
 
-Because authentication uses cookies, CSRF must be considered.
+Because authentication uses cookies, CSRF must be considered. (Native app requests authenticate with an explicit `Authorization` header instead, which a browser never adds on its own, so they are not affected; see §9, Native App Sessions.)
 
 CityCart should use appropriate:
 

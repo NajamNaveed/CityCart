@@ -7,6 +7,7 @@ const { formatZodError } = require('../utils/formatZodError');
 const { changePasswordSchema } = require('../validators/password.validator');
 const { changePassword: changePasswordForUser, PasswordError } = require('../services/password.service');
 const { signToken } = require('../utils/jwt');
+const { isMobileClient } = require('../utils/clientType');
 const env = require('../config/env');
 
 // Staff sessions use the short-lived cookie (docs/06 §9); shoppers the
@@ -35,6 +36,11 @@ async function register(req, res, next) {
   try {
     const { user, token } = await registerUser(parsed.data);
 
+    // The native app asks for the token in the response (no cookie is set for
+    // it); the web gets the HTTP-only cookie and never sees the token.
+    if (isMobileClient(req)) {
+      return res.status(201).json({ success: true, message: 'Registration successful', user, token });
+    }
     res.cookie(AUTH_COOKIE_NAME, token, authCookieOptions);
     return res.status(201).json({
       success: true,
@@ -53,6 +59,16 @@ async function register(req, res, next) {
 // which roles may sign in; see PORTAL_ROLES in services/auth.service.js.
 const loginFor = (portal) =>
   async function login(req, res, next) {
+    // The app is for shoppers. Refused before credentials are even looked at,
+    // so it cannot be used to probe seller or admin accounts.
+    if (isMobileClient(req) && portal !== 'customer') {
+      return res.status(403).json({
+        success: false,
+        message: 'Seller and admin accounts sign in on the web dashboard.',
+        code: 'WEB_ONLY',
+      });
+    }
+
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({
@@ -65,6 +81,9 @@ const loginFor = (portal) =>
     try {
       const { user, token } = await loginUser(parsed.data, portal);
 
+      if (isMobileClient(req)) {
+        return res.status(200).json({ success: true, message: 'Login successful', user, token });
+      }
       res.cookie(AUTH_COOKIE_NAME, token, cookieOptionsFor(user.role));
       return res.status(200).json({
         success: true,

@@ -293,6 +293,14 @@ The server must identify the connected user before allowing private notification
 
 Users must not be able to subscribe to another user's notification channel.
 
+The web client authenticates the handshake with its HTTP-only cookie. The
+native shopper app (docs/19) sends its bearer token in the handshake `auth`
+payload (`io(url, { auth: { token } })`), never in the URL. Both paths apply
+the same checks as HTTP: valid unexpired JWT, an existing active user, and a
+matching `passwordVersion`. A bearer token of a seller or admin account is
+refused, as on HTTP. Chat messages (docs/19 and `routes/chat.routes.js`) are
+pushed over this same private per-user connection.
+
 ---
 
 # 15. Notification Events

@@ -3,6 +3,7 @@ const { Server } = require('socket.io');
 const { isAllowedOrigin } = require('../config/cors');
 const { AUTH_COOKIE_NAME } = require('../config/cookie');
 const { verifyToken } = require('../utils/jwt');
+const { ROLES } = require('../config/roles');
 const User = require('../models/user.model');
 
 /**
@@ -46,13 +47,26 @@ function parseAuthCookie(header) {
  */
 async function authenticateHandshake(socket, next) {
   try {
-    const token = parseAuthCookie(socket.request.headers.cookie);
+    // The native app sends its token in the handshake `auth` payload (never in
+    // the URL, which gets logged); browsers send the HTTP-only cookie.
+    const handshakeToken = socket.handshake && socket.handshake.auth && socket.handshake.auth.token;
+    const bearer = typeof handshakeToken === 'string' && handshakeToken ? handshakeToken : null;
+    const token = bearer || parseAuthCookie(socket.request.headers.cookie);
     if (!token) {
       return next(new Error('Unauthorized'));
     }
     const payload = verifyToken(token);
-    const user = await User.findById(payload.userId).select('_id isActive');
+    const user = await User.findById(payload.userId).select('_id isActive role passwordVersion');
     if (!user || !user.isActive) {
+      return next(new Error('Unauthorized'));
+    }
+    // Same revocation rule as HTTP (middleware/authenticate.js): a token issued
+    // before a password change no longer works.
+    if ((payload.passwordVersion || 0) !== (user.passwordVersion || 0)) {
+      return next(new Error('Unauthorized'));
+    }
+    // Bearer tokens are for the shopper app only, as on HTTP.
+    if (bearer && user.role !== ROLES.CUSTOMER) {
       return next(new Error('Unauthorized'));
     }
     socket.data.userId = String(user._id);
@@ -106,4 +120,4 @@ function closeSockets() {
   return new Promise((resolve) => closing.close(() => resolve()));
 }
 
-module.exports = { initSockets, emitToUser, emitChat, closeSockets };
+module.exports = { initSockets, emitToUser, emitChat, closeSockets, authenticateHandshake };

@@ -163,6 +163,28 @@ POST /api/v1/auth/login
 
 The JWT must not be returned unnecessarily in the JSON response when HTTP-only cookies are being used.
 
+### Native app clients
+
+The shopper mobile app (docs/19) sends `X-Client: mobile` on `POST /auth/login`
+and `POST /auth/register`. For that request only, the response also contains
+the session token and no cookie is set:
+
+```json
+{
+  "success": true,
+  "message": "Login successful",
+  "user": { "id": "user_id", "name": "John Doe", "email": "john@example.com", "role": "CUSTOMER" },
+  "token": "<jwt>"
+}
+```
+
+The app then authenticates every request with `Authorization: Bearer <token>`.
+This is for customers only: `POST /auth/brand/login` and `/auth/admin/login`
+answer `403` with `code: "WEB_ONLY"` to `X-Client: mobile`, and a Bearer token
+of a seller or admin account is refused with `403 WEB_ONLY` on every endpoint.
+The web client does not send `X-Client` and never receives a token in a body.
+See docs/06 (Native App Sessions).
+
 ---
 
 ## Logout
