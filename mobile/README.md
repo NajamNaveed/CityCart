@@ -18,6 +18,17 @@ npx expo start
 
 If the Home tab says **Connected to the CityCart server**, the app is talking to your API.
 
+## If something goes wrong
+
+| Problem | Fix |
+|---|---|
+| Home says "not connected to a server yet" | `.env` must contain the **whole line** `EXPO_PUBLIC_API_URL=http://YOUR-ADDRESS:5000`, not just the address. Save it, then restart with `npx expo start -c`. |
+| "Can't reach the server" with a local address | Use your computer's real Wi-Fi address (Windows: `ipconfig`, look for *IPv4 Address*; Mac/Linux: `ifconfig`). Phone and computer must be on the same Wi-Fi. |
+| It worked in a browser but not on the phone | Windows Firewall is probably blocking Node on port 5000: allow Node.js on **Private networks**, or run `New-NetFirewallRule -DisplayName "CityCart API" -Direction Inbound -LocalPort 5000 -Protocol TCP -Action Allow` in an Administrator PowerShell. |
+| "Unable to resolve ..." or a screen from the starter template | Leftover starter files. The app has no `.tsx` files and no `tsconfig.json`; delete any you find. |
+| Expo Go says the project is incompatible | Update Expo Go from the store: it must support SDK 57. |
+| Strange cached behaviour | `npx expo start -c` clears the cache. |
+
 ## Useful commands
 
 | Command | What it does |

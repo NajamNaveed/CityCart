@@ -3,6 +3,7 @@
 # Runs on every push to main and every pull request:
 #   - server: lint + full unit suite
 #   - client: lint + production build
+#   - mobile: lint + unit tests
 #   - integration: the real-database test suite (transactions, concurrency)
 #
 # Deployment (Vercel for the client, Render for the server) can be attached
@@ -65,6 +66,30 @@ jobs:
       - name: Production build
         working-directory: client
         run: npm run build
+
+  mobile:
+    name: Mobile — lint & unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        working-directory: mobile
+        run: npm ci
+
+      - name: Lint
+        working-directory: mobile
+        run: npm run lint
+
+      - name: Unit tests
+        working-directory: mobile
+        run: npm test
 
   integration:
     name: Server — integration tests (real MongoDB)

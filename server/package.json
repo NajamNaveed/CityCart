@@ -27,7 +27,9 @@
     "testPathIgnorePatterns": [
       "/node_modules/",
       "/tests/integration/"
-    ]
+    ],
+    "maxWorkers": 2,
+    "workerIdleMemoryLimit": "600MB"
   },
   "engines": {
     "node": ">=22"
