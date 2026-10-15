@@ -73,6 +73,7 @@ beforeEach(() => {
   Category.find.mockResolvedValue([lawn]);
   Branch.find.mockResolvedValue([gulberg, dground]);
   Product.find.mockResolvedValue([]);
+  Inventory.find.mockResolvedValue([]);
   Product.findOne.mockResolvedValue(null);
   Product.create.mockImplementation(async (data) => ({ _id: oid(), ...data }));
   Branch.countDocuments.mockResolvedValue(1);
@@ -95,6 +96,8 @@ describe('GET /api/v1/products/mine/export', () => {
     expect(res.headers['content-type']).toMatch(/text\/csv/);
     expect(res.headers['content-disposition']).toMatch(/attachment/);
     const lines = res.text.replace(/^\uFEFF/, '').split('\r\n');
+    // archived (removed) products are not exported, so the file can always be imported back
+    expect(Product.find).toHaveBeenCalledWith({ brandId: user.brandId.toString(), status: { $ne: 'ARCHIVED' } });
     expect(lines[0]).toBe(HEADER);
     expect(lines[1]).toBe(`'=Danger Suit,S-1,Lawn,4500,,ACTIVE,12,3,"Soft, ""light""",https://x/a.jpg|https://x/b.jpg,Gulberg Shop`);
   });
@@ -164,10 +167,82 @@ describe('POST /api/v1/products/import', () => {
 
     const res = await post(headers, `${HEADER}\nMehrunisa Lawn,ML-1,Lawn,4800,,ACTIVE,,,,,\n`);
 
-    expect(res.body).toMatchObject({ created: 0, updated: 1, failed: 0 });
+    expect(res.body).toMatchObject({ created: 0, updated: 1, unchanged: 0, failed: 0 });
     expect(Product.create).not.toHaveBeenCalled();
     expect(existing.price).toBe(4800);
     expect(existing.status).toBe('ACTIVE');
+  });
+
+  describe('importing an exported file back', () => {
+    const stored = (brandId, extra = {}) => ({
+      _id: oid(), brandId, name: 'Mehrunisa Lawn', slug: 'mehrunisa-lawn', sku: 'ML-1', categoryId: lawn._id, price: 4500,
+      compareAtPrice: 5200, status: 'ACTIVE', isActive: true, description: 'Soft lawn', images: ['https://x/a.jpg'],
+      branchIds: [gulberg._id], ...extra,
+      save: jest.fn(async function s() { return this; }),
+    });
+
+    // Export asks for non-archived products with a chain; import reads them all as a promise.
+    const shopHas = (list) =>
+      Product.find.mockImplementation((filter) =>
+        filter.status ? { sort: () => ({ limit: () => Promise.resolve(list.filter((p) => p.status !== 'ARCHIVED')) }) } : Promise.resolve(list)
+      );
+
+    it('reports the products as unchanged instead of failing or rewriting them', async () => {
+      const { user, headers } = asBrandAdmin();
+      const p = stored(user.brandId);
+      shopHas([p]);
+      Inventory.find.mockResolvedValue([{ productId: p._id, quantity: 20, lowStockThreshold: 5 }]);
+
+      const exported = await request(app).get('/api/v1/products/mine/export').set(...headers);
+      const res = await post(headers, exported.text);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ total: 1, created: 0, updated: 0, unchanged: 1, failed: 0 });
+      expect(p.save).not.toHaveBeenCalled();
+      expect(Product.create).not.toHaveBeenCalled();
+      expect(updateInventory).not.toHaveBeenCalled();
+    });
+
+    it('imports an export as brand-new products when the shop no longer has them', async () => {
+      const { user, headers } = asBrandAdmin();
+      const p = stored(user.brandId);
+      shopHas([p]);
+      Inventory.find.mockResolvedValue([{ productId: p._id, quantity: 20, lowStockThreshold: 5 }]);
+      const exported = await request(app).get('/api/v1/products/mine/export').set(...headers);
+
+      shopHas([]); // e.g. a different, empty shop
+      Branch.countDocuments.mockResolvedValue(1);
+      const res = await post(headers, exported.text);
+
+      expect(res.body).toMatchObject({ created: 1, updated: 0, unchanged: 0, failed: 0 });
+      expect(Product.create).toHaveBeenCalledWith(expect.objectContaining({ name: 'Mehrunisa Lawn', status: 'ACTIVE', sku: 'ML-1' }));
+    });
+
+    it('updates only what changed, and notices a stock-only change', async () => {
+      const { user, headers } = asBrandAdmin();
+      const p = stored(user.brandId);
+      shopHas([p]);
+      Product.findById.mockResolvedValue(p);
+      Inventory.find.mockResolvedValue([{ productId: p._id, quantity: 20, lowStockThreshold: 5 }]);
+
+      const stockOnly = await post(headers, `${HEADER}\nMehrunisa Lawn,ML-1,Lawn,4500,5200,ACTIVE,35,5,Soft lawn,https://x/a.jpg,Gulberg Shop\n`);
+
+      expect(stockOnly.body).toMatchObject({ updated: 1, unchanged: 0, failed: 0 });
+      expect(updateInventory).toHaveBeenCalledWith(expect.anything(), { quantity: 35, lowStockThreshold: 5 });
+    });
+
+    it('brings back an archived product when its row says ACTIVE', async () => {
+      const { user, headers } = asBrandAdmin();
+      const archived = stored(user.brandId, { status: 'ARCHIVED', isActive: false });
+      shopHas([archived]);
+      Product.findById.mockResolvedValue(archived);
+
+      const res = await post(headers, `${HEADER}\nMehrunisa Lawn,ML-1,Lawn,4500,5200,ACTIVE,,,Soft lawn,https://x/a.jpg,Gulberg Shop\n`);
+
+      expect(res.body).toMatchObject({ updated: 1, failed: 0 });
+      // status AND visibility are restored together, or shoppers still would not see it
+      expect(archived).toMatchObject({ status: 'ACTIVE', isActive: true });
+    });
   });
 
   it('checks the file without writing anything when dryRun=true', async () => {

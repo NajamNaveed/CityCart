@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Download, FileUp } from 'lucide-react'
 import api, { getErrorMessage } from '../../services/api'
 import { Modal } from '../ui'
@@ -12,10 +12,16 @@ const TEMPLATE =
 // Upload a CSV: "Check file" validates every row without saving, "Import" saves the valid ones.
 export default function ProductImportModal({ open, onClose, onImported }) {
   const input = useRef(null)
+  const report = useRef(null)
   const [file, setFile] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
+
+  // Bring the result into view: it appears below the buttons, possibly off screen.
+  useEffect(() => {
+    if (result || error) report.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [result, error])
 
   function close() {
     setFile(null)
@@ -88,14 +94,21 @@ export default function ProductImportModal({ open, onClose, onImported }) {
         </button>
       </div>
 
-      <div aria-live="polite" className="mt-4">
+      <div ref={report} aria-live="polite" className="mt-4">
         {error && <p className="rounded-md bg-clay/5 px-3.5 py-2.5 text-sm text-clay">{error}</p>}
         {result && (
           <div className="space-y-3 text-[13.5px]">
             <p className="rounded-md bg-paper px-3.5 py-2.5 text-ink">
-              {result.dryRun ? 'Check complete. Nothing was saved yet. ' : 'Done. '}
-              {result.created} {result.dryRun ? 'to add' : 'added'}, {result.updated} {result.dryRun ? 'to update' : 'updated'}, {result.failed} with problems.
+              {result.dryRun ? 'Check complete. Nothing was saved yet. ' : 'Import finished. '}
+              <strong>{result.created}</strong> {result.dryRun ? 'will be added' : 'added'}, <strong>{result.updated}</strong>{' '}
+              {result.dryRun ? 'will be updated' : 'updated'}, <strong>{result.unchanged}</strong> already up to date,{' '}
+              <strong>{result.failed}</strong> with problems.
             </p>
+            {result.created + result.updated === 0 && result.failed === 0 && result.unchanged > 0 && (
+              <p className="rounded-md bg-warning-soft px-3.5 py-2.5 text-warning">
+                These products already exist in your shop with exactly these details, so nothing needed to change. To add new products, put each one on a new row with a name or SKU that is not in your shop yet.
+              </p>
+            )}
             {result.warnings.map((w) => (
               <p key={w} className="rounded-md bg-warning-soft px-3.5 py-2.5 text-warning">
                 {w}
@@ -103,7 +116,7 @@ export default function ProductImportModal({ open, onClose, onImported }) {
             ))}
             {result.ignoredColumns.length > 0 && <p className="text-xs text-muted">Ignored columns: {result.ignoredColumns.join(', ')}</p>}
             {result.errors.length > 0 && (
-              <div className="max-h-56 overflow-auto rounded-md border border-line">
+              <div className="max-h-48 overflow-auto rounded-md border border-line">
                 <table className="w-full text-left text-[12.5px]">
                   <thead className="bg-paper/60 text-[11px] uppercase tracking-[0.1em] text-muted">
                     <tr>

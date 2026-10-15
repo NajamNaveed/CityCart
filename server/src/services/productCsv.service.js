@@ -60,8 +60,36 @@ function wholeNumber(value, label, messages) {
   return Number(value);
 }
 
+const asIds = (list) => (list || []).map(String);
+const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x));
+
+/**
+ * True when the row would change nothing: every value the row provides equals
+ * what the shop already has. Such rows are counted as "unchanged" and skipped,
+ * so re-importing an exported file does not rewrite products (or stock) for
+ * no reason.
+ */
+function isUnchanged(existing, data, inventory, stock) {
+  if (existing.isActive === false) return false; // an archived product would be restored
+  const checks = [
+    data.name === undefined || data.name === existing.name,
+    data.sku === undefined || data.sku === existing.sku,
+    data.price === undefined || data.price === existing.price,
+    data.compareAtPrice === undefined || data.compareAtPrice === existing.compareAtPrice,
+    data.status === undefined || data.status === existing.status,
+    data.description === undefined || data.description === existing.description,
+    data.categoryId === undefined || String(data.categoryId) === String(existing.categoryId),
+    data.images === undefined || JSON.stringify(data.images) === JSON.stringify(existing.images || []),
+    data.branchIds === undefined || sameSet(asIds(data.branchIds), asIds(existing.branchIds)),
+    stock.quantity === undefined || (inventory && inventory.quantity === stock.quantity),
+    stock.lowStockThreshold === undefined || (inventory && inventory.lowStockThreshold === stock.lowStockThreshold),
+  ];
+  return checks.every(Boolean);
+}
+
 async function exportBrandProducts(brandId) {
-  const products = await Product.find({ brandId }).sort({ createdAt: 1 }).limit(MAX_EXPORT_ROWS);
+  // Archived products are removed from the shop, so they are left out: the file can always be imported back.
+  const products = await Product.find({ brandId, status: { $ne: 'ARCHIVED' } }).sort({ createdAt: 1 }).limit(MAX_EXPORT_ROWS);
   const ids = products.map((p) => p._id);
   const [categories, branches, inventories] = await Promise.all([
     Category.find({ brandId }),
@@ -125,10 +153,11 @@ async function importBrandProducts(brandId, text, { dryRun = false, canManageSto
     throw new CsvImportError(400, `A file can have at most ${MAX_IMPORT_ROWS} products. Split it into smaller files.`);
   }
 
-  const [categories, branches, existing] = await Promise.all([
+  const [categories, branches, existing, inventories] = await Promise.all([
     Category.find({ brandId }),
     Branch.find({ brandId }),
-    Product.find({ brandId }, '_id sku slug'),
+    Product.find({ brandId }),
+    Inventory.find({ brandId }),
   ]);
   const categoryByKey = new Map();
   categories.forEach((c) => {
@@ -136,10 +165,11 @@ async function importBrandProducts(brandId, text, { dryRun = false, canManageSto
     categoryByKey.set(String(c.slug || '').toLowerCase(), c);
   });
   const branchByName = new Map(branches.map((b) => [b.name.trim().toLowerCase(), b]));
-  const idBySku = new Map(existing.filter((p) => p.sku).map((p) => [p.sku, p._id]));
-  const idBySlug = new Map(existing.map((p) => [p.slug, p._id]));
+  const bySku = new Map(existing.filter((p) => p.sku).map((p) => [p.sku, p]));
+  const bySlug = new Map(existing.map((p) => [p.slug, p]));
+  const stockByProduct = new Map(inventories.map((i) => [String(i.productId), i]));
 
-  const result = { dryRun, total: dataRows.length, created: 0, updated: 0, failed: 0, errors: [], warnings: [], ignoredColumns };
+  const result = { dryRun, total: dataRows.length, created: 0, updated: 0, unchanged: 0, failed: 0, errors: [], warnings: [], ignoredColumns };
   if (!canManageStock && columns.some((c) => c === 'quantity' || c === 'lowStockThreshold')) {
     result.warnings.push('Stock columns were ignored because you do not have permission to manage stock.');
   }
@@ -216,10 +246,17 @@ async function importBrandProducts(brandId, text, { dryRun = false, canManageSto
     if (sku) seenSku.set(sku, line);
 
     // ---- create or update (matched by SKU, else by name)
-    const existingId = (sku && idBySku.get(sku)) || idBySlug.get(slug);
+    const match = (sku && bySku.get(sku)) || bySlug.get(slug);
+    if (match && isUnchanged(match, parsed.data, stockByProduct.get(String(match._id)), { quantity, lowStockThreshold })) {
+      result.unchanged += 1;
+      continue;
+    }
+    const existingId = match && match._id;
     try {
       if (!dryRun) {
-        const data = { ...parsed.data, ...(existingId ? {} : { status: parsed.data.status || 'DRAFT' }) };
+        // An update also makes the product visible again (isActive), so a row
+        // can bring back a product that was archived.
+        const data = existingId ? { ...parsed.data, isActive: true } : { ...parsed.data, status: parsed.data.status || 'DRAFT' };
         let product;
         if (existingId) {
           product = await getProductByIdRaw(existingId);
