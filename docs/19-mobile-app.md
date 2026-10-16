@@ -82,7 +82,7 @@ Installed once, inside `mobile/`, each with a stated reason:
 | 0 | Server: bearer-token login for shoppers, tests, docs | done |
 | 1 | App foundation: Expo project, theme, API client, token storage, session rules, tab shell | done |
 | 2 | Login and register: forms with instant checks, safe return-to-where-you-were, account tab | done |
-| 3 | Browse: home, shop (search, filters, endless scroll), brands, product and reviews | |
+| 3 | Browse: home, shop (search, sort, brand filter, endless scroll), brands, product page with photos and reviews | done |
 | 4 | Nearby: location permission, block detection, area picker, range, results, map | |
 | 5 | Cart, checkout (cash on delivery), order confirmation, orders and tracking | |
 | 6 | Chat and notifications, unread badges | |
@@ -107,7 +107,21 @@ Each phase ends with the server tests, lint and a successful app bundle.
   passwords are masked with a show/hide toggle, and nothing secret is logged or stored
   beyond the token in secure storage.
 
-## 8. Development
+## 8. Browsing (Phase 3)
+
+Everything here uses the public API, so no sign-in is needed.
+
+* **Home** (`(tabs)/index`): brands strip and the newest products, both for the chosen city; pull down to refresh.
+* **Shop** (`(tabs)/shop`): search (sent to the server after 400 ms of no typing), sort, brand filter, endless scroll in pages of 12. Star ratings are requested only for products not yet seen. A newer search always wins: an answer for an old search is discarded (`services/paging.js`).
+* **Brands** (`brands`) and **Product** (`product/[id]`): the product page has swipeable photos with a full-screen view, price and discount, stock, details, and the reviews summary with the reviews five at a time.
+* **City**: remembered on the phone (`context/CityProvider.jsx`); a remembered city that no longer exists falls back to "all cities".
+* **Opening the Shop from elsewhere** uses `shopHref()` (`utils/nav.js`), which stamps each request, because the Shop stays alive in the tab bar and would otherwise ignore asking for the same brand twice.
+* Photos hosted on Cloudinary are requested at the phone's real pixel width (same rule as the web); any other address is used as given. A missing or broken photo shows a monogram tile.
+* Add to cart is not on the product page yet (Phase 5), and "Chat with seller" arrives with Phase 6.
+
+Tests: the paging rules, query building and helpers are unit tested, and `__tests__/screens.test.js` renders the real screens against a fake API (what is shown, loading and error states, and the Shop navigation rule).
+
+## 9. Development
 
 ```bash
 cd mobile
@@ -121,7 +135,7 @@ The phone must be able to reach the API: use the deployed (https) address, or
 your computer's address on the same Wi-Fi. Plain `http` addresses work while
 developing but not in release builds of Android.
 
-## 9. Known limits
+## 10. Known limits
 
 * A bearer token cannot be revoked individually; it ends at expiry, on account
   deactivation, or when the password version changes. A lost phone is

@@ -1,72 +1,138 @@
-import { useCallback, useEffect, useState } from 'react'
-import { View } from 'react-native'
-import api, { getErrorMessage } from '../../services/api'
-import { API_URL, apiIsInsecure } from '../../services/config'
+import { FlatList, Pressable, View, useWindowDimensions } from 'react-native'
+import { useState } from 'react'
+import { useRouter } from 'expo-router'
 import AppText from '../../components/ui/AppText'
 import Button from '../../components/ui/Button'
-import Card from '../../components/ui/Card'
 import EmptyState from '../../components/ui/EmptyState'
 import Screen from '../../components/ui/Screen'
-import Spinner from '../../components/ui/Spinner'
-import { colors, radius, spacing } from '../../theme'
+import SearchBar from '../../components/ui/SearchBar'
+import SectionHeader from '../../components/ui/SectionHeader'
+import Skeleton from '../../components/ui/Skeleton'
+import { BrandLogo } from '../../components/BrandCard'
+import CityChip from '../../components/CityChip'
+import ProductCard from '../../components/ProductCard'
+import { useCity } from '../../hooks/useCity'
+import { useRatings } from '../../hooks/useRatings'
+import { useRemote } from '../../hooks/useRemote'
+import { fetchBrands, fetchProducts } from '../../services/catalog'
+import { API_URL, apiIsInsecure } from '../../services/config'
+import { shopHref } from '../../utils/nav'
+import { colors, spacing } from '../../theme'
 
-// Phase 1 home: proves the app can reach the API (public city list). The real
-// home screen (featured brands and products) arrives with Phase 3.
+const ARRIVALS = 8
+
 export default function Home() {
-  const [state, setState] = useState({ status: 'loading', cities: [], error: '' })
+  const router = useRouter()
+  const { width } = useWindowDimensions()
+  const { city, cityId } = useCity()
+  const [search, setSearch] = useState('')
 
-  const load = useCallback(async () => {
-    setState({ status: 'loading', cities: [], error: '' })
-    try {
-      const res = await api.get('/cities')
-      setState({ status: 'ok', cities: res.data.cities || [], error: '' })
-    } catch (err) {
-      setState({ status: 'error', cities: [], error: getErrorMessage(err) })
-    }
-  }, [])
+  const scope = cityId || 'all'
+  const brands = useRemote(`brands:${scope}`, () => fetchBrands(cityId))
+  const arrivals = useRemote(`arrivals:${scope}`, () => fetchProducts({ cityId, limit: ARRIVALS }))
 
-  // Runs once when the screen opens.
-  useEffect(() => {
-    let active = true
-    api
-      .get('/cities')
-      .then((res) => active && setState({ status: 'ok', cities: res.data.cities || [], error: '' }))
-      .catch((err) => active && setState({ status: 'error', cities: [], error: getErrorMessage(err) }))
-    return () => {
-      active = false
-    }
-  }, [])
+  const products = arrivals.data?.items ?? []
+  const ratings = useRatings(products)
+  const brandList = brands.data ?? []
+  const brandName = Object.fromEntries(brandList.map((b) => [b._id, b.name]))
+  const cardWidth = Math.floor((width - spacing.lg * 2 - spacing.md) / 2)
+
+  const failed = brands.status === 'error' && arrivals.status === 'error'
+  const reload = () => {
+    brands.reload()
+    arrivals.reload()
+  }
+
+  const goSearch = () => router.navigate(shopHref({ q: search.trim() }))
 
   return (
-    <Screen title="CityCart" subtitle="Shop the markets of your city, from your phone.">
-      {state.status === 'loading' && <Spinner label="Connecting to the server…" />}
+    <Screen onRefresh={reload} refreshing={brands.refreshing || arrivals.refreshing}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.lg }}>
+        <View style={{ flex: 1, paddingRight: spacing.md }}>
+          <AppText variant="title">CityCart</AppText>
+          <AppText variant="small">{city ? `Shopping in ${city.name}` : 'Shopping in every city'}</AppText>
+        </View>
+        <CityChip />
+      </View>
 
-      {state.status === 'error' && (
-        <EmptyState
-          icon="wifi-off"
-          tone="error"
-          title="Can't reach the server"
-          message={state.error}
-          action={<Button title="Try again" onPress={load} />}
-        />
-      )}
+      <SearchBar value={search} onChangeText={setSearch} onSubmit={goSearch} placeholder="Search products…" label="Search products" />
 
-      {state.status === 'ok' && (
-        <Card>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-            <View style={{ width: 10, height: 10, borderRadius: radius.pill, backgroundColor: colors.success }} />
-            <AppText variant="strong">Connected to the CityCart server</AppText>
+      {failed ? (
+        <View style={{ marginTop: spacing.xl }}>
+          <EmptyState icon="wifi-off" tone="error" title="Can't reach the server" message={brands.error} action={<Button title="Try again" onPress={reload} />} />
+        </View>
+      ) : (
+        <>
+          <View style={{ marginTop: spacing.xl }}>
+            <SectionHeader title="Brands" actionLabel={brandList.length > 0 ? 'See all' : undefined} onAction={() => router.push('/brands')} />
+            {brands.status === 'loading' ? (
+              <View style={{ flexDirection: 'row', gap: spacing.lg }}>
+                {[0, 1, 2, 3].map((i) => (
+                  <Skeleton key={i} height={84} width={72} />
+                ))}
+              </View>
+            ) : brandList.length === 0 ? (
+              <AppText variant="small">No brands are selling here yet.</AppText>
+            ) : (
+              <FlatList
+                horizontal
+                data={brandList}
+                keyExtractor={(b) => b._id}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: spacing.lg }}
+                renderItem={({ item }) => (
+                  <Pressable
+                    onPress={() => router.navigate(shopHref({ brandId: item._id }))}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${item.name}, see products`}
+                    style={{ width: 76, alignItems: 'center' }}
+                  >
+                    <BrandLogo brand={item} size={64} />
+                    <AppText variant="small" numberOfLines={2} style={{ textAlign: 'center', marginTop: spacing.xs, fontSize: 12, lineHeight: 16, color: colors.ink }}>
+                      {item.name}
+                    </AppText>
+                  </Pressable>
+                )}
+              />
+            )}
           </View>
-          <AppText variant="small" style={{ marginTop: spacing.sm }}>
-            {state.cities.length > 0
-              ? `Cities available: ${state.cities.map((c) => c.name).join(', ')}`
-              : 'The server is reachable, but no cities have been set up yet.'}
-          </AppText>
-        </Card>
+
+          <View style={{ marginTop: spacing.xl }}>
+            <SectionHeader title="New arrivals" actionLabel={products.length > 0 ? 'Shop all' : undefined} onAction={() => router.navigate('/shop')} />
+            {arrivals.status === 'loading' ? (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
+                {[0, 1, 2, 3].map((i) => (
+                  <View key={i} style={{ width: cardWidth }}>
+                    <Skeleton height={cardWidth * 1.25} />
+                    <Skeleton height={14} width="70%" style={{ marginTop: spacing.sm }} />
+                    <Skeleton height={14} width="40%" style={{ marginTop: spacing.xs }} />
+                  </View>
+                ))}
+              </View>
+            ) : arrivals.status === 'error' ? (
+              <EmptyState icon="alert-circle" tone="error" title="Couldn't load products" message={arrivals.error} action={<Button title="Try again" onPress={arrivals.reload} />} />
+            ) : products.length === 0 ? (
+              <EmptyState icon="package" title="No products yet" message={city ? `Nothing is on sale in ${city.name} yet.` : 'Nothing is on sale yet.'} />
+            ) : (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: spacing.md, rowGap: spacing.xl }}>
+                {products.map((product) => (
+                  <ProductCard
+                    key={product._id}
+                    product={product}
+                    brandName={brandName[product.brandId]}
+                    rating={ratings[product._id]}
+                    width={cardWidth}
+                    onPress={() => router.push(`/product/${product._id}`)}
+                  />
+                ))}
+              </View>
+            )}
+          </View>
+        </>
       )}
 
       {__DEV__ && API_URL ? (
-        <AppText variant="small" style={{ marginTop: spacing.lg }}>
+        <AppText variant="small" style={{ marginTop: spacing.xl }}>
           Server: {API_URL}
           {apiIsInsecure ? '  (plain http: fine for testing, but release builds need https)' : ''}
         </AppText>
