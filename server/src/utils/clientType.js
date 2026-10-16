@@ -7,7 +7,12 @@
  * `Authorization: Bearer <token>`. The web app never sends that header, so it
  * never receives a token in a response body.
  */
-const isMobileClient = (req) => String(req.get('x-client') || '').trim().toLowerCase() === 'mobile';
+// Headers are read from `req.headers` (Node lower-cases the names) rather than
+// `req.get()`, so a request object without Express's helpers, such as the plain
+// object internal callers and tests pass to middleware, still works.
+const headerOf = (req, name) => (req && req.headers ? req.headers[name] : undefined);
+
+const isMobileClient = (req) => String(headerOf(req, 'x-client') || '').trim().toLowerCase() === 'mobile';
 
 /**
  * Reads `Authorization: Bearer <token>`.
@@ -18,7 +23,7 @@ const isMobileClient = (req) => String(req.get('x-client') || '').trim().toLower
  *   { present: true, token: '...' }    a Bearer token
  */
 function readBearerToken(req) {
-  const header = req.get('authorization');
+  const header = headerOf(req, 'authorization');
   if (header === undefined) return { present: false, token: null };
   const value = String(header).trim();
   if (!/^Bearer(\s|$)/i.test(value)) return { present: false, token: null };

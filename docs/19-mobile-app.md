@@ -81,7 +81,7 @@ Installed once, inside `mobile/`, each with a stated reason:
 |---|---|---|
 | 0 | Server: bearer-token login for shoppers, tests, docs | done |
 | 1 | App foundation: Expo project, theme, API client, token storage, session rules, tab shell | done |
-| 2 | Login and register | |
+| 2 | Login and register: forms with instant checks, safe return-to-where-you-were, account tab | done |
 | 3 | Browse: home, shop (search, filters, endless scroll), brands, product and reviews | |
 | 4 | Nearby: location permission, block detection, area picker, range, results, map | |
 | 5 | Cart, checkout (cash on delivery), order confirmation, orders and tracking | |
@@ -91,7 +91,23 @@ Installed once, inside `mobile/`, each with a stated reason:
 
 Each phase ends with the server tests, lint and a successful app bundle.
 
-## 7. Development
+## 7. Sign-in screens (Phase 2)
+
+* `login` and `register` live in `src/app/(auth)/` and open over the tabs. Browsing
+  needs no account; the Account tab (and later the cart, checkout and chat) send a
+  shopper to sign in and bring them back with `?next=`.
+* The checks in `src/utils/validation.js` mirror the server's rules (name required,
+  valid email, password of at least 8 characters). They give instant feedback only;
+  the server validates everything again and its messages are shown inline.
+* `?next=` is accepted only when it is a path inside the app (`src/utils/nav.js`):
+  never another site, a custom scheme, or the sign-in screens themselves.
+* Signing in flips the auth state; the screen's single `<Redirect>` then moves the
+  shopper on, so there is no separate "navigate after login" code to get out of sync.
+* Fields set `autoComplete` / `textContentType` so the phone's password manager works,
+  passwords are masked with a show/hide toggle, and nothing secret is logged or stored
+  beyond the token in secure storage.
+
+## 8. Development
 
 ```bash
 cd mobile
@@ -105,7 +121,7 @@ The phone must be able to reach the API: use the deployed (https) address, or
 your computer's address on the same Wi-Fi. Plain `http` addresses work while
 developing but not in release builds of Android.
 
-## 8. Known limits
+## 9. Known limits
 
 * A bearer token cannot be revoked individually; it ends at expiry, on account
   deactivation, or when the password version changes. A lost phone is

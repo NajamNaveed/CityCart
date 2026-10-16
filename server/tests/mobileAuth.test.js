@@ -11,6 +11,7 @@ const env = require('../src/config/env');
 const { signToken } = require('../src/utils/jwt');
 const { hashPassword } = require('../src/utils/password');
 const { authenticateHandshake } = require('../src/sockets');
+const authenticate = require('../src/middleware/authenticate');
 const { AUTH_COOKIE_NAME } = require('../src/config/cookie');
 
 const oid = () => new mongoose.Types.ObjectId();
@@ -171,6 +172,59 @@ describe('Authorization: Bearer on the API', () => {
 
   it('requires a token at all', async () => {
     expect((await request(app).get('/api/v1/auth/me')).status).toBe(401);
+  });
+});
+
+describe('authenticate called with a bare request object', () => {
+  // Internal callers and the integration tests hand the middleware a plain
+  // object ({ cookies, method, originalUrl }) with no headers and no req.get().
+  const bare = (user) => ({ method: 'GET', originalUrl: '/api/v1/brand/orders', cookies: user ? { [AUTH_COOKIE_NAME]: tokenFor(user) } : {} });
+  const fakeRes = () => {
+    const res = { statusCode: null, body: null };
+    res.status = (code) => {
+      res.statusCode = code;
+      return res;
+    };
+    res.json = (body) => {
+      res.body = body;
+      return res;
+    };
+    res.cookie = jest.fn();
+    return res;
+  };
+
+  it('still authenticates from the cookie, without throwing', async () => {
+    const user = fakeUser();
+    User.findById.mockResolvedValue(user);
+    const req = bare(user);
+    const next = jest.fn();
+
+    await authenticate(req, fakeRes(), next);
+
+    expect(next).toHaveBeenCalledWith(); // called with no error
+    expect(req.user).toBe(user);
+  });
+
+  it('answers 401 with no cookie, and never lets the request through', async () => {
+    const res = fakeRes();
+    const next = jest.fn();
+
+    await authenticate(bare(null), res, next);
+
+    expect(res.statusCode).toBe(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('still applies the session rules (a token from before a password change is refused)', async () => {
+    const user = fakeUser();
+    User.findById.mockResolvedValue({ ...user, passwordVersion: 3 });
+    const res = fakeRes();
+    const next = jest.fn();
+
+    await authenticate(bare(user), res, next);
+
+    expect(res.statusCode).toBe(401);
+    expect(next).not.toHaveBeenCalled();
   });
 });
 
