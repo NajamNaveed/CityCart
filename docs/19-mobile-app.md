@@ -83,7 +83,7 @@ Installed once, inside `mobile/`, each with a stated reason:
 | 1 | App foundation: Expo project, theme, API client, token storage, session rules, tab shell | done |
 | 2 | Login and register: forms with instant checks, safe return-to-where-you-were, account tab | done |
 | 3 | Browse: home, shop (search, sort, brand filter, endless scroll), brands, product page with photos and reviews | done |
-| 4 | Nearby: location permission, block detection, area picker, range, results, map | |
+| 4 | Nearby: location permission, block detection, area picker, range, results, map | done |
 | 5 | Cart, checkout (cash on delivery), order confirmation, orders and tracking | |
 | 6 | Chat and notifications, unread badges | |
 | 7 | Polish and release: states, offline handling, icon/splash, Android build, device tests | |
@@ -121,7 +121,40 @@ Everything here uses the public API, so no sign-in is needed.
 
 Tests: the paging rules, query building and helpers are unit tested, and `__tests__/screens.test.js` renders the real screens against a fake API (what is shown, loading and error states, and the Shop navigation rule).
 
-## 9. Development
+## 9. Nearby (Phase 4)
+
+The same feature as the web app's Nearby page, on the same public endpoints
+(`GET /blocks`, `GET /blocks/resolve`, `GET /discover`).
+
+* **Finding the shopper.** The first time the Nearby tab opens, the app asks for the
+  phone's position once (the system permission prompt appears then, not at launch). It
+  uses a recent known position when there is one (instant), otherwise waits up to 12
+  seconds for a fresh one. The server turns the position into a block and city.
+  Refusal, location switched off, a timeout and "outside every city we serve" each get
+  their own plain message, and a permission blocked for good offers **Open Settings**.
+  Choosing an area by hand never asks for the position.
+* **Privacy.** The position is rounded to about 11 metres and saved only on the phone
+  (`prefs`, not secure storage: it is not a credential). The server receives it only as
+  query parameters of the one search it answers; request logs drop query strings
+  (docs/06).
+* **Range.** This block, 2, 5, 10, 20 km, the whole city, or any custom distance from 0.5
+  to 50 km. A range that needs an area the shopper has not given falls back to the whole
+  city and says so. An empty result offers the next wider range.
+* **Results** are brands with their nearest distance, branches (Directions and Call),
+  and a few products, with "Only at ..." where a product is sold at some branches only.
+  They load ten brands at a time.
+* **Map.** `react-native-maps`: pins per branch, a marker at the search centre, and a
+  circle for a radius search. It uses the phone's own map: Apple Maps on iPhone (no
+  setup), Google Maps on Android. It works in Expo Go. **Android release builds need a
+  Google Maps API key**: set the `GOOGLE_MAPS_API_KEY` environment variable when building
+  (`app.config.js` passes it to the build), and restrict the key to the app's package name
+  in Google Cloud. Without a key the Android map is blank but everything else, including
+  Directions (which opens the maps app), works.
+* The area is kept in `context/NearbyProvider.jsx` and the rules (query building, saved
+  value checks, "find me" outcomes) in `services/nearby.js` and `services/location.js`,
+  both unit tested; the screen is covered by `__tests__/nearby-screen.test.js`.
+
+## 10. Development
 
 ```bash
 cd mobile
@@ -135,7 +168,7 @@ The phone must be able to reach the API: use the deployed (https) address, or
 your computer's address on the same Wi-Fi. Plain `http` addresses work while
 developing but not in release builds of Android.
 
-## 10. Known limits
+## 11. Known limits
 
 * A bearer token cannot be revoked individually; it ends at expiry, on account
   deactivation, or when the password version changes. A lost phone is

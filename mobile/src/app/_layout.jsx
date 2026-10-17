@@ -12,6 +12,7 @@ import { Poppins_700Bold } from '@expo-google-fonts/poppins/700Bold'
 import { Fraunces_600SemiBold } from '@expo-google-fonts/fraunces/600SemiBold'
 import { AuthProvider } from '../context/AuthProvider'
 import { CityProvider } from '../context/CityProvider'
+import { NearbyProvider } from '../context/NearbyProvider'
 import { useAuth } from '../hooks/useAuth'
 import { colors } from '../theme'
 
@@ -48,8 +49,10 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <CityProvider>
-        {/* If a font fails to load the app still opens, with the system font. */}
-        <Shell fontsReady={fontsLoaded || Boolean(fontError)} />
+        <NearbyProvider>
+          {/* If a font fails to load the app still opens, with the system font. */}
+          <Shell fontsReady={fontsLoaded || Boolean(fontError)} />
+        </NearbyProvider>
       </CityProvider>
     </AuthProvider>
   )
