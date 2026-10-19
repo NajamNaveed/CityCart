@@ -7,6 +7,7 @@
 import React from 'react'
 import { Text } from 'react-native'
 import TestRenderer, { act } from 'react-test-renderer'
+import { tree } from './helpers/screens'
 
 // The first render in a fresh test process loads the whole app, which is slow on a busy machine.
 jest.setTimeout(30000)
@@ -70,12 +71,21 @@ function serve({ failProducts = false, emptyProducts = false } = {}) {
   })
 }
 
+const opened = []
+afterEach(async () => {
+  while (opened.length) {
+    const renderer = opened.pop()
+    await act(async () => renderer.unmount())
+  }
+})
+
 // Render, then let every promise settle (the screens load data when they open).
 async function show(element) {
   let renderer
   await act(async () => {
-    renderer = TestRenderer.create(<CityProvider>{element}</CityProvider>)
+    renderer = TestRenderer.create(tree(<CityProvider>{element}</CityProvider>))
   })
+  opened.push(renderer)
   for (let i = 0; i < 6; i += 1) await act(async () => { await Promise.resolve() })
   return renderer
 }
@@ -162,11 +172,12 @@ describe('Shop keeps up with the rest of the app', () => {
 
   it('applies a brand again after the shopper cleared it by hand', async () => {
     mockParams = { brandId: BRAND._id, t: '1' }
-    const element = () => (
-      <CityProvider>
-        <Shop />
-      </CityProvider>
-    )
+    const element = () =>
+      tree(
+        <CityProvider>
+          <Shop />
+        </CityProvider>,
+      )
     const renderer = await show(<Shop />)
     expect(productCalls().at(-1)).toMatchObject({ brandId: BRAND._id })
 
@@ -187,7 +198,7 @@ describe('Shop keeps up with the rest of the app', () => {
     mockParams = { q: 'lawn', t: '5' }
     const renderer = await show(<Shop />)
     const before = productCalls().length
-    await act(async () => renderer.update(<CityProvider><Shop /></CityProvider>))
+    await act(async () => renderer.update(tree(<CityProvider><Shop /></CityProvider>)))
     for (let i = 0; i < 4; i += 1) await act(async () => { await Promise.resolve() })
     expect(productCalls().length).toBe(before)
   })

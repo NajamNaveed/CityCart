@@ -1,4 +1,5 @@
-import { Alert, View } from 'react-native'
+import { Alert, Pressable, View } from 'react-native'
+import Feather from '@expo/vector-icons/Feather'
 import { useRouter } from 'expo-router'
 import AppText from '../../components/ui/AppText'
 import Button from '../../components/ui/Button'
@@ -6,7 +7,7 @@ import Card from '../../components/ui/Card'
 import EmptyState from '../../components/ui/EmptyState'
 import Screen from '../../components/ui/Screen'
 import { useAuth } from '../../hooks/useAuth'
-import { spacing } from '../../theme'
+import { colors, radius, spacing } from '../../theme'
 
 export default function Account() {
   const router = useRouter()
@@ -25,8 +26,20 @@ export default function Account() {
           <AppText variant="strong">{user.name}</AppText>
           <AppText variant="small">{user.email}</AppText>
         </Card>
+        <Pressable
+          onPress={() => router.push('/orders')}
+          accessibilityRole="button"
+          accessibilityLabel="My orders"
+          style={({ pressed }) => ({ marginTop: spacing.lg, flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 56, paddingHorizontal: spacing.lg, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: pressed ? colors.sand : colors.surface })}
+        >
+          <Feather name="package" size={20} color={colors.clay} />
+          <AppText variant="strong" style={{ flex: 1 }}>
+            My orders
+          </AppText>
+          <Feather name="chevron-right" size={20} color={colors.muted} />
+        </Pressable>
         <AppText variant="small" style={{ marginTop: spacing.lg }}>
-          Your orders and messages will appear here in the next phases.
+          Your messages with sellers will appear here in the next phase.
         </AppText>
         <Button title="Sign out" variant="outline" onPress={confirmSignOut} style={{ marginTop: spacing.xl }} />
       </Screen>

@@ -91,6 +91,14 @@ const tick = async (times = 6) => {
   for (let i = 0; i < times; i += 1) await act(async () => { await Promise.resolve() })
 }
 
+const opened = []
+afterEach(async () => {
+  while (opened.length) {
+    const renderer = opened.pop()
+    await act(async () => renderer.unmount())
+  }
+})
+
 async function open() {
   let renderer
   await act(async () => {
@@ -102,6 +110,7 @@ async function open() {
       </CityProvider>,
     )
   })
+  opened.push(renderer)
   await tick()
   return renderer
 }

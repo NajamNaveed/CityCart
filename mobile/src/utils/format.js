@@ -13,3 +13,10 @@ export function humanize(value = '') {
   const text = String(value).toLowerCase().replaceAll('_', ' ')
   return text.charAt(0).toUpperCase() + text.slice(1)
 }
+
+// "4 Oct 2026, 03:15 pm"; empty for a missing or invalid date.
+export function formatDateTime(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}

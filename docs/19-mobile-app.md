@@ -84,7 +84,7 @@ Installed once, inside `mobile/`, each with a stated reason:
 | 2 | Login and register: forms with instant checks, safe return-to-where-you-were, account tab | done |
 | 3 | Browse: home, shop (search, sort, brand filter, endless scroll), brands, product page with photos and reviews | done |
 | 4 | Nearby: location permission, block detection, area picker, range, results, map | done |
-| 5 | Cart, checkout (cash on delivery), order confirmation, orders and tracking | |
+| 5 | Cart, checkout (cash on delivery), order confirmation, orders and tracking | done |
 | 6 | Chat and notifications, unread badges | |
 | 7 | Polish and release: states, offline handling, icon/splash, Android build, device tests | |
 | later | Push notifications when the app is closed (needs a server device-token model); seller inbox | |
@@ -154,7 +154,19 @@ The same feature as the web app's Nearby page, on the same public endpoints
   value checks, "find me" outcomes) in `services/nearby.js` and `services/location.js`,
   both unit tested; the screen is covered by `__tests__/nearby-screen.test.js`.
 
-## 10. Development
+## 10. Cart, checkout and orders (Phase 5)
+
+All on the existing customer endpoints (`/cart`, `/orders`); no server changes.
+
+* **Cart** (tab, with the item count as a badge): the cart is the server's, grouped by brand; every change (quantity, remove) is answered with the fresh cart, which is what is shown. It re-reads when the tab is focused and on pull-down. A line that cannot be ordered (out of stock, unavailable) is marked and blocks checkout. Quantities are 1 to 99 per line; the product page adds 1 to 10 at once.
+* **Add to cart** is a bar at the bottom of the product page. A visitor who is not signed in is sent to sign in with `?next=/product/<id>?add=<qty>` and, once back, the page adds that quantity once and clears the parameter.
+* **Checkout:** address, delivery notes (required, 1 to 200 words, as on the web) and cash on delivery. The checks in `services/orders.js` were compared with the server's own validator on 43 cases (boundaries, phone formats, word limits) with no differences. The app sends only the address and payment method; **the server reads the cart and computes every price and total itself**. The place-order button is blocked from a second tap, and a failed order is retried without losing the form. A cart with several brands becomes one order per brand (the confirmation says so).
+* **Confirmation** shows what was just placed from memory only (`rememberPlacedOrders`), not from the navigation address, and goes to the orders list if opened with nothing placed.
+* **Orders:** the list loads ten at a time; the detail shows a six-step progress view (or why an order was cancelled/rejected), items, totals, the delivery address, courier tracking when there is one, and cancelling while the order is still pending (with a confirmation).
+* **Not in this phase:** writing reviews after delivery (reviews are shown on product pages since Phase 3), and live order updates (pull down to refresh; live updates arrive with Phase 6's notifications).
+* Every screen that needs an account (`RequireCustomer`) shows a sign-in prompt that brings the shopper back to where they were.
+
+## 11. Development
 
 ```bash
 cd mobile
@@ -168,7 +180,7 @@ The phone must be able to reach the API: use the deployed (https) address, or
 your computer's address on the same Wi-Fi. Plain `http` addresses work while
 developing but not in release builds of Android.
 
-## 11. Known limits
+## 12. Known limits
 
 * A bearer token cannot be revoked individually; it ends at expiry, on account
   deactivation, or when the password version changes. A lost phone is
