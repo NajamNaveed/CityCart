@@ -6,12 +6,35 @@ import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
 import EmptyState from '../../components/ui/EmptyState'
 import Screen from '../../components/ui/Screen'
+import UnreadPill from '../../components/ui/UnreadPill'
 import { useAuth } from '../../hooks/useAuth'
+import { useChat } from '../../hooks/useChat'
+import { useNotifications } from '../../hooks/useNotifications'
 import { colors, radius, spacing } from '../../theme'
+
+function AccountRow({ icon, label, badge, onPress }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={badge ? `${label}, ${badge} unread` : label}
+      style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 56, paddingHorizontal: spacing.lg, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: pressed ? colors.sand : colors.surface })}
+    >
+      <Feather name={icon} size={20} color={colors.clay} />
+      <AppText variant="strong" style={{ flex: 1 }}>
+        {label}
+      </AppText>
+      {badge ? <UnreadPill count={badge} /> : null}
+      <Feather name="chevron-right" size={20} color={colors.muted} />
+    </Pressable>
+  )
+}
 
 export default function Account() {
   const router = useRouter()
   const { status, user, offline, logout, retry } = useAuth()
+  const { unread: chatUnread } = useChat()
+  const { unreadCount: notificationUnread } = useNotifications()
 
   const confirmSignOut = () =>
     Alert.alert('Sign out?', 'You will need to sign in again to order or chat with sellers.', [
@@ -26,21 +49,11 @@ export default function Account() {
           <AppText variant="strong">{user.name}</AppText>
           <AppText variant="small">{user.email}</AppText>
         </Card>
-        <Pressable
-          onPress={() => router.push('/orders')}
-          accessibilityRole="button"
-          accessibilityLabel="My orders"
-          style={({ pressed }) => ({ marginTop: spacing.lg, flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 56, paddingHorizontal: spacing.lg, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: pressed ? colors.sand : colors.surface })}
-        >
-          <Feather name="package" size={20} color={colors.clay} />
-          <AppText variant="strong" style={{ flex: 1 }}>
-            My orders
-          </AppText>
-          <Feather name="chevron-right" size={20} color={colors.muted} />
-        </Pressable>
-        <AppText variant="small" style={{ marginTop: spacing.lg }}>
-          Your messages with sellers will appear here in the next phase.
-        </AppText>
+        <View style={{ gap: spacing.md, marginTop: spacing.lg }}>
+          <AccountRow icon="package" label="My orders" onPress={() => router.push('/orders')} />
+          <AccountRow icon="message-circle" label="Messages" badge={chatUnread} onPress={() => router.push('/chat')} />
+          <AccountRow icon="bell" label="Notifications" badge={notificationUnread} onPress={() => router.push('/notifications')} />
+        </View>
         <Button title="Sign out" variant="outline" onPress={confirmSignOut} style={{ marginTop: spacing.xl }} />
       </Screen>
     )

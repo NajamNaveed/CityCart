@@ -2,7 +2,7 @@
 import React from 'react'
 import { Text } from 'react-native'
 import TestRenderer, { act } from 'react-test-renderer'
-import { AuthContext, CartContext, CityContext } from '../../src/context/contexts'
+import { AuthContext, CartContext, ChatContext, CityContext, NotificationContext } from '../../src/context/contexts'
 
 export const textOf = (node) => [].concat(node.props.children).flat(Infinity).filter((c) => typeof c === 'string' || typeof c === 'number').join('')
 export const screenText = (renderer) => renderer.root.findAllByType(Text).map(textOf).join(' | ')
@@ -17,14 +17,21 @@ export const CUSTOMER = { id: 'u1', name: 'Sana Iqbal', email: 'sana@example.com
 export const signedIn = (user = CUSTOMER) => ({ status: 'signedIn', user, isReady: true, offline: false, login: jest.fn(), register: jest.fn(), logout: jest.fn(), retry: jest.fn() })
 export const signedOut = () => ({ status: 'signedOut', user: null, isReady: true, offline: false, login: jest.fn(), register: jest.fn(), logout: jest.fn(), retry: jest.fn() })
 
-// Renders an element with a chosen sign-in state and a fake cart badge.
-export function tree(element, { auth = signedOut(), cart, city } = {}) {
+// Renders an element with a chosen sign-in state and fake cart/city/chat values.
+export const notificationsValue = (over = {}) => ({ unreadCount: 0, refresh: jest.fn(), markRead: jest.fn().mockResolvedValue({}), markAllRead: jest.fn().mockResolvedValue(undefined), remove: jest.fn().mockResolvedValue(undefined), subscribeChat: jest.fn(() => jest.fn()), ...over })
+export const chatValue = (over = {}) => ({ unread: 0, refreshUnread: jest.fn().mockResolvedValue(undefined), subscribe: jest.fn(() => jest.fn()), ...over })
+
+export function tree(element, { auth = signedOut(), cart, city, notifications, chat } = {}) {
   const cartValue = cart || { itemCount: 0, addItem: jest.fn().mockResolvedValue({ itemCount: 1 }), setCount: jest.fn() }
   const cityValue = city || { cities: [], city: { _id: 'c1', name: 'Faisalabad' }, cityId: 'c1', setCityId: jest.fn(), ready: true }
   return (
     <AuthContext.Provider value={auth}>
       <CityContext.Provider value={cityValue}>
-        <CartContext.Provider value={cartValue}>{element}</CartContext.Provider>
+        <CartContext.Provider value={cartValue}>
+          <NotificationContext.Provider value={notifications || notificationsValue()}>
+            <ChatContext.Provider value={chat || chatValue()}>{element}</ChatContext.Provider>
+          </NotificationContext.Provider>
+        </CartContext.Provider>
       </CityContext.Provider>
     </AuthContext.Provider>
   )

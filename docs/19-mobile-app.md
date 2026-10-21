@@ -30,7 +30,7 @@ CityCart/
    │  ├─ components/ui/  AppText, Screen, Button, Card, Spinner, EmptyState
    │  ├─ context/        AuthProvider (more providers arrive with their screens)
    │  ├─ hooks/
-   │  ├─ services/       api.js (axios + bearer token), storage.js, session.js, config.js
+   │  ├─ services/       api.js (axios + bearer token), storage.js, session.js, config.js, socket.js (the live connection, Phase 6)
    │  ├─ utils/          formatting now; geo, range, chat later (ported from client/src/utils)
    │  └─ theme.js        the web app's colours, Poppins and Fraunces
    ├─ __tests__/         unit tests (jest-expo)
@@ -85,7 +85,7 @@ Installed once, inside `mobile/`, each with a stated reason:
 | 3 | Browse: home, shop (search, sort, brand filter, endless scroll), brands, product page with photos and reviews | done |
 | 4 | Nearby: location permission, block detection, area picker, range, results, map | done |
 | 5 | Cart, checkout (cash on delivery), order confirmation, orders and tracking | done |
-| 6 | Chat and notifications, unread badges | |
+| 6 | Chat and notifications, unread badges | done |
 | 7 | Polish and release: states, offline handling, icon/splash, Android build, device tests | |
 | later | Push notifications when the app is closed (needs a server device-token model); seller inbox | |
 
@@ -117,7 +117,7 @@ Everything here uses the public API, so no sign-in is needed.
 * **City**: remembered on the phone (`context/CityProvider.jsx`); a remembered city that no longer exists falls back to "all cities".
 * **Opening the Shop from elsewhere** uses `shopHref()` (`utils/nav.js`), which stamps each request, because the Shop stays alive in the tab bar and would otherwise ignore asking for the same brand twice.
 * Photos hosted on Cloudinary are requested at the phone's real pixel width (same rule as the web); any other address is used as given. A missing or broken photo shows a monogram tile.
-* Add to cart is not on the product page yet (Phase 5), and "Chat with seller" arrives with Phase 6.
+* Add to cart arrived with Phase 5, and "Chat with seller" with Phase 6.
 
 Tests: the paging rules, query building and helpers are unit tested, and `__tests__/screens.test.js` renders the real screens against a fake API (what is shown, loading and error states, and the Shop navigation rule).
 
@@ -159,14 +159,58 @@ The same feature as the web app's Nearby page, on the same public endpoints
 All on the existing customer endpoints (`/cart`, `/orders`); no server changes.
 
 * **Cart** (tab, with the item count as a badge): the cart is the server's, grouped by brand; every change (quantity, remove) is answered with the fresh cart, which is what is shown. It re-reads when the tab is focused and on pull-down. A line that cannot be ordered (out of stock, unavailable) is marked and blocks checkout. Quantities are 1 to 99 per line; the product page adds 1 to 10 at once.
-* **Add to cart** is a bar at the bottom of the product page. A visitor who is not signed in is sent to sign in with `?next=/product/<id>?add=<qty>` and, once back, the page adds that quantity once and clears the parameter.
-* **Checkout:** address, delivery notes (required, 1 to 200 words, as on the web) and cash on delivery. The checks in `services/orders.js` were compared with the server's own validator on 43 cases (boundaries, phone formats, word limits) with no differences. The app sends only the address and payment method; **the server reads the cart and computes every price and total itself**. The place-order button is blocked from a second tap, and a failed order is retried without losing the form. A cart with several brands becomes one order per brand (the confirmation says so).
+* **Add to cart** is a bar at the bottom of the product page. A visitor who is not signed in is sent to sign in with `?next=/product/<id>?add=<qty>` and, once back, the page adds that quantity once and clears the parameter.* **Checkout:** address, delivery notes (required, 1 to 200 words, as on the web) and cash on delivery. The checks in `services/orders.js` were compared with the server's own validator on 43 cases (boundaries, phone formats, word limits) with no differences. The app sends only the address and payment method; **the server reads the cart and computes every price and total itself**. The place-order button is blocked from a second tap, and a failed order is retried without losing the form. A cart with several brands becomes one order per brand (the confirmation says so).
 * **Confirmation** shows what was just placed from memory only (`rememberPlacedOrders`), not from the navigation address, and goes to the orders list if opened with nothing placed.
 * **Orders:** the list loads ten at a time; the detail shows a six-step progress view (or why an order was cancelled/rejected), items, totals, the delivery address, courier tracking when there is one, and cancelling while the order is still pending (with a confirmation).
 * **Not in this phase:** writing reviews after delivery (reviews are shown on product pages since Phase 3), and live order updates (pull down to refresh; live updates arrive with Phase 6's notifications).
 * Every screen that needs an account (`RequireCustomer`) shows a sign-in prompt that brings the shopper back to where they were.
 
-## 11. Development
+## 11. Chat and notifications (Phase 6)
+
+The customer side of the web app's chat and notifications, on the same
+endpoints and the same one socket (`/api/v1/chats`, `/api/v1/notifications`,
+docs/12); no server changes. The socket is the connection the server designed
+for this app: the login token in the handshake `auth` payload, accepted for
+customers only, push-only — every write still goes through REST where
+permissions are checked.
+
+* **Live wiring.** `NotificationProvider` owns the single connection
+  (`services/socket.js`): it exists while a customer is signed in, closes on
+  sign-out, and re-reads the badge on connect and whenever the app returns to
+  the foreground (`AppState`), so a missed push heals itself. `chat:message`
+  pushes fan out to chat screens through `subscribeChat`.
+* **Badges.** The Account tab shows Messages and Notifications rows with the
+  unread counts (capped at "9+"). Counts always come from the server: a push
+  only triggers a re-read, and `ChatProvider` debounces a burst of pushes into
+  one (300 ms), like the web app.
+* **Messages** (`chat/index`): the conversation list (twenty at a time, pull
+  down to refresh) with the last message, its time and an unread pill per row.
+  It re-reads on focus and when a push or reconnect arrives.
+* **Thread** (`chat/[id]`): messages bubble WhatsApp-style with day dividers,
+  older pages load with the server's `before` cursor, and a message received
+  while the thread is open is shown and marked read at once. The composer
+  allows 1,000 characters (counter past 200 left), blocks a second send while
+  one is in flight, and reports the server's answer on failure with the draft
+  kept. A seller that is not taking messages (`canSend`) closes the composer;
+  the server enforces it for real either way. A brand-new conversation opens
+  from memory the moment the first message starts it.
+* **Starting from a product** ("Chat with seller" on the product page):
+  `/chat?product=<id>` asks the server for the product's chat context; an
+  existing thread with that brand opens straight away, otherwise the first
+  message starts one. A visitor is sent to sign in with
+  `?next=/chat?product=<id>` and returns to the same place.
+* **Notifications** (`notifications`): the inbox loads twenty at a time with
+  All / Unread filters (unread is counted from what is loaded), tap reads the
+  notification and follows it to the order when it has one, and rows can be
+  deleted or all marked read. Reads, deletes and mark-all keep the badge in
+  step immediately, then the next fetch confirms it.
+
+Tests: `chat.test.js` (requests, cursor, live-connection rules, time stamps),
+`live.test.js` (socket lifecycle, badge honesty, fan-out and the debounced
+re-read), `chat-screens.test.js` and `notifications-screen.test.js` (the
+screens against a fake server).
+
+## 12. Development
 
 ```bash
 cd mobile
@@ -180,7 +224,7 @@ The phone must be able to reach the API: use the deployed (https) address, or
 your computer's address on the same Wi-Fi. Plain `http` addresses work while
 developing but not in release builds of Android.
 
-## 12. Known limits
+## 13. Known limits
 
 * A bearer token cannot be revoked individually; it ends at expiry, on account
   deactivation, or when the password version changes. A lost phone is

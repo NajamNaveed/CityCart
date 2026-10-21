@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Pressable, ScrollView, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import Feather from '@expo/vector-icons/Feather'
 import AppText from '../../components/ui/AppText'
 import Button from '../../components/ui/Button'
 import EmptyState from '../../components/ui/EmptyState'
@@ -105,6 +106,7 @@ function AddToCartBar({ product, resumeQty }) {
 
 function ProductView({ product, brand, resumeQty }) {
   const router = useRouter()
+  const { user } = useAuth()
   const stock = availabilityInfo(product)
   const discount = discountPercent(product)
   // Only the summary is needed here (stars under the title); the full list loads in the reviews section.
@@ -169,6 +171,21 @@ function ProductView({ product, brand, resumeQty }) {
             {stock.label}
           </AppText>
         </View>
+
+        {brand ? (
+          <Pressable
+            onPress={() => (user ? router.push(`/chat?product=${product._id}`) : router.push(loginHref(`/chat?product=${product._id}`)))}
+            accessibilityRole="button"
+            accessibilityLabel="Chat with seller"
+            style={({ pressed }) => ({ marginTop: spacing.lg, flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 52, paddingHorizontal: spacing.lg, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: pressed ? colors.sand : colors.surface })}
+          >
+            <Feather name="message-circle" size={20} color={colors.clay} />
+            <AppText variant="strong" style={{ flex: 1 }}>
+              Chat with seller
+            </AppText>
+            <Feather name="chevron-right" size={20} color={colors.muted} />
+          </Pressable>
+        ) : null}
 
         {product.description ? (
           <View style={{ marginTop: spacing.lg }}>
