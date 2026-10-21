@@ -16,7 +16,7 @@ CityCart/
 ├─ server/     the API (unchanged apart from the native-session support below)
 ├─ client/     the web app (unchanged)
 └─ mobile/     the Expo app (plain JavaScript, like the web app)
-   ├─ app.json  package.json  .env (the API address; see .env.example)
+   ├─ app.json  app.config.js  eas.json  package.json  .env (the API address; see .env.example)
    ├─ src/
    │  ├─ app/          screens; each file is a route (Expo Router, SDK 57 puts routes in src/app)
    │  │  ├─ _layout.jsx        fonts, providers, splash screen
@@ -86,7 +86,7 @@ Installed once, inside `mobile/`, each with a stated reason:
 | 4 | Nearby: location permission, block detection, area picker, range, results, map | done |
 | 5 | Cart, checkout (cash on delivery), order confirmation, orders and tracking | done |
 | 6 | Chat and notifications, unread badges | done |
-| 7 | Polish and release: states, offline handling, icon/splash, Android build, device tests | |
+| 7 | Polish and release: states, offline handling, icon/splash, Android build, device tests | done |
 | later | Push notifications when the app is closed (needs a server device-token model); seller inbox | |
 
 Each phase ends with the server tests, lint and a successful app bundle.
@@ -210,7 +210,68 @@ Tests: `chat.test.js` (requests, cursor, live-connection rules, time stamps),
 re-read), `chat-screens.test.js` and `notifications-screen.test.js` (the
 screens against a fake server).
 
-## 12. Development
+## 12. Polish and release (Phase 7)
+
+* **States.** Loading, empty and error states were built screen by screen in
+  Phases 2–6 (skeletons while loading, an explanation with "Try again" on
+  failure, pull-to-refresh or re-read on focus everywhere a list lives). This
+  phase audited all fifteen screens against that checklist and found no gaps.
+* **Offline.** `@react-native-community/netinfo` (installed with
+  `npx expo install`, so it matches the SDK). `OfflineBanner` sits in the root
+  layout and overlays every screen only while the OS reports the device as
+  disconnected; the unknown state at launch is treated as online so it never
+  flashes. It reads `isConnected` only — `isInternetReachable` needs a probe
+  request and is unreliable on some networks — so a connected-but-broken
+  network still surfaces as the per-screen "Cannot reach the server" errors,
+  and the live socket backs off on its own until the connection returns.
+* **Icon and splash.** The branded set (the clay "C" on clay and cream, plus
+  the adaptive-icon foreground, background and monochrome layers) was already
+  generated earlier and is wired in `app.json`; verified present, on-palette,
+  and referenced by the splash-screen and adaptive-icon config.
+* **Android build.** `eas.json` defines `development` and `preview` profiles
+  that produce installable APKs for internal testing, and `production`, which
+  auto-increments the version code on EAS (`appVersionSource: "remote"`).
+  Building needs an Expo account and the EAS CLI as a global tool:
+  ```bash
+  npm i -g eas-cli && eas login
+  eas secret:create --name GOOGLE_MAPS_API_KEY --value <key>   # release builds only
+  npm run build:android            # production (AAB, for Play)
+  npm run build:android:preview    # APK to install directly on a phone
+  ```
+  `app.config.js` reads `GOOGLE_MAPS_API_KEY` from the environment, so the key
+  reaches release builds through the EAS secret and is never committed.
+
+### Device-test checklist
+
+Automated tests cover logic against a fake server; these checks need a real
+phone (Expo Go while developing, a preview APK for release behaviour):
+
+1. **Launch and sign-in** — branded splash, home loads, register and login
+   work, `?next=` returns to where the shopper was, sign-out clears the badges.
+2. **Browse** — home skeletons then content, shop search/sort/filter and
+   endless scroll, product photos and reviews, "Chat with seller" asks a
+   visitor to sign in and returns to the same product.
+3. **Nearby** — the location-permission wording appears, blocks load, the map
+   shows pins and pans to results (tiles render in the release build — that is
+   what the Google Maps key is for), Directions opens the maps app.
+4. **Cart and checkout** — quantities, remove, an out-of-stock line blocks
+   checkout, a multi-brand cart splits into one order per brand on the
+   confirmation, a pending order can be cancelled.
+5. **Orders** — progress steps, pull-to-refresh, tracking link when the brand
+   adds one.
+6. **Chat** — start from a product page, send and receive with the seller on
+   the web dashboard, unread pill on the conversation and the Account tab,
+   receiving while the thread is open shows the message at once, badges settle
+   after backgrounding and returning.
+7. **Notifications** — an order update arrives live, the badge increments,
+   tap follows to the order, mark-all-read and delete keep the badge honest.
+8. **Offline** — airplane mode shows the banner on every screen and requests
+   fail with "Cannot reach the server"; turning the connection back removes
+   the banner and pull-to-refresh recovers without restarting the app.
+9. **Release build** — install the preview APK, repeat sign-in, nearby map and
+   one order end to end; the launcher icon and splash are the branded set.
+
+## 13. Development
 
 ```bash
 cd mobile
@@ -224,7 +285,7 @@ The phone must be able to reach the API: use the deployed (https) address, or
 your computer's address on the same Wi-Fi. Plain `http` addresses work while
 developing but not in release builds of Android.
 
-## 13. Known limits
+## 14. Known limits
 
 * A bearer token cannot be revoked individually; it ends at expiry, on account
   deactivation, or when the password version changes. A lost phone is

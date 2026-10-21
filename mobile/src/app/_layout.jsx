@@ -16,6 +16,7 @@ import { ChatProvider } from '../context/ChatProvider'
 import { CityProvider } from '../context/CityProvider'
 import { NearbyProvider } from '../context/NearbyProvider'
 import { NotificationProvider } from '../context/NotificationProvider'
+import OfflineBanner from '../components/OfflineBanner'
 import { useAuth } from '../hooks/useAuth'
 import { colors } from '../theme'
 
@@ -35,6 +36,7 @@ function Shell({ fontsReady }) {
   return (
     <>
       <StatusBar style="dark" />
+      <OfflineBanner />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.paper } }} />
     </>
   )
