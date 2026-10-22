@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import api, { getErrorMessage } from '../../services/api'
+import { useCan } from '../../hooks/useCan'
 import { inputClass } from '../../ui'
 import { Notice, StatusBadge } from './Bits'
 
@@ -34,8 +35,26 @@ export default function DeliveryPanel({ delivery, onChanged }) {
   const [tracking, setTracking] = useState(delivery.trackingReference || '')
   const [agent, setAgent] = useState(delivery.assignedAgent || '')
 
+  const can = useCan()
+  const [riders, setRiders] = useState([])
   const actions = NEXT[delivery.status] || []
   const editable = !FINAL.includes(delivery.status)
+  // With riders on the team the delivery is given to one of them; the typed-in
+  // agent name stays for brands that do not use riders (and for older deliveries).
+  const canAssign = editable && can('delivery.manage') && can('riders.view')
+  const hasRider = Boolean(delivery.riderId)
+
+  useEffect(() => {
+    if (!canAssign) return undefined
+    let active = true
+    api
+      .get('/riders', { params: { isActive: true, limit: 50 } })
+      .then((res) => active && setRiders(res.data.riders))
+      .catch(() => active && setRiders([]))
+    return () => {
+      active = false
+    }
+  }, [canAssign])
 
   async function run(request, success) {
     setBusy(true)
@@ -60,12 +79,19 @@ export default function DeliveryPanel({ delivery, onChanged }) {
       status === 'DELIVERED' ? 'Marked as delivered. Cash payment recorded as received.' : 'Delivery updated.',
     )
 
+  const assign = (riderId) =>
+    run(
+      () => api.patch(`/deliveries/${delivery._id}/rider`, { riderId: riderId || null }),
+      riderId ? 'Rider assigned. They have been told.' : 'Rider removed.',
+    )
+
   function onSave(e) {
     e.preventDefault()
     // The API cannot clear these once set, so only filled-in values are sent.
     const body = {
       ...(tracking.trim() && { trackingReference: tracking.trim() }),
-      ...(agent.trim() && { assignedAgent: agent.trim() }),
+      // The server refuses a typed-in name while a rider is assigned.
+      ...(!hasRider && agent.trim() && { assignedAgent: agent.trim() }),
     }
     if (Object.keys(body).length === 0) {
       setMessage({ text: 'Enter a tracking reference or a delivery agent first.', tone: 'warn' })
@@ -202,10 +228,41 @@ export default function DeliveryPanel({ delivery, onChanged }) {
             <input id="tracking" value={tracking} onChange={(e) => setTracking(e.target.value)} className={`h-10 ${inputClass}`} />
           </div>
           <div>
-            <label htmlFor="agent" className={labelClass}>
-              Delivery agent
-            </label>
-            <input id="agent" value={agent} onChange={(e) => setAgent(e.target.value)} placeholder="Name or number" className={`h-10 ${inputClass}`} />
+            {canAssign && (riders.length > 0 || hasRider) ? (
+              <>
+                <label htmlFor="rider" className={labelClass}>
+                  Rider
+                </label>
+                <select
+                  id="rider"
+                  value={delivery.riderId || ''}
+                  disabled={busy}
+                  onChange={(e) => assign(e.target.value)}
+                  className={`h-10 ${inputClass}`}
+                >
+                  <option value="">{hasRider ? 'Remove rider' : 'Choose a rider'}</option>
+                  {riders.map((r) => (
+                    <option key={r._id} value={r._id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              </>
+            ) : (
+              <>
+                <label htmlFor="agent" className={labelClass}>
+                  Delivery agent
+                </label>
+                <input
+                  id="agent"
+                  value={agent}
+                  onChange={(e) => setAgent(e.target.value)}
+                  readOnly={hasRider}
+                  placeholder="Name or number"
+                  className={`h-10 ${inputClass}`}
+                />
+              </>
+            )}
           </div>
           <button
             type="submit"

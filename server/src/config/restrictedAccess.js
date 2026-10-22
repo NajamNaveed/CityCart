@@ -9,7 +9,12 @@
  */
 const SAFE_METHODS = ['GET', 'HEAD', 'OPTIONS'];
 
-const ALLOWED_WRITES = [{ method: 'PATCH', pattern: /^\/api\/v1\/deliveries\/[a-f0-9]{24}\/status$/i }];
+const ALLOWED_WRITES = [
+  { method: 'PATCH', pattern: /^\/api\/v1\/deliveries\/[a-f0-9]{24}\/status$/i },
+  // The riders of a terminated brand can also finish what is already on the road.
+  { method: 'PATCH', pattern: /^\/api\/v1\/rider\/deliveries\/[a-f0-9]{24}\/status$/i },
+  { method: 'POST', pattern: /^\/api\/v1\/rider\/deliveries\/[a-f0-9]{24}\/complete$/i },
+];
 
 function isAllowedWhenRestricted(method, path) {
   if (SAFE_METHODS.includes(method)) {

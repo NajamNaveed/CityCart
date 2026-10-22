@@ -215,7 +215,17 @@ function buildDataset({ now = new Date(), hashes }) {
       return { user, employee, joined, changed: history.length > 1 };
     });
 
-    brands.push({ def: b, doc: brandDoc, owner, store: storeDoc, categoryByKey, products, staff, terminatedAt });
+    // Riders: plain brand accounts that only the partner app can sign in to.
+    const riders = (b.riders || []).map((r, i) => {
+      const user = userDoc({
+        name: r.name, email: r.email, phone: r.phone, role: 'RIDER', passwordHash: hashes.demo,
+        brandId, createdAt: new Date(createdAt.getTime() + (5 + i) * DAY), restrictedUntil,
+      });
+      ds.users.push(user);
+      return user;
+    });
+
+    brands.push({ def: b, doc: brandDoc, owner, store: storeDoc, categoryByKey, products, staff, riders, terminatedAt });
   }
   const brandByKey = Object.fromEntries(brands.map((b) => [b.def.key, b]));
 
@@ -366,12 +376,18 @@ function buildDataset({ now = new Date(), hashes }) {
         const deliveryStatus = status === 'READY_FOR_SHIPMENT' ? 'READY_FOR_PICKUP'
           : status === 'SHIPPED' ? (flags.inTransit ? 'IN_TRANSIT' : 'PICKED_UP')
           : status === 'OUT_FOR_DELIVERY' ? (flags.failedDelivery ? 'FAILED' : 'OUT_FOR_DELIVERY') : 'DELIVERED';
+        // A brand with riders hands its deliveries to them; the others use a courier or a named agent.
+        const rider = deliveryStatus !== 'READY_FOR_PICKUP' && brand.riders.length ? brand.riders[ds.deliveries.length % brand.riders.length] : null;
         ds.deliveries.push({
           _id: new ObjectId(), orderId: order._id, brandId: brand.doc._id, customerId: customer.doc._id, status: deliveryStatus,
           address: { ...order.shippingAddress }, deliveryFee,
+          // The customer's proof-of-delivery code, made with the delivery; a failed attempt cost one wrong try.
+          deliveryCode: pad(Math.floor(random() * 1e6), 6), codeAttempts: deliveryStatus === 'FAILED' ? 1 : 0,
           ...(deliveryStatus !== 'READY_FOR_PICKUP' && {
-            trackingReference: `${COURIERS[brandKey]}-${pad(Math.floor(random() * 1e10), 10)}`, assignedAgent: pick(AGENTS),
+            trackingReference: `${COURIERS[brandKey]}-${pad(Math.floor(random() * 1e10), 10)}`,
+            assignedAgent: rider ? rider.name : pick(AGENTS),
           }),
+          ...(rider && { riderId: rider._id, assignedAt: new Date(readyEvent.at.getTime() + 30 * 60 * 1000) }),
           ...(deliveryStatus === 'FAILED' && { failureReason: 'The customer\'s phone was switched off and nobody was at the address. The rider will try again tomorrow.' }),
           createdAt: readyEvent.at, updatedAt: finishedAt,
         });
@@ -555,6 +571,13 @@ function buildDataset({ now = new Date(), hashes }) {
       }
     }
     note(brand.owner._id, 'SYSTEM_NOTIFICATION', 'Welcome to CityCart', 'Your brand account is ready. Add a category, then your first products.', { brandId: brand.doc._id }, new Date(brand.doc.createdAt.getTime() + 5 * 60 * 1000));
+  }
+  // Riders hear about the deliveries they are given (only those that are still open).
+  for (const d of ds.deliveries) {
+    if (!d.riderId || ['DELIVERED', 'CANCELLED', 'RETURNED'].includes(d.status)) continue;
+    const order = ds.orders.find((o) => String(o._id) === String(d.orderId));
+    note(d.riderId, 'DELIVERY_ASSIGNED', 'New delivery', `You have been assigned the delivery for order ${order.orderNumber}.`,
+      { brandId: d.brandId, deliveryId: d._id, orderNumber: order.orderNumber }, d.assignedAt);
   }
   customers.forEach((c) => note(c.doc._id, 'SYSTEM_NOTIFICATION', 'Welcome to CityCart', 'Shop local brands in your city and pay in cash when your order arrives.', { kind: 'welcome' }, new Date(c.doc.createdAt.getTime() + 5 * 60 * 1000)));
 

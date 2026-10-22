@@ -1,9 +1,12 @@
 const Delivery = require('../models/delivery.model');
 const Order = require('../models/order.model');
 const Payment = require('../models/payment.model');
+const User = require('../models/user.model');
 const { runInTransaction } = require('../utils/transaction');
 const { OrderError } = require('./order.service');
-const { notifyCustomerOfOrderStatus, notifyPaymentReceived } = require('./notification.service');
+const { notifyCustomerOfOrderStatus, notifyPaymentReceived, notifyRiderAssigned } = require('./notification.service');
+const { generateDeliveryCode } = require('../utils/deliveryCode');
+const { ROLES } = require('../config/roles');
 const {
   DELIVERY_FINAL_STATUSES,
   ORDER_STATUS_FOR_DELIVERY,
@@ -14,9 +17,10 @@ const {
 
 const DEFAULT_LIMIT = 20;
 
-async function listDeliveries(brandId, { status, page, limit } = {}) {
+async function listDeliveries(brandId, { status, riderId, page, limit } = {}) {
   const filter = { brandId };
   if (status) filter.status = status;
+  if (riderId) filter.riderId = riderId;
   const pageNumber = page || 1;
   const limitNumber = limit || DEFAULT_LIMIT;
 
@@ -75,7 +79,10 @@ async function getDeliveryForUser(user, tenantBrandId, deliveryId) {
  * double DELIVERED can't mark payment PAID twice). If the order is not in a
  * status the delivery step requires, everything is rolled back.
  */
-async function updateDeliveryStatus({ brandId, deliveryId, status, failureReason, userId }) {
+async function updateDeliveryStatus({ brandId, deliveryId, status, failureReason, userId, riderId }) {
+  // riderId is set only when a rider makes the change: the delivery must then be
+  // assigned to that rider, so a rider can never move someone else's delivery.
+  const owner = { brandId, ...(riderId && { riderId }) };
   // Customer notifications collected inside the transaction, delivered after
   // it commits — a rollback then leaves nothing behind, and a withTransaction
   // retry only leaves the entries of the run that actually committed.
@@ -94,13 +101,13 @@ async function updateDeliveryStatus({ brandId, deliveryId, status, failureReason
 
     // new:false => `previous` is the delivery as it was BEFORE this change.
     const previous = await Delivery.findOneAndUpdate(
-      { _id: deliveryId, brandId, status: { $in: legalDeliverySourcesFor(status) } },
+      { _id: deliveryId, ...owner, status: { $in: legalDeliverySourcesFor(status) } },
       update,
       { new: false, session }
     );
 
     if (!previous) {
-      const existing = await Delivery.findOne({ _id: deliveryId, brandId }).session(session);
+      const existing = await Delivery.findOne({ _id: deliveryId, ...owner }).session(session);
       if (!existing) {
         throw new OrderError(404, 'Delivery not found.');
       }
@@ -170,8 +177,15 @@ async function updateDelivery({ brandId, deliveryId, trackingReference, assigned
   if (trackingReference !== undefined) fields.trackingReference = trackingReference;
   if (assignedAgent !== undefined) fields.assignedAgent = assignedAgent;
 
+  // A typed-in agent name cannot overwrite the name of an assigned rider: it
+  // would leave the delivery showing one person and belonging to another.
   const updated = await Delivery.findOneAndUpdate(
-    { _id: deliveryId, brandId, status: { $nin: DELIVERY_FINAL_STATUSES } },
+    {
+      _id: deliveryId,
+      brandId,
+      status: { $nin: DELIVERY_FINAL_STATUSES },
+      ...(assignedAgent !== undefined && { riderId: { $exists: false } }),
+    },
     { $set: fields },
     { new: true }
   );
@@ -182,9 +196,99 @@ async function updateDelivery({ brandId, deliveryId, trackingReference, assigned
   if (!existing) {
     throw new OrderError(404, 'Delivery not found.');
   }
+  if (!DELIVERY_FINAL_STATUSES.includes(existing.status) && existing.riderId) {
+    throw new OrderError(409, 'A rider is assigned to this delivery. Change the rider instead of typing an agent name.', {
+      code: 'USE_RIDER_ASSIGNMENT',
+    });
+  }
   throw new OrderError(409, `A ${existing.status} delivery can no longer be edited.`, {
     code: 'DELIVERY_FINAL',
   });
 }
 
-module.exports = { listDeliveries, getDeliveryForUser, updateDeliveryStatus, updateDelivery };
+/**
+ * Assigns the delivery to one of the brand's active riders, or takes the rider
+ * off it (riderId null). Brand isolation is enforced twice: the rider must belong
+ * to the caller's brand, and so must the delivery. Final deliveries cannot be
+ * reassigned. The proof-of-delivery code is created here for any delivery that
+ * does not have one yet, and the rider is told about their new job.
+ */
+async function assignRider({ brandId, deliveryId, riderId }) {
+  let rider = null;
+  if (riderId) {
+    rider = await User.findOne({ _id: riderId, brandId, role: ROLES.RIDER, isActive: true });
+    if (!rider) {
+      throw new OrderError(404, 'Rider not found.');
+    }
+  }
+
+  const change = rider
+    ? { $set: { riderId: rider._id, assignedAgent: rider.name, assignedAt: new Date() } }
+    : { $unset: { riderId: '', assignedAgent: '', assignedAt: '' } };
+  // Unassigning only makes sense when a rider is assigned; a hand-typed agent
+  // name is not touched by it.
+  const filter = {
+    _id: deliveryId,
+    brandId,
+    status: { $nin: DELIVERY_FINAL_STATUSES },
+    ...(!rider && { riderId: { $exists: true } }),
+  };
+
+  const previous = await Delivery.findOneAndUpdate(filter, change, { new: false });
+  if (!previous) {
+    const existing = await Delivery.findOne({ _id: deliveryId, brandId });
+    if (!existing) {
+      throw new OrderError(404, 'Delivery not found.');
+    }
+    if (DELIVERY_FINAL_STATUSES.includes(existing.status)) {
+      throw new OrderError(409, `A ${existing.status} delivery can no longer be edited.`, { code: 'DELIVERY_FINAL' });
+    }
+    throw new OrderError(409, 'No rider is assigned to this delivery.', { code: 'NO_RIDER_ASSIGNED' });
+  }
+
+  if (rider) {
+    // Older deliveries (created before delivery codes existed) get theirs now.
+    // Conditional on the code being absent, so it can never be replaced.
+    await Delivery.updateOne({ _id: previous._id, deliveryCode: { $exists: false } }, { $set: { deliveryCode: generateDeliveryCode() } });
+    if (!previous.riderId || String(previous.riderId) !== String(rider._id)) {
+      const order = await Order.findById(previous.orderId).select('orderNumber');
+      await notifyRiderAssigned({
+        userId: rider._id,
+        brandId,
+        orderNumber: order ? order.orderNumber : '',
+        deliveryId: previous._id,
+      });
+    }
+  }
+  return Delivery.findById(previous._id);
+}
+
+// Statuses in which the customer may see the code: the order is on the road.
+const CODE_VISIBLE_STATUSES = ['PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'FAILED'];
+
+/**
+ * The proof-of-delivery code, for the customer who owns the order and only
+ * while the order is on its way. This is the one place the code leaves the
+ * server: it is never part of a delivery returned to a brand, rider or admin.
+ */
+async function getDeliveryCodeForCustomer(customerId, deliveryId) {
+  const delivery = await Delivery.findOne({ _id: deliveryId, customerId }).select('+deliveryCode status');
+  if (!delivery) {
+    throw new OrderError(404, 'Delivery not found.');
+  }
+  if (!CODE_VISIBLE_STATUSES.includes(delivery.status) || !delivery.deliveryCode) {
+    throw new OrderError(409, 'The delivery code is available once your order is on its way.', {
+      code: 'CODE_NOT_AVAILABLE',
+    });
+  }
+  return delivery.deliveryCode;
+}
+
+module.exports = {
+  listDeliveries,
+  getDeliveryForUser,
+  updateDeliveryStatus,
+  updateDelivery,
+  assignRider,
+  getDeliveryCodeForCustomer,
+};

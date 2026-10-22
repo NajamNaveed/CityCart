@@ -41,6 +41,7 @@ const BrandMessages = lazy(() => import('./pages/brand/Messages'))
 const BrandOrderDetail = lazy(() => import('./pages/brand/OrderDetail'))
 const Deliveries = lazy(() => import('./pages/brand/Deliveries'))
 const Team = lazy(() => import('./pages/brand/Team'))
+const Riders = lazy(() => import('./pages/brand/Riders'))
 const BrandBranches = lazy(() => import('./pages/brand/Branches'))
 const BrandSettings = lazy(() => import('./pages/brand/Settings'))
 const BrandAnalytics = lazy(() => import('./pages/brand/Analytics'))
@@ -142,6 +143,7 @@ function App() {
                     <Route path="deliveries" element={<Deliveries />} />
                     <Route path="reviews" element={<BrandReviews />} />
                     <Route path="team" element={<Team />} />
+                    <Route path="riders" element={<Riders />} />
                     <Route path="analytics" element={<BrandAnalytics />} />
                     <Route element={<ProtectedRoute roles={['BRAND_ADMIN']} loginPath="/sell/login" />}>
                       <Route path="settings" element={<BrandSettings />} />

@@ -27,13 +27,14 @@ The backend must enforce all security rules defined in this document. Frontend r
 
 # 2. User Roles
 
-CityCart has four primary roles:
+CityCart has five roles (`RIDER` was added in October 2026, see `20-partner-app.md`):
 
 | Role             | Scope            | Description                                |
 | ---------------- | ---------------- | ------------------------------------------ |
 | `SUPER_ADMIN`    | Platform-wide    | Manages the entire CityCart platform       |
 | `BRAND_ADMIN`    | One brand        | Owns and manages one brand/store           |
 | `BRAND_EMPLOYEE` | One brand        | Performs assigned tasks within a brand     |
+| `RIDER`          | One brand        | Delivers that brand's orders; partner app only |
 | `CUSTOMER`       | Personal account | Shops and manages their own account/orders |
 
 ---
@@ -239,6 +240,20 @@ delivery.manage
 ```
 
 See `11-delivery-system.md` and `05-api-specification.md` (§22a) — delivery is part of the MVP, not a future addition.
+
+## 6.12a Rider Permissions
+
+```text
+riders.view
+riders.create
+riders.update
+```
+
+These guard the brand's management of its rider accounts (`GET/POST /riders`,
+`PATCH /riders/:id`, `PATCH /riders/:id/password`). `riders.view` is also what
+the delivery screen needs to offer a rider list when assigning; the assignment
+itself needs `delivery.manage`. A rider holds no permissions: a `RIDER` can only
+use the `/rider/*` endpoints for deliveries assigned to them. See `20-partner-app.md`.
 
 ## 6.13 Payment Permissions
 
@@ -670,6 +685,12 @@ Employees cannot promote themselves to:
 BRAND_ADMIN
 SUPER_ADMIN
 ```
+
+### Rider
+
+A `RIDER` account is created only by a Brand Admin, or an employee holding
+`riders.create`, inside that brand. The role and brand are never client-supplied,
+and a rider can never be created, edited or promoted by another rider.
 
 ### Customer
 

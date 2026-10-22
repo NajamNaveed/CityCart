@@ -12,6 +12,8 @@
 // object internal callers and tests pass to middleware, still works.
 const headerOf = (req, name) => (req && req.headers ? req.headers[name] : undefined);
 
+const isPartnerClient = (req) => String(headerOf(req, 'x-client') || '').trim().toLowerCase() === 'partner';
+
 const isMobileClient = (req) => String(headerOf(req, 'x-client') || '').trim().toLowerCase() === 'mobile';
 
 /**
@@ -31,4 +33,4 @@ function readBearerToken(req) {
   return { present: true, token: match ? match[1] : null };
 }
 
-module.exports = { isMobileClient, readBearerToken };
+module.exports = { isMobileClient, isPartnerClient, readBearerToken };

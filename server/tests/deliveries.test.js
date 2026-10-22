@@ -298,7 +298,8 @@ describe('PATCH /api/v1/deliveries/:id', () => {
 
     expect(res.status).toBe(200);
     expect(Delivery.findOneAndUpdate).toHaveBeenCalledWith(
-      { _id: id.toString(), brandId: brandId.toString(), status: { $nin: ['DELIVERED', 'CANCELLED', 'RETURNED'] } },
+      // riderId: a typed-in agent name may not overwrite an assigned rider's name.
+      { _id: id.toString(), brandId: brandId.toString(), status: { $nin: ['DELIVERED', 'CANCELLED', 'RETURNED'] }, riderId: { $exists: false } },
       { $set: { trackingReference: 'TRK-1', assignedAgent: 'Ali' } }, // status/brandId ignored
       { new: true }
     );

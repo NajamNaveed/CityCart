@@ -1,7 +1,7 @@
 const User = require('../models/user.model');
 const { hashPassword, comparePassword } = require('../utils/password');
 const { signToken } = require('../utils/jwt');
-const { ROLES, STAFF_ROLES } = require('../config/roles');
+const { ROLES, STAFF_ROLES, PARTNER_ROLES } = require('../config/roles');
 const env = require('../config/env');
 
 /**
@@ -83,12 +83,14 @@ async function registerUser({ name, email, password }) {
 const PORTAL_ROLES = Object.freeze({
   customer: [ROLES.CUSTOMER],
   brand: [ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE],
+  partner: PARTNER_ROLES,
   admin: [ROLES.SUPER_ADMIN],
 });
 
 const PORTAL_ACCOUNT_TYPES = Object.freeze({
   customer: 'CUSTOMER',
   brand: 'BRAND',
+  partner: 'BRAND',
   admin: 'PLATFORM_ADMIN',
 });
 
@@ -139,6 +141,9 @@ async function loginUser({ email, password }, portal = 'customer') {
       role: user.role,
       brandId: user.brandId,
       passwordVersion: user.passwordVersion,
+      // Marks a partner-app token so it can only ever be used as one (see
+      // middleware/authenticate.js).
+      ...(portal === 'partner' && { client: 'partner' }),
     },
     STAFF_ROLES.includes(user.role) ? { expiresIn: `${env.staffSessionHours}h` } : undefined,
   );

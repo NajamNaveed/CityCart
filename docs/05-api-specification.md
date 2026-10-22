@@ -185,6 +185,18 @@ of a seller or admin account is refused with `403 WEB_ONLY` on every endpoint.
 The web client does not send `X-Client` and never receives a token in a body.
 See docs/06 (Native App Sessions).
 
+### Partner app sign-in
+
+```text
+POST /api/v1/auth/partner/login        (header X-Client: partner)
+```
+
+Body `{ "email", "password" }`. Only `RIDER` and `BRAND_EMPLOYEE` accounts can
+sign in; any other account, a wrong password and an unknown email all answer the
+same `401`. Without the header: `403 PARTNER_APP_ONLY`. The response contains the
+token (marked as a partner token, one staff session long) and sets no cookie.
+See `20-partner-app.md`.
+
 ---
 
 ## Logout
@@ -1309,6 +1321,61 @@ Required (brand users):
 ```text
 delivery.manage
 ```
+
+---
+
+## Assign Rider
+
+```text
+PATCH /api/v1/deliveries/:deliveryId/rider
+```
+
+Body `{ "riderId": "<id>" }` assigns an active rider of the same brand (also
+sets `assignedAgent` to the rider's name and notifies the rider with
+`DELIVERY_ASSIGNED`); `{ "riderId": null }` removes the rider. Required: `delivery.manage`.
+Errors: `404` rider not in this brand or inactive; `409 DELIVERY_FINAL`;
+`409 NO_RIDER_ASSIGNED` (removing when none). `PATCH /deliveries/:id` with a typed
+`assignedAgent` answers `409 USE_RIDER_ASSIGNMENT` while a rider is assigned.
+`GET /deliveries` also accepts `riderId` as a filter.
+
+## Delivery Code (customer)
+
+```text
+GET /api/v1/deliveries/:deliveryId/code
+```
+
+Customer only, own delivery only, and only while it is on its way
+(`PICKED_UP`, `IN_TRANSIT`, `OUT_FOR_DELIVERY`, `FAILED`); otherwise
+`409 CODE_NOT_AVAILABLE`. Returns `{ "success": true, "code": "482913" }`.
+
+---
+
+# 22b. Rider Endpoints
+
+Base `/api/v1/riders` (brand users; `riders.view` / `riders.create` / `riders.update`):
+
+```text
+GET    /riders                 list the brand's riders (?isActive, page, limit)
+POST   /riders                 { name, email, password, phone }  -> role RIDER, brand from the signed-in user
+PATCH  /riders/:id             { name?, phone?, isActive? }
+PATCH  /riders/:id/password    { password }  resets it and signs the rider out everywhere
+```
+
+Base `/api/v1/rider/deliveries` (role `RIDER` only; brand and rider come from the
+account, every query is pinned to both, anything else is `404`):
+
+```text
+GET   /rider/deliveries?scope=active|history
+GET   /rider/deliveries/:id
+PATCH /rider/deliveries/:id/status      { status: PICKED_UP|IN_TRANSIT|OUT_FOR_DELIVERY|FAILED, failureReason? }
+POST  /rider/deliveries/:id/complete    { code }  six digits
+```
+
+A rider's delivery view contains: order number, status, address (only while the
+delivery is open), item names and quantities, `paymentMethod`, `amountToCollect`,
+`cashCollected`. Never the customer account, brand, prices or the code. `complete`
+errors: `422 INVALID_CODE` (with `attemptsRemaining`), `429 CODE_LOCKED`,
+`409 INVALID_TRANSITION`, `409 NO_DELIVERY_CODE`. See `20-partner-app.md`.
 
 ---
 

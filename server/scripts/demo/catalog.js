@@ -40,6 +40,11 @@ const BRANDS = [
       { name: 'Usman Tariq', email: 'usman.tariq@citycart.demo', phone: '+92 321 6638120', jobTitle: 'Order Handler', permissions: [...P.orders, ...P.delivery, ...P.messages] },
       { name: 'Fatima Noor', email: 'fatima.noor@citycart.demo', phone: '+92 333 6107754', jobTitle: 'Catalogue Manager', permissions: [...P.productsAll, ...P.categoriesAll, ...P.stock] },
     ],
+    // Delivery riders (role RIDER): they sign in on the partner app and see only their own deliveries.
+    riders: [
+      { name: 'Shoaib Raza', email: 'shoaib.raza@citycart.demo', phone: '+92 322 7741095' },
+      { name: 'Imran Bashir', email: 'imran.bashir@citycart.demo', phone: '+92 305 1182640' },
+    ],
     categories: [
       { key: 'women', name: 'Women\'s Unstitched', description: 'Three-piece and two-piece suits, cut and ready to stitch.' },
       { key: 'lawn', name: 'Lawn Collection', parent: 'women', description: 'Light combed-cotton lawn for the long Punjab summer.' },
@@ -193,6 +198,7 @@ const BRANDS = [
       address: { addressLine: '12, Block C, Susan Road, Madina Town', city: 'Faisalabad', state: 'Punjab', country: 'Pakistan', postalCode: '38000' },
       contact: { phone: '+92 41 8791 8830', email: 'studio@sukoonhome.pk' }, hours: { open: '10:00', close: '19:00', closed: ['sun'] }, isActive: true,
     },
+    riders: [{ name: 'Kamran Ali', email: 'kamran.ali@citycart.demo', phone: '+92 311 5530287' }],
     staff: [{ name: 'Maryam Javed', email: 'maryam.javed@citycart.demo', phone: '+92 300 4417762', jobTitle: 'Catalogue Assistant', permissions: ['products.view', 'products.create', 'products.update', 'categories.view', 'inventory.view', 'inventory.manage'] }],
     categories: [
       { key: 'bedding', name: 'Bedding', description: 'Sheets, quilts and bed covers in natural fabrics.' },

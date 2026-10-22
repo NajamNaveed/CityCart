@@ -291,3 +291,12 @@ developing but not in release builds of Android.
   deactivation, or when the password version changes. A lost phone is
   therefore covered by deactivating the account or changing the password.
 * No refresh tokens or push notifications in the first version.
+
+## 15. Related: the partner app
+
+Riders and the people who keep order records use a separate app, *CityCart
+Partner* (`partner/`, see `20-partner-app.md`). It shares this app's stack and API
+but has its own sign-in (`/auth/partner/login`, `X-Client: partner`); a shopper
+token never works there and a partner token never works here. This app will show
+the customer's delivery code (`GET /deliveries/:id/code`) once the partner app's
+rider screens (Phase C) are built.

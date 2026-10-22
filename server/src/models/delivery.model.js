@@ -75,6 +75,29 @@ const deliverySchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    // The rider (User, role RIDER, same brand) who delivers this order
+    // (docs/11 §11a, docs/20). assignedAgent keeps the display name: it is set
+    // to the rider's name on assignment, or typed by hand when no rider is used.
+    riderId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    assignedAt: {
+      type: Date,
+    },
+    // Six-digit proof-of-delivery code (docs/11 §11b). Shown only to the
+    // customer, never to the brand or rider, and never returned by default
+    // (select: false): the rider types it in to complete the delivery.
+    deliveryCode: {
+      type: String,
+      select: false,
+    },
+    // Wrong codes entered so far; the code locks at MAX_CODE_ATTEMPTS.
+    codeAttempts: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     failureReason: {
       type: String,
       trim: true,
@@ -84,6 +107,9 @@ const deliverySchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+// A rider's own deliveries, by progress.
+deliverySchema.index({ riderId: 1, status: 1 });
 
 const Delivery = mongoose.model('Delivery', deliverySchema);
 

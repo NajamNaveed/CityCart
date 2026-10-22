@@ -1,6 +1,6 @@
 const express = require('express');
 
-const { list, getById, updateStatus, update } = require('../controllers/delivery.controller');
+const { list, getById, updateStatus, update, assign, getCode } = require('../controllers/delivery.controller');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
 const requirePermission = require('../middleware/requirePermission');
@@ -14,6 +14,10 @@ const router = express.Router();
 const brandUser = [authenticate, requireRole(...BRAND_ROLES)];
 
 router.get('/', ...brandUser, requirePermission(PERMISSIONS.DELIVERY_VIEW), requireTenant, list);
+
+// The customer's proof-of-delivery code (docs/11 §11b): the customer, and
+// nobody else, can read it.
+router.get('/:id/code', authenticate, requireRole(ROLES.CUSTOMER), getCode);
 
 router.get(
   '/:id',
@@ -30,6 +34,14 @@ router.patch(
   requirePermission(PERMISSIONS.DELIVERY_MANAGE),
   requireTenant,
   updateStatus
+);
+
+router.patch(
+  '/:id/rider',
+  ...brandUser,
+  requirePermission(PERMISSIONS.DELIVERY_MANAGE),
+  requireTenant,
+  assign
 );
 
 router.patch(

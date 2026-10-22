@@ -183,8 +183,11 @@ Allowed values:
 SUPER_ADMIN
 BRAND_ADMIN
 BRAND_EMPLOYEE
+RIDER
 CUSTOMER
 ```
+
+`RIDER` (added October 2026, `20-partner-app.md`) is a brand-scoped account with `accountType: BRAND`; riders are plain `User` records, not a separate collection.
 
 ### `brandId`
 
@@ -193,6 +196,7 @@ Required for:
 ```text
 BRAND_ADMIN
 BRAND_EMPLOYEE
+RIDER
 ```
 
 Not required for:
@@ -801,10 +805,16 @@ address
 deliveryFee
 trackingReference
 assignedAgent
+riderId
+assignedAt
+deliveryCode
+codeAttempts
 failureReason
 createdAt
 updatedAt
 ```
+
+`riderId` is a `User` (role `RIDER`) of the same brand; `assignedAgent` keeps the display name (set to the rider's name on assignment). `deliveryCode` is the six-digit proof-of-delivery code (`select: false`, shown only to the customer); `codeAttempts` counts wrong tries. Index `{ riderId, status }` serves the rider's own list (run `npm run sync-indexes` where auto-indexing is off). See `11-delivery-system.md` §12 and §19, and `20-partner-app.md`.
 
 `address` is a snapshot, captured the same way as `Order.shippingAddress`, so a later profile change never alters an existing delivery record.
 

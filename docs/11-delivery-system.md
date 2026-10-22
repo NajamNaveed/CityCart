@@ -247,6 +247,14 @@ For the MVP, delivery assignment may remain simple.
 
 A brand may handle delivery itself or manually assign a delivery person.
 
+**Riders (added October 2026).** A brand may create rider accounts
+(`RIDER`, one brand each, see `20-partner-app.md`) and assign a delivery to one
+of them (`PATCH /deliveries/:id/rider`). Assignment is only possible on a
+delivery that is not final, only to an active rider of the same brand, and
+does not change delivery, order or payment status. A rider sees and moves only
+their own deliveries (`/rider/deliveries`); a hand-typed `assignedAgent` remains
+for brands that do not use riders.
+
 Future versions may introduce:
 
 ```text id="dly011"
@@ -376,9 +384,15 @@ The payment workflow may also update the payment status for COD orders when paym
 
 Proof of delivery is not required for the initial MVP.
 
-Future implementations may support:
+**Delivery confirmation code (implemented October 2026).** A six-digit code is
+created with the delivery (and for older deliveries when a rider is assigned).
+Only the customer can read it. A rider can complete a delivery only by entering
+it; five wrong tries lock it, after which the brand completes the delivery from
+the dashboard. Brand users complete deliveries without it as before. See
+`20-partner-app.md` §7.
 
-* Delivery confirmation code
+Future implementations may also support:
+
 * Customer signature
 * Photo proof
 * Courier confirmation

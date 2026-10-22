@@ -132,7 +132,7 @@ async function terminateBrand({ brandId, reason, adminId, graceHours }) {
     // account (they can still finish in-transit deliveries); after it,
     // authenticate rejects every request. graceHours 0 = immediate cut-off.
     await User.updateMany(
-      { brandId, role: { $in: [ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE] } },
+      { brandId, role: { $in: [ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE, ROLES.RIDER] } },
       { $set: { accessExpiresAt: accessEndsAt, accessRestricted: true } },
       { session }
     );

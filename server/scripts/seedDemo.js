@@ -99,6 +99,7 @@ Sign in (passwords are the same on every account in a group):
   Super admin  /admin/login   admin@citycart.local            ${PASSWORDS.admin}
   Brand owner  /sell/login    brand@citycart.local            ${PASSWORDS.brand}   (Loom & Co., the fullest account)
   Other owners /sell/login    hamza.sheikh@citycart.demo and the rest   ${PASSWORDS.demo}
+  Rider        partner app    shoaib.raza@citycart.demo (Loom & Co.)   ${PASSWORDS.demo}
   Staff        /sell/login    usman.tariq@citycart.demo (orders) / fatima.noor@citycart.demo (catalogue)   ${PASSWORDS.demo}
   Customers    /login         sana.iqbal@citycart.demo and the rest      ${PASSWORDS.demo}
 `);

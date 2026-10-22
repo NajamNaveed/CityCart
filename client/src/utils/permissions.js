@@ -62,6 +62,14 @@ export const PERMISSION_GROUPS = [
     ],
   },
   {
+    title: 'Riders',
+    items: [
+      ['riders.view', 'See riders and assign them to deliveries'],
+      ['riders.create', 'Add riders'],
+      ['riders.update', 'Edit, deactivate and reset riders'],
+    ],
+  },
+  {
     title: 'Team',
     items: [
       ['employees.view', 'See the team'],
@@ -75,7 +83,7 @@ export const PERMISSION_GROUPS = [
 
 // Quick starting points; the owner can still tick or untick anything afterwards.
 export const PRESETS = [
-  ['Order handler', ['orders.view', 'orders.manage', 'delivery.view', 'delivery.manage']],
+  ['Order handler', ['orders.view', 'orders.manage', 'delivery.view', 'delivery.manage', 'riders.view']],
   [
     'Catalogue manager',
     ['products.view', 'products.create', 'products.update', 'categories.view', 'categories.create', 'categories.update', 'inventory.view', 'inventory.manage'],

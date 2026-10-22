@@ -944,3 +944,38 @@ Rules for this programme:
 * The backend is untouched in Phases 1-4; the API contract must remain stable
   so the Phase 9 client and the deployed web app share one surface.
 * Every phase ends with tests, lint and the production build green.
+
+---
+
+# Addendum — Partner App Programme (October 2026)
+
+The software house guild requires extra mobile apps next to the marketplace:
+one for delivery riders and one for the person who keeps order and payment
+records. They are built as **one** role-based app, `partner/`, on the existing
+API. The full design, visibility rules and security decisions are in
+`20-partner-app.md`.
+
+```text
+Phase A  Rider foundation                                   DONE
+         RIDER role (brand-scoped), rider management (API + web Riders page),
+         rider assignment, partner sign-in (/auth/partner/login), rider
+         endpoints, six-digit delivery code.
+
+Phase B  Receipts and cash records
+         Receipt model issued when a payment becomes PAID, visibility rules,
+         COD collectedBy and settlement.
+
+Phase C  Partner app: sign-in and rider screens; delivery code shown in the
+         shopper app's order page.
+
+Phase D  Partner app: records screens (orders by status, deliveries, returns,
+         payments, receipts).
+
+Phase E  Card / online payments through a hosted gateway checkout with a
+         signed webhook. Card data is never stored.
+
+Phase F  Optional: push notification on assignment, rider live location.
+```
+
+Each phase follows the dependency rule above: no new package without approval.
+Phases A, B, D and E need none; Phase C reuses the shopper app's package list.

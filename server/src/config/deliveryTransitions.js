@@ -21,6 +21,11 @@ const DELIVERY_TRANSITIONS = {
 // Statuses a brand user may set via PATCH /deliveries/:id/status.
 const DELIVERY_SETTABLE_STATUSES = ['PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED', 'FAILED'];
 
+// Statuses a RIDER may set via PATCH /rider/deliveries/:id/status. DELIVERED is
+// deliberately absent: a rider completes a delivery only with the customer's
+// proof-of-delivery code (POST /rider/deliveries/:id/complete).
+const RIDER_SETTABLE_STATUSES = ['PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'FAILED'];
+
 // Delivery status that is final: nothing may edit it any more.
 const DELIVERY_FINAL_STATUSES = ['DELIVERED', 'CANCELLED', 'RETURNED'];
 
@@ -47,6 +52,7 @@ function nextDeliveryStatuses(from) {
 module.exports = {
   DELIVERY_TRANSITIONS,
   DELIVERY_SETTABLE_STATUSES,
+  RIDER_SETTABLE_STATUSES,
   DELIVERY_FINAL_STATUSES,
   ORDER_STATUS_FOR_DELIVERY,
   legalDeliverySourcesFor,

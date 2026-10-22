@@ -1,7 +1,7 @@
 const User = require('../models/user.model');
 const { signToken, verifyToken } = require('../utils/jwt');
 const { AUTH_COOKIE_NAME, staffAuthCookieOptions } = require('../config/cookie');
-const { ROLES, STAFF_ROLES } = require('../config/roles');
+const { ROLES, STAFF_ROLES, PARTNER_ROLES } = require('../config/roles');
 const { readBearerToken } = require('../utils/clientType');
 const { isAllowedWhenRestricted } = require('../config/restrictedAccess');
 
@@ -54,15 +54,23 @@ async function authenticate(req, res, next) {
       return res.status(401).json({ success: false, message: 'Invalid or expired session.' });
     }
 
-    // Bearer tokens are for the shopper app only. Staff sessions are short-lived
-    // and renewed through the cookie (docs/06 §9), so seller and admin accounts
-    // stay on the web dashboard even if one of their tokens were ever presented here.
-    if (viaBearer && user.role !== ROLES.CUSTOMER) {
-      return res.status(403).json({
-        success: false,
-        message: 'Seller and admin accounts sign in on the web dashboard.',
-        code: 'WEB_ONLY',
-      });
+    // Bearer tokens belong to the native apps only (docs/06, docs/20 §6):
+    //  - the shopper app's token (no `client` claim) works for CUSTOMER accounts;
+    //  - the partner app's token (`client: 'partner'`, issued only by
+    //    POST /auth/partner/login) works for the partner roles (riders and
+    //    brand team members).
+    // Brand owners and the super admin stay on the web dashboard, and a token
+    // of one app never works as the other's, even for the same account.
+    if (viaBearer) {
+      const partnerToken = payload.client === 'partner';
+      const allowed = user.role === ROLES.CUSTOMER ? !partnerToken : partnerToken && PARTNER_ROLES.includes(user.role);
+      if (!allowed) {
+        return res.status(403).json({
+          success: false,
+          message: 'Seller and admin accounts sign in on the web dashboard.',
+          code: 'WEB_ONLY',
+        });
+      }
     }
 
     // Conceptual shape from §11 (req.user = { id, role, brandId }),
@@ -94,7 +102,9 @@ async function authenticate(req, res, next) {
     // active staff member never hits the expiry mid-work, while an idle or
     // stolen one still expires within hours. Shoppers keep their
     // full-length session untouched.
-    if (STAFF_ROLES.includes(user.role) && !req.skipStaffSessionRenewal) {
+    // A partner-app (bearer) session has no cookie to renew: it simply lasts one
+    // staff session length and the app signs in again.
+    if (STAFF_ROLES.includes(user.role) && !req.skipStaffSessionRenewal && !viaBearer) {
       const renewed = signToken(
         {
           userId: user._id,

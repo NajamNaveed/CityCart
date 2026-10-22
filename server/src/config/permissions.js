@@ -66,6 +66,12 @@ const PERMISSIONS = Object.freeze({
   EMPLOYEES_DELETE: 'employees.delete',
   EMPLOYEES_MANAGE_PERMISSIONS: 'employees.manage_permissions',
 
+  // Rider accounts of the brand (docs/20). riders.update also covers
+  // deactivating a rider and resetting their password.
+  RIDERS_VIEW: 'riders.view',
+  RIDERS_CREATE: 'riders.create',
+  RIDERS_UPDATE: 'riders.update',
+
   STORE_UPDATE: 'store.update',
   ANALYTICS_VIEW: 'analytics.view',
 });

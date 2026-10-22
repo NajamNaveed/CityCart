@@ -315,6 +315,14 @@ intact and keep the native door as narrow as possible:
   token belonging to a brand admin, brand employee or platform admin is
   refused with `403 WEB_ONLY`. Staff sessions stay on the web, where they are
   short-lived, renewed and bound to the tab.
+* **Partner app exception (October 2026).** The CityCart Partner app (docs/20)
+  signs in through `POST /auth/partner/login` with `X-Client: partner`. Only
+  `RIDER` and `BRAND_EMPLOYEE` accounts can; the token carries `client: "partner"`,
+  lasts one staff session, and is renewed by signing in again (no sliding
+  renewal). A bearer token without that mark is still refused for every
+  non-shopper account, a partner-marked token is refused for shoppers, brand
+  owners and the super admin, and all the checks above still apply on every
+  request. Brand owners and the super admin remain web-only.
 * A `Bearer` header with no usable token is a `401`, never silently ignored.
   Other schemes (for example `Basic`, which some hosting adds) are not ours
   and are ignored so the cookie session keeps working.

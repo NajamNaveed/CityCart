@@ -2,6 +2,7 @@ const {
   listDeliveriesQuerySchema,
   updateDeliveryStatusSchema,
   updateDeliverySchema,
+  assignRiderSchema,
 } = require('../validators/delivery.validator');
 const { objectIdParamSchema } = require('../validators/common.validator');
 const {
@@ -9,6 +10,8 @@ const {
   getDeliveryForUser,
   updateDeliveryStatus,
   updateDelivery,
+  assignRider,
+  getDeliveryCodeForCustomer,
 } = require('../services/delivery.service');
 const { OrderError } = require('../services/order.service');
 const { formatZodError } = require('../utils/formatZodError');
@@ -86,4 +89,37 @@ async function update(req, res, next) {
   }
 }
 
-module.exports = { list, getById, updateStatus, update };
+async function assign(req, res, next) {
+  const params = objectIdParamSchema.safeParse(req.params);
+  if (!params.success) return invalid(res, params.error);
+  const body = assignRiderSchema.safeParse(req.body);
+  if (!body.success) return invalid(res, body.error);
+  try {
+    const delivery = await assignRider({
+      brandId: req.tenantBrandId,
+      deliveryId: params.data.id,
+      riderId: body.data.riderId,
+    });
+    return res.status(200).json({
+      success: true,
+      message: body.data.riderId ? 'Rider assigned' : 'Rider removed',
+      delivery,
+    });
+  } catch (err) {
+    return handleError(err, res, next);
+  }
+}
+
+// Customer only: the proof-of-delivery code for their own order.
+async function getCode(req, res, next) {
+  const params = objectIdParamSchema.safeParse(req.params);
+  if (!params.success) return invalid(res, params.error);
+  try {
+    const code = await getDeliveryCodeForCustomer(req.user._id, params.data.id);
+    return res.status(200).json({ success: true, code });
+  } catch (err) {
+    return handleError(err, res, next);
+  }
+}
+
+module.exports = { list, getById, updateStatus, update, assign, getCode };

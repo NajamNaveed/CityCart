@@ -291,7 +291,7 @@ describe('POST /api/v1/admin/brands/:id/terminate', () => {
     );
     expect(Store.updateMany).toHaveBeenCalledWith({ brandId: brandId.toString() }, { $set: { isActive: false } }, { session: 'SESSION' });
     expect(User.updateMany).toHaveBeenCalledWith(
-      { brandId: brandId.toString(), role: { $in: [ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE] } },
+      { brandId: brandId.toString(), role: { $in: [ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE, ROLES.RIDER] } },
       // staff are NOT deactivated: time-limited, read-only access instead
       { $set: { accessExpiresAt: expect.any(Date), accessRestricted: true } },
       { session: 'SESSION' }

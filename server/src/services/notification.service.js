@@ -249,6 +249,16 @@ async function notifyEmployeeCreated({ userId, brandId, brandName, jobTitle }) {
   });
 }
 
+async function notifyRiderAssigned({ userId, brandId, orderNumber, deliveryId }) {
+  await notify({
+    userIds: [userId],
+    type: 'DELIVERY_ASSIGNED',
+    title: 'New delivery',
+    message: `You have been assigned the delivery for order ${orderNumber}.`,
+    data: { brandId: String(brandId), deliveryId: String(deliveryId), orderNumber },
+  });
+}
+
 async function notifyEmployeePermissionsChanged({ userId, brandId, added = [], removed = [] }) {
   if (added.length === 0 && removed.length === 0) return;
   const brand = await Brand.findById(brandId).select('name');
@@ -413,6 +423,7 @@ module.exports = {
   notifyStockTransitions: bestEffort(notifyStockTransitions),
   notifyEmployeeCreated: bestEffort(notifyEmployeeCreated),
   notifyEmployeePermissionsChanged: bestEffort(notifyEmployeePermissionsChanged),
+  notifyRiderAssigned: bestEffort(notifyRiderAssigned),
   notifyBrandOfNewReview: bestEffort(notifyBrandOfNewReview),
   notifySuperAdminsOfNewBrand: bestEffort(notifySuperAdminsOfNewBrand),
   notifyBrandOwnerWelcome: bestEffort(notifyBrandOwnerWelcome),

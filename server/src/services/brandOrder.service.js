@@ -6,6 +6,7 @@ const { restockStock } = require('./inventory.service');
 const { OrderError } = require('./order.service');
 const { notifyCustomerOfOrderStatus } = require('./notification.service');
 const { legalSourcesFor, brandNextStatuses } = require('../config/orderTransitions');
+const { generateDeliveryCode } = require('../utils/deliveryCode');
 
 const DEFAULT_LIMIT = 20;
 
@@ -111,6 +112,7 @@ async function updateBrandOrderStatus({ brandId, orderId, status, userId }) {
             status: 'READY_FOR_PICKUP',
             address,
             deliveryFee: order.deliveryFee,
+            deliveryCode: generateDeliveryCode(),
           },
         ],
         { session }

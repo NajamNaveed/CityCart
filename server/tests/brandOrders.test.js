@@ -218,7 +218,7 @@ describe('PATCH /api/v1/brand/orders/:id/status', () => {
 
     expect(res.status).toBe(200);
     expect(Delivery.create).toHaveBeenCalledWith(
-      [{ orderId, brandId, customerId, status: 'READY_FOR_PICKUP', address: shippingAddress, deliveryFee: 0 }],
+      [{ orderId, brandId, customerId, status: 'READY_FOR_PICKUP', address: shippingAddress, deliveryFee: 0, deliveryCode: expect.stringMatching(/^[0-9]{6}$/) }],
       { session: 'SESSION' }
     );
     // READY_FOR_SHIPMENT is internal workflow — the customer hears nothing yet.
