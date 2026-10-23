@@ -965,14 +965,17 @@ Phase B  Receipts and cash records                         DONE
          Receipt model issued when a payment becomes PAID, visibility rules,
          COD collectedBy and settlement (API; screens arrive in C and D).
 
-Phase C  Partner app: sign-in and rider screens; delivery code shown in the
-         shopper app's order page.
+Phase D0 Returns backend. FOUND MISSING: return statuses exist but nothing
+         can reach them (docs/20 §6.1). Needs a design agreed with the owner.
 
-Phase D  Partner app: records screens (orders by status, deliveries, returns,
-         payments, receipts).
+Phase C  Partner app: sign-in and rider screens; delivery code and receipt
+         shown in the shopper app's order page.
+
+Phase D  Partner app: records screens (orders by status, deliveries, returns
+         once D0 exists, payments, receipts, cash hand-over).
 
 Phase E  Card / online payments through a hosted gateway checkout with a
-         signed webhook. Card data is never stored.
+         signed webhook. Card data is never stored. Gateway not chosen yet.
 
 Phase F  Optional: push notification on assignment, rider live location.
 ```
