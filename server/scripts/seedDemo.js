@@ -32,6 +32,7 @@ const MODELS = {
   carts: require('../src/models/cart.model'),
   orders: require('../src/models/order.model'),
   payments: require('../src/models/payment.model'),
+  receipts: require('../src/models/receipt.model'),
   deliveries: require('../src/models/delivery.model'),
   reviews: require('../src/models/review.model'),
   notifications: require('../src/models/notification.model'),

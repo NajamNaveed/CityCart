@@ -1,6 +1,6 @@
 # 20 — CityCart Partner App
 
-Status: **Phase A implemented (backend + web dashboard); Phases B–F planned.**
+Status: **Phases A and B implemented (backend, web dashboard, docs); C–F planned.**
 Added October 2026. Read together with `02` (roles), `06` (native app sessions),
 `10` (payments), `11` (delivery) and `19` (shopper app).
 
@@ -103,17 +103,21 @@ Proof of delivery (docs/11 §19) is a six-digit code created with the delivery.
 * On completion the order becomes `DELIVERED` and a COD payment becomes `PAID`
   with `confirmedBy` = the rider, in one transaction.
 
-## 8. Receipts and payment records (planned, Phase B and E)
+## 8. Receipts and payment records (receipts and cash: Phase B, done; card and online: Phase E, planned)
 
-**Receipt** (new model, Phase B): receipt number (from the counter model), order,
-payment, brand, customer, method, amount, item snapshot, issued time. Created
-automatically when a payment becomes `PAID`; never edited. Visibility follows §4:
-the customer sees their own, brand staff see their brand's (`payments.view`), the
-rider sees none.
+**Receipt** (Phase B, done): one per paid payment, numbered `RC-<year>-<n>`, a
+snapshot of the order (items and totals), brand name, method, payment reference and
+who collected the cash; never the customer's address or phone. Issued automatically
+when a payment becomes `PAID` and never edited. Visibility follows §4: the customer
+sees their own (without internal details), brand staff see their brand's
+(`payments.view`), the rider sees none. Details: `10-payment-system.md` §28.
 
-**COD cash** (Phase B): the payment records `collectedBy` (rider) and later
-`settledAt` / `settledBy` when the records person confirms the rider handed the
-cash over.
+**COD cash** (Phase B, done): the payment records `collectedBy` and `collectedAt`
+when the delivery is completed, and `settledAt` / `settledBy` when the records person
+confirms the collector handed the cash over. The brand sees who holds how much
+(`GET /payments/cash/outstanding`) and settles exactly the payments it counted
+(`POST /payments/cash/settle`, all or nothing); a rider sees only their own total.
+Details: `10-payment-system.md` §11a.
 
 **Card / online** (Phase E): use the gateway's hosted checkout. CityCart never
 sees or stores card numbers; it stores only the transaction reference, provider
@@ -126,7 +130,7 @@ its sandbox documentation checked before wiring.
 | Phase | Work |
 |---|---|
 | A (done) | `RIDER` role and management (API + web Riders page), assignment, partner sign-in, rider endpoints, delivery code |
-| B | `Receipt` model, auto-issue, visibility rules, COD collection and settlement |
+| B (done) | `Receipt` model, auto-issue, visibility rules, COD collection and settlement (API only; screens come with C and D) |
 | C | `partner/` app: sign-in and rider screens (also shows the code field) |
 | D | Records screens in the same app |
 | E | Card and online payments with webhook |

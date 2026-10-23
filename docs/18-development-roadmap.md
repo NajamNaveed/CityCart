@@ -961,9 +961,9 @@ Phase A  Rider foundation                                   DONE
          rider assignment, partner sign-in (/auth/partner/login), rider
          endpoints, six-digit delivery code.
 
-Phase B  Receipts and cash records
+Phase B  Receipts and cash records                         DONE
          Receipt model issued when a payment becomes PAID, visibility rules,
-         COD collectedBy and settlement.
+         COD collectedBy and settlement (API; screens arrive in C and D).
 
 Phase C  Partner app: sign-in and rider screens; delivery code shown in the
          shopper app's order page.

@@ -9,12 +9,14 @@ jest.mock('../src/utils/transaction', () => ({
   runInTransaction: (work) => work('SESSION'),
 }));
 jest.mock('../src/services/notification.service');
+jest.mock('../src/services/receipt.service');
 
 const User = require('../src/models/user.model');
 const Employee = require('../src/models/employee.model');
 const Order = require('../src/models/order.model');
 const Payment = require('../src/models/payment.model');
 const notifications = require('../src/services/notification.service');
+const receipts = require('../src/services/receipt.service');
 const app = require('../src/app');
 const { ROLES } = require('../src/config/roles');
 const { PERMISSIONS } = require('../src/config/permissions');
@@ -37,7 +39,7 @@ const mkPayment = (o = {}) => ({
   _id: oid(), orderId: oid(), amount: 100, refundedAmount: 0, method: 'COD', status: 'PAID', ...o,
 });
 
-function world({ payment = mkPayment(), order = { _id: payment.orderId, orderStatus: 'DELIVERED' }, updated = { ok: true } } = {}) {
+function world({ payment = mkPayment(), order = { _id: payment.orderId, brandId, orderStatus: 'DELIVERED' }, updated = { ok: true } } = {}) {
   Payment.findById.mockReturnValue(q(payment));
   Order.findOne.mockReturnValue(q(order));
   Payment.findOneAndUpdate.mockResolvedValue(updated);
@@ -156,7 +158,8 @@ describe('PATCH /api/v1/payments/:id/status — rules', () => {
       expect(res.status).toBe(200);
       expect(Payment.findOneAndUpdate).toHaveBeenCalledWith(
         { _id: payment._id, status: 'PENDING', refundedAmount: { $in: [0, null] } },
-        { $set: { status: 'PAID', paidAt: expect.any(Date), confirmedBy: user._id } },
+        // The person who confirms it received the cash (docs/10 §11a).
+        { $set: { status: 'PAID', paidAt: expect.any(Date), confirmedBy: user._id, brandId, collectedBy: user._id, collectedAt: expect.any(Date) } },
         { new: true, session: 'SESSION' }
       );
       expect(Order.updateOne).toHaveBeenCalledWith({ _id: payment.orderId }, { $set: { paymentStatus: 'PAID' } }, { session: 'SESSION' });
@@ -165,6 +168,8 @@ describe('PATCH /api/v1/payments/:id/status — rules', () => {
       expect(notifications.notifyPaymentReceived).toHaveBeenCalledWith(
         expect.objectContaining({ _id: payment.orderId })
       );
+      // ... and the receipt is issued once the payment has committed.
+      expect(receipts.issueReceiptBestEffort).toHaveBeenCalledWith(payment._id);
     });
 
     it('409 before delivery (no early "cash collected")', async () => {

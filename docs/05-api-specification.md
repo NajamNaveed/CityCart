@@ -1244,6 +1244,46 @@ For future online gateways, payment status should preferably be updated through 
 
 ---
 
+## Cash on Delivery Hand-over
+
+```text
+GET  /api/v1/payments/cash/outstanding            payments.view
+GET  /api/v1/payments/cash/outstanding?collectorId=<id>
+POST /api/v1/payments/cash/settle                 payments.manage
+```
+
+Brand users only, always pinned to their own brand (never a brandId from the
+request). Without `collectorId` the first returns `{ collectors: [{ collectorId,
+name, role, count, total, oldest }] }`; with it, that person's unsettled
+`payments: [{ paymentId, orderNumber, amount, collectedAt }]` and their `total`.
+
+`settle` takes `{ "collectorId": "<id>", "paymentIds": ["<id>", ...] }` (1 to 200) and
+marks exactly those payments settled, recording who did it. All or nothing: if any
+listed payment is not an unsettled payment of this brand collected by that person,
+nothing changes and the answer is `409 CASH_CHANGED`. A rider sees only their own
+total, at `GET /rider/deliveries/cash` (`{ cash: { count, total } }`). See
+`10-payment-system.md` §11a.
+
+---
+
+# 22c. Receipt Endpoints
+
+Base `/api/v1/receipts`. Read only: receipts are issued by the system when a payment
+becomes `PAID` (`10-payment-system.md` §28).
+
+```text
+GET /api/v1/receipts                    list (?from, ?to, page, limit), newest first
+GET /api/v1/receipts/:id
+GET /api/v1/receipts/order/:orderId     the receipt of an order (issued on the spot if it was never written)
+```
+
+Who: customers see their own (without internal details), brand users their brand's
+with `payments.view` (also the payment reference and who collected the cash), the
+super admin all, riders none. Another person's receipt is `404`. An unpaid order:
+`404` with `code: "NO_RECEIPT"`.
+
+---
+
 # 22a. Delivery Endpoints
 
 Base:

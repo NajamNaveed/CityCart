@@ -240,6 +240,32 @@ confirmedAt
 
 where appropriate.
 
+## 11a. Cash handling (added October 2026)
+
+Cash on delivery is money in someone's pocket until it is handed over, so the
+payment records who holds it:
+
+```text
+brandId        the brand the cash belongs to (set when collected)
+collectedBy    who received the cash: the rider, or the team member who completed the delivery
+collectedAt    when
+settledAt      when the brand confirmed that person handed the cash over
+settledBy      who at the brand confirmed it
+```
+
+* `collectedBy`, `collectedAt` and `brandId` are written in the same transaction
+  that marks the COD payment `PAID` (delivery completion, or the manual safety net
+  in §19). They are never client-supplied.
+* Settlement is the brand's act: `POST /payments/cash/settle` (`payments.manage`)
+  lists exactly the payments counted. It is all or nothing, pinned to the brand and
+  the collector, and a payment that is not (or no longer) unsettled makes the whole
+  request fail with `409 CASH_CHANGED`.
+* `GET /payments/cash/outstanding` (`payments.view`) shows who holds how much; with
+  `collectorId` it lists that person's unsettled payments, oldest first.
+* A rider sees only their own total (`GET /rider/deliveries/cash`).
+* Refunds do not change who collected the cash: a refunded payment is still cash
+  that was collected, and it stays on the books until settled.
+
 ---
 
 # 12. Payment Failures
@@ -549,3 +575,30 @@ The MVP should remain simple with COD while keeping the payment architecture ext
 ## Next Document
 
 **11-delivery-system.md — Delivery, Shipping, Order Handoff, Delivery Status, and Future Courier Integration**
+
+---
+
+# 28. Receipts (added October 2026)
+
+A receipt is issued automatically for every payment that becomes `PAID`, and is
+never created, edited or deleted through the API.
+
+* **Snapshot.** A receipt copies the order's items, totals, the brand name, the
+  payment method and reference, who collected the cash, and the payment time. It
+  never copies the customer's address or phone. Later changes to a product, a
+  brand or an address cannot alter it, and a refund does not change it.
+* **One per payment** (unique on `paymentId`), numbered `RC-<year>-<6 digits>` from
+  an atomic yearly counter (`receipt-<year>`); a failed attempt may leave a gap,
+  never a duplicate.
+* **When.** After the payment change has committed, so a receipt problem can never
+  undo a payment. If it fails, reading the receipt (`GET /receipts/order/:orderId`)
+  issues it, so none is permanently lost.
+* **Who sees what.** The customer: their own, without internal details (who collected
+  the cash, the payment id, the reference). The brand: its own, with `payments.view`,
+  including who collected the cash and the payment reference. Super admin: all.
+  Riders: none. See `20-partner-app.md` §4.
+* **Card and online** payments (Phase E) get the same receipt from the same code;
+  only the confirmation of the payment differs (the gateway's signed webhook).
+
+Endpoints are in `05-api-specification.md` §22c.
+

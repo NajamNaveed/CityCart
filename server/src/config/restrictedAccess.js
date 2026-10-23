@@ -14,6 +14,8 @@ const ALLOWED_WRITES = [
   // The riders of a terminated brand can also finish what is already on the road.
   { method: 'PATCH', pattern: /^\/api\/v1\/rider\/deliveries\/[a-f0-9]{24}\/status$/i },
   { method: 'POST', pattern: /^\/api\/v1\/rider\/deliveries\/[a-f0-9]{24}\/complete$/i },
+  // Handing cash over is closing the books, not trading.
+  { method: 'POST', pattern: /^\/api\/v1\/payments\/cash\/settle$/i },
 ];
 
 function isAllowedWhenRestricted(method, path) {

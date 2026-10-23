@@ -5,6 +5,7 @@ const {
   getRiderDelivery,
   riderUpdateStatus,
   completeWithCode,
+  riderCash,
 } = require('../services/riderDelivery.service');
 const { OrderError } = require('../services/order.service');
 const { formatZodError } = require('../utils/formatZodError');
@@ -71,4 +72,13 @@ async function complete(req, res, next) {
   }
 }
 
-module.exports = { list, getById, updateStatus, complete };
+async function cash(req, res, next) {
+  try {
+    const result = await riderCash(who(req));
+    return res.status(200).json({ success: true, cash: result });
+  } catch (err) {
+    return handleError(err, res, next);
+  }
+}
+
+module.exports = { list, getById, updateStatus, complete, cash };

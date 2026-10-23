@@ -60,7 +60,7 @@ function buildDataset({ now = new Date(), hashes }) {
 
   const ds = {
     cities: [], blocks: [], branches: [], conversations: [], messages: [], users: [], brands: [], stores: [], categories: [], products: [], inventories: [],
-    employees: [], carts: [], orders: [], payments: [], deliveries: [], reviews: [], notifications: [], counters: [],
+    employees: [], carts: [], orders: [], payments: [], receipts: [], deliveries: [], reviews: [], notifications: [], counters: [],
   };
 
   // ── cities ──
@@ -271,6 +271,7 @@ function buildDataset({ now = new Date(), hashes }) {
   const GIFT_NOTES = ['Gift: please remove the price slip.', 'Needed before the weekend if possible.', 'Please pack carefully, it is a gift.'];
 
   const orders = [];
+  const receiptJobs = [];
   for (const [brandKey, statuses] of Object.entries(PLAN)) {
     const brand = brandByKey[brandKey];
     const sellable = brand.products.filter((p) => (brandKey === 'quick' ? true : p.status === 'ACTIVE'));
@@ -352,10 +353,18 @@ function buildDataset({ now = new Date(), hashes }) {
         _id: new ObjectId(), orderId: order._id, customerId: customer.doc._id, amount: total, method: 'COD', status: order.paymentStatus,
         currency: 'PKR', createdAt, updatedAt: finishedAt, refundedAmount: 0, refunds: [],
       };
+      let collector = null;
       if (status === 'DELIVERED') {
+        // Whoever completes the delivery takes the cash: the rider when the brand has riders (the same one
+        // the delivery below is given to), otherwise the team member. Older cash has been handed over.
+        collector = brand.riders.length ? brand.riders[ds.deliveries.length % brand.riders.length] : deliveryHandler;
+        const handedOver = finishedAt < ago(20 * DAY);
         Object.assign(payment, {
-          paidAt: finishedAt, confirmedBy: deliveryHandler._id, provider: 'Cash on Delivery', transactionReference: `RCPT-${pad(ds.orders.length, 6)}`,
+          paidAt: finishedAt, confirmedBy: collector._id, provider: 'Cash on Delivery', transactionReference: `RCPT-${pad(ds.orders.length, 6)}`,
+          brandId: brand.doc._id, collectedBy: collector._id, collectedAt: finishedAt,
+          ...(handedOver && { settledAt: new Date(finishedAt.getTime() + DAY), settledBy: brand.owner._id }),
         });
+        receiptJobs.push({ order, payment, brand, collector });
       }
       if (flags.fullRefund || flags.partRefund) {
         const amount = flags.fullRefund ? total : Math.round(items[0].totalPrice / 2 / 10) * 10;
@@ -404,6 +413,23 @@ function buildDataset({ now = new Date(), hashes }) {
     order.orderNumber = `CC-${year}-${pad(perYear[year], 6)}`;
   });
   for (const [year, seq] of Object.entries(perYear)) ds.counters.push({ _id: `order-${year}`, seq });
+
+  // A receipt for every paid payment, numbered in the order the money came in (one counter per year).
+  const receiptsPerYear = {};
+  receiptJobs.sort((a, c) => a.payment.paidAt - c.payment.paidAt).forEach(({ order, payment, brand, collector }) => {
+    const year = payment.paidAt.getUTCFullYear();
+    receiptsPerYear[year] = (receiptsPerYear[year] || 0) + 1;
+    ds.receipts.push({
+      _id: new ObjectId(), receiptNumber: `RC-${year}-${pad(receiptsPerYear[year], 6)}`, paymentId: payment._id, orderId: order._id,
+      orderNumber: order.orderNumber, brandId: order.brandId, brandName: brand.def.name, customerId: order.customerId,
+      billedTo: order.shippingAddress.name, method: payment.method, amount: payment.amount, currency: payment.currency,
+      items: order.items.map((i) => ({ productName: i.productName, quantity: i.quantity, unitPrice: i.unitPrice, totalPrice: i.totalPrice })),
+      subtotal: order.subtotal, deliveryFee: order.deliveryFee, discount: order.discount, tax: order.tax,
+      transactionReference: payment.transactionReference, provider: payment.provider,
+      collectedBy: collector._id, collectedByName: collector.name, issuedAt: payment.paidAt, createdAt: payment.paidAt,
+    });
+  });
+  for (const [year, seq] of Object.entries(receiptsPerYear)) ds.counters.push({ _id: `receipt-${year}`, seq });
 
   // ── reviews, written by customers whose orders were delivered ──
   const OPENERS = {

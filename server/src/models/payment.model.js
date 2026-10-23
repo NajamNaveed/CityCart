@@ -65,6 +65,29 @@ const paymentSchema = new mongoose.Schema(
     paidAt: {
       type: Date,
     },
+    // Cash handling (docs/10 §11a, docs/20 §8). Set when cash is collected on
+    // delivery: the brand, who physically received the cash (a rider or a team
+    // member) and when. brandId is stored here (payments are otherwise scoped
+    // through their order) so cash can be summed per brand without a join.
+    brandId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Brand',
+    },
+    collectedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    collectedAt: {
+      type: Date,
+    },
+    // Set when the brand confirms the collector handed that cash over.
+    settledAt: {
+      type: Date,
+    },
+    settledBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
     // Refunds (docs/10 §13): cumulative total + an audit entry per refund.
     refundedAmount: {
       type: Number,
@@ -90,6 +113,9 @@ const paymentSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+// Cash still held by a collector, per brand.
+paymentSchema.index({ brandId: 1, collectedBy: 1, settledAt: 1 });
 
 const Payment = mongoose.model('Payment', paymentSchema);
 

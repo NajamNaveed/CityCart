@@ -861,9 +861,19 @@ status
 transactionReference
 provider
 paidAt
+confirmedBy
+brandId
+collectedBy
+collectedAt
+settledAt
+settledBy
+refundedAmount
+refunds
 createdAt
 updatedAt
 ```
+
+`brandId`, `collectedBy`, `collectedAt`, `settledAt` and `settledBy` record who holds cash-on-delivery money and when it was handed over (`10-payment-system.md` §11a). Index `{ brandId, collectedBy, settledAt }`.
 
 Initial payment method:
 
@@ -879,6 +889,48 @@ BANK_TRANSFER
 WALLET
 ONLINE_GATEWAY
 ```
+
+---
+
+# 26a. Receipt Model
+
+Collection:
+
+```text
+receipts
+```
+
+One receipt per paid payment, issued by the system and never edited (no `updatedAt`).
+Everything on it is a snapshot (`10-payment-system.md` §28).
+
+```text
+_id
+receiptNumber        unique, RC-<year>-<6 digits>
+paymentId            unique
+orderId
+orderNumber
+brandId
+brandName
+customerId
+billedTo             the customer's name only, never address or phone
+method
+amount
+currency
+items                [{ productName, quantity, unitPrice, totalPrice }]
+subtotal
+deliveryFee
+discount
+tax
+transactionReference
+provider
+collectedBy          the user who took the cash (never shown to customers)
+collectedByName
+issuedAt
+createdAt
+```
+
+Indexes: `{ customerId, issuedAt }`, `{ brandId, issuedAt }`, `orderId`.
+Counter documents `receipt-<year>` allocate the numbers.
 
 ---
 

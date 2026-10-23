@@ -3,6 +3,7 @@ const Order = require('../models/order.model');
 const { runInTransaction } = require('../utils/transaction');
 const { OrderError } = require('./order.service');
 const { notifyPaymentReceived, notifyRefundIssued } = require('./notification.service');
+const { issueReceiptBestEffort } = require('./receipt.service');
 
 const toCents = (amount) => Math.round(amount * 100);
 const fromCents = (cents) => cents / 100;
@@ -78,10 +79,12 @@ async function updatePaymentStatus({ userId, tenantBrandId, paymentId, status, r
         throw new OrderError(409, 'A COD payment can only be marked PAID after the order is delivered.', { code: 'PAYMENT_NOT_COLLECTABLE' });
       }
       finalStatus = 'PAID';
-      update = { $set: { status: 'PAID', paidAt: new Date(), confirmedBy: userId } };
+      const now = new Date();
+      // Same cash record as a delivery completion: the person who confirms it received the cash.
+      update = { $set: { status: 'PAID', paidAt: now, confirmedBy: userId, brandId: order.brandId, collectedBy: userId, collectedAt: now } };
       // Only the request that wins the PENDING -> PAID guard reaches here,
       // so the announcement can't repeat (docs/12 §16).
-      event = { kind: 'PAID', order };
+      event = { kind: 'PAID', order, paymentId: payment._id };
     } else {
       if (!['PAID', 'PARTIALLY_REFUNDED'].includes(payment.status)) {
         throw new OrderError(409, `A ${payment.status} payment cannot be refunded.`, { code: 'INVALID_TRANSITION', from: payment.status, to: status });
@@ -121,6 +124,7 @@ async function updatePaymentStatus({ userId, tenantBrandId, paymentId, status, r
 
   if (event && event.kind === 'PAID') {
     await notifyPaymentReceived(event.order);
+    await issueReceiptBestEffort(event.paymentId);
   } else if (event && event.kind === 'REFUND') {
     await notifyRefundIssued(event.order, { amount: event.amount, reason: event.reason });
   }

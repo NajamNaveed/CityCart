@@ -10,6 +10,7 @@ jest.mock('../src/utils/transaction', () => ({
   runInTransaction: (work) => work('SESSION'),
 }));
 jest.mock('../src/services/notification.service');
+jest.mock('../src/services/receipt.service');
 
 const User = require('../src/models/user.model');
 const Employee = require('../src/models/employee.model');
@@ -17,6 +18,7 @@ const Order = require('../src/models/order.model');
 const Payment = require('../src/models/payment.model');
 const Delivery = require('../src/models/delivery.model');
 const notifications = require('../src/services/notification.service');
+const receipts = require('../src/services/receipt.service');
 const app = require('../src/app');
 const { ROLES } = require('../src/config/roles');
 const { PERMISSIONS } = require('../src/config/permissions');
@@ -209,7 +211,9 @@ describe('PATCH /api/v1/deliveries/:id/status', () => {
     const { cookie, user } = asRole(ROLES.BRAND_ADMIN);
     const orderId = oid();
     const previous = { _id: oid(), orderId, status: 'OUT_FOR_DELIVERY' };
-    world({ previous, order: { _id: orderId, paymentMethod: 'COD' } });
+    world({ previous, order: { _id: orderId, brandId, paymentMethod: 'COD' } });
+    const paymentId = oid();
+    Payment.findOneAndUpdate.mockResolvedValue({ _id: paymentId });
 
     const res = await patch(cookie, previous._id, { status: 'DELIVERED' });
 
@@ -217,12 +221,15 @@ describe('PATCH /api/v1/deliveries/:id/status', () => {
     expect(Order.updateOne).toHaveBeenCalledWith({ _id: orderId }, { $set: { paymentStatus: 'PAID' } }, { session: 'SESSION' });
     expect(Payment.findOneAndUpdate).toHaveBeenCalledWith(
       { orderId, status: 'PENDING' },
-      { $set: { status: 'PAID', paidAt: expect.any(Date), confirmedBy: user._id } },
+      // The collector holds the cash until the brand settles it.
+      { $set: { status: 'PAID', paidAt: expect.any(Date), confirmedBy: user._id, brandId, collectedBy: user._id, collectedAt: expect.any(Date) } },
       { session: 'SESSION' }
     );
     // Delivered + cash collected, announced after the commit (docs/12 §5).
     expect(notifications.notifyCustomerOfOrderStatus).toHaveBeenCalledWith(expect.anything(), 'DELIVERED');
     expect(notifications.notifyPaymentReceived).toHaveBeenCalledTimes(1);
+    // The receipt is issued after the commit, for exactly this payment.
+    expect(receipts.issueReceiptBestEffort).toHaveBeenCalledWith(paymentId);
   });
 
   it('FAILED records the reason and leaves order and payment untouched', async () => {

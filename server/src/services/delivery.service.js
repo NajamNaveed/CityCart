@@ -6,6 +6,7 @@ const { runInTransaction } = require('../utils/transaction');
 const { OrderError } = require('./order.service');
 const { notifyCustomerOfOrderStatus, notifyPaymentReceived, notifyRiderAssigned } = require('./notification.service');
 const { generateDeliveryCode } = require('../utils/deliveryCode');
+const { issueReceiptBestEffort } = require('./receipt.service');
 const { ROLES } = require('../config/roles');
 const {
   DELIVERY_FINAL_STATUSES,
@@ -143,15 +144,18 @@ async function updateDeliveryStatus({ brandId, deliveryId, status, failureReason
         // Cash collected on delivery (docs/10 §6, §11). Conditional on
         // PENDING so it can only ever flip once.
         await Order.updateOne({ _id: order._id }, { $set: { paymentStatus: 'PAID' } }, { session });
+        // The collector (the rider, or the team member completing it) holds the
+        // cash until the brand settles it (docs/10 §11a).
+        const now = new Date();
         const cod = await Payment.findOneAndUpdate(
           { orderId: order._id, status: 'PENDING' },
-          { $set: { status: 'PAID', paidAt: new Date(), confirmedBy: userId } },
+          { $set: { status: 'PAID', paidAt: now, confirmedBy: userId, brandId: order.brandId, collectedBy: userId, collectedAt: now } },
           { session }
         );
         // The notification only accompanies the request that actually won
         // the payment flip, so a duplicate DELIVERED can't double-announce.
         if (cod) {
-          events.push({ kind: 'PAYMENT_RECEIVED', order });
+          events.push({ kind: 'PAYMENT_RECEIVED', order, paymentId: cod._id });
         }
       }
     }
@@ -165,6 +169,7 @@ async function updateDeliveryStatus({ brandId, deliveryId, status, failureReason
       await notifyCustomerOfOrderStatus(event.order, event.status);
     } else if (event.kind === 'PAYMENT_RECEIVED') {
       await notifyPaymentReceived(event.order);
+      await issueReceiptBestEffort(event.paymentId);
     }
   }
   return delivery.updated;

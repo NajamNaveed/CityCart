@@ -1,5 +1,6 @@
 const Delivery = require('../models/delivery.model');
 const Order = require('../models/order.model');
+const Payment = require('../models/payment.model');
 const { OrderError } = require('./order.service');
 const { updateDeliveryStatus } = require('./delivery.service');
 const { DELIVERY_FINAL_STATUSES } = require('../config/deliveryTransitions');
@@ -156,4 +157,13 @@ async function completeWithCode({ brandId, riderId, id, code }) {
   return viewFor(delivery, brandId);
 }
 
-module.exports = { listRiderDeliveries, getRiderDelivery, riderUpdateStatus, completeWithCode, toRiderView };
+/**
+ * The cash this rider is holding: collected on delivery and not yet handed over
+ * to the brand. Only their own, and only an amount and a count.
+ */
+async function riderCash({ brandId, riderId }) {
+  const payments = await Payment.find({ brandId, collectedBy: riderId, settledAt: { $exists: false } }).select('amount');
+  return { count: payments.length, total: payments.reduce((sum, p) => sum + p.amount, 0) };
+}
+
+module.exports = { listRiderDeliveries, getRiderDelivery, riderUpdateStatus, completeWithCode, riderCash, toRiderView };

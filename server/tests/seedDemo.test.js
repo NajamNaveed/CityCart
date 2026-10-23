@@ -17,13 +17,14 @@ const Order = require('../src/models/order.model');
 const Payment = require('../src/models/payment.model');
 const Delivery = require('../src/models/delivery.model');
 const Review = require('../src/models/review.model');
+const Receipt = require('../src/models/receipt.model');
 const Notification = require('../src/models/notification.model');
 const Counter = require('../src/models/counter.model');
 const { ALL_PERMISSIONS } = require('../src/config/permissions');
 
 const MODELS = {
   cities: City, blocks: Block, branches: Branch, conversations: Conversation, messages: Message, users: User, brands: Brand, stores: Store, categories: Category, products: Product,
-  inventories: Inventory, employees: Employee, carts: Cart, orders: Order, payments: Payment,
+  inventories: Inventory, employees: Employee, carts: Cart, orders: Order, payments: Payment, receipts: Receipt,
   deliveries: Delivery, reviews: Review, notifications: Notification, counters: Counter,
 };
 
@@ -300,8 +301,33 @@ describe('demo dataset', () => {
     });
   });
 
+  it('has a receipt for every paid payment and tracks who holds the cash', () => {
+    const paid = ds.payments.filter((p) => p.paidAt);
+    expect(ds.receipts).toHaveLength(paid.length);
+    paid.forEach((p) => {
+      const receipt = ds.receipts.find((r) => id(r.paymentId) === id(p._id));
+      expect(receipt).toBeDefined();
+      expect(receipt.amount).toBe(p.amount);
+      expect(id(receipt.collectedBy)).toBe(id(p.collectedBy));
+      // cash was collected by someone of the same brand, and settling comes after collecting
+      const collector = ds.users.find((u) => id(u._id) === id(p.collectedBy));
+      expect(id(collector.brandId)).toBe(id(p.brandId));
+      if (p.settledAt) expect(p.settledAt >= p.collectedAt).toBe(true);
+      expect(Boolean(p.settledAt)).toBe(Boolean(p.settledBy));
+    });
+    expect(unique(ds.receipts.map((r) => r.receiptNumber))).toBe(true);
+    // some cash is still with its collector, some has been handed over
+    expect(paid.some((p) => p.settledAt)).toBe(true);
+    expect(paid.some((p) => !p.settledAt)).toBe(true);
+    // riders collect the cash of the deliveries given to them
+    ds.deliveries.filter((d) => d.status === 'DELIVERED' && d.riderId).forEach((d) => {
+      const p = ds.payments.find((x) => id(x.orderId) === id(d.orderId));
+      expect(id(p.collectedBy)).toBe(id(d.riderId));
+    });
+  });
+
   it('counts orders per year the way the app does', () => {
-    ds.counters.forEach((c) => {
+    ds.counters.filter((c) => c._id.startsWith('order-')).forEach((c) => {
       const year = c._id.replace('order-', '');
       expect(ds.orders.filter((o) => o.orderNumber.startsWith(`CC-${year}-`))).toHaveLength(c.seq);
     });

@@ -10,6 +10,7 @@ jest.mock('../src/utils/transaction', () => ({
   runInTransaction: (work) => work('SESSION'),
 }));
 jest.mock('../src/services/notification.service');
+jest.mock('../src/services/receipt.service');
 
 const User = require('../src/models/user.model');
 const Employee = require('../src/models/employee.model');
@@ -17,6 +18,7 @@ const Order = require('../src/models/order.model');
 const Payment = require('../src/models/payment.model');
 const Delivery = require('../src/models/delivery.model');
 const notifications = require('../src/services/notification.service');
+const receipts = require('../src/services/receipt.service');
 const app = require('../src/app');
 const { ROLES } = require('../src/config/roles');
 const { PERMISSIONS } = require('../src/config/permissions');
@@ -48,6 +50,7 @@ const asWeb = (role, permissions) => {
 
 const codOrder = (overrides = {}) => ({
   _id: oid(),
+  brandId,
   orderNumber: 'CC-2026-000042',
   total: 2450,
   currency: 'PKR',
@@ -326,7 +329,8 @@ describe('POST /api/v1/rider/deliveries/:id/complete', () => {
     Delivery.findById.mockReturnValue({ session: () => Promise.resolve({ ...attempt, status: 'DELIVERED' }) });
     Order.findOneAndUpdate.mockResolvedValue(order);
     Order.updateOne.mockResolvedValue({});
-    Payment.findOneAndUpdate.mockResolvedValue({});
+    const paymentId = oid();
+    Payment.findOneAndUpdate.mockResolvedValue({ _id: paymentId });
     Order.findOne.mockReturnValue({ select: () => Promise.resolve({ ...order, paymentStatus: 'PAID' }) });
 
     const res = await post(header, attempt._id, { code: '482913' });
@@ -340,11 +344,12 @@ describe('POST /api/v1/rider/deliveries/:id/complete', () => {
     });
     expect(Payment.findOneAndUpdate).toHaveBeenCalledWith(
       { orderId: order._id, status: 'PENDING' },
-      { $set: { status: 'PAID', paidAt: expect.any(Date), confirmedBy: user._id } },
+      { $set: { status: 'PAID', paidAt: expect.any(Date), confirmedBy: user._id, brandId: order.brandId, collectedBy: user._id, collectedAt: expect.any(Date) } },
       { session: 'SESSION' }
     );
     expect(notifications.notifyCustomerOfOrderStatus).toHaveBeenCalledWith(expect.anything(), 'DELIVERED');
     expect(notifications.notifyPaymentReceived).toHaveBeenCalledTimes(1);
+    expect(receipts.issueReceiptBestEffort).toHaveBeenCalledWith(paymentId);
     expect(res.body.delivery).toMatchObject({ status: 'DELIVERED', cashCollected: true, amountToCollect: 0, address: null });
     expect(JSON.stringify(res.body)).not.toContain('482913');
   });
