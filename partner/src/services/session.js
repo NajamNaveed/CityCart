@@ -41,6 +41,17 @@ export async function signIn({ email, password }) {
   const { user, token } = res.data
   if (!token || !isPartnerRole(user?.role)) throw new Error('The server did not return a session. Please try again.')
   await tokenStore.set(token)
+  // The sign-in answer does not list a team member's permissions; `/auth/me` does.
+  // Without them the app would not know which screens to offer.
+  if (user.role === 'BRAND_EMPLOYEE') {
+    try {
+      const me = await api.get('/auth/me')
+      return me.data.user
+    } catch (err) {
+      await tokenStore.clear()
+      throw err
+    }
+  }
   return user
 }
 

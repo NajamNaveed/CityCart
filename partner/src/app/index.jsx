@@ -7,5 +7,5 @@ export default function Start() {
   const { status, user } = useAuth()
   if (status === 'loading') return null
   if (status !== 'signedIn') return <Redirect href="/login" />
-  return <Redirect href={user?.role === 'RIDER' ? '/deliveries' : '/records'} />
+  return <Redirect href={user?.role === 'RIDER' ? '/deliveries' : '/overview'} />
 }

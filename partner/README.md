@@ -7,7 +7,7 @@ It is one app for two kinds of people; the account's role decides the screens:
 | Account | Sees |
 |---|---|
 | Delivery rider (`RIDER`) | Their own deliveries, one delivery at a time (call the customer, open Maps, status, the customer's code, failed attempt), the cash they hold, alerts, account |
-| Brand team member (`BRAND_EMPLOYEE`) | A "records coming soon" screen. The records screens are the next phase (docs/20 §6.3) |
+| Brand team member (`BRAND_EMPLOYEE`) | The records screens, each shown only if the brand gave them the permission: **Overview** (counts and cash with riders), **Orders**, **Deliveries** (and giving a delivery to a rider), **Money** (receipts, and counting the cash riders hand over). Returns come with a later update |
 
 Brand owners and the super admin sign in on the website, not here. Riders are created by their brand on the website (Brand dashboard, Riders) and sign in here with the email and password the brand gave them.
 
@@ -25,7 +25,7 @@ npx expo start
 
 4. Scan the QR code (Android: from inside Expo Go; iPhone: with the Camera app). Phone and computer must be on the same Wi-Fi.
 
-To try the rider flow with demo data: run `npm run seed:demo` in the project root, then sign in with `shoaib.raza@citycart.demo` and the demo password the seed script prints.
+To try the rider flow with demo data: run `npm run seed:demo` in the project root, then sign in with `shoaib.raza@citycart.demo` and the demo password the seed script prints. For the records screens, sign in with `hira.anwar@citycart.demo` (Loom & Co.'s demo "Records Keeper": orders, deliveries, riders, receipts and cash). Other demo team members see less, because what a team member sees depends on the permissions the brand gave them.
 
 ## Commands
 
@@ -48,6 +48,7 @@ npx expo start -c # start with a clean cache
 | Problem | Fix |
 |---|---|
 | "The app is not connected to a server yet" | `.env` must contain the **whole line** `EXPO_PUBLIC_API_URL=http://YOUR-ADDRESS:5000`. Save it, then restart with `npx expo start -c`. |
+| "Cannot reach the server at http://..." | The message shows the address the app tried. First open `http://YOUR-ADDRESS:5000/health` in your **phone's browser**: if that page does not load, the problem is the network or firewall, not the app. |
 | "Cannot reach the server" with a local address | Use your computer's real Wi-Fi address (Windows: `ipconfig`, *IPv4 Address*; Mac/Linux: `ifconfig`). Phone and computer must be on the same Wi-Fi, and the firewall must allow Node on port 5000. |
 | "This sign-in is for the CityCart Partner app" | The request did not come from this app (it must send `X-Client: partner`). |
 | Brand owner cannot sign in | By design: owners use the website. |

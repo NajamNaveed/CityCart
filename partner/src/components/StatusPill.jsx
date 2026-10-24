@@ -3,10 +3,25 @@ import AppText from './ui/AppText'
 import { humanize } from '../utils/format'
 import { colors, radius, weights } from '../theme'
 
+const GOOD = { fg: colors.success, bg: colors.successSoft, border: 'rgba(21,128,61,0.25)' }
+const TROUBLE = { fg: colors.clay, bg: 'rgba(182,71,42,0.06)', border: 'rgba(182,71,42,0.3)' }
+const ACTIVE = { fg: colors.pine, bg: colors.pineSoft, border: 'rgba(30,58,47,0.3)' }
+const WAITING = { fg: colors.warning, bg: colors.warningSoft, border: 'rgba(180,83,9,0.25)' }
+
+// Orders, deliveries and payments share one set of looks.
 const LOOKS = {
-  DELIVERED: { fg: colors.success, bg: colors.successSoft, border: 'rgba(21,128,61,0.25)' },
-  FAILED: { fg: colors.clay, bg: 'rgba(182,71,42,0.06)', border: 'rgba(182,71,42,0.3)' },
-  OUT_FOR_DELIVERY: { fg: colors.pine, bg: colors.pineSoft, border: 'rgba(30,58,47,0.3)' },
+  DELIVERED: GOOD,
+  PAID: GOOD,
+  FAILED: TROUBLE,
+  REJECTED: TROUBLE,
+  CANCELLED: TROUBLE,
+  RETURNED: TROUBLE,
+  RETURN_REQUESTED: TROUBLE,
+  REFUNDED: TROUBLE,
+  OUT_FOR_DELIVERY: ACTIVE,
+  SHIPPED: ACTIVE,
+  PENDING: WAITING,
+  READY_FOR_PICKUP: WAITING,
 }
 const NEUTRAL = { fg: colors.ink, bg: colors.paper, border: colors.line }
 

@@ -43,7 +43,7 @@ import Deliveries from '../src/app/(rider)/deliveries'
 import Cash from '../src/app/(rider)/cash'
 import Alerts from '../src/app/(rider)/alerts'
 import Account from '../src/app/(rider)/account'
-import Records from '../src/app/(records)/records'
+import OrderScreen from '../src/app/order/[id]'
 import DeliveryScreen from '../src/app/delivery/[id]'
 import { cleanup, EMPLOYEE, has, isDisabled, press, pressByLabel, RIDER, screenText, show, signedIn, signedOut, tick, type } from './helpers/screens'
 
@@ -67,7 +67,7 @@ describe('the start screen sends each person where they belong', () => {
   it.each([
     ['signed out', signedOut(), 'redirect:/login'],
     ['a rider', signedIn(RIDER), 'redirect:/deliveries'],
-    ['a team member', signedIn(EMPLOYEE), 'redirect:/records'],
+    ['a team member', signedIn(EMPLOYEE), 'redirect:/overview'],
   ])('%s', async (_name, auth, expected) => {
     const screen = await show(<Start />, { auth })
     expect(screenText(screen)).toBe(expected)
@@ -118,7 +118,8 @@ describe('sign-in', () => {
 
 describe('who may see which screens', () => {
   it('a rider cannot open the records screens, and a team member cannot open rider screens', async () => {
-    expect(screenText(await show(<Records />, { auth: signedIn(RIDER) }))).toBe('redirect:/')
+    mockParams = { id: 'o1' }
+    expect(screenText(await show(<OrderScreen />, { auth: signedIn(RIDER) }))).toBe('redirect:/')
     mockParams = { id: 'd1' }
     expect(screenText(await show(<DeliveryScreen />, { auth: signedIn(EMPLOYEE) }))).toBe('redirect:/')
     expect(api.get).not.toHaveBeenCalled()
@@ -127,15 +128,8 @@ describe('who may see which screens', () => {
   it('signed-out visitors are sent to sign in', async () => {
     mockParams = { id: 'd1' }
     expect(screenText(await show(<DeliveryScreen />, { auth: signedOut() }))).toBe('redirect:/login')
-    expect(screenText(await show(<Records />, { auth: signedOut() }))).toBe('redirect:/login')
-  })
-
-  it('a team member sees the records placeholder and can sign out', async () => {
-    const auth = signedIn(EMPLOYEE)
-    const screen = await show(<Records />, { auth })
-    expect(screenText(screen)).toMatch(/coming in the next update/)
-    await press(screen, 'Sign out')
-    expect(auth.logout).toHaveBeenCalled()
+    mockParams = { id: 'o1' }
+    expect(screenText(await show(<OrderScreen />, { auth: signedOut() }))).toBe('redirect:/login')
   })
 })
 

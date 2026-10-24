@@ -972,8 +972,9 @@ Phase C  Partner app: sign-in and rider screens; delivery code and receipt   DON
          shown in the shopper app's order page and on the website. (Not yet run
          on a physical phone.)
 
-Phase D  Partner app: records screens (orders by status, deliveries, returns
-         once D0 exists, payments, receipts, cash hand-over).
+Phase D  Partner app: records screens (overview, orders, deliveries with   DONE
+         rider assignment, receipts, cash hand-over). The returns tab waits for
+         D0. (Not yet run on a physical phone.)
 
 Phase E  Card / online payments through a hosted gateway checkout with a
          signed webhook. Card data is never stored. Gateway not chosen yet.

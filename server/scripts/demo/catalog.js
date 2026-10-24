@@ -15,6 +15,9 @@ const P = {
   delivery: ['delivery.view', 'delivery.manage'],
   stock: ['inventory.view', 'inventory.manage'],
   messages: ['messages.view', 'messages.manage'],
+  // The person who keeps the records in the Partner app: sees orders, deliveries, riders, receipts and cash,
+  // can give a delivery to a rider and mark rider cash as received, and changes nothing else.
+  records: ['orders.view', 'delivery.view', 'delivery.manage', 'riders.view', 'payments.view', 'payments.manage'],
   viewOnly: ['products.view', 'categories.view', 'inventory.view', 'orders.view', 'delivery.view'],
 }
 
@@ -39,6 +42,7 @@ const BRANDS = [
     staff: [
       { name: 'Usman Tariq', email: 'usman.tariq@citycart.demo', phone: '+92 321 6638120', jobTitle: 'Order Handler', permissions: [...P.orders, ...P.delivery, ...P.messages] },
       { name: 'Fatima Noor', email: 'fatima.noor@citycart.demo', phone: '+92 333 6107754', jobTitle: 'Catalogue Manager', permissions: [...P.productsAll, ...P.categoriesAll, ...P.stock] },
+      { name: 'Hira Anwar', email: 'hira.anwar@citycart.demo', phone: '+92 331 2750946', jobTitle: 'Records Keeper', permissions: P.records },
     ],
     // Delivery riders (role RIDER): they sign in on the partner app and see only their own deliveries.
     riders: [

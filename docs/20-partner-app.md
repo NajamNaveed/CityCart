@@ -13,12 +13,12 @@ the work up cold. Read it first, then the documents it points to.
 | B | Receipts and cash-on-delivery records: receipts, who collected cash, settlement | **Done** (API + docs; no screens yet) |
 | D0 | **Returns backend** (found missing, see §6.1); version-one design approved | Not started |
 | C | `partner/` Expo app: sign-in and rider screens; the shopper app and website show the delivery code and receipt | **Done** (not yet run on a real phone, see §5.4) |
-| D | Records screens in the same app (orders, deliveries, returns, payments, receipts, cash) | Not started |
+| D | Records screens in the same app: orders, deliveries and rider assignment, receipts, cash hand-over (no returns tab until D0) | **Done** (not yet run on a real phone, see §5.5) |
 | E | Card / online payments with a hosted gateway and signed webhook | Not started (gateway not chosen) |
 | F | Optional: push notification on assignment, rider live location | Not started |
 
 Server test suite: 940 tests before the programme, 1,047 after Phase A, 1,090
-after Phase B, 1,097 after Phase C. The Partner app has its own 93 tests and the
+after Phase B, 1,097 after Phase C (unchanged by Phase D). The Partner app has its own 142 tests and the
 shopper app (`mobile/`) 251. All pass; lint is clean everywhere. The real-MongoDB integration suite
 (`npm run test:integration`) could not be run by the author (no MongoDB binary
 download in the build sandbox) and should be run by the owner after applying
@@ -278,6 +278,48 @@ Main files: `partner/src/app/**` (routes), `partner/src/services/{api,session,st
 `partner/src/utils/{delivery,validation,format}.js`, `partner/src/components/**`,
 `partner/__tests__/**`.
 
+### 5.5 Phase D: the records screens
+
+For a `BRAND_EMPLOYEE` the Partner app opens `(records)/` (tabs in `_layout.jsx`). **Each
+tab exists only if the person holds the permission that opens it** (`utils/permissions.js`
+mirrors the server's permission names; the server still checks every request):
+
+| Tab | Needs | Shows | Endpoints used |
+|---|---|---|---|
+| Overview | any of the three below | To pick up, On the road, Failed, Delivered counts (tap one to open Deliveries filtered), and cash still with riders | `GET /deliveries?status=&limit=1` (one small request per status), `GET /payments/cash/outstanding` |
+| Orders | `orders.view` | Orders with status filters; order detail with progress, items, totals, payment, customer (Call) and a link to its delivery | `GET /brand/orders`, `GET /brand/orders/:id` |
+| Deliveries | `delivery.view` | Deliveries with status filters; delivery detail with rider, tracking, address (Call). **Assign or remove a rider** with `delivery.manage` + `riders.view` | `GET /deliveries`, `GET /deliveries/:id`, `GET /riders`, `PATCH /deliveries/:id/rider` |
+| Money | `payments.view` | **Receipts** list and detail; **Cash**: who holds how much, then a hand-over screen (`/handover/:collectorId`): tick exactly the payments you received, confirm, settle (needs `payments.manage`; without it the person can look but not tick) | `GET /receipts`, `GET /receipts/:id`, `GET /payments/cash/outstanding`, `POST /payments/cash/settle` |
+| Account | everyone | Who is signed in, what they can see, sign out | none |
+
+Behaviour worth knowing:
+
+* A team member's **permissions come from `GET /auth/me`** (the partner sign-in answer
+  does not carry them), so `signIn` makes that second call for `BRAND_EMPLOYEE`; if it
+  fails the new session is discarded. Permissions are read at sign-in and app start, so a
+  change made by the brand owner takes effect the next time the person signs in or opens
+  the app (the server enforces the new permissions at once).
+* **The records tabs only read, except two actions** that belong to this person's job:
+  assigning a rider and settling cash. Changing an order's status stays on the website.
+* The overview never shows an error for something the person may not see: a part they
+  have no permission for (or that fails) is simply left out.
+* The hand-over is two steps (tick, then "Yes, received") and all or nothing; a
+  `CASH_CHANGED` answer clears the ticks, reloads the list and tells the person to count again.
+* Route names are distinct from the rider's (`/overview`, `/orders`, `/shipments`, `/money`,
+  `/order/:id`, `/shipment/:id`, `/receipt/:id`, `/handover/:collectorId`) so one app can hold
+  both sets of screens.
+* `StatusPill` covers order, delivery and payment statuses.
+* **Returns:** `Returned` chips already exist on the order and delivery filters but stay
+  empty until Phase D0 makes returns possible; D0 then adds the request, approval and
+  "mark returned" actions (decision 8).
+* **Demo:** `npm run seed:demo` adds a Loom & Co. team member, `hira.anwar@citycart.demo` ("Records Keeper"), with exactly the permissions the records tabs use (`orders.view`, `delivery.view`, `delivery.manage`, `riders.view`, `payments.view`, `payments.manage`).
+* Not verified: running on a physical phone (same as Phase C), and the server's
+  real-MongoDB integration tests.
+
+Main files: `partner/src/app/(records)/*`, `partner/src/app/{order,shipment,receipt,handover}/*`,
+`partner/src/services/records.js`, `partner/src/utils/permissions.js`,
+`partner/src/components/{FilterChips,ListRow,ListScreen,StatusPill}.jsx`.
+
 ## 6. What is left
 
 ### 6.1 Phase D0: returns backend (found missing, must precede the returns screen)
@@ -305,26 +347,9 @@ security rule as the rest of the programme.
 The Partner app, its rider screens, and the delivery code and receipt in the shopper
 app and on the website are built; details and the one thing still to verify are in §5.4.
 
-### 6.3 Phase D: records screens (same app)
+### 6.3 Phase D: done (see §5.5)
 
-Build these in `partner/src/app/(records)/` with a `Tabs` layout like `(rider)/_layout.jsx`, guarded by `RequireRole role="BRAND_EMPLOYEE"`, replacing the `records.jsx` placeholder and reusing `usePagedList`, `useRemote`, `Screen`, `Card` and `StatusPill` (the records person needs a status pill for order statuses too). Add services files in the same style as `services/deliveries.js`. Use `GET /auth/me` permissions to choose tabs. For `BRAND_EMPLOYEE` accounts, tabs shown by permission:
-
-* **Orders / deliveries by status** (to deliver, out for delivery, delivered,
-  failed, returned once D0 exists): `GET /brand/orders`, `GET /deliveries?status=`
-  (`orders.view`, `delivery.view`); order timeline from `GET /brand/orders/:id`.
-* **Assign rider** (`PATCH /deliveries/:id/rider`, needs `delivery.manage` +
-  `riders.view` for the picker).
-* **Returns**: after Phase D0.
-* **Payments and receipts**: `GET /receipts` (filter by date), receipt detail
-  (`payments.view`).
-* **Cash**: `GET /payments/cash/outstanding`, then tick the payments counted and
-  `POST /payments/cash/settle` (`payments.manage`). Handle `409 CASH_CHANGED` by
-  reloading.
-* **Daily summary**: composed from the above; add a backend endpoint only if the
-  existing ones are not enough, and discuss it first.
-
-Hide anything the account lacks permission for, but remember the **server is the
-authority**: a hidden button is a convenience, never the security.
+The returns tab is the only part of the records app still missing, and it waits for Phase D0 (§6.1).
 
 ### 6.4 Phase E: card and online payments
 
@@ -364,7 +389,7 @@ authority**: a hidden button is a convenience, never the security.
 * A rider with open deliveries **cannot** be deactivated (Phase C); the brand
   reassigns first.
 * Riders do not get live socket updates yet (Phase F).
-* The Partner app has not yet been run on a physical device (§5.4).
+* The Partner app has not yet been run on a physical device (§5.4, §5.5).
 * The Partner app polls every minute for new deliveries; sockets and push come with Phase F.
 * Brand owners cannot use the Partner app (decision 4). Allowing it is a
   one-line change in `config/roles.js` (`PARTNER_ROLES`) but widens the security
@@ -400,7 +425,7 @@ Run from `server/`: `npx eslint .` and `npx jest` (unit, mocked models, fast).
 Integration tests (`npm run test:integration`) need a real MongoDB binary.
 Client: `npm run lint` (oxlint) and `npx vite build` in `client/`.
 
-Partner app (`partner/`): `npm test` runs 93 tests: `api`, `storage`, `session`, `delivery` (rules and messages), `paging`, `config`, `format` and `screens` (sign-in, who goes where, deliveries, one delivery, cash, alerts, account). Shopper app: five tests in `mobile/__tests__/shopping-screens.test.js` cover the code and receipt.
+Partner app (`partner/`): `npm test` runs 142 tests: `api`, `storage`, `session`, `delivery` (rules and messages), `permissions`, `records-services` (request shapes), `paging`, `config`, `format`, `screens` (sign-in, who goes where, the rider's screens) and `records-screens` (overview, orders, deliveries and rider assignment, receipts, cash hand-over, account). Shopper app: five tests in `mobile/__tests__/shopping-screens.test.js` cover the code and receipt.
 
 Partner-programme test files (`server/tests/`): `partnerAuth.test.js` (sign-in,
 token rules), `riders.test.js` (rider management and tenant isolation),
@@ -440,4 +465,5 @@ tests; add the same for new rules, in the same style.
 * **2026-10 Phase A** delivered: rider role and management, assignment, partner sign-in and rider endpoints, delivery code, web Riders page, demo data, docs.
 * **2026-10 Phase B** delivered: receipts, cash-on-delivery collection and settlement, rider cash view, demo data, docs.
 * **2026-10 Handoff** written; missing returns backend identified and added as Phase D0.
+* **2026-10 Phase D** delivered: the records screens for brand team members (overview, orders, deliveries with rider assignment, receipts, cash hand-over), permission-based tabs, permissions loaded at sign-in, `StatusPill` for all statuses. No server changes.
 * **2026-10 Phase C** delivered: `partner/` app (sign-in, rider screens), delivery code and receipt in the shopper app and website, rider-deactivation guard, customer-safe delivery view, root scripts.

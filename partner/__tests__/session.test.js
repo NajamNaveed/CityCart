@@ -80,6 +80,28 @@ describe('signIn', () => {
     expect(tokenStore.get()).toBe('fresh.token')
   })
 
+  it("loads a team member's permissions from /auth/me, because the sign-in answer does not carry them", async () => {
+    const withPermissions = { name: 'Maryam', role: 'BRAND_EMPLOYEE', permissions: ['orders.view'] }
+    api.post.mockResolvedValue({ data: { user: { name: 'Maryam', role: 'BRAND_EMPLOYEE' }, token: 'emp.token' } })
+    api.get.mockResolvedValue({ data: { user: withPermissions } })
+    expect(await signIn({ email: 'm@example.com', password: 'x' })).toEqual(withPermissions)
+    expect(api.get).toHaveBeenCalledWith('/auth/me')
+    expect(tokenStore.get()).toBe('emp.token')
+  })
+
+  it('does not keep a session it could not finish setting up (permissions unavailable)', async () => {
+    api.post.mockResolvedValue({ data: { user: { role: 'BRAND_EMPLOYEE' }, token: 'emp.token' } })
+    api.get.mockRejectedValue(httpError(503))
+    await expect(signIn({ email: 'm@example.com', password: 'x' })).rejects.toBeDefined()
+    expect(tokenStore.get()).toBeNull()
+  })
+
+  it('a rider needs no extra request', async () => {
+    api.post.mockResolvedValue({ data: { user: RIDER, token: 'r.token' } })
+    await signIn({ email: 'b@example.com', password: 'x' })
+    expect(api.get).not.toHaveBeenCalled()
+  })
+
   it('refuses a reply without a token, and a reply for the wrong kind of account, and stores nothing', async () => {
     api.post.mockResolvedValue({ data: { user: RIDER } })
     await expect(signIn({ email: 'a@b.co', password: 'x' })).rejects.toThrow(/did not return a session/)
