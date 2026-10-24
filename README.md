@@ -377,6 +377,8 @@ CityCart/
 │   │
 │   └── package.json
 │
+├── partner/                     # CityCart Partner app for riders and brand team members (Expo) — docs/20
+│
 ├── mobile/                      # shopper app (React Native + Expo) — docs/19
 │   ├── src/
 │   │   ├── app/                 # screens; each file is a route (Expo Router)
@@ -424,7 +426,8 @@ CityCart/
 │   ├── 16-testing-strategy.md
 │   ├── 17-deployment.md
 │   ├── 18-development-roadmap.md
-│   └── 19-mobile-app.md
+│   ├── 19-mobile-app.md
+│   └── 20-partner-app.md       # partner programme: plan, status, handoff
 │
 ├── AGENTS.md
 ├── .gitignore

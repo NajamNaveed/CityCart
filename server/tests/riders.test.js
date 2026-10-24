@@ -4,10 +4,12 @@ const mongoose = require('mongoose');
 jest.mock('../src/models/user.model');
 jest.mock('../src/models/employee.model');
 jest.mock('../src/models/brand.model');
+jest.mock('../src/models/delivery.model');
 
 const User = require('../src/models/user.model');
 const Employee = require('../src/models/employee.model');
 const Brand = require('../src/models/brand.model');
+const Delivery = require('../src/models/delivery.model');
 const app = require('../src/app');
 const { ROLES } = require('../src/config/roles');
 const { PERMISSIONS } = require('../src/config/permissions');
@@ -153,6 +155,7 @@ describe('PATCH /api/v1/riders/:id and /:id/password', () => {
   it('updates only a RIDER of the caller\'s brand', async () => {
     const { cookie } = asRole(ROLES.BRAND_ADMIN);
     const id = oid();
+    Delivery.countDocuments.mockResolvedValue(0);
     User.findOneAndUpdate.mockResolvedValue(riderDoc({ _id: id, isActive: false }));
 
     const res = await request(app).patch(`/api/v1/riders/${id}`).set(...cookie).send({ isActive: false, role: 'BRAND_ADMIN', brandId: oid() });
@@ -163,6 +166,39 @@ describe('PATCH /api/v1/riders/:id and /:id/password', () => {
       { $set: { isActive: false } },
       { new: true }
     );
+  });
+
+  it('will not deactivate a rider who still has open deliveries: they must be given to someone else first', async () => {
+    const { cookie } = asRole(ROLES.BRAND_ADMIN);
+    const id = oid();
+    Delivery.countDocuments.mockResolvedValue(2);
+
+    const res = await request(app).patch(`/api/v1/riders/${id}`).set(...cookie).send({ isActive: false });
+
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({ code: 'RIDER_HAS_OPEN_DELIVERIES', openDeliveries: 2 });
+    expect(res.body.message).toMatch(/2 open deliveries/);
+    expect(Delivery.countDocuments).toHaveBeenCalledWith({
+      brandId: brandId.toString(),
+      riderId: id.toString(),
+      status: { $nin: ['DELIVERED', 'CANCELLED', 'RETURNED'] },
+    });
+    expect(User.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('uses the singular for one open delivery', async () => {
+    const { cookie } = asRole(ROLES.BRAND_ADMIN);
+    Delivery.countDocuments.mockResolvedValue(1);
+    const res = await request(app).patch(`/api/v1/riders/${oid()}`).set(...cookie).send({ isActive: false });
+    expect(res.body.message).toMatch(/1 open delivery\. Give it to another rider first/);
+  });
+
+  it('editing a name, or reactivating, never looks at deliveries', async () => {
+    const { cookie } = asRole(ROLES.BRAND_ADMIN);
+    User.findOneAndUpdate.mockResolvedValue(riderDoc());
+    expect((await request(app).patch(`/api/v1/riders/${oid()}`).set(...cookie).send({ name: 'New Name' })).status).toBe(200);
+    expect((await request(app).patch(`/api/v1/riders/${oid()}`).set(...cookie).send({ isActive: true })).status).toBe(200);
+    expect(Delivery.countDocuments).not.toHaveBeenCalled();
   });
 
   it("404 for another brand's rider (or any non-rider account), 400 for bad id or empty body", async () => {

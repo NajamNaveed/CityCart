@@ -17,6 +17,59 @@ import ProductImage from '../components/ProductImage'
 import { Skeleton } from '../components/ui'
 import { formatDateTime, formatPrice, wrap } from '../ui'
 
+// While the order is on its way, the customer reads this code to the rider; the
+// rider cannot mark the order delivered without it (docs/11, docs/20 §7).
+const ON_THE_ROAD = ['PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'FAILED']
+
+function DeliveryCode({ deliveryId }) {
+  const [code, setCode] = useState('')
+  useEffect(() => {
+    let active = true
+    api
+      .get(`/deliveries/${deliveryId}/code`)
+      .then((res) => active && setCode(res.data.code))
+      .catch(() => active && setCode(''))
+    return () => {
+      active = false
+    }
+  }, [deliveryId])
+
+  if (!code) return null
+  return (
+    <div className="mt-3.5 rounded-md border border-line bg-white p-4">
+      <p className="text-[12px] text-muted">Your delivery code</p>
+      <p className="mt-1 font-display text-3xl tracking-[0.3em] text-ink" aria-label={`Delivery code ${code.split('').join(' ')}`}>
+        {code}
+      </p>
+      <p className="mt-2 text-[12.5px] text-muted">
+        Give this code to the rider when your order arrives. Please do not share it before.
+      </p>
+    </div>
+  )
+}
+
+// The receipt of a paid order; nothing is shown until one exists.
+function ReceiptNote({ orderId }) {
+  const [receipt, setReceipt] = useState(null)
+  useEffect(() => {
+    let active = true
+    api
+      .get(`/receipts/order/${orderId}`)
+      .then((res) => active && setReceipt(res.data.receipt))
+      .catch(() => active && setReceipt(null))
+    return () => {
+      active = false
+    }
+  }, [orderId])
+
+  if (!receipt) return null
+  return (
+    <p className="mt-2 text-[12.5px] text-muted">
+      Receipt {receipt.receiptNumber}, issued {formatDateTime(receipt.issuedAt)}.
+    </p>
+  )
+}
+
 function SectionTitle({ children }) {
   return (
     <h2 className="border-b border-line pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
@@ -280,6 +333,7 @@ export default function MyOrderDetail() {
               <dd className="text-ink">{formatPrice(order.total)}</dd>
             </div>
           </dl>
+          {payment?.status === 'PAID' && <ReceiptNote orderId={order._id} />}
 
           {order.orderStatus === 'PENDING' && (
             <div className="mt-8 rounded-lg border border-warning/30 bg-warning-soft p-4 sm:p-5">
@@ -374,6 +428,8 @@ export default function MyOrderDetail() {
               )}
             </section>
           )}
+
+          {delivery && ON_THE_ROAD.includes(delivery.status) && <DeliveryCode deliveryId={delivery._id} />}
         </aside>
       </div>
     </div>

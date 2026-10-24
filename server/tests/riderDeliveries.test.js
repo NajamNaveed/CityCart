@@ -575,3 +575,56 @@ describe('GET /api/v1/deliveries/:id/code (the customer\'s proof-of-delivery cod
     expect((await get(header, 'nope')).status).toBe(400);
   });
 });
+
+describe('what a customer sees of their own delivery', () => {
+  const withRider = (extra = {}) => ({
+    _id: oid(), orderId: oid(), brandId, customerId: oid(), status: 'OUT_FOR_DELIVERY', assignedAgent: 'Bilal Ahmed',
+    riderId: oid(), codeAttempts: 2, assignedAt: new Date(), address: { name: 'Sana Iqbal' }, ...extra,
+  });
+
+  it('GET /deliveries/:id keeps the rider\'s name but never the internal rider id or the wrong-code counter', async () => {
+    const { header } = asWeb(ROLES.CUSTOMER);
+    Delivery.findOne.mockResolvedValue(withRider());
+
+    const res = await request(app).get(`/api/v1/deliveries/${oid()}`).set(...header);
+
+    expect(res.status).toBe(200);
+    expect(res.body.delivery.assignedAgent).toBe('Bilal Ahmed');
+    ['riderId', 'codeAttempts', 'deliveryCode'].forEach((hidden) => expect(res.body.delivery).not.toHaveProperty(hidden));
+  });
+
+  it('the brand still sees the rider id on its own deliveries', async () => {
+    const { header } = asWeb(ROLES.BRAND_ADMIN);
+    const d = withRider();
+    Delivery.findOne.mockResolvedValue(d);
+    const res = await request(app).get(`/api/v1/deliveries/${d._id}`).set(...header);
+    expect(res.body.delivery).toHaveProperty('riderId');
+  });
+
+  it('the order page (getOrderForUser) hides them from customers too, and leaves brand and admin views alone', async () => {
+    const { getOrderForUser } = require('../src/services/order.service');
+    const order = { _id: oid(), customerId: oid() };
+    Order.findOne.mockResolvedValue(order);
+    Payment.findOne.mockResolvedValue({ _id: oid() });
+    const d = withRider();
+    Delivery.findOne.mockResolvedValue(d);
+
+    const asCustomer = await getOrderForUser({ _id: order.customerId, role: ROLES.CUSTOMER }, order._id);
+    expect(asCustomer.delivery.assignedAgent).toBe('Bilal Ahmed');
+    expect(asCustomer.delivery).not.toHaveProperty('riderId');
+    expect(asCustomer.delivery).not.toHaveProperty('codeAttempts');
+
+    const asAdmin = await getOrderForUser({ _id: oid(), role: ROLES.SUPER_ADMIN }, order._id);
+    expect(asAdmin.delivery).toBe(d);
+  });
+
+  it('a delivery that does not exist yet stays empty', async () => {
+    const { getOrderForUser } = require('../src/services/order.service');
+    const order = { _id: oid(), customerId: oid() };
+    Order.findOne.mockResolvedValue(order);
+    Payment.findOne.mockResolvedValue(null);
+    Delivery.findOne.mockResolvedValue(null);
+    const result = await getOrderForUser({ _id: order.customerId, role: ROLES.CUSTOMER }, order._id);
+    expect(result.delivery).toBeNull();
+  });
+});

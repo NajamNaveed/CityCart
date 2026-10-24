@@ -298,5 +298,4 @@ Riders and the people who keep order records use a separate app, *CityCart
 Partner* (`partner/`, see `20-partner-app.md`). It shares this app's stack and API
 but has its own sign-in (`/auth/partner/login`, `X-Client: partner`); a shopper
 token never works there and a partner token never works here. This app will show
-the customer's delivery code (`GET /deliveries/:id/code`) once the partner app's
-rider screens (Phase C) are built.
+the customer's delivery code (`GET /deliveries/:id/code`) on the order page while the order is on the road, and the receipt number (`GET /receipts/order/:orderId`) once it is paid (added with the Partner app's Phase C).

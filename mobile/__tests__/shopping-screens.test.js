@@ -399,6 +399,67 @@ describe('Order detail', () => {
     expect(text).not.toContain('Cancel order') // too late to cancel
   })
 
+  describe('the delivery code and the receipt', () => {
+    const ON_THE_ROAD = { ...ORDER, orderStatus: 'OUT_FOR_DELIVERY', statusHistory: [{ status: 'PENDING' }, { status: 'CONFIRMED' }, { status: 'SHIPPED' }, { status: 'OUT_FOR_DELIVERY' }] }
+    const serveWith = (order, { payment = { status: 'PENDING' }, delivery = null, code, receipt } = {}) => {
+      mockParams = { id: order._id }
+      api.get.mockImplementation(async (url) => {
+        if (url === `/orders/${order._id}`) return { data: { order, payment, delivery } }
+        if (delivery && url === `/deliveries/${delivery._id}/code`) {
+          if (code instanceof Error) throw code
+          return { data: { code } }
+        }
+        if (url === `/receipts/order/${order._id}`) {
+          if (receipt instanceof Error || !receipt) throw receipt || new Error('no receipt')
+          return { data: { receipt } }
+        }
+        throw new Error(`unexpected GET ${url}`)
+      })
+    }
+
+    it('shows the six-digit code while the order is on its way, so the customer can read it to the rider', async () => {
+      serveWith(ON_THE_ROAD, { delivery: { _id: ID(9), status: 'OUT_FOR_DELIVERY', assignedAgent: 'Bilal Ahmed' }, code: '482913' })
+      const text = screenText(await show(<OrderScreen />, auth()))
+      expect(text).toContain('Your delivery code')
+      expect(text).toContain('482913')
+      expect(text).toContain('Give this code to the rider')
+      expect(api.get).toHaveBeenCalledWith(`/deliveries/${ID(9)}/code`)
+    })
+
+    it('does not ask for a code before the order is on the road, or once it is delivered', async () => {
+      for (const status of ['READY_FOR_PICKUP', 'DELIVERED']) {
+        api.get.mockReset()
+        serveWith(ON_THE_ROAD, { delivery: { _id: ID(9), status }, code: '482913' })
+        const text = screenText(await show(<OrderScreen />, auth()))
+        expect(text).not.toContain('Your delivery code')
+        expect(api.get).not.toHaveBeenCalledWith(`/deliveries/${ID(9)}/code`)
+      }
+    })
+
+    it('shows nothing, and no error, when the server has no code to give', async () => {
+      const refused = Object.assign(new Error('http'), { response: { status: 409, data: { code: 'CODE_NOT_AVAILABLE' } } })
+      serveWith(ON_THE_ROAD, { delivery: { _id: ID(9), status: 'OUT_FOR_DELIVERY' }, code: refused })
+      const text = screenText(await show(<OrderScreen />, auth()))
+      expect(text).not.toContain('Your delivery code')
+      expect(text).toContain('CC-20261004-0007') // the rest of the page is fine
+    })
+
+    it('shows the receipt number once a paid order has one', async () => {
+      const delivered = { ...ORDER, orderStatus: 'DELIVERED' }
+      serveWith(delivered, { payment: { status: 'PAID' }, delivery: { _id: ID(9), status: 'DELIVERED' }, receipt: { receiptNumber: 'RC-2026-000012', issuedAt: '2026-10-20T10:00:00Z' } })
+      const text = screenText(await show(<OrderScreen />, auth()))
+      expect(text).toContain('Paid in cash on delivery')
+      expect(text).toContain('Receipt RC-2026-000012')
+    })
+
+    it('does not look for a receipt on an unpaid order', async () => {
+      serveWith(ORDER, { payment: { status: 'PENDING' }, receipt: { receiptNumber: 'RC-1', issuedAt: '2026-10-20T10:00:00Z' } })
+      const text = screenText(await show(<OrderScreen />, auth()))
+      expect(text).not.toContain('Receipt RC-')
+      expect(api.get).not.toHaveBeenCalledWith(`/receipts/order/${ORDER._id}`)
+    })
+  })
+
   it('cancels a pending order after asking, and shows the result', async () => {
     serve()
     jest.spyOn(Alert, 'alert').mockImplementation(() => {})

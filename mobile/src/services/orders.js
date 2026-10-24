@@ -72,6 +72,22 @@ export async function fetchOrder(id) {
   return { order: res.data.order, payment: res.data.payment, delivery: res.data.delivery }
 }
 
+// While the order is on its way the customer reads a six-digit code to the rider; the
+// rider cannot mark the order delivered without it (docs/11, docs/20 §7). The server
+// only gives it to the customer who owns the order, and only in these statuses.
+export const CODE_VISIBLE_STATUSES = ['PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'FAILED']
+
+export async function fetchDeliveryCode(deliveryId) {
+  const res = await api.get(`/deliveries/${deliveryId}/code`)
+  return res.data.code
+}
+
+// The receipt of a paid order (docs/10 §28).
+export async function fetchReceipt(orderId) {
+  const res = await api.get(`/receipts/order/${orderId}`)
+  return res.data.receipt
+}
+
 export async function cancelOrder(id) {
   const res = await api.patch(`/orders/${id}/cancel`)
   return res.data.order

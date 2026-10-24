@@ -11,14 +11,15 @@ the work up cold. Read it first, then the documents it points to.
 |---|---|---|
 | A | Rider foundation: `RIDER` role, rider management, assignment, partner sign-in, rider endpoints, delivery code | **Done** (backend + web dashboard + docs) |
 | B | Receipts and cash-on-delivery records: receipts, who collected cash, settlement | **Done** (API + docs; no screens yet) |
-| D0 | **Returns backend** (found missing, see §6.1) | Not started |
-| C | `partner/` Expo app: sign-in and rider screens; shopper app shows delivery code | Not started |
+| D0 | **Returns backend** (found missing, see §6.1); version-one design approved | Not started |
+| C | `partner/` Expo app: sign-in and rider screens; the shopper app and website show the delivery code and receipt | **Done** (not yet run on a real phone, see §5.4) |
 | D | Records screens in the same app (orders, deliveries, returns, payments, receipts, cash) | Not started |
 | E | Card / online payments with a hosted gateway and signed webhook | Not started (gateway not chosen) |
 | F | Optional: push notification on assignment, rider live location | Not started |
 
 Server test suite: 940 tests before the programme, 1,047 after Phase A, 1,090
-after Phase B. All pass; ESLint is clean. The real-MongoDB integration suite
+after Phase B, 1,097 after Phase C. The Partner app has its own 93 tests and the
+shopper app (`mobile/`) 251. All pass; lint is clean everywhere. The real-MongoDB integration suite
 (`npm run test:integration`) could not be run by the author (no MongoDB binary
 download in the build sandbox) and should be run by the owner after applying
 each phase.
@@ -48,6 +49,11 @@ proposed and then **approved by the owner**.
 | 5 | Proof of delivery is a **six-digit code** the customer reads out | Strong enough, needs no camera/signature library. Chosen over four digits for safety |
 | 6 | Dependencies are kept **minimal and justified**; installs consolidated | Owner preference (see §8) |
 | 7 | Card data is **never stored**; online payments are confirmed only by the gateway's signed webhook | Security and PCI scope |
+| 8 | **Returns (Phase D0), version one:** customer requests within 7 days of delivery (fixed reasons, whole order) → brand approves or rejects → the records person marks it returned, with a "put back in stock" checkbox (default yes) → refund through the existing refund endpoint. Rider pickup of returns comes later | Simplest valid chain that reuses existing pieces; approved, not yet built |
+| 9 | **Payment gateway behind a small adapter** (create payment, verify webhook), so the provider can be swapped. The first provider is whichever sandbox account the owner gets approved first (JazzCash sandbox, Safepay, PayFast) | Live use needs a registered business (NTN, bank account, KYC), which is a business step, not code |
+| 10 | **Prepaid orders:** stay pending with stock held for about 30 minutes; only the signed webhook marks them paid; otherwise the order cancels and stock is released. Check the existing inventory reservation first (docs/09) | Never ship goods on an unconfirmed payment |
+| 11 | **Build order:** C, then D (without the returns tab), then D0 and the returns tab, then E, then F | C needs no decisions; E needs a sandbox account |
+| 12 | **Small defaults:** a rider with open deliveries cannot be deactivated; customers never receive the internal `riderId`; brand owners stay web-only | Done in Phase C (the first two) |
 
 ## 3. Design
 
@@ -109,8 +115,9 @@ together).
    the same transaction that marks it `PAID`. Never client-supplied.
 7. Cash settlement is all-or-nothing and pinned to brand and collector.
 8. **Never store card data. Never mark an online payment paid from the app.**
-9. Do not add a new brand-scoped role without updating `02-user-roles-and-permissions.md`.
-10. Everything in `AGENTS.md` still applies (multi-tenancy §7, authorization §8,
+9. A customer receives their delivery **without** `riderId`, `codeAttempts` and `deliveryCode` (`utils/deliveryView.js`); keep using it on every customer path.
+10. Do not add a new brand-scoped role without updating `02-user-roles-and-permissions.md`.
+11. Everything in `AGENTS.md` still applies (multi-tenancy §7, authorization §8,
     never trust client ownership data §9, payments §16, tests §26, dependencies §29).
 
 ## 5. What is built
@@ -229,6 +236,48 @@ PICKED_UP → IN_TRANSIT → OUT_FOR_DELIVERY → DELIVERED | FAILED`, and `FAIL
 OUT_FOR_DELIVERY` (re-attempt). `PICKED_UP` may also go straight to
 `OUT_FOR_DELIVERY`. Final statuses: `DELIVERED`, `CANCELLED`, `RETURNED`.
 
+### 5.4 Phase C: the Partner app and the customer's code
+
+* **`partner/`** (Expo SDK 57, plain JavaScript, Expo Router; see `partner/README.md`).
+  It sends `X-Client: partner`, signs in at `/auth/partner/login`, keeps its token in
+  secure storage under its **own** key (`citycart.partner.session`, so it never
+  shares a session with the shopper app on the same phone), and signs out when the
+  server ends the session. After sign-in `/` sends a `RIDER` to `/deliveries` and a
+  `BRAND_EMPLOYEE` to `/records` (a placeholder until Phase D); `RequireRole` guards
+  every screen (the server is still the real guard).
+* **Rider screens:** *Deliveries* (To do / Finished, refreshes on open, every minute
+  and on pull-down), *Delivery* detail (customer, address and note, **Call** and
+  **Open in Maps** through plain `tel:` and `https` links, items, cash to collect,
+  status buttons that mirror the server lifecycle, **Enter code to complete**,
+  **Could not deliver** with a required reason), *Cash* (what the rider holds),
+  *Alerts* (the inbox; opening a `DELIVERY_ASSIGNED` alert goes to that delivery) and
+  *Account* (sign out). The wrong-code message shows tries left; a locked code says
+  to ask the brand.
+* **Dependencies:** exactly the shopper app's list minus the maps library, location,
+  socket.io, async storage and the two Google font packages (the app uses the system
+  font). `npm install` in `partner/` is the only install step. No new package was
+  needed for Phase C.
+* **Customer side:** the shopper app's order page (`mobile/src/app/orders/[id].jsx`)
+  and the website's order page (`client/src/pages/MyOrderDetail.jsx`) show **Your
+  delivery code** while the order is on the road (`GET /deliveries/:id/code`) and the
+  **receipt number** once the order is paid (`GET /receipts/order/:orderId`). Both show
+  nothing when the server has nothing to give.
+* **Backend, small defaults:** `RIDER_HAS_OPEN_DELIVERIES` (409) blocks deactivating
+  a rider who still has open deliveries; customers receive their delivery without
+  `riderId`, `codeAttempts` or `deliveryCode` (`server/src/utils/deliveryView.js`,
+  used by `GET /deliveries/:id` and the order detail).
+* **Root scripts:** `npm run dev:partner`, `npm run test:partner`, and `npm run lint`
+  now includes `partner/`.
+* **Verified:** lint, 93 unit and screen tests, and a full Android bundle build
+  (`npx expo export --platform android`) all pass, so every import and route
+  resolves. **Not verified:** running on a physical phone or emulator (no device in
+  the build sandbox) and the server's real-MongoDB integration tests. The owner
+  should sign a demo rider in on a phone and walk one delivery through to the code.
+
+Main files: `partner/src/app/**` (routes), `partner/src/services/{api,session,storage,deliveries}.js`,
+`partner/src/utils/{delivery,validation,format}.js`, `partner/src/components/**`,
+`partner/__tests__/**`.
+
 ## 6. What is left
 
 ### 6.1 Phase D0: returns backend (found missing, must precede the returns screen)
@@ -246,63 +295,19 @@ coding; questions to settle:
 * stock: when does returned stock go back into inventory (`inventoryReasons` already has `RETURNED`)?
 * money: how a return connects to the existing refund endpoint (a refund does not change who collected the cash, and never edits the receipt; a credit note is out of scope unless asked).
 
-Update `02`, `08`, `09`, `10`, `11` and this file when it is designed.
+**The owner approved the version-one design in decision 8.** What remains is to
+write it into `02`, `08`, `09`, `10`, `11` (statuses, endpoints, permissions,
+stock and refund rules) and this file, and then build it, with the same tests per
+security rule as the rest of the programme.
 
-### 6.2 Phase C: the Partner app, sign-in and rider screens
+### 6.2 Phase C: done (see §5.4)
 
-Create `partner/` as an Expo app modelled on `mobile/` (read `mobile/AGENTS.md`
-and `docs/19-mobile-app.md` first). Facts about `mobile/` to reuse:
-
-* Expo SDK 57 (`expo ~57.0.x`), React Native 0.86, React 19, Expo Router
-  (`src/app/`), **plain JavaScript (no TypeScript)**, `axios`, tokens in
-  `expo-secure-store`. **Expo changes between SDKs: read the versioned Expo docs
-  before using any Expo API** (`mobile/AGENTS.md` says how), and install with
-  `npx expo install <pkg>`, never `npm i`. Run `npx expo lint` and `npm test`
-  (jest-expo) before finishing.
-* `mobile/src/services/api.js` shows the client pattern (header `X-Client`,
-  bearer token, a 401 handler that signs out, error mapping). The partner copy
-  must send **`X-Client: partner`**, use **`/auth/partner/login`** (add it to the
-  "a 401 at login is not a lost session" pattern), keep its token under its own
-  secure-store key, and add a `WEB_ONLY`-style message for partner-only errors.
-* Sign-in rules live in `services/session.js`, kept free of React for testing.
-
-Dependency guidance (the owner wants few and justified): start from
-`mobile/package.json` and **leave out** `react-native-maps`, `expo-location`,
-`socket.io-client` and the fonts unless needed. The rider opens Maps and the
-phone dialler with `Linking` (`geo:`/`https` map link, `tel:`), which needs no
-extra package. Phase C should need **no packages beyond what `mobile/` already
-uses**; state the single consolidated `npx expo install ...` line and where each
-file goes.
-
-Rider screens, all backed by endpoints in §5.3 (poll or pull-to-refresh; sockets
-are Phase F):
-
-1. **Sign in** (`/auth/partner/login`). After sign-in `GET /auth/me`; the app
-   shows rider screens for `RIDER`, records screens (Phase D) for
-   `BRAND_EMPLOYEE`, choosing tabs from the permissions returned.
-2. **My deliveries** (active / history) with pull to refresh.
-3. **Delivery detail**: address, call the customer, open in Maps, items, **amount
-   to collect** for COD, and buttons that follow the lifecycle: picked up → in
-   transit / out for delivery → *enter code to complete* or *failed* (reason
-   required). Show the server's `INVALID_CODE` attempts left and `CODE_LOCKED`
-   ("ask the brand to complete this delivery").
-4. **Cash**: `GET /rider/deliveries/cash`.
-5. **Notifications**: the existing inbox (`DELIVERY_ASSIGNED`).
-6. **Account**: sign out.
-
-Also in this phase, in the **shopper app** (`mobile/`): show the delivery code on
-the order page while the order is on its way (`GET /deliveries/:id/code`), and
-the receipt once paid (`GET /receipts/order/:orderId`). The web client may show
-the receipt too.
-
-Acceptance: a rider created on the web Riders page can sign in on the app, see
-only their assigned deliveries, move one to delivered with the customer's code,
-and the order, delivery and COD payment all update (and a receipt exists); a
-brand owner or customer account cannot sign in on the Partner app.
+The Partner app, its rider screens, and the delivery code and receipt in the shopper
+app and on the website are built; details and the one thing still to verify are in §5.4.
 
 ### 6.3 Phase D: records screens (same app)
 
-For `BRAND_EMPLOYEE` accounts, tabs shown by permission:
+Build these in `partner/src/app/(records)/` with a `Tabs` layout like `(rider)/_layout.jsx`, guarded by `RequireRole role="BRAND_EMPLOYEE"`, replacing the `records.jsx` placeholder and reusing `usePagedList`, `useRemote`, `Screen`, `Card` and `StatusPill` (the records person needs a status pill for order statuses too). Add services files in the same style as `services/deliveries.js`. Use `GET /auth/me` permissions to choose tabs. For `BRAND_EMPLOYEE` accounts, tabs shown by permission:
 
 * **Orders / deliveries by status** (to deliver, out for delivery, delivered,
   failed, returned once D0 exists): `GET /brand/orders`, `GET /deliveries?status=`
@@ -356,16 +361,15 @@ authority**: a hidden button is a convenience, never the security.
 
 * **Returns** are not built (§6.1): needs a design and the owner's decisions.
 * **Payment gateway** not chosen (§6.4); prepaid order-confirmation flow undecided.
-* Deactivating a rider does **not** move their open deliveries; the brand
-  reassigns (the web message says so).
+* A rider with open deliveries **cannot** be deactivated (Phase C); the brand
+  reassigns first.
 * Riders do not get live socket updates yet (Phase F).
-* The customer receives the delivery object in the order response, which now
-  contains `riderId` (an internal id, harmless, but could be stripped for
-  customers if the owner prefers).
+* The Partner app has not yet been run on a physical device (§5.4).
+* The Partner app polls every minute for new deliveries; sockets and push come with Phase F.
 * Brand owners cannot use the Partner app (decision 4). Allowing it is a
   one-line change in `config/roles.js` (`PARTNER_ROLES`) but widens the security
   rule; ask first.
-* Receipts are JSON only; a printable/shareable PDF is not built (ask before adding a dependency).
+* Receipts are JSON only; the apps show the receipt number. A printable/shareable receipt is not built (ask before adding a dependency).
 * Receipt numbers may have gaps after a failed attempt (never duplicates).
 
 ## 8. How to work with the owner (working agreement)
@@ -384,6 +388,7 @@ authority**: a hidden button is a convenience, never the security.
   baseline commit so the zip contains only the new phase.
 * Update the docs in the same change as the code (`AGENTS.md` §35/§34 spirit),
   and keep `20-partner-app.md` current: change §0 and the relevant sections.
+* Lint the apps with `npx expo lint` (the project's own command; plain `eslint` also scans test files and complains about Jest globals).
 * The sandbox can install npm packages and run the **mocked unit tests**
   (`server`: `npx jest`), ESLint, and the client build (`npx vite build`), but it
   **cannot** download MongoDB (so `npm run test:integration` cannot run) and
@@ -394,6 +399,8 @@ authority**: a hidden button is a convenience, never the security.
 Run from `server/`: `npx eslint .` and `npx jest` (unit, mocked models, fast).
 Integration tests (`npm run test:integration`) need a real MongoDB binary.
 Client: `npm run lint` (oxlint) and `npx vite build` in `client/`.
+
+Partner app (`partner/`): `npm test` runs 93 tests: `api`, `storage`, `session`, `delivery` (rules and messages), `paging`, `config`, `format` and `screens` (sign-in, who goes where, deliveries, one delivery, cash, alerts, account). Shopper app: five tests in `mobile/__tests__/shopping-screens.test.js` cover the code and receipt.
 
 Partner-programme test files (`server/tests/`): `partnerAuth.test.js` (sign-in,
 token rules), `riders.test.js` (rider management and tenant isolation),
@@ -426,9 +433,11 @@ tests; add the same for new rules, in the same style.
 | `NO_RECEIPT` | 404 | Order not paid yet |
 | `CASH_CHANGED` | 409 | A listed payment is no longer unsettled for that collector |
 | `BRAND_TERMINATED` | 409 | A terminated brand cannot add riders |
+| `RIDER_HAS_OPEN_DELIVERIES` | 409 | Cannot deactivate a rider with open deliveries (`openDeliveries` in the body) |
 
 ## 11. Change log
 
 * **2026-10 Phase A** delivered: rider role and management, assignment, partner sign-in and rider endpoints, delivery code, web Riders page, demo data, docs.
 * **2026-10 Phase B** delivered: receipts, cash-on-delivery collection and settlement, rider cash view, demo data, docs.
 * **2026-10 Handoff** written; missing returns backend identified and added as Phase D0.
+* **2026-10 Phase C** delivered: `partner/` app (sign-in, rider screens), delivery code and receipt in the shopper app and website, rider-deactivation guard, customer-safe delivery view, root scripts.

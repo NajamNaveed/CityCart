@@ -1415,7 +1415,7 @@ A rider's delivery view contains: order number, status, address (only while the
 delivery is open), item names and quantities, `paymentMethod`, `amountToCollect`,
 `cashCollected`. Never the customer account, brand, prices or the code. `complete`
 errors: `422 INVALID_CODE` (with `attemptsRemaining`), `429 CODE_LOCKED`,
-`409 INVALID_TRANSITION`, `409 NO_DELIVERY_CODE`. See `20-partner-app.md`.
+`409 INVALID_TRANSITION`, `409 NO_DELIVERY_CODE`. Deactivating a rider (`PATCH /riders/:id` with `isActive: false`) answers `409 RIDER_HAS_OPEN_DELIVERIES` while the rider still has open deliveries. Customers receive their delivery without `riderId`, `codeAttempts` or `deliveryCode`. See `20-partner-app.md`.
 
 ---
 

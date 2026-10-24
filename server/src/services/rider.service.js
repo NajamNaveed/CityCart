@@ -1,7 +1,9 @@
 const User = require('../models/user.model');
 const Brand = require('../models/brand.model');
+const Delivery = require('../models/delivery.model');
 const { hashPassword } = require('../utils/password');
 const { ROLES } = require('../config/roles');
+const { DELIVERY_FINAL_STATUSES } = require('../config/deliveryTransitions');
 
 const DEFAULT_LIMIT = 20;
 
@@ -80,9 +82,20 @@ async function createRider({ brandId, data }) {
 }
 
 // Profile fields and activation. A deactivated rider can no longer sign in
-// (authenticate rejects inactive users); deliveries already assigned to them
-// stay assigned until the brand moves them to someone else.
+// (authenticate rejects inactive users), so a rider who still has deliveries
+// to make cannot be deactivated: the brand moves those to someone else first.
 async function updateRider({ brandId, id, data }) {
+  if (data.isActive === false) {
+    const open = await Delivery.countDocuments({ brandId, riderId: id, status: { $nin: DELIVERY_FINAL_STATUSES } });
+    if (open > 0) {
+      throw new RiderError(
+        409,
+        `This rider still has ${open} open ${open === 1 ? 'delivery' : 'deliveries'}. Give ${open === 1 ? 'it' : 'them'} to another rider first.`,
+        { code: 'RIDER_HAS_OPEN_DELIVERIES', openDeliveries: open }
+      );
+    }
+  }
+
   const fields = {};
   if (data.name !== undefined) fields.name = data.name;
   if (data.phone !== undefined) fields.phone = data.phone;

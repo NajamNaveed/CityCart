@@ -7,6 +7,7 @@ const { OrderError } = require('./order.service');
 const { notifyCustomerOfOrderStatus, notifyPaymentReceived, notifyRiderAssigned } = require('./notification.service');
 const { generateDeliveryCode } = require('../utils/deliveryCode');
 const { issueReceiptBestEffort } = require('./receipt.service');
+const { deliveryForCustomer } = require('../utils/deliveryView');
 const { ROLES } = require('../config/roles');
 const {
   DELIVERY_FINAL_STATUSES,
@@ -63,7 +64,7 @@ async function getDeliveryForUser(user, tenantBrandId, deliveryId) {
   if (!delivery) {
     throw new OrderError(404, 'Delivery not found.');
   }
-  return delivery;
+  return user.role === 'CUSTOMER' ? deliveryForCustomer(delivery) : delivery;
 }
 
 /**

@@ -16,7 +16,7 @@ import StatusPill from '../../components/StatusPill'
 import { useAuth } from '../../hooks/useAuth'
 import { useRemote } from '../../hooks/useRemote'
 import { getErrorMessage } from '../../services/api'
-import { canCancel, cancelOrder, fetchOrder, TERMINAL_PROBLEMS } from '../../services/orders'
+import { canCancel, cancelOrder, CODE_VISIBLE_STATUSES, fetchDeliveryCode, fetchOrder, fetchReceipt, TERMINAL_PROBLEMS } from '../../services/orders'
 import { formatDateTime, formatPrice, humanize } from '../../utils/format'
 import { isObjectId } from '../../utils/ids'
 import { colors, radius, spacing } from '../../theme'
@@ -43,6 +43,35 @@ function Row({ label, value, strong = false }) {
   )
 }
 
+// The code the rider asks for at the door. Nothing is shown if the server has none to give.
+function DeliveryCode({ deliveryId }) {
+  const remote = useRemote(`code:${deliveryId}`, () => fetchDeliveryCode(deliveryId))
+  if (remote.status !== 'ready' || !remote.data) return null
+  return (
+    <Section title="Your delivery code">
+      <Card style={{ gap: spacing.sm, alignItems: 'center' }}>
+        <AppText variant="title" accessibilityLabel={`Delivery code ${String(remote.data).split('').join(' ')}`} style={{ letterSpacing: 8, fontSize: 34, lineHeight: 42 }}>
+          {remote.data}
+        </AppText>
+        <AppText variant="small" style={{ textAlign: 'center' }}>
+          Give this code to the rider when your order arrives. Please do not share it before.
+        </AppText>
+      </Card>
+    </Section>
+  )
+}
+
+// The receipt of a paid order; nothing is shown until one exists.
+function ReceiptNote({ orderId }) {
+  const remote = useRemote(`receipt:${orderId}`, () => fetchReceipt(orderId))
+  if (remote.status !== 'ready' || !remote.data) return null
+  return (
+    <AppText variant="small" style={{ fontSize: 12 }}>
+      Receipt {remote.data.receiptNumber}, issued {formatDateTime(remote.data.issuedAt)}.
+    </AppText>
+  )
+}
+
 function OrderView({ data, refreshing, onRefresh, onChanged }) {
   const router = useRouter()
   const { order, payment, delivery } = data
@@ -51,6 +80,8 @@ function OrderView({ data, refreshing, onRefresh, onChanged }) {
   const a = order.shippingAddress || {}
   const problem = TERMINAL_PROBLEMS[order.orderStatus]
   const hasTracking = delivery && (delivery.trackingReference || delivery.assignedAgent || delivery.status === 'FAILED')
+  const showCode = Boolean(delivery) && CODE_VISIBLE_STATUSES.includes(delivery.status)
+  const paid = payment?.status === 'PAID'
 
   async function doCancel() {
     setCancelling(true)
@@ -118,6 +149,8 @@ function OrderView({ data, refreshing, onRefresh, onChanged }) {
         {canCancel(order) ? <Button title="Cancel order" variant="outline" onPress={confirmCancel} loading={cancelling} /> : null}
       </Section>
 
+      {showCode ? <DeliveryCode deliveryId={delivery._id} /> : null}
+
       <Section title="Items">
         <View style={{ borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, overflow: 'hidden' }}>
           {order.items.map((item, i) => (
@@ -150,6 +183,7 @@ function OrderView({ data, refreshing, onRefresh, onChanged }) {
           <AppText variant="small" style={{ fontSize: 12 }}>
             {payment?.status === 'PAID' ? 'Paid in cash on delivery.' : 'Pay in cash when your order arrives.'}
           </AppText>
+          {paid ? <ReceiptNote orderId={order._id} /> : null}
         </Card>
       </Section>
 

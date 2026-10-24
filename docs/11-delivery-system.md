@@ -251,7 +251,7 @@ A brand may handle delivery itself or manually assign a delivery person.
 (`RIDER`, one brand each, see `20-partner-app.md`) and assign a delivery to one
 of them (`PATCH /deliveries/:id/rider`). Assignment is only possible on a
 delivery that is not final, only to an active rider of the same brand, and
-does not change delivery, order or payment status. A rider sees and moves only
+does not change delivery, order or payment status. A rider who still has open deliveries cannot be deactivated (`409 RIDER_HAS_OPEN_DELIVERIES`). A rider sees and moves only
 their own deliveries (`/rider/deliveries`); a hand-typed `assignedAgent` remains
 for brands that do not use riders.
 

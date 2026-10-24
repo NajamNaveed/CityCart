@@ -7,6 +7,7 @@ const Brand = require('../models/brand.model');
 const Inventory = require('../models/inventory.model');
 const Counter = require('../models/counter.model');
 const { runInTransaction } = require('../utils/transaction');
+const { deliveryForCustomer } = require('../utils/deliveryView');
 const { evaluateLine } = require('./cart.service');
 const { deductStock, restockStock, getStockStatus, InventoryError } = require('./inventory.service');
 const {
@@ -317,7 +318,7 @@ async function getOrderForUser(user, orderId) {
     Payment.findOne({ orderId: order._id }),
     Delivery.findOne({ orderId: order._id }),
   ]);
-  return { order, payment, delivery };
+  return { order, payment, delivery: user.role === 'CUSTOMER' ? deliveryForCustomer(delivery) : delivery };
 }
 
 /**
