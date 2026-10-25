@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { FlatList, Pressable, View } from 'react-native'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -28,10 +28,20 @@ export default function Deliveries() {
   useEffect(() => {
     refreshRef.current = list.refresh
   })
-  useFocusEffect(() => {
-    // Coming back to the screen (after finishing a delivery) shows the truth.
-    refreshRef.current()
-  })
+  // The callback MUST be memoized: the navigation library runs it again whenever it
+  // changes, so a new function on every render refreshed, re-rendered and looped forever.
+  // The first focus is skipped because the list has just loaded itself.
+  const firstFocus = useRef(true)
+  useFocusEffect(
+    useCallback(() => {
+      if (firstFocus.current) {
+        firstFocus.current = false
+        return
+      }
+      // Coming back to the screen (after finishing a delivery) shows the truth.
+      refreshRef.current()
+    }, []),
+  )
   useEffect(() => {
     if (scope !== 'active') return undefined
     const timer = setInterval(() => refreshRef.current(), REFRESH_EVERY_MS)

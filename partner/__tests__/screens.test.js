@@ -17,7 +17,8 @@ jest.mock('expo-router', () => {
   return {
     useRouter: () => mockRouter,
     useLocalSearchParams: () => mockParams,
-    useFocusEffect: (callback) => React.useEffect(callback, []),
+    // Like the real one, it runs again whenever it is given a NEW callback: that is what made an un-memoized callback loop on a phone.
+    useFocusEffect: (callback) => React.useEffect(callback, [callback]),
     // A redirect shows where it points, so a test can read it.
     Redirect: ({ href }) => <Text>{`redirect:${href}`}</Text>,
     Link: ({ children }) => children,
@@ -148,6 +149,12 @@ describe('the rider\'s deliveries', () => {
 
     await pressByLabel(screen, 'Order CC-2026-000042')
     expect(mockRouter.push).toHaveBeenCalledWith('/delivery/d1')
+  })
+
+  it('loads the list once when it opens (no refresh loop)', async () => {
+    api.get.mockResolvedValue(page([delivery()]))
+    await show(<Deliveries />)
+    expect(api.get).toHaveBeenCalledTimes(1)
   })
 
   it('has a friendly empty state', async () => {

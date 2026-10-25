@@ -15,7 +15,8 @@ jest.mock('expo-router', () => {
   return {
     useRouter: () => mockRouter,
     useLocalSearchParams: () => mockParams,
-    useFocusEffect: (callback) => React.useEffect(callback, []),
+    // Like the real one, it runs again whenever it is given a NEW callback: that is what made an un-memoized callback loop on a phone.
+    useFocusEffect: (callback) => React.useEffect(callback, [callback]),
     Redirect: ({ href }) => <Text>{`redirect:${href}`}</Text>,
     Tabs: () => null,
     Stack: () => null,

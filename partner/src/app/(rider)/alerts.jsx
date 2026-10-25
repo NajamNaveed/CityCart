@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { FlatList, Pressable, View } from 'react-native'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -22,9 +22,17 @@ export default function Alerts() {
   useEffect(() => {
     refreshRef.current = list.refresh
   })
-  useFocusEffect(() => {
-    refreshRef.current()
-  })
+  // Memoized on purpose (see deliveries.jsx): an un-memoized callback loops forever.
+  const firstFocus = useRef(true)
+  useFocusEffect(
+    useCallback(() => {
+      if (firstFocus.current) {
+        firstFocus.current = false
+        return
+      }
+      refreshRef.current()
+    }, []),
+  )
 
   async function open(notification) {
     if (!notification.isRead) {
