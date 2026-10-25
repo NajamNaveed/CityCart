@@ -65,6 +65,11 @@ const paymentSchema = new mongoose.Schema(
     paidAt: {
       type: Date,
     },
+    // Online payments only: when the stock hold ends. An order still unpaid then is
+    // cancelled and its stock released (docs/10 §29).
+    expiresAt: {
+      type: Date,
+    },
     // Cash handling (docs/10 §11a, docs/20 §8). Set when cash is collected on
     // delivery: the brand, who physically received the cash (a rider or a team
     // member) and when. brandId is stored here (payments are otherwise scoped
@@ -113,6 +118,10 @@ const paymentSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+// Finding the payment a gateway notification is about, and the expiry sweep.
+paymentSchema.index({ provider: 1, transactionReference: 1 });
+paymentSchema.index({ method: 1, status: 1, expiresAt: 1 });
 
 // Cash still held by a collector, per brand.
 paymentSchema.index({ brandId: 1, collectedBy: 1, settledAt: 1 });

@@ -37,10 +37,10 @@ export function validateCheckout(form) {
 }
 
 // The server reads the cart itself; the app only sends where to deliver and how to pay.
-export function orderBody(form) {
+export function orderBody(form, paymentMethod = 'COD') {
   const text = (v) => String(v ?? '').trim()
   return {
-    paymentMethod: 'COD',
+    paymentMethod,
     shippingAddress: {
       fullName: text(form.fullName),
       phone: text(form.phone),
@@ -57,10 +57,28 @@ export function checkoutFieldErrors(fieldErrors = {}) {
   return Object.fromEntries(Object.entries(fieldErrors).map(([field, message]) => [field.replace(/^shippingAddress\./, ''), message]))
 }
 
-export async function placeOrder(form) {
-  const res = await api.post('/orders', orderBody(form))
+export async function placeOrder(form, paymentMethod = 'COD') {
+  const res = await api.post('/orders', orderBody(form, paymentMethod))
   return res.data.orders
 }
+
+// What the customer can pay with. Cash is always possible; paying online appears only while the
+// server has a payment gateway switched on (docs/10 §29).
+export async function fetchPaymentMethods() {
+  const res = await api.get('/payments/methods')
+  return res.data.methods
+}
+
+// The gateway page where one online order is paid. The server checks the order is the caller's
+// and still waiting for payment; nothing is marked paid by the app (only the gateway's
+// confirmation does that).
+export async function startOnlinePayment(orderId) {
+  const res = await api.post(`/payments/order/${orderId}/checkout`)
+  return res.data
+}
+
+export const isOnline = (order) => order?.paymentMethod === 'ONLINE_GATEWAY'
+export const awaitingPayment = ({ order, payment }) => isOnline(order) && payment?.status === 'PENDING' && order?.orderStatus === 'PENDING'
 
 export async function fetchMyOrders(page = 1, limit = 10) {
   const res = await api.get('/orders/my', { params: { page, limit } })

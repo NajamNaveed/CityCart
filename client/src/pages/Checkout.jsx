@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
-import { Banknote, ShoppingBag } from 'lucide-react'
+import { Banknote, CreditCard, ShoppingBag } from 'lucide-react'
 import api, { getErrorMessage, getFieldErrors } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import { useCart } from '../hooks/useCart'
@@ -36,6 +36,10 @@ export default function Checkout() {
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
   const [placing, setPlacing] = useState(false)
+  // What the shopper can pay with. Cash is always possible; paying online appears only while the
+  // server has a payment gateway switched on.
+  const [methods, setMethods] = useState([{ method: 'COD', label: 'Cash on delivery' }])
+  const [method, setMethod] = useState('COD')
 
   useEffect(() => {
     let active = true
@@ -43,6 +47,19 @@ export default function Checkout() {
       .get('/cart')
       .then((res) => active && setCart({ loading: false, data: res.data.cart, error: '' }))
       .catch((err) => active && setCart({ loading: false, data: null, error: getErrorMessage(err) }))
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    api
+      .get('/payments/methods')
+      .then((res) => active && setMethods(res.data.methods))
+      .catch(() => {
+        /* cash on delivery stays available */
+      })
     return () => {
       active = false
     }
@@ -62,7 +79,7 @@ export default function Checkout() {
     setPlacing(true)
     try {
       const res = await api.post('/orders', {
-        paymentMethod: 'COD',
+        paymentMethod: method,
         shippingAddress: {
           fullName: form.fullName,
           phone: form.phone,
@@ -73,7 +90,7 @@ export default function Checkout() {
         },
       })
       setCount(0)
-      navigate('/order-placed', { replace: true, state: { orders: res.data.orders } })
+      navigate('/order-placed', { replace: true, state: { orders: res.data.orders, online: method === 'ONLINE_GATEWAY' } })
     } catch (err) {
       setFieldErrors(getFieldErrors(err))
       setPlacing(false)
@@ -175,16 +192,38 @@ export default function Checkout() {
 
           <fieldset className="rounded-lg border border-line bg-white p-6">
             <legend className="font-display px-1.5 text-lg font-semibold tracking-tight text-ink">Payment</legend>
-            <div className="mt-2 flex items-start gap-3.5 rounded-md border-2 border-ink bg-paper p-5">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-cream text-clay">
-                <Banknote className="h-5 w-5" aria-hidden="true" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-ink">Cash on delivery</p>
-                <p className="mt-1 text-[13px] leading-relaxed text-muted">
-                  Pay in cash when each order arrives. Nothing is charged online.
-                </p>
-              </div>
+            <div className="mt-2 space-y-3">
+              {methods.map((m) => {
+                const selected = method === m.method
+                const online = m.method === 'ONLINE_GATEWAY'
+                const Icon = online ? CreditCard : Banknote
+                return (
+                  <label
+                    key={m.method}
+                    className={`flex cursor-pointer items-start gap-3.5 rounded-md border-2 p-5 ${selected ? 'border-ink bg-paper' : 'border-line bg-white'}`}
+                  >
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value={m.method}
+                      checked={selected}
+                      onChange={() => setMethod(m.method)}
+                      className="mt-3.5"
+                    />
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-cream text-clay">
+                      <Icon className="h-5 w-5" aria-hidden="true" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-ink">{online ? m.label : 'Cash on delivery'}</p>
+                      <p className="mt-1 text-[13px] leading-relaxed text-muted">
+                        {online
+                          ? `Pay now through our payment partner. Your order is held for ${m.holdMinutes} minutes while you pay; if it is not paid by then it is cancelled.`
+                          : 'Pay in cash when each order arrives. Nothing is charged online.'}
+                      </p>
+                    </div>
+                  </label>
+                )
+              })}
             </div>
           </fieldset>
 

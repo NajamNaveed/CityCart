@@ -14,9 +14,11 @@ import ProductImage from '../../components/ProductImage'
 import RequireCustomer from '../../components/RequireCustomer'
 import StatusPill from '../../components/StatusPill'
 import { useAuth } from '../../hooks/useAuth'
+import { useRefreshOnForeground } from '../../hooks/useRefreshOnForeground'
 import { useRemote } from '../../hooks/useRemote'
+import PayNowButton from '../../components/PayNowButton'
 import { getErrorMessage } from '../../services/api'
-import { canCancel, cancelOrder, CODE_VISIBLE_STATUSES, fetchDeliveryCode, fetchOrder, fetchReceipt, TERMINAL_PROBLEMS } from '../../services/orders'
+import { awaitingPayment, canCancel, cancelOrder, CODE_VISIBLE_STATUSES, fetchDeliveryCode, fetchOrder, fetchReceipt, isOnline, TERMINAL_PROBLEMS } from '../../services/orders'
 import { formatDateTime, formatPrice, humanize } from '../../utils/format'
 import { isObjectId } from '../../utils/ids'
 import { colors, radius, spacing } from '../../theme'
@@ -149,6 +151,18 @@ function OrderView({ data, refreshing, onRefresh, onChanged }) {
         {canCancel(order) ? <Button title="Cancel order" variant="outline" onPress={confirmCancel} loading={cancelling} /> : null}
       </Section>
 
+      {awaitingPayment({ order, payment }) ? (
+        <Section title="Waiting for your payment">
+          <Card style={{ gap: spacing.md }}>
+            <AppText variant="small">
+              {payment.expiresAt ? `Pay before ${new Date(payment.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, or this order is cancelled and its items go back on sale. ` : ''}
+              The brand starts on your order once the payment is confirmed.
+            </AppText>
+            <PayNowButton orderId={order._id} />
+          </Card>
+        </Section>
+      ) : null}
+
       {showCode ? <DeliveryCode deliveryId={delivery._id} /> : null}
 
       <Section title="Items">
@@ -181,7 +195,9 @@ function OrderView({ data, refreshing, onRefresh, onChanged }) {
             <Row label="Total" value={formatPrice(order.total)} strong />
           </View>
           <AppText variant="small" style={{ fontSize: 12 }}>
-            {payment?.status === 'PAID' ? 'Paid in cash on delivery.' : 'Pay in cash when your order arrives.'}
+            {payment?.status === 'PAID'
+              ? isOnline(order) ? 'Paid online.' : 'Paid in cash on delivery.'
+              : isOnline(order) ? 'To be paid online.' : 'Pay in cash when your order arrives.'}
           </AppText>
           {paid ? <ReceiptNote orderId={order._id} /> : null}
         </Card>
@@ -242,6 +258,10 @@ export default function OrderScreen() {
     setChanged(null)
     remote.reload()
   }
+  // Back from paying in the browser: look again, so a payment that went through shows at once.
+  useRefreshOnForeground(() => {
+    if (data && awaitingPayment(data)) refresh()
+  })
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: colors.paper }}>

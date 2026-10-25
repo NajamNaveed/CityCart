@@ -56,7 +56,16 @@ if (env.nodeEnv === 'production') {
 app.use(helmet());
 app.use(requestLogger);
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '100kb' }));
+// The gateway's payment notifications are verified by a signature over the exact bytes it sent,
+// so for those routes (and only those) the raw body is kept next to the parsed one.
+app.use(
+  express.json({
+    limit: '100kb',
+    verify: (req, res, buf) => {
+      if (req.originalUrl.startsWith('/api/v1/payments/webhooks/')) req.rawBody = buf;
+    },
+  })
+);
 app.use(express.urlencoded({ extended: true }));
 // Required to populate req.cookies for the HTTP-only auth cookie (see
 // config/cookie.js and middleware/authenticate.js).

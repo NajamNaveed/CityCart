@@ -602,3 +602,103 @@ never created, edited or deleted through the API.
 
 Endpoints are in `05-api-specification.md` §22c.
 
+---
+
+# 29. Online Payments (added October 2026)
+
+Customers can pay for an order online, through a hosted payment page, besides cash on
+delivery. This chapter makes sections 16 to 19 concrete. **Status: built and tested with a
+built-in TEST gateway; a real gateway is added later as one more provider file.**
+
+## 29.1 Rules (never break these)
+
+1. Only a **verified gateway notification** marks an online payment `PAID`: never the app,
+   never the customer, never a redirect back from the gateway.
+2. Every notification is applied **at most once**, together with the change it causes.
+3. Money that nothing can accept (a cancelled or expired order, a second payment, a wrong
+   amount, an unknown reference) is **never applied silently**: it is recorded for review.
+4. **Card data is never stored or seen.** CityCart keeps only the provider's reference, the
+   provider's name and the status.
+5. The test gateway **cannot be switched on in production**.
+
+## 29.2 Providers
+
+Code: `server/src/payments/`. A provider is one file with `name`, `label`,
+`createCheckout({ payment, order })` (returns a reference and the hosted page's address) and
+`verifyWebhook(rawBody, headers)` (checks the signature over the raw bytes and returns
+`{ eventId, reference, status: PAID|FAILED, amount, currency }`). The registry in
+`payments/index.js` lists them; `activeProvider()` is `null` unless a known provider is named
+**and** `PAYMENT_WEBHOOK_SECRET` has at least 16 characters.
+
+* `mock` (`payments/mock.provider.js`): the TEST gateway. It serves a checkout page
+  (`GET /payments/mock-checkout/:reference`, with Pay and Fail buttons) and tells the server
+  about the result with a **signed** notification (HMAC-SHA256 of the raw body, header
+  `X-CityCart-Signature: sha256=<hex>`) that goes through exactly the same code as a real
+  gateway's. No money moves. Use it for development, demos and automated tests.
+* **A real gateway** (to do: needs the owner's sandbox account and the gateway's official
+  documentation): add `payments/<name>.provider.js` with the same members and register it.
+  Nothing else changes. Live card payments also need a registered business with the gateway.
+
+## 29.3 Environment
+
+| Variable | Meaning |
+|---|---|
+| `PAYMENT_PROVIDER` | `none` (default, cash only) or a provider name (`mock`) |
+| `PAYMENT_WEBHOOK_SECRET` | Signs and verifies notifications; 16+ random characters; secret |
+| `PUBLIC_API_URL` | The address phones and browsers can reach this server at (used to build the test gateway's page address) |
+| `ONLINE_PAYMENT_HOLD_MINUTES` | How long an unpaid online order keeps its stock (5 to 240, default 30) |
+
+## 29.4 The flow
+
+1. `GET /payments/methods` (customer): `COD`, plus `ONLINE_GATEWAY` while a provider is on.
+2. **Checkout** with `paymentMethod: ONLINE_GATEWAY` creates the usual orders (one per brand,
+   stock deducted exactly as for cash) and one payment per order, `PENDING`, with `expiresAt`
+   = now + the hold. Refused with `400 ONLINE_PAYMENTS_UNAVAILABLE` while no provider is on.
+   (`CARD`, `BANK_TRANSFER` and `WALLET` are still not accepted.)
+3. `POST /payments/order/:orderId/checkout` (customer, own order only) returns the hosted
+   page's address. Idempotent: it reuses the payment's reference. Errors: `404` not yours,
+   `409 NOT_ONLINE`, `ALREADY_PAID`, `NOT_PAYABLE`, `PAYMENT_EXPIRED`; `503
+   ONLINE_PAYMENTS_UNAVAILABLE`.
+4. The customer pays on the gateway's page. The gateway calls
+   `POST /payments/webhooks/:provider` (no login; authenticated by the signature, checked
+   before anything else, on the raw body). Answers: `401` bad signature, `400` malformed,
+   `404` unknown provider or payments off, otherwise **`200` with the outcome** so the gateway
+   stops retrying.
+5. Outcomes (stored as `PaymentEvent`, unique on provider + eventId):
+
+| Outcome | Meaning | What changed |
+|---|---|---|
+| `PAID` | Payment was pending and the amount matched | Payment `PAID`, order `paymentStatus` `PAID`, customer notified, receipt issued (after commit) |
+| `FAILED_ATTEMPT` | The customer's attempt failed | Nothing. The payment stays pending so they can try again until the hold ends |
+| `LATE_PAYMENT` | Money arrived for a cancelled, expired or failed payment | Nothing applied. **Needs a refund** |
+| `DUPLICATE_PAYMENT` | Money arrived again for an already paid payment | Nothing applied. **Needs a refund** |
+| `AMOUNT_MISMATCH` | Amount or currency differs | Nothing applied |
+| `UNKNOWN_PAYMENT` | No payment has this reference | Nothing applied |
+| `DUPLICATE_EVENT` (answer only) | The same notification again | Nothing (the unique index rejects it) |
+
+   The super admin reviews them at `GET /payments/events?outcome=` (the cases that need a
+   human are `LATE_PAYMENT`, `DUPLICATE_PAYMENT`, `AMOUNT_MISMATCH`).
+6. **The brand cannot confirm an unpaid online order:** `PATCH /brand/orders/:id/status` to
+   `CONFIRMED` needs cash on delivery or a paid payment (`409 PAYMENT_PENDING`). Rejecting is
+   still allowed and restocks.
+7. **Not paid in time:** a timer inside the server (`jobs/paymentExpiry.js`, every minute,
+   only while a provider is on) cancels online orders whose hold ended, returns their stock,
+   cancels the payment, and tells the customer and the brand. Each order is cancelled by one
+   atomic conditional update (still `PENDING` and unpaid), so running twice, on two servers, or
+   against the customer's own cancel can never restock twice.
+8. **The customer cannot cancel an order that is already paid online** (`409
+   PAID_ORDER_NOT_CANCELLABLE`): they ask the brand to reject it. A rejected paid order is
+   refunded with the existing refund endpoint (section 13).
+
+## 29.5 Limits of this version
+
+* **Refunds are records.** Marking a payment refunded does not send money back through the
+  gateway; the brand returns it in the gateway's dashboard. A real provider's refund call
+  belongs in its adapter.
+* One payment per order: a cart with several brands is paid in several steps (a Pay button per order).
+* The test gateway's page is plain HTML; a real gateway shows its own page.
+* Online receipts are issued like cash ones (section 28) but have no collector.
+
+Related code: `services/onlinePayment.service.js`, `controllers/onlinePayment.controller.js`,
+`models/paymentEvent.model.js`, `routes/payment.routes.js`, `jobs/paymentExpiry.js`.
+

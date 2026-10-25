@@ -57,6 +57,19 @@ const env = {
     apiKey: (process.env.CLOUDINARY_API_KEY || '').trim(),
     apiSecret: (process.env.CLOUDINARY_API_SECRET || '').trim(),
   },
+  // Online payments (docs/10 §29). `provider` is 'none' until a gateway is set up; 'mock' is
+  // a built-in TEST gateway for development and demos and is refused in production.
+  // The webhook secret signs and verifies gateway notifications. The hold is how long
+  // stock is kept for an online order that has not been paid yet.
+  payments: {
+    provider: (process.env.PAYMENT_PROVIDER || 'none').trim().toLowerCase(),
+    webhookSecret: (process.env.PAYMENT_WEBHOOK_SECRET || '').trim(),
+    publicApiUrl: (process.env.PUBLIC_API_URL || '').trim().replace(/\/+$/, ''),
+    holdMinutes: (() => {
+      const minutes = Number((process.env.ONLINE_PAYMENT_HOLD_MINUTES || '').trim());
+      return Number.isFinite(minutes) && minutes >= 5 ? Math.min(minutes, 240) : 30;
+    })(),
+  },
   // How long a terminated brand's staff keep (read-only) access, in hours.
   // 0 = cut off immediately. Capped at 30 days.
   terminationGraceHours: (() => {

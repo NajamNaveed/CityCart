@@ -183,6 +183,15 @@ CLOUDINARY_API_KEY
 CLOUDINARY_API_SECRET
 ```
 
+Online payments (docs/10 §29), all optional; without them customers can only pay cash on delivery:
+
+```text
+PAYMENT_PROVIDER            none | mock (TEST gateway, refused in production) | a real provider
+PAYMENT_WEBHOOK_SECRET      16+ random characters; signs and verifies gateway notifications
+PUBLIC_API_URL              the server's public address (used to build the test gateway's page)
+ONLINE_PAYMENT_HOLD_MINUTES minutes an unpaid online order keeps its stock (5-240, default 30)
+```
+
 Future:
 
 ```text

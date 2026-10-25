@@ -181,14 +181,16 @@ async function notifyCustomerOfOrderStatus(order, status) {
 }
 
 /** A customer cancelled; the brand's order viewers need to know (docs/12 §6). */
-async function notifyBrandOfCancelledOrder(order) {
+async function notifyBrandOfCancelledOrder(order, { expired = false } = {}) {
   if (!order) return;
   const staff = await brandStaffIds(order.brandId, { anyOf: [PERMISSIONS.ORDERS_VIEW] });
   await notify({
     userIds: staff,
     type: 'ORDER_CANCELLED',
     title: 'Order cancelled',
-    message: `The customer cancelled order ${order.orderNumber}. Stock has been returned.`,
+    message: expired
+      ? `Order ${order.orderNumber} was cancelled because the online payment was not completed in time. Stock has been returned.`
+      : `The customer cancelled order ${order.orderNumber}. Stock has been returned.`,
     data: orderData(order),
   });
 }
@@ -246,6 +248,18 @@ async function notifyEmployeeCreated({ userId, brandId, brandName, jobTitle }) {
     title: 'Welcome to the team',
     message: `You have been added to the ${brandName} team${jobTitle ? ` as ${jobTitle}` : ''}.`,
     data: { brandId: String(brandId) },
+  });
+}
+
+/** An online order was not paid in time; it was cancelled and its stock released (docs/10 §29). */
+async function notifyPaymentExpired(order) {
+  if (!order) return;
+  await notify({
+    userIds: [order.customerId],
+    type: 'PAYMENT_FAILED',
+    title: 'Order cancelled: payment not received',
+    message: `Order ${order.orderNumber} was cancelled because the online payment was not completed in time. You can place it again.`,
+    data: orderData(order),
   });
 }
 
@@ -424,6 +438,7 @@ module.exports = {
   notifyEmployeeCreated: bestEffort(notifyEmployeeCreated),
   notifyEmployeePermissionsChanged: bestEffort(notifyEmployeePermissionsChanged),
   notifyRiderAssigned: bestEffort(notifyRiderAssigned),
+  notifyPaymentExpired: bestEffort(notifyPaymentExpired),
   notifyBrandOfNewReview: bestEffort(notifyBrandOfNewReview),
   notifySuperAdminsOfNewBrand: bestEffort(notifySuperAdminsOfNewBrand),
   notifyBrandOwnerWelcome: bestEffort(notifyBrandOwnerWelcome),

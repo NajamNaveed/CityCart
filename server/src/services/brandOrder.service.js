@@ -65,16 +65,23 @@ async function updateBrandOrderStatus({ brandId, orderId, status, userId }) {
       update.$set.paymentStatus = 'CANCELLED';
     }
 
-    const order = await Order.findOneAndUpdate(
-      { _id: orderId, brandId, orderStatus: { $in: legalSourcesFor(status) } },
-      update,
-      { new: true, session }
-    );
+    // An order paid online is not processed until the gateway has confirmed the money
+    // (docs/10 §29). Cash on delivery has nothing to wait for.
+    const filter = { _id: orderId, brandId, orderStatus: { $in: legalSourcesFor(status) } };
+    if (status === 'CONFIRMED') {
+      filter.$or = [{ paymentMethod: 'COD' }, { paymentStatus: 'PAID' }];
+    }
+    const order = await Order.findOneAndUpdate(filter, update, { new: true, session });
 
     if (!order) {
       const existing = await Order.findOne({ _id: orderId, brandId }).session(session);
       if (!existing) {
         throw new OrderError(404, 'Order not found.');
+      }
+      if (status === 'CONFIRMED' && existing.paymentMethod !== 'COD' && existing.paymentStatus !== 'PAID' && legalSourcesFor(status).includes(existing.orderStatus)) {
+        throw new OrderError(409, 'This order has not been paid yet. Wait for the online payment to be confirmed.', {
+          code: 'PAYMENT_PENDING',
+        });
       }
       throw new OrderError(409, `Cannot change an order from ${existing.orderStatus} to ${status}.`, {
         code: 'INVALID_TRANSITION',

@@ -8,6 +8,8 @@ const Inventory = require('../models/inventory.model');
 const Counter = require('../models/counter.model');
 const { runInTransaction } = require('../utils/transaction');
 const { deliveryForCustomer } = require('../utils/deliveryView');
+const { activeProvider } = require('../payments');
+const env = require('../config/env');
 const { evaluateLine } = require('./cart.service');
 const { deductStock, restockStock, getStockStatus, InventoryError } = require('./inventory.service');
 const {
@@ -77,6 +79,15 @@ function toAddressSnapshot(a) {
  * sees an empty cart.
  */
 async function checkout(userId, { shippingAddress, paymentMethod }) {
+  // Paying online is only possible while a payment provider is switched on (docs/10 §29).
+  const online = paymentMethod === 'ONLINE_GATEWAY';
+  if (online && !activeProvider()) {
+    throw new OrderError(400, 'Online payment is not available right now. Please choose cash on delivery.', {
+      code: 'ONLINE_PAYMENTS_UNAVAILABLE',
+    });
+  }
+  // An unpaid online order only holds its stock for a while; then it is cancelled (see onlinePayment.service).
+  const expiresAt = online ? new Date(Date.now() + env.payments.holdMinutes * 60 * 1000) : undefined;
   const address = toAddressSnapshot(shippingAddress);
   // Stock states that flipped to LOW/OUT during deduction, for the staff
   // alert after the transaction commits.
@@ -214,6 +225,7 @@ async function checkout(userId, { shippingAddress, paymentMethod }) {
         currency: CURRENCY,
         method: paymentMethod,
         status: 'PENDING',
+        ...(expiresAt && { expiresAt }),
       })),
       { session, ordered: true }
     );
@@ -331,7 +343,8 @@ async function getOrderForUser(user, orderId) {
 async function cancelMyOrder(userId, orderId) {
   const order = await runInTransaction(async (session) => {
     const order = await Order.findOneAndUpdate(
-      { _id: orderId, customerId: userId, orderStatus: { $in: CANCELLABLE_BY_CUSTOMER } },
+      // An order that is already PAID (online) cannot be cancelled here: the money would be stuck.
+      { _id: orderId, customerId: userId, orderStatus: { $in: CANCELLABLE_BY_CUSTOMER }, paymentStatus: { $ne: 'PAID' } },
       {
         $set: { orderStatus: 'CANCELLED', paymentStatus: 'CANCELLED' },
         $push: { statusHistory: { status: 'CANCELLED', by: userId, at: new Date() } },
@@ -343,6 +356,11 @@ async function cancelMyOrder(userId, orderId) {
       const existing = await Order.findOne({ _id: orderId, customerId: userId }).session(session);
       if (!existing) {
         throw new OrderError(404, 'Order not found.');
+      }
+      if (existing.paymentStatus === 'PAID' && CANCELLABLE_BY_CUSTOMER.includes(existing.orderStatus)) {
+        throw new OrderError(409, 'This order is already paid. Ask the brand to reject it, which refunds you.', {
+          code: 'PAID_ORDER_NOT_CANCELLABLE',
+        });
       }
       throw new OrderError(409, `An order that is ${existing.orderStatus} cannot be cancelled.`, {
         code: 'NOT_CANCELLABLE',

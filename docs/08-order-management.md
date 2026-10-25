@@ -632,6 +632,8 @@ The MVP initially supports:
 Cash on Delivery
 ```
 
+(Online payment was added in October 2026: `paymentMethod: ONLINE_GATEWAY`, see `10-payment-system.md` §29. An online order is created `PENDING` like any other, but the brand cannot confirm it until the payment is `PAID`, an unpaid one is cancelled automatically when its stock hold ends, and a customer cannot cancel one that is already paid.)
+
 The order should still have a payment reference/status.
 
 Example:

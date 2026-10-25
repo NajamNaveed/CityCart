@@ -14,12 +14,12 @@ the work up cold. Read it first, then the documents it points to.
 | D0 | **Returns backend** (found missing, see §6.1); version-one design approved | Not started |
 | C | `partner/` Expo app: sign-in and rider screens; the shopper app and website show the delivery code and receipt | **Done** (not yet run on a real phone, see §5.4) |
 | D | Records screens in the same app: orders, deliveries and rider assignment, receipts, cash hand-over (no returns tab until D0) | **Done** (not yet run on a real phone, see §5.5) |
-| E | Card / online payments with a hosted gateway and signed webhook | Not started (gateway not chosen) |
+| E | Online payments: hosted gateway, signed webhook, stock hold and release, Pay now in the shopper app and website | **Built and tested with a built-in TEST gateway.** A real gateway adapter is still to do (needs the owner's sandbox account), see §5.6 |
 | F | Optional: push notification on assignment, rider live location | Not started |
 
 Server test suite: 940 tests before the programme, 1,047 after Phase A, 1,090
-after Phase B, 1,097 after Phase C (unchanged by Phase D). The Partner app has its own 142 tests and the
-shopper app (`mobile/`) 251. All pass; lint is clean everywhere. The real-MongoDB integration suite
+after Phase B, 1,097 after Phase C (unchanged by Phase D), 1,158 after Phase E. The Partner app has its own 143 tests and the
+shopper app (`mobile/`) 267. All pass; lint is clean everywhere. The real-MongoDB integration suite
 (`npm run test:integration`) could not be run by the author (no MongoDB binary
 download in the build sandbox) and should be run by the owner after applying
 each phase.
@@ -320,6 +320,19 @@ Main files: `partner/src/app/(records)/*`, `partner/src/app/{order,shipment,rece
 `partner/src/services/records.js`, `partner/src/utils/permissions.js`,
 `partner/src/components/{FilterChips,ListRow,ListScreen,StatusPill}.jsx`.
 
+### 5.6 Phase E: online payments
+
+Full rules, flow, outcome table and limits are in `10-payment-system.md` §29; this is the summary for whoever continues.
+
+* **Built:** a provider layer (`server/src/payments/`) with a **TEST gateway** (`mock`) that works exactly like a hosted-checkout gateway: a checkout page, and a **signed** webhook processed by the same code a real gateway will use. `ONLINE_GATEWAY` is accepted at checkout only while `PAYMENT_PROVIDER` names a provider and `PAYMENT_WEBHOOK_SECRET` is strong; the test gateway is refused in production.
+* **Safety rules built and tested:** signature checked on the raw bytes before any database access; each notification applied at most once (unique `provider + eventId`, applied in the same transaction as the payment change); wrong amount or currency, unknown reference, late payment (after the order expired or was cancelled) and duplicate payment are recorded in `PaymentEvent` and never applied (`GET /payments/events`, super admin); the brand cannot confirm an unpaid online order; the customer cannot cancel a paid one; the receipt and customer notification happen after the commit.
+* **Stock:** stock is deducted at checkout as before and **held for `ONLINE_PAYMENT_HOLD_MINUTES`** (default 30). A timer in the server (`jobs/paymentExpiry.js`, no new package) cancels unpaid online orders, restocks and notifies, with one atomic conditional update per order so it can never restock twice.
+* **Customer screens:** the website's checkout and the shopper app's checkout offer "Online payment" when `GET /payments/methods` lists it; after placing, each order has **Pay now** (opens the gateway page); the order page shows "Waiting for your payment" with the deadline, and the shopper app looks again when the app comes back to the foreground, so a payment that went through shows at once.
+* **Partner app:** no change needed. Online orders have no cash to collect (the rider screen says "Already paid online"), no collector, and nothing to settle; receipts show the method.
+* **Demo:** `npm run seed:demo` makes about a quarter of the delivered orders paid online (provider `mock`). To try the whole flow live, set in `server/.env`: `PAYMENT_PROVIDER=mock`, `PAYMENT_WEBHOOK_SECRET=<16+ random characters>`, `PUBLIC_API_URL=http://<your computer's Wi-Fi address>:5000`, restart, choose "Online payment" at checkout, tap Pay now, and press **Pay now** on the test page.
+* **Not built (to do, in this order):** (1) a **real gateway adapter** (owner must open a sandbox account and verify the gateway's current official documentation: signature scheme, hosted-checkout request, refund API; add one `payments/<name>.provider.js`, register it, and add provider-specific tests; live card payments also need a registered business); (2) **real refunds through the gateway** (today a refund is only recorded; the brand returns the money in the gateway's dashboard); (3) one payment for a multi-brand cart (today one payment per order); (4) a screen in the website's admin area and in the app for the super admin's `LATE_PAYMENT` / `DUPLICATE_PAYMENT` review list (API exists).
+* **Not verified:** a real gateway (none was available), a physical phone, and the server's real-MongoDB integration tests (the webhook transaction's rollback of a duplicate event is proven only with mocks here; run `npm run test:integration` and consider adding an integration test for it).
+
 ## 6. What is left
 
 ### 6.1 Phase D0: returns backend (found missing, must precede the returns screen)
@@ -351,26 +364,9 @@ app and on the website are built; details and the one thing still to verify are 
 
 The returns tab is the only part of the records app still missing, and it waits for Phase D0 (§6.1).
 
-### 6.4 Phase E: card and online payments
+### 6.4 Phase E: built with the test gateway (see §5.6)
 
-* The `Payment` model already allows `CARD`, `ONLINE_GATEWAY` etc.; only COD is
-  implemented. The owner must **choose a gateway available in Pakistan** (for
-  example Safepay, PayFast, JazzCash or Easypaisa; verify current sandbox
-  documentation and that the owner can get a merchant sandbox account before
-  coding).
-* Use the gateway's **hosted checkout**. CityCart stores only the transaction
-  reference, provider and status, never card numbers.
-* **Webhook**: a public endpoint, verified by the gateway's signature against the
-  raw request body (use Node's built-in `crypto`; no SDK needed unless the
-  gateway requires it), idempotent (docs/10 covers duplicate events), and the
-  **only** thing that marks an online payment `PAID`. On success call
-  `issueReceiptBestEffort(payment._id)`, so receipts come for free. Online
-  payments have no `collectedBy`, so they never appear in cash outstanding.
-* Open decision: when an order is confirmed for prepaid methods (after the
-  webhook, with a pending window and stock reservation). Settle this with the
-  owner and document it in `08` and `10` first.
-* Opening the hosted checkout from the shopper app may need an in-app browser
-  package; check `mobile/package.json` and prefer `Linking` before adding one.
+What remains is the real gateway adapter and real refunds (§5.6 "Not built").
 
 ### 6.5 Phase F: optional extras
 
@@ -459,11 +455,16 @@ tests; add the same for new rules, in the same style.
 | `CASH_CHANGED` | 409 | A listed payment is no longer unsettled for that collector |
 | `BRAND_TERMINATED` | 409 | A terminated brand cannot add riders |
 | `RIDER_HAS_OPEN_DELIVERIES` | 409 | Cannot deactivate a rider with open deliveries (`openDeliveries` in the body) |
+| `ONLINE_PAYMENTS_UNAVAILABLE` | 400 / 503 | No payment provider is switched on |
+| `PAYMENT_PENDING` | 409 | The brand tried to confirm an online order that is not paid yet |
+| `PAID_ORDER_NOT_CANCELLABLE` | 409 | The customer tried to cancel an order already paid online |
+| `PAYMENT_EXPIRED` / `ALREADY_PAID` / `NOT_PAYABLE` / `NOT_ONLINE` | 409 | Starting a payment that cannot be started |
 
 ## 11. Change log
 
 * **2026-10 Phase A** delivered: rider role and management, assignment, partner sign-in and rider endpoints, delivery code, web Riders page, demo data, docs.
 * **2026-10 Phase B** delivered: receipts, cash-on-delivery collection and settlement, rider cash view, demo data, docs.
 * **2026-10 Handoff** written; missing returns backend identified and added as Phase D0.
+* **2026-10 Phase E** delivered: online payments with a built-in test gateway (provider layer, signed webhook, idempotent events, stock hold and release, confirm/cancel rules, Pay now in the shopper app and website, demo data). Real gateway adapter pending.
 * **2026-10 Phase D** delivered: the records screens for brand team members (overview, orders, deliveries with rider assignment, receipts, cash hand-over), permission-based tabs, permissions loaded at sign-in, `StatusPill` for all statuses. No server changes.
 * **2026-10 Phase C** delivered: `partner/` app (sign-in, rider screens), delivery code and receipt in the shopper app and website, rider-deactivation guard, customer-safe delivery view, root scripts.

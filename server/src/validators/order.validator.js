@@ -37,10 +37,10 @@ const shippingAddressSchema = z.object({
     }),
 });
 
-// COD is the only method implemented in the MVP (docs/08 §25).
+// COD always; ONLINE_GATEWAY only while a payment provider is switched on (checked at checkout).
 const createOrderSchema = z.object({
   shippingAddress: shippingAddressSchema,
-  paymentMethod: z.literal('COD', { error: 'Only COD is supported' }),
+  paymentMethod: z.enum(['COD', 'ONLINE_GATEWAY'], { error: 'paymentMethod must be COD or ONLINE_GATEWAY' }),
 });
 
 const listOrdersQuerySchema = z.object({

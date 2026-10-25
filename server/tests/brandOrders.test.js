@@ -163,7 +163,8 @@ describe('PATCH /api/v1/brand/orders/:id/status', () => {
 
     expect(res.status).toBe(200);
     expect(Order.findOneAndUpdate).toHaveBeenCalledWith(
-      { _id: id.toString(), brandId: brandId.toString(), orderStatus: { $in: ['PENDING'] } },
+      // cash on delivery has nothing to wait for; an online order must have been paid first
+      { _id: id.toString(), brandId: brandId.toString(), orderStatus: { $in: ['PENDING'] }, $or: [{ paymentMethod: 'COD' }, { paymentStatus: 'PAID' }] },
       {
         $set: { orderStatus: 'CONFIRMED' },
         $push: { statusHistory: { status: 'CONFIRMED', by: user._id, at: expect.any(Date) } },
@@ -230,6 +231,43 @@ describe('PATCH /api/v1/brand/orders/:id/status', () => {
     Order.findOneAndUpdate.mockResolvedValue({ _id: oid(), items: [] });
     await patch(cookie, oid(), 'PROCESSING');
     expect(Delivery.create).not.toHaveBeenCalled();
+  });
+
+  describe('an order paid online is not processed until the gateway confirms the money', () => {
+    it('409 PAYMENT_PENDING when confirming an online order that is not paid yet', async () => {
+      const { cookie } = asRole(ROLES.BRAND_ADMIN);
+      Order.findOneAndUpdate.mockResolvedValue(null);
+      Order.findOne.mockReturnValue({ session: () => Promise.resolve({ orderStatus: 'PENDING', paymentMethod: 'ONLINE_GATEWAY', paymentStatus: 'PENDING' }) });
+
+      const res = await patch(cookie, oid(), 'CONFIRMED');
+
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe('PAYMENT_PENDING');
+    });
+
+    it('the confirm filter lets cash orders and PAID online orders through, and nothing else', async () => {
+      const { cookie } = asRole(ROLES.BRAND_ADMIN);
+      Order.findOneAndUpdate.mockResolvedValue({ _id: oid(), items: [] });
+      await patch(cookie, oid(), 'CONFIRMED');
+      expect(Order.findOneAndUpdate.mock.calls[0][0].$or).toEqual([{ paymentMethod: 'COD' }, { paymentStatus: 'PAID' }]);
+    });
+
+    it('rejecting an unpaid online order is still allowed (it restocks), and no payment gate applies to other steps', async () => {
+      const { cookie } = asRole(ROLES.BRAND_ADMIN);
+      Order.findOneAndUpdate.mockResolvedValue({ _id: oid(), items: [] });
+      await patch(cookie, oid(), 'REJECTED');
+      expect(Order.findOneAndUpdate.mock.calls[0][0]).not.toHaveProperty('$or');
+      await patch(cookie, oid(), 'PROCESSING');
+      expect(Order.findOneAndUpdate.mock.calls[1][0]).not.toHaveProperty('$or');
+    });
+
+    it('a cash order that cannot be confirmed for another reason still reports INVALID_TRANSITION', async () => {
+      const { cookie } = asRole(ROLES.BRAND_ADMIN);
+      Order.findOneAndUpdate.mockResolvedValue(null);
+      Order.findOne.mockReturnValue({ session: () => Promise.resolve({ orderStatus: 'SHIPPED', paymentMethod: 'COD', paymentStatus: 'PENDING' }) });
+      const res = await patch(cookie, oid(), 'CONFIRMED');
+      expect(res.body.code).toBe('INVALID_TRANSITION');
+    });
   });
 
   it('409 INVALID_TRANSITION (with allowed next steps) and NO restock for an illegal move', async () => {

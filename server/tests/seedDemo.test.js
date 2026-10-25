@@ -308,21 +308,44 @@ describe('demo dataset', () => {
       const receipt = ds.receipts.find((r) => id(r.paymentId) === id(p._id));
       expect(receipt).toBeDefined();
       expect(receipt.amount).toBe(p.amount);
-      expect(id(receipt.collectedBy)).toBe(id(p.collectedBy));
-      // cash was collected by someone of the same brand, and settling comes after collecting
-      const collector = ds.users.find((u) => id(u._id) === id(p.collectedBy));
-      expect(id(collector.brandId)).toBe(id(p.brandId));
-      if (p.settledAt) expect(p.settledAt >= p.collectedAt).toBe(true);
-      expect(Boolean(p.settledAt)).toBe(Boolean(p.settledBy));
+      expect(receipt.method).toBe(p.method);
+      if (p.method === 'COD') {
+        expect(id(receipt.collectedBy)).toBe(id(p.collectedBy));
+        // cash was collected by someone of the same brand, and settling comes after collecting
+        const collector = ds.users.find((u) => id(u._id) === id(p.collectedBy));
+        expect(id(collector.brandId)).toBe(id(p.brandId));
+        if (p.settledAt) expect(p.settledAt >= p.collectedAt).toBe(true);
+        expect(Boolean(p.settledAt)).toBe(Boolean(p.settledBy));
+      } else {
+        // paid online: nobody collected cash, so there is nothing to settle and no collector
+        ['collectedBy', 'collectedAt', 'settledAt', 'settledBy'].forEach((field) => expect(p[field]).toBeUndefined());
+        expect(receipt.collectedBy).toBeUndefined();
+      }
     });
     expect(unique(ds.receipts.map((r) => r.receiptNumber))).toBe(true);
     // some cash is still with its collector, some has been handed over
-    expect(paid.some((p) => p.settledAt)).toBe(true);
-    expect(paid.some((p) => !p.settledAt)).toBe(true);
+    const cash = paid.filter((p) => p.method === 'COD');
+    expect(cash.some((p) => p.settledAt)).toBe(true);
+    expect(cash.some((p) => !p.settledAt)).toBe(true);
     // riders collect the cash of the deliveries given to them
     ds.deliveries.filter((d) => d.status === 'DELIVERED' && d.riderId).forEach((d) => {
       const p = ds.payments.find((x) => id(x.orderId) === id(d.orderId));
-      expect(id(p.collectedBy)).toBe(id(d.riderId));
+      if (p.method === 'COD') expect(id(p.collectedBy)).toBe(id(d.riderId));
+    });
+  });
+
+  it('has orders paid online through the gateway, with their payment reference and stock-hold end', () => {
+    const online = ds.payments.filter((p) => p.method === 'ONLINE_GATEWAY');
+    expect(online.length).toBeGreaterThan(0);
+    online.forEach((p) => {
+      expect(p.status).toBe('PAID');
+      expect(p.provider).toBe('mock');
+      expect(p.transactionReference).toMatch(/^mock_[0-9a-f]{24}$/);
+      expect(p.expiresAt).toBeInstanceOf(Date);
+      expect(p.paidAt >= p.createdAt).toBe(true);
+      const order = ds.orders.find((o) => id(o._id) === id(p.orderId));
+      expect(order.paymentMethod).toBe('ONLINE_GATEWAY');
+      expect(order.paymentStatus).toBe('PAID');
     });
   });
 

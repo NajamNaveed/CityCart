@@ -334,13 +334,16 @@ function buildDataset({ now = new Date(), hashes }) {
         inTransit: brandKey === 'mehr' && status === 'SHIPPED',
       };
 
+      // Some delivered orders were paid online, up front, through the (test) gateway: no cash for the rider to collect.
+      const paidOnline = status === 'DELIVERED' && !flags.fullRefund && !flags.partRefund && ds.orders.length % 4 === 0;
+
       const order = {
         _id: new ObjectId(), orderNumber: '', customerId: customer.doc._id, brandId: brand.doc._id, items,
         shippingAddress: {
           name: customer.name, phone: customer.phone, address: customer.address, city: customer.city, state: customer.state,
           country: 'Pakistan', postalCode: customer.postalCode, ...(customer.note && { additionalInstructions: customer.note }),
         },
-        subtotal, deliveryFee, discount, tax, total, paymentMethod: 'COD',
+        subtotal, deliveryFee, discount, tax, total, paymentMethod: paidOnline ? 'ONLINE_GATEWAY' : 'COD',
         paymentStatus: status === 'CANCELLED' || status === 'REJECTED' ? 'CANCELLED' : status === 'DELIVERED' ? 'PAID' : 'PENDING',
         currency: 'PKR', orderStatus: status, statusHistory, ...(notes && { notes }), createdAt, updatedAt: finishedAt,
       };
@@ -350,11 +353,20 @@ function buildDataset({ now = new Date(), hashes }) {
 
       // payment
       const payment = {
-        _id: new ObjectId(), orderId: order._id, customerId: customer.doc._id, amount: total, method: 'COD', status: order.paymentStatus,
+        _id: new ObjectId(), orderId: order._id, customerId: customer.doc._id, amount: total, method: order.paymentMethod, status: order.paymentStatus,
         currency: 'PKR', createdAt, updatedAt: finishedAt, refundedAmount: 0, refunds: [],
+        // Online payments keep the end of their stock hold (settled long ago for these).
+        ...(paidOnline && { expiresAt: new Date(createdAt.getTime() + 30 * 60 * 1000) }),
       };
       let collector = null;
-      if (status === 'DELIVERED') {
+      if (paidOnline) {
+        // Paid through the gateway a few minutes after ordering. Nobody collected cash, so there is no
+        // collector and nothing to settle; the gateway reference stands in for the cash receipt reference.
+        Object.assign(payment, {
+          paidAt: new Date(createdAt.getTime() + 10 * 60 * 1000), provider: 'mock', transactionReference: `mock_${new ObjectId().toHexString()}`,
+        });
+        receiptJobs.push({ order, payment, brand, collector: null });
+      } else if (status === 'DELIVERED') {
         // Whoever completes the delivery takes the cash: the rider when the brand has riders (the same one
         // the delivery below is given to), otherwise the team member. Older cash has been handed over.
         collector = brand.riders.length ? brand.riders[ds.deliveries.length % brand.riders.length] : deliveryHandler;
@@ -426,7 +438,7 @@ function buildDataset({ now = new Date(), hashes }) {
       items: order.items.map((i) => ({ productName: i.productName, quantity: i.quantity, unitPrice: i.unitPrice, totalPrice: i.totalPrice })),
       subtotal: order.subtotal, deliveryFee: order.deliveryFee, discount: order.discount, tax: order.tax,
       transactionReference: payment.transactionReference, provider: payment.provider,
-      collectedBy: collector._id, collectedByName: collector.name, issuedAt: payment.paidAt, createdAt: payment.paidAt,
+      ...(collector && { collectedBy: collector._id, collectedByName: collector.name }), issuedAt: payment.paidAt, createdAt: payment.paidAt,
     });
   });
   for (const [year, seq] of Object.entries(receiptsPerYear)) ds.counters.push({ _id: `receipt-${year}`, seq });

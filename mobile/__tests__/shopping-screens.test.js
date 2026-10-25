@@ -3,7 +3,7 @@
  * checkout, order confirmation, orders list and order detail.
  */
 import React from 'react'
-import { Alert, Text } from 'react-native'
+import { Alert, AppState, Linking, Text } from 'react-native'
 import { act } from 'react-test-renderer'
 
 jest.setTimeout(30000)
@@ -38,7 +38,7 @@ jest.mock('../src/services/api', () => ({
 }))
 
 import api from '../src/services/api'
-import { rememberPlacedOrders, takePlacedOrders } from '../src/services/orders'
+import { awaitingPayment, fetchPaymentMethods, isOnline, orderBody, rememberPlacedOrders, startOnlinePayment, takePlacedOrders } from '../src/services/orders'
 import CartScreen from '../src/app/(tabs)/cart'
 import Checkout from '../src/app/checkout'
 import OrderPlaced from '../src/app/order-placed'
@@ -507,5 +507,229 @@ describe('Order detail', () => {
     expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/login', params: { next: `/orders/${ORDER._id}` } })
     expect(api.get).not.toHaveBeenCalled()
     expect(CUSTOMER.role).toBe('CUSTOMER')
+  })
+})
+
+describe('paying online', () => {
+  const ONLINE_METHODS = [{ method: 'COD', label: 'Cash on delivery' }, { method: 'ONLINE_GATEWAY', label: 'Online payment (test gateway)', holdMinutes: 30 }]
+  const fill = async (renderer) => {
+    const values = { Phone: '+92 300 1234567', 'Street address': 'House 41, Street 5', City: 'Faisalabad', 'Delivery notes': 'Blue gate, call on arrival.' }
+    for (const [label, value] of Object.entries(values)) await type(renderer, label, value)
+  }
+  const serveCheckout = (methods) =>
+    api.get.mockImplementation(async (url) => {
+      if (url === '/cart') return { data: { cart: CART } }
+      if (url === '/payments/methods') {
+        if (methods instanceof Error) throw methods
+        return { data: { methods } }
+      }
+      throw new Error(`unexpected GET ${url}`)
+    })
+
+  describe('the service', () => {
+    it('sends the chosen method with the order, cash by default', () => {
+      const form = { fullName: 'Sana', phone: '+92 300 1234567', addressLine: 'House 41', city: 'Faisalabad', additionalInstructions: 'Blue gate' }
+      expect(orderBody(form).paymentMethod).toBe('COD')
+      expect(orderBody(form, 'ONLINE_GATEWAY').paymentMethod).toBe('ONLINE_GATEWAY')
+    })
+
+    it('asks what can be paid with, and starts one order\'s payment', async () => {
+      api.get.mockResolvedValue({ data: { methods: ONLINE_METHODS } })
+      expect(await fetchPaymentMethods()).toEqual(ONLINE_METHODS)
+      expect(api.get).toHaveBeenCalledWith('/payments/methods')
+      api.post.mockResolvedValue({ data: { checkoutUrl: 'https://pay.example/x', expiresAt: null } })
+      expect((await startOnlinePayment(ID(5))).checkoutUrl).toBe('https://pay.example/x')
+      expect(api.post).toHaveBeenCalledWith(`/payments/order/${ID(5)}/checkout`)
+    })
+
+    it('knows which orders are waiting to be paid', () => {
+      const online = { _id: 'o', paymentMethod: 'ONLINE_GATEWAY', orderStatus: 'PENDING' }
+      expect(isOnline(online)).toBe(true)
+      expect(isOnline({ paymentMethod: 'COD' })).toBe(false)
+      expect(awaitingPayment({ order: online, payment: { status: 'PENDING' } })).toBe(true)
+      expect(awaitingPayment({ order: online, payment: { status: 'PAID' } })).toBe(false)
+      expect(awaitingPayment({ order: { ...online, orderStatus: 'CANCELLED' }, payment: { status: 'PENDING' } })).toBe(false)
+      expect(awaitingPayment({ order: { ...online, paymentMethod: 'COD' }, payment: { status: 'PENDING' } })).toBe(false)
+    })
+  })
+
+  describe('at checkout', () => {
+    it('offers only cash while no gateway is on, and when the question cannot be answered', async () => {
+      serveCheckout([{ method: 'COD', label: 'Cash on delivery' }])
+      expect(screenText(await show(<Checkout />, auth()))).not.toContain('Online payment')
+      serveCheckout(httpError(500, 'Server error'))
+      const text = screenText(await show(<Checkout />, auth()))
+      expect(text).toContain('Cash on delivery')
+      expect(text).not.toContain('Online payment')
+    })
+
+    it('offers both when a gateway is on, and says how long the order is held', async () => {
+      serveCheckout(ONLINE_METHODS)
+      const text = screenText(await show(<Checkout />, auth()))
+      expect(text).toContain('Cash on delivery')
+      expect(text).toContain('Online payment (test gateway)')
+      expect(text).toContain('held for 30 minutes')
+    })
+
+    it('pays cash unless the shopper chooses otherwise', async () => {
+      serveCheckout(ONLINE_METHODS)
+      api.post.mockResolvedValue({ data: { orders: [{ _id: ID(5), orderNumber: 'CC-1', total: 7200, items: [{}] }] } })
+      const renderer = await show(<Checkout />, auth())
+      await fill(renderer)
+      await press(renderer, 'Place order · Rs 9,700')
+      expect(api.post.mock.calls[0][1].paymentMethod).toBe('COD')
+    })
+
+    it('places the order as an online order when that is chosen', async () => {
+      serveCheckout(ONLINE_METHODS)
+      api.post.mockResolvedValue({ data: { orders: [{ _id: ID(5), orderNumber: 'CC-1', paymentMethod: 'ONLINE_GATEWAY', total: 7200, items: [{}] }] } })
+      const renderer = await show(<Checkout />, auth())
+      await pressByLabel(renderer, 'Online payment (test gateway)')
+      await fill(renderer)
+      await press(renderer, 'Place order · Rs 9,700')
+      expect(api.post.mock.calls[0][1].paymentMethod).toBe('ONLINE_GATEWAY')
+      expect(mockRouter.replace).toHaveBeenCalledWith('/order-placed')
+    })
+
+    it('says plainly if the server refuses online payment (it was switched off meanwhile)', async () => {
+      serveCheckout(ONLINE_METHODS)
+      api.post.mockRejectedValue(httpError(400, 'Online payment is not available right now. Please choose cash on delivery.', { code: 'ONLINE_PAYMENTS_UNAVAILABLE' }))
+      const renderer = await show(<Checkout />, auth())
+      await pressByLabel(renderer, 'Online payment (test gateway)')
+      await fill(renderer)
+      await press(renderer, 'Place order · Rs 9,700')
+      expect(screenText(renderer)).toContain('Please choose cash on delivery')
+    })
+  })
+
+  describe('after placing', () => {
+    const openUrl = () => jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined)
+
+    it('cash orders say pay on delivery and have no Pay buttons', async () => {
+      rememberPlacedOrders([{ _id: ID(5), orderNumber: 'CC-1', paymentMethod: 'COD', total: 7200, items: [{}] }])
+      const renderer = await show(<OrderPlaced />, auth())
+      expect(screenText(renderer)).toContain('Order placed!')
+      expect(screenText(renderer)).toContain('in cash when it arrives')
+      expect(screenText(renderer)).not.toContain('for CC-1') // no "Pay Rs ... for CC-1" button
+    })
+
+    it('online orders ask for payment, one Pay button per order, and open that order\'s gateway page', async () => {
+      const spy = openUrl()
+      rememberPlacedOrders([
+        { _id: ID(5), orderNumber: 'CC-1', paymentMethod: 'ONLINE_GATEWAY', total: 7200, items: [{}] },
+        { _id: ID(6), orderNumber: 'CC-2', paymentMethod: 'ONLINE_GATEWAY', total: 2500, items: [{}] },
+      ])
+      const renderer = await show(<OrderPlaced />, auth())
+      const text = screenText(renderer)
+      expect(text).toContain('One more step: pay')
+      expect(text).toContain('Pay Rs 9,700 online')
+      expect(text).toContain('Pay Rs 7,200 for CC-1')
+      expect(text).toContain('Pay Rs 2,500 for CC-2')
+
+      api.post.mockResolvedValue({ data: { checkoutUrl: 'https://pay.example/second' } })
+      await press(renderer, 'Pay Rs 2,500 for CC-2')
+      expect(api.post).toHaveBeenCalledWith(`/payments/order/${ID(6)}/checkout`)
+      expect(spy).toHaveBeenCalledWith('https://pay.example/second')
+      spy.mockRestore()
+    })
+
+    it('shows why paying could not start, and stays usable', async () => {
+      const spy = openUrl()
+      rememberPlacedOrders([{ _id: ID(5), orderNumber: 'CC-1', paymentMethod: 'ONLINE_GATEWAY', total: 7200, items: [{}] }])
+      const renderer = await show(<OrderPlaced />, auth())
+      api.post.mockRejectedValue(httpError(409, 'The time to pay for this order has ended.', { code: 'PAYMENT_EXPIRED' }))
+      await press(renderer, 'Pay Rs 7,200 for CC-1')
+      expect(screenText(renderer)).toContain('The time to pay for this order has ended.')
+      expect(spy).not.toHaveBeenCalled()
+      spy.mockRestore()
+    })
+  })
+
+  describe('on the order page', () => {
+    const ONLINE_ORDER = { ...ORDER, paymentMethod: 'ONLINE_GATEWAY' }
+    const serve = (order, payment) => {
+      mockParams = { id: order._id }
+      api.get.mockImplementation(async (url) => {
+        if (url === `/orders/${order._id}`) return { data: { order, payment, delivery: null } }
+        throw new Error(`unexpected GET ${url}`)
+      })
+    }
+
+    it('an unpaid online order shows when to pay by, and a Pay now button that opens the gateway', async () => {
+      const spy = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined)
+      serve(ONLINE_ORDER, { status: 'PENDING', expiresAt: new Date(Date.now() + 20 * 60 * 1000).toISOString() })
+      const renderer = await show(<OrderScreen />, auth())
+      const text = screenText(renderer)
+      expect(text).toContain('Waiting for your payment')
+      expect(text).toContain('Pay before')
+      expect(text).toContain('To be paid online.')
+
+      api.post.mockResolvedValue({ data: { checkoutUrl: 'https://pay.example/order' } })
+      await press(renderer, 'Pay now')
+      expect(api.post).toHaveBeenCalledWith(`/payments/order/${ONLINE_ORDER._id}/checkout`)
+      expect(spy).toHaveBeenCalledWith('https://pay.example/order')
+      spy.mockRestore()
+    })
+
+    it('a cash order never shows it', async () => {
+      serve(ORDER, { status: 'PENDING' })
+      const text = screenText(await show(<OrderScreen />, auth()))
+      expect(text).not.toContain('Waiting for your payment')
+      expect(text).toContain('Pay in cash when your order arrives')
+    })
+
+    it('a paid online order says so, and no longer asks for payment', async () => {
+      serve({ ...ONLINE_ORDER, orderStatus: 'CONFIRMED' }, { status: 'PAID' })
+      api.get.mockImplementation(async (url) => {
+        if (url === `/orders/${ONLINE_ORDER._id}`) return { data: { order: { ...ONLINE_ORDER, orderStatus: 'CONFIRMED' }, payment: { status: 'PAID' }, delivery: null } }
+        if (url === `/receipts/order/${ONLINE_ORDER._id}`) return { data: { receipt: { receiptNumber: 'RC-2026-000012', issuedAt: '2026-10-20T10:00:00Z' } } }
+        throw new Error(`unexpected GET ${url}`)
+      })
+      const text = screenText(await show(<OrderScreen />, auth()))
+      expect(text).toContain('Paid online.')
+      expect(text).toContain('Receipt RC-2026-000012')
+      expect(text).not.toContain('Waiting for your payment')
+    })
+
+    it('comes back from the browser and looks again, so a payment that went through shows at once', async () => {
+      let onChange
+      const listen = jest.spyOn(AppState, 'addEventListener').mockImplementation((event, handler) => {
+        onChange = handler
+        return { remove: jest.fn() }
+      })
+      serve(ONLINE_ORDER, { status: 'PENDING', expiresAt: new Date(Date.now() + 20 * 60 * 1000).toISOString() })
+      const renderer = await show(<OrderScreen />, auth())
+      expect(screenText(renderer)).toContain('Waiting for your payment')
+      const reads = api.get.mock.calls.length
+
+      // the shopper paid in the browser and returns to the app
+      api.get.mockImplementation(async (url) => {
+        if (url === `/orders/${ONLINE_ORDER._id}`) return { data: { order: { ...ONLINE_ORDER, orderStatus: 'CONFIRMED' }, payment: { status: 'PAID' }, delivery: null } }
+        if (url === `/receipts/order/${ONLINE_ORDER._id}`) throw new Error('none yet')
+        throw new Error(`unexpected GET ${url}`)
+      })
+      await act(async () => onChange('active'))
+      await tick()
+
+      expect(api.get.mock.calls.length).toBeGreaterThan(reads)
+      expect(screenText(renderer)).not.toContain('Waiting for your payment')
+      expect(screenText(renderer)).toContain('Paid online.')
+      listen.mockRestore()
+    })
+
+    it('does not reload on every return to the app once nothing is waiting for payment', async () => {
+      let onChange
+      const listen = jest.spyOn(AppState, 'addEventListener').mockImplementation((event, handler) => {
+        onChange = handler
+        return { remove: jest.fn() }
+      })
+      serve(ORDER, { status: 'PENDING' })
+      await show(<OrderScreen />, auth())
+      const reads = api.get.mock.calls.length
+      await act(async () => onChange('active'))
+      await tick()
+      expect(api.get.mock.calls.length).toBe(reads)
+      listen.mockRestore()
+    })
   })
 })

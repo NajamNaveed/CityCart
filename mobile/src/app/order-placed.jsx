@@ -5,7 +5,8 @@ import Feather from '@expo/vector-icons/Feather'
 import AppText from '../components/ui/AppText'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
-import { takePlacedOrders } from '../services/orders'
+import PayNowButton from '../components/PayNowButton'
+import { isOnline, takePlacedOrders } from '../services/orders'
 import { formatPrice } from '../utils/format'
 import { colors, spacing } from '../theme'
 
@@ -18,6 +19,8 @@ export default function OrderPlaced() {
 
   const total = orders.reduce((sum, order) => sum + (order.total || 0), 0)
   const many = orders.length > 1
+  // Paid online: each order is paid on its own (one payment per brand).
+  const online = orders.some(isOnline)
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.paper }}>
@@ -27,17 +30,20 @@ export default function OrderPlaced() {
         </View>
         <View style={{ alignItems: 'center', gap: spacing.xs }}>
           <AppText variant="title" accessibilityRole="header" style={{ textAlign: 'center' }}>
-            Order placed!
+            {online ? 'One more step: pay' : 'Order placed!'}
           </AppText>
           <AppText variant="small" style={{ textAlign: 'center' }}>
-            {many ? `Your cart had ${orders.length} brands, so we created ${orders.length} orders.` : 'The brand has been notified and will confirm it shortly.'} Pay {formatPrice(total)} in cash when
-            {many ? ' they arrive.' : ' it arrives.'}
+            {many ? `Your cart had ${orders.length} brands, so we created ${orders.length} orders.` : online ? 'The brand will confirm it as soon as your payment arrives.' : 'The brand has been notified and will confirm it shortly.'}{' '}
+            {online
+              ? `Pay ${formatPrice(total)} online. Each order is paid on its own, and an order that is not paid in time is cancelled.`
+              : `Pay ${formatPrice(total)} in cash when ${many ? 'they arrive.' : 'it arrives.'}`}
           </AppText>
         </View>
 
         <View style={{ alignSelf: 'stretch', gap: spacing.md }}>
           {orders.map((order) => (
-            <Pressable key={order._id} onPress={() => router.replace(`/orders/${order._id}`)} accessibilityRole="button" accessibilityLabel={`Order ${order.orderNumber}, ${formatPrice(order.total)}. Track it`}>
+            <View key={order._id} style={{ gap: spacing.sm }}>
+            <Pressable onPress={() => router.replace(`/orders/${order._id}`)} accessibilityRole="button" accessibilityLabel={`Order ${order.orderNumber}, ${formatPrice(order.total)}. Track it`}>
               <Card style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
                 <View style={{ flex: 1 }}>
                   <AppText variant="strong">{order.orderNumber}</AppText>
@@ -51,6 +57,8 @@ export default function OrderPlaced() {
                 <Feather name="chevron-right" size={18} color={colors.muted} />
               </Card>
             </Pressable>
+            {isOnline(order) ? <PayNowButton orderId={order._id} title={`Pay ${formatPrice(order.total)} for ${order.orderNumber}`} /> : null}
+            </View>
           ))}
         </View>
 

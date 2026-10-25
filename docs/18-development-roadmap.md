@@ -976,8 +976,9 @@ Phase D  Partner app: records screens (overview, orders, deliveries with   DONE
          rider assignment, receipts, cash hand-over). The returns tab waits for
          D0. (Not yet run on a physical phone.)
 
-Phase E  Card / online payments through a hosted gateway checkout with a
-         signed webhook. Card data is never stored. Gateway not chosen yet.
+Phase E  Online payments through a hosted gateway checkout with a signed   BUILT
+         webhook. Built and tested with a TEST gateway; a real gateway adapter
+         and real refunds are still to do (docs/20 §5.6). Card data is never stored.
 
 Phase F  Optional: push notification on assignment, rider live location.
 ```

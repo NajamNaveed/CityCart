@@ -2,6 +2,7 @@ import { Link, Navigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Check, Package } from 'lucide-react'
 import { Reveal } from '../components/ui'
+import PayNow from '../components/PayNow'
 import { btnOutline, btnPrimary, formatPrice, wrap } from '../ui'
 
 export default function OrderPlaced() {
@@ -12,6 +13,8 @@ export default function OrderPlaced() {
   if (!orders?.length) return <Navigate to="/orders" replace />
 
   const total = orders.reduce((sum, o) => sum + o.total, 0)
+  // Paying online: each order is paid on its own (one payment per brand).
+  const online = Boolean(state?.online)
 
   return (
     <div className={`${wrap} max-w-3xl py-16`}>
@@ -26,20 +29,24 @@ export default function OrderPlaced() {
         </motion.span>
         <p className="mt-6 text-[11px] font-medium uppercase tracking-[0.18em] text-muted">Order placed</p>
         <h1 className="font-display mt-3 text-4xl font-semibold tracking-tight text-ink">
-          Thank you for your order.
+          {online ? 'One more step: pay for your order.' : 'Thank you for your order.'}
         </h1>
         <p className="mx-auto mt-4 max-w-lg text-[15px] leading-relaxed text-muted">
           {orders.length > 1
             ? `We have placed ${orders.length} orders, one for each brand. Each brand will confirm and deliver its own.`
-            : 'The brand will confirm it shortly.'}{' '}
-          Pay {formatPrice(total)} in cash on delivery.
+            : online
+              ? 'The brand will confirm it as soon as your payment arrives.'
+              : 'The brand will confirm it shortly.'}{' '}
+          {online
+            ? `Pay ${formatPrice(total)} online. Each order is paid on its own, and an order that is not paid in time is cancelled.`
+            : `Pay ${formatPrice(total)} in cash on delivery.`}
         </p>
       </Reveal>
 
       <Reveal delay={0.15}>
         <ul className="mt-10 space-y-3">
           {orders.map((o) => (
-            <li key={o._id}>
+            <li key={o._id} className="space-y-3">
               <Link
                 to={`/orders/${o._id}`}
                 className="group flex items-center gap-4 rounded-lg border border-line bg-white p-5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-ink/5"
@@ -55,6 +62,7 @@ export default function OrderPlaced() {
                 </span>
                 <span className="font-semibold text-ink">{formatPrice(o.total)}</span>
               </Link>
+              {online && <PayNow orderId={o._id} label={`Pay ${formatPrice(o.total)} for ${o.orderNumber}`} />}
             </li>
           ))}
         </ul>

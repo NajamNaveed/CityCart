@@ -1266,6 +1266,27 @@ total, at `GET /rider/deliveries/cash` (`{ cash: { count, total } }`). See
 
 ---
 
+# 22d. Online Payment Endpoints
+
+Details and rules: `10-payment-system.md` §29.
+
+```text
+GET  /api/v1/payments/methods                          customer: [{ method, label, holdMinutes? }]
+POST /api/v1/payments/order/:orderId/checkout          customer, own order: { checkoutUrl, expiresAt, provider }
+POST /api/v1/payments/webhooks/:provider               the gateway (signature over the raw body, no login)
+GET  /api/v1/payments/mock-checkout/:reference         TEST gateway page (404 unless the test gateway is on)
+POST /api/v1/payments/mock-checkout/:reference/:choice TEST gateway: choice is pay or fail
+GET  /api/v1/payments/events?outcome=&page=&limit=     super admin: what the gateway told us
+```
+
+Checkout (`POST /orders`) now accepts `paymentMethod` `COD` or `ONLINE_GATEWAY` (the latter
+only while a provider is on, else `400 ONLINE_PAYMENTS_UNAVAILABLE`). Related errors:
+`409 PAYMENT_PENDING` (confirming an unpaid online order), `409 PAID_ORDER_NOT_CANCELLABLE`,
+`409 PAYMENT_EXPIRED`, `409 ALREADY_PAID`, `409 NOT_PAYABLE`, `409 NOT_ONLINE`,
+`503 ONLINE_PAYMENTS_UNAVAILABLE`, and for the webhook `401` (bad signature) and `400` (malformed).
+
+---
+
 # 22c. Receipt Endpoints
 
 Base `/api/v1/receipts`. Read only: receipts are issued by the system when a payment

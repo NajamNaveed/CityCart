@@ -13,6 +13,7 @@ import {
 import api, { getErrorMessage } from '../services/api'
 import StatusPill from '../components/StatusPill'
 import OrderItemReview from '../components/OrderItemReview'
+import PayNow from '../components/PayNow'
 import ProductImage from '../components/ProductImage'
 import { Skeleton } from '../components/ui'
 import { formatDateTime, formatPrice, wrap } from '../ui'
@@ -329,11 +330,24 @@ export default function MyOrderDetail() {
               </div>
             )}
             <div className="flex justify-between text-base font-semibold">
-              <dt className="text-ink">Total (cash on delivery)</dt>
+              <dt className="text-ink">{order.paymentMethod === 'ONLINE_GATEWAY' ? 'Total' : 'Total (cash on delivery)'}</dt>
               <dd className="text-ink">{formatPrice(order.total)}</dd>
             </div>
           </dl>
           {payment?.status === 'PAID' && <ReceiptNote orderId={order._id} />}
+
+          {order.paymentMethod === 'ONLINE_GATEWAY' && payment?.status === 'PENDING' && order.orderStatus === 'PENDING' && (
+            <div className="mt-6 rounded-lg border border-warning/30 bg-warning-soft p-4 sm:p-5">
+              <p className="text-sm font-semibold text-ink">Waiting for your payment</p>
+              <p className="mt-1 text-[13px] leading-relaxed text-muted">
+                {payment.expiresAt
+                  ? `Pay before ${new Date(payment.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, or this order is cancelled and its items go back on sale. `
+                  : ''}
+                The brand starts on your order once the payment is confirmed.
+              </p>
+              <PayNow orderId={order._id} className="mt-3" />
+            </div>
+          )}
 
           {order.orderStatus === 'PENDING' && (
             <div className="mt-8 rounded-lg border border-warning/30 bg-warning-soft p-4 sm:p-5">

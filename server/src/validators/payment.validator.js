@@ -37,4 +37,26 @@ const updatePaymentStatusSchema = z
     }
   });
 
-module.exports = { orderIdParamSchema, updatePaymentStatusSchema };
+// Super admin's review list of what the gateway told us (docs/10 §29).
+const PaymentEvent = require('../models/paymentEvent.model');
+const listPaymentEventsQuerySchema = z.object({
+  outcome: z.enum(PaymentEvent.OUTCOMES).optional(),
+  page: z.coerce.number().int().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(50).optional(),
+});
+
+const mockCheckoutParamsSchema = z.object({
+  reference: z.string().trim().min(1).max(100).regex(/^[A-Za-z0-9_-]+$/),
+});
+const mockCheckoutChoiceSchema = z.object({
+  reference: z.string().trim().min(1).max(100).regex(/^[A-Za-z0-9_-]+$/),
+  choice: z.enum(['pay', 'fail']),
+});
+
+module.exports = {
+  orderIdParamSchema,
+  updatePaymentStatusSchema,
+  listPaymentEventsQuerySchema,
+  mockCheckoutParamsSchema,
+  mockCheckoutChoiceSchema,
+};

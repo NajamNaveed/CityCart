@@ -33,6 +33,11 @@ services:
         value: 8
       - key: TERMINATION_GRACE_HOURS
         value: 24
+      # Online payments stay OFF until a real gateway is configured (docs/10 §29). Never set PAYMENT_PROVIDER=mock in production.
+      - key: PAYMENT_PROVIDER
+        value: none
+      - key: ONLINE_PAYMENT_HOLD_MINUTES
+        value: 30
       - key: CLOUDINARY_CLOUD_NAME
         sync: false # optional; without them image upload falls back to links
       - key: CLOUDINARY_API_KEY

@@ -43,6 +43,7 @@ const Inventory = require('../src/models/inventory.model');
 const notifications = require('../src/services/notification.service');
 const app = require('../src/app');
 const { ROLES } = require('../src/config/roles');
+const env = require('../src/config/env');
 const { getAuthCookie } = require('./helpers/testAuth');
 
 const oid = () => new mongoose.Types.ObjectId();
@@ -210,6 +211,53 @@ describe('POST /api/v1/orders (checkout)', () => {
       expect.objectContaining({ method: 'COD', status: 'PENDING', amount: 20, currency: 'PKR' }),
     ]);
     expect(Cart.updateOne).toHaveBeenCalledWith(expect.anything(), { $set: { items: [] } }, { session: 'SESSION' });
+  });
+
+  describe('paying online', () => {
+    const online = { ...body, paymentMethod: 'ONLINE_GATEWAY' };
+    const saved = { ...env.payments };
+    afterEach(() => Object.assign(env.payments, saved));
+    const gatewayOn = () => Object.assign(env.payments, { provider: 'mock', webhookSecret: 'a-long-test-webhook-secret-123', holdMinutes: 30 });
+
+    it('is refused, before the cart is even read, while no gateway is switched on', async () => {
+      Object.assign(env.payments, { provider: 'none', webhookSecret: '' });
+      const res = await post(online);
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('ONLINE_PAYMENTS_UNAVAILABLE');
+      expect(Cart.findOne).not.toHaveBeenCalled();
+    });
+
+    it('keeps the stock for the hold time, with a PENDING online payment per order', async () => {
+      gatewayOn();
+      const p1 = mkProduct(brandA, { price: 10 });
+      checkoutWorld({ lines: [[p1, 2]], products: [p1] });
+      const before = Date.now();
+
+      const res = await post(online);
+
+      expect(res.status).toBe(201);
+      const [orderA] = Order.create.mock.calls[0][0];
+      expect(orderA).toMatchObject({ paymentMethod: 'ONLINE_GATEWAY', paymentStatus: 'PENDING', orderStatus: 'PENDING' });
+      const [payment] = Payment.create.mock.calls[0][0];
+      expect(payment).toMatchObject({ method: 'ONLINE_GATEWAY', status: 'PENDING', amount: 20 });
+      // 30 minutes from now (give or take the test's own runtime)
+      expect(payment.expiresAt.getTime()).toBeGreaterThanOrEqual(before + 30 * 60 * 1000);
+      expect(payment.expiresAt.getTime()).toBeLessThan(before + 31 * 60 * 1000);
+    });
+
+    it('cash on delivery never gets a stock-hold deadline, and works with or without a gateway', async () => {
+      gatewayOn();
+      const p1 = mkProduct(brandA, { price: 10 });
+      checkoutWorld({ lines: [[p1, 1]], products: [p1] });
+      await post();
+      expect(Payment.create.mock.calls[0][0][0]).not.toHaveProperty('expiresAt');
+    });
+
+    it.each(['CARD', 'BANK_TRANSFER', 'WALLET', 'CASH'])('%s is still not accepted at checkout', async (method) => {
+      gatewayOn();
+      expect((await post({ ...body, paymentMethod: method })).status).toBe(400);
+      expect(Cart.findOne).not.toHaveBeenCalled();
+    });
   });
 
   it('409 reports ALL problem lines together and creates nothing', async () => {
@@ -384,7 +432,8 @@ describe('PATCH /api/v1/orders/:id/cancel', () => {
 
     expect(res.status).toBe(200);
     expect(Order.findOneAndUpdate).toHaveBeenCalledWith(
-      { _id: id.toString(), customerId: user._id, orderStatus: { $in: ['PENDING'] } },
+      // an order already paid online cannot be cancelled here (the money would be stuck)
+      { _id: id.toString(), customerId: user._id, orderStatus: { $in: ['PENDING'] }, paymentStatus: { $ne: 'PAID' } },
       {
         $set: { orderStatus: 'CANCELLED', paymentStatus: 'CANCELLED' },
         $push: { statusHistory: { status: 'CANCELLED', by: user._id, at: expect.any(Date) } },
@@ -401,6 +450,18 @@ describe('PATCH /api/v1/orders/:id/cancel', () => {
     expect(notifications.notifyBrandOfCancelledOrder).toHaveBeenCalledWith(
       expect.objectContaining({ _id: id })
     );
+  });
+
+  it('409 PAID_ORDER_NOT_CANCELLABLE for an order already paid online (the money would be stuck): ask the brand to reject and refund', async () => {
+    const { cookie } = asRole();
+    Order.findOneAndUpdate.mockResolvedValue(null);
+    Order.findOne.mockReturnValue({ session: () => Promise.resolve({ orderStatus: 'PENDING', paymentStatus: 'PAID' }) });
+
+    const res = await request(app).patch(`/api/v1/orders/${oid()}/cancel`).set(...cookie);
+
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('PAID_ORDER_NOT_CANCELLABLE');
+    expect(Inventory.updateOne).not.toHaveBeenCalled();
   });
 
   it('409 (no restock) when the order is no longer PENDING', async () => {
