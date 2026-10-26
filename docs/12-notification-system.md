@@ -596,3 +596,38 @@ The MVP should prioritize reliable **in-app + real-time notifications** while ke
 ## Next Document
 
 **13-review-and-rating-system.md — Product Reviews, Ratings, Eligibility, Moderation, and Brand Feedback**
+
+---
+
+# 31. Push Notifications (added October 2026)
+
+Every in-app notification is also sent as a **push notification** to the phones that registered for it,
+so a rider hears about a new delivery (and a records person about a new order) even when the app is closed.
+It mirrors the inbox: the same title and text, plus the ids needed to open the right screen. The in-app inbox
+(sections 1 to 30) is unchanged and remains the source of truth.
+
+## 31.1 How it works
+
+* **Partner app only.** `PUT /devices/push-token` (riders and brand team members; the user always comes from
+  the session) saves the phone's Expo push token in `DeviceToken`; `DELETE /devices/push-token` removes it on
+  sign-out. The token is unique: a phone signed in as someone else **moves** to that person, so the previous
+  user's notifications never reach it. At most five phones per user are kept.
+* **Sending.** `notify()` calls `services/push.service.js` after creating the in-app notifications. It sends
+  through Expo's push service with Node's built-in `fetch` (no package), in batches of 100, with an 8-second
+  timeout. It is **best effort**: a failure is logged and never reaches the request that caused the notification.
+  A phone Expo reports as `DeviceNotRegistered` is forgotten.
+* **Off by default.** Nothing is sent unless `PUSH_ENABLED=true` (`EXPO_ACCESS_TOKEN` is optional). Tests and
+  development never call the push service.
+* **Tapping a push** opens the delivery (rider, from `deliveryId`) or the order (team member, from `orderId`).
+
+## 31.2 What it needs (and honest limits)
+
+* **A real build of the Partner app.** Expo Go on Android cannot receive push notifications (since SDK 53). The
+  app detects Expo Go and skips push without an error; the rest of the app works. A development or production
+  build (EAS) is needed, with Firebase (FCM) credentials for Android and an Apple developer account for iOS.
+* **An Expo project id.** Run `npx eas-cli init` in `partner/`; it writes `extra.eas.projectId` into `app.json`.
+  Without it the app skips push (`not_configured`).
+* **Not verified end to end.** The server and app logic are tested with mocks; sending to a real phone needs the
+  build above and was not possible in the development sandbox.
+* The shopper app does not register for push yet (customers still get the in-app inbox).
+

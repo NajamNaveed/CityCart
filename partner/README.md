@@ -43,6 +43,11 @@ npx expo start -c # start with a clean cache
 * **No extra packages:** Maps and the phone dialler open through plain links (`Linking`). No maps library, no location permission, no fonts to download.
 * **Updates:** the list refreshes when the screen opens, every minute, and when you pull down. Push notifications and live location are a later, optional phase (docs/20 §6.5).
 
+## Notifications and sharing your location
+
+* **Share my location while I deliver** (Account tab, off by default): while an order is out for delivery, that order's customer and your brand can see where you were last seen. Only your latest position is kept, and it works only while this app is open.
+* **Push notifications** (a new delivery, even when the app is closed) need a real build of the app: **Expo Go on Android cannot receive them**, and the app simply skips them there. To enable: run `npx eas-cli init` in this folder (links an Expo project), add Firebase credentials in EAS, run `eas build --profile development --platform android`, and set `PUSH_ENABLED=true` on the server. See `../docs/12-notification-system.md` §31.
+
 ## If something goes wrong
 
 | Problem | Fix |

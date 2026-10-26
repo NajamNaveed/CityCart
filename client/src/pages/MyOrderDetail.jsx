@@ -71,6 +71,46 @@ function ReceiptNote({ orderId }) {
   )
 }
 
+// Where the rider is, if they chose to share it while delivering. Nothing is shown (and nothing is
+// claimed) when they are not sharing.
+function RiderLocation({ deliveryId }) {
+  const [state, setState] = useState({ point: null, tick: 0 })
+  useEffect(() => {
+    let active = true
+    api
+      .get(`/deliveries/${deliveryId}/rider-location`)
+      .then((res) => active && setState((s) => ({ ...s, point: res.data.location && { ...res.data.location, fetchedAt: new Date().toISOString() } })))
+      .catch(() => active && setState((s) => ({ ...s, point: null })))
+    return () => {
+      active = false
+    }
+  }, [deliveryId, state.tick])
+
+  const { point } = state
+  if (!point) return null
+  // The server already hides a position older than ten minutes, so the age is a short, calm "x min ago".
+  const minutes = Math.max(0, Math.round((new Date(point.fetchedAt).getTime() - new Date(point.recordedAt).getTime()) / 60000))
+  return (
+    <div className="mt-3.5 rounded-md border border-line bg-white p-4">
+      <p className="text-[12px] text-muted">Your rider</p>
+      <p className="mt-1 text-sm text-ink">Last seen {minutes < 1 ? 'just now' : `${minutes} min ago`}.</p>
+      <div className="mt-3 flex gap-2">
+        <a
+          href={`https://www.google.com/maps/search/?api=1&query=${point.latitude},${point.longitude}`}
+          target="_blank"
+          rel="noreferrer"
+          className="text-[13px] font-medium text-ink underline"
+        >
+          See on map
+        </a>
+        <button type="button" onClick={() => setState((s) => ({ ...s, tick: s.tick + 1 }))} className="text-[13px] font-medium text-muted underline">
+          Refresh
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function SectionTitle({ children }) {
   return (
     <h2 className="border-b border-line pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
@@ -442,6 +482,8 @@ export default function MyOrderDetail() {
               )}
             </section>
           )}
+
+          {delivery?.status === 'OUT_FOR_DELIVERY' && <RiderLocation deliveryId={delivery._id} />}
 
           {delivery && ON_THE_ROAD.includes(delivery.status) && <DeliveryCode deliveryId={delivery._id} />}
         </aside>

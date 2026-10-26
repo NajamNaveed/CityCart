@@ -14,6 +14,10 @@ const ALLOWED_WRITES = [
   // The riders of a terminated brand can also finish what is already on the road.
   { method: 'PATCH', pattern: /^\/api\/v1\/rider\/deliveries\/[a-f0-9]{24}\/status$/i },
   { method: 'POST', pattern: /^\/api\/v1\/rider\/deliveries\/[a-f0-9]{24}\/complete$/i },
+  // Finishing deliveries on the road includes the rider's position and their phone's push setup.
+  { method: 'PUT', pattern: /^\/api\/v1\/rider\/deliveries\/location$/i },
+  { method: 'DELETE', pattern: /^\/api\/v1\/rider\/deliveries\/location$/i },
+  { method: 'DELETE', pattern: /^\/api\/v1\/devices\/push-token$/i },
   // Handing cash over is closing the books, not trading.
   { method: 'POST', pattern: /^\/api\/v1\/payments\/cash\/settle$/i },
 ];

@@ -15,11 +15,11 @@ the work up cold. Read it first, then the documents it points to.
 | C | `partner/` Expo app: sign-in and rider screens; the shopper app and website show the delivery code and receipt | **Done** (not yet run on a real phone, see §5.4) |
 | D | Records screens in the same app: orders, deliveries and rider assignment, receipts, cash hand-over (no returns tab until D0) | **Done** (not yet run on a real phone, see §5.5) |
 | E | Online payments: hosted gateway, signed webhook, stock hold and release, Pay now in the shopper app and website | **Built and tested with a built-in TEST gateway.** A real gateway adapter is still to do (needs the owner's sandbox account), see §5.6 |
-| F | Optional: push notification on assignment, rider live location | Not started |
+| F | Push notifications to the Partner app, and the rider sharing their location while delivering | **Built and tested with mocks**; push needs a real EAS build to try on a phone (see §5.7) |
 
 Server test suite: 940 tests before the programme, 1,047 after Phase A, 1,090
-after Phase B, 1,097 after Phase C (unchanged by Phase D), 1,158 after Phase E. The Partner app has its own 143 tests and the
-shopper app (`mobile/`) 267. All pass; lint is clean everywhere. The real-MongoDB integration suite
+after Phase B, 1,097 after Phase C (unchanged by Phase D), 1,158 after Phase E, 1,200 after Phase F. The Partner app has its own 179 tests and the
+shopper app (`mobile/`) 270. All pass; lint is clean everywhere. The real-MongoDB integration suite
 (`npm run test:integration`) could not be run by the author (no MongoDB binary
 download in the build sandbox) and should be run by the owner after applying
 each phase.
@@ -333,6 +333,16 @@ Full rules, flow, outcome table and limits are in `10-payment-system.md` §29; t
 * **Not built (to do, in this order):** (1) a **real gateway adapter** (owner must open a sandbox account and verify the gateway's current official documentation: signature scheme, hosted-checkout request, refund API; add one `payments/<name>.provider.js`, register it, and add provider-specific tests; live card payments also need a registered business); (2) **real refunds through the gateway** (today a refund is only recorded; the brand returns the money in the gateway's dashboard); (3) one payment for a multi-brand cart (today one payment per order); (4) a screen in the website's admin area and in the app for the super admin's `LATE_PAYMENT` / `DUPLICATE_PAYMENT` review list (API exists).
 * **Not verified:** a real gateway (none was available), a physical phone, and the server's real-MongoDB integration tests (the webhook transaction's rollback of a duplicate event is proven only with mocks here; run `npm run test:integration` and consider adding an integration test for it).
 
+### 5.7 Phase F: push notifications and rider location
+
+Rules and API are in `12-notification-system.md` §31 (push) and `11-delivery-system.md` §30 (location); summary for whoever continues.
+
+* **New packages (the only two of the whole programme):** `expo-location` and `expo-notifications`, in `partner/` only, installed with `npx expo install expo-location expo-notifications` (already in `package.json` and the lockfile). The shopper app, website and server gained **no** package (push uses Node's built-in `fetch`; maps open through a plain link).
+* **Push:** the server stores each phone's token (`DeviceToken`) and, for every in-app notification, sends a push through Expo's push service when `PUSH_ENABLED=true`. The Partner app registers after sign-in, removes the token on sign-out, and opens the delivery/order when a notification is tapped. **It does nothing in Expo Go** (Android Expo Go cannot receive push; the app detects it) and until the app has an Expo project id. To try it on a phone: `cd partner && npx eas-cli init` (writes the project id), add Firebase (FCM) credentials in EAS for Android, `eas build --profile development --platform android`, set `PUSH_ENABLED=true` on the server. **Not tried on a real phone.**
+* **Rider location:** opt-in switch on the rider's Account screen (off by default, per phone, turned off on sign-out), foreground only (about every 30 s), accepted by the server only while a delivery is out, **only the last point is kept** (deleted after two hours, or at once when sharing stops), readable only by that order's customer and the brand's staff with `delivery.view`, only while out for delivery and fresh (under 10 minutes). The records delivery page, the shopper app's order page and the website's order page show "last seen" with an **Open in Maps** link (no map library).
+* **Verified:** server tests (push sending, token handling, location rules and who may read it), Partner app tests (push registration incl. Expo Go and missing project id, the sharing decision logic, the hook, the Account switch, sign-out cleanup), shopper and website cards; lint; a real Android bundle build.
+* **Known gaps and ideas:** no background tracking (needs special store permissions: ask the owner first); location is shown as "last seen" plus a map link, not a live moving map (a map package would be needed: ask the owner first); the shopper app does not register for push yet; push needs the EAS build described above; FCM/APNs credentials are the owner's to create.
+
 ## 6. What is left
 
 ### 6.1 Phase D0: returns backend (found missing, must precede the returns screen)
@@ -368,15 +378,9 @@ The returns tab is the only part of the records app still missing, and it waits 
 
 What remains is the real gateway adapter and real refunds (§5.6 "Not built").
 
-### 6.5 Phase F: optional extras
+### 6.5 Phase F: built (see §5.7)
 
-* **Push notification** on rider assignment: needs `expo-notifications` (native
-  module: development build required), storing device push tokens (new field or
-  model, discuss), and the server sending through Expo's push service.
-* **Rider live location**: `expo-location` (foreground) and Socket.io. **The
-  socket handshake currently accepts bearer tokens for shoppers only**
-  (`server/src/sockets/index.js`); it must be extended with the same partner-token
-  rule as `middleware/authenticate.js` (§4 rule 4), with tests.
+What remains: try push on a real build, and the ideas in §5.7 "Known gaps".
 
 ## 7. Open decisions and known gaps
 
@@ -456,6 +460,7 @@ tests; add the same for new rules, in the same style.
 | `BRAND_TERMINATED` | 409 | A terminated brand cannot add riders |
 | `RIDER_HAS_OPEN_DELIVERIES` | 409 | Cannot deactivate a rider with open deliveries (`openDeliveries` in the body) |
 | `ONLINE_PAYMENTS_UNAVAILABLE` | 400 / 503 | No payment provider is switched on |
+| `NO_ACTIVE_DELIVERY` | 409 | The rider tried to share a position with no delivery out |
 | `PAYMENT_PENDING` | 409 | The brand tried to confirm an online order that is not paid yet |
 | `PAID_ORDER_NOT_CANCELLABLE` | 409 | The customer tried to cancel an order already paid online |
 | `PAYMENT_EXPIRED` / `ALREADY_PAID` / `NOT_PAYABLE` / `NOT_ONLINE` | 409 | Starting a payment that cannot be started |
@@ -465,6 +470,7 @@ tests; add the same for new rules, in the same style.
 * **2026-10 Phase A** delivered: rider role and management, assignment, partner sign-in and rider endpoints, delivery code, web Riders page, demo data, docs.
 * **2026-10 Phase B** delivered: receipts, cash-on-delivery collection and settlement, rider cash view, demo data, docs.
 * **2026-10 Handoff** written; missing returns backend identified and added as Phase D0.
+* **2026-10 Phase F** delivered: push notifications to the Partner app (device tokens, Expo push sender, tap to open) and opt-in, foreground rider location with last-seen display for records staff and customers. Two packages added to `partner/` only.
 * **2026-10 Phase E** delivered: online payments with a built-in test gateway (provider layer, signed webhook, idempotent events, stock hold and release, confirm/cancel rules, Pay now in the shopper app and website, demo data). Real gateway adapter pending.
 * **2026-10 Phase D** delivered: the records screens for brand team members (overview, orders, deliveries with rider assignment, receipts, cash hand-over), permission-based tabs, permissions loaded at sign-in, `StatusPill` for all statuses. No server changes.
 * **2026-10 Phase C** delivered: `partner/` app (sign-in, rider screens), delivery code and receipt in the shopper app and website, rider-deactivation guard, customer-safe delivery view, root scripts.

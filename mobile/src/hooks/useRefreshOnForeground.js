@@ -12,6 +12,6 @@ export function useRefreshOnForeground(callback) {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') latest.current()
     })
-    return () => subscription.remove()
+    return () => subscription?.remove?.()
   }, [])
 }

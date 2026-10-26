@@ -733,3 +733,46 @@ describe('paying online', () => {
     })
   })
 })
+
+describe('where my rider is', () => {
+  const OUT = { _id: ID(9), status: 'OUT_FOR_DELIVERY', assignedAgent: 'Bilal Ahmed' }
+  const ON_THE_ROAD = { ...ORDER, orderStatus: 'OUT_FOR_DELIVERY' }
+  const serve = (location, delivery = OUT) => {
+    mockParams = { id: ON_THE_ROAD._id }
+    api.get.mockImplementation(async (url) => {
+      if (url === `/orders/${ON_THE_ROAD._id}`) return { data: { order: ON_THE_ROAD, payment: { status: 'PENDING' }, delivery } }
+      if (url === `/deliveries/${delivery._id}/code`) return { data: { code: '482913' } }
+      if (url === `/deliveries/${delivery._id}/rider-location`) {
+        if (location instanceof Error) throw location
+        return { data: { location } }
+      }
+      throw new Error(`unexpected GET ${url}`)
+    })
+  }
+
+  it('shows when the rider was last seen and opens the map, while the order is out for delivery', async () => {
+    const spy = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined)
+    serve({ latitude: 31.4181, longitude: 73.0776, accuracy: 12, recordedAt: new Date(Date.now() - 4 * 60 * 1000).toISOString() })
+    const renderer = await show(<OrderScreen />, auth())
+    expect(screenText(renderer)).toContain('Your rider')
+    expect(screenText(renderer)).toContain('Last seen 4m ago')
+    await press(renderer, 'See on map')
+    expect(spy).toHaveBeenCalledWith('https://www.google.com/maps/search/?api=1&query=31.4181,73.0776')
+    spy.mockRestore()
+  })
+
+  it('shows nothing, and claims nothing, when the rider is not sharing or the server has none', async () => {
+    serve(null)
+    expect(screenText(await show(<OrderScreen />, auth()))).not.toContain('Your rider')
+    serve(Object.assign(new Error('http'), { response: { status: 404, data: {} } }))
+    const text = screenText(await show(<OrderScreen />, auth()))
+    expect(text).not.toContain('Your rider')
+    expect(text).toContain('CC-20261004-0007') // the rest of the page is fine
+  })
+
+  it('is not asked for before the order is out for delivery', async () => {
+    serve({ latitude: 1, longitude: 2, recordedAt: new Date().toISOString() }, { ...OUT, status: 'PICKED_UP' })
+    await show(<OrderScreen />, auth())
+    expect(api.get).not.toHaveBeenCalledWith(`/deliveries/${OUT._id}/rider-location`)
+  })
+})

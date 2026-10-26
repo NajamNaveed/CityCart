@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Alert, Pressable, RefreshControl, ScrollView, View } from 'react-native'
+import { Alert, Linking, Pressable, RefreshControl, ScrollView, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import Feather from '@expo/vector-icons/Feather'
@@ -18,8 +18,8 @@ import { useRefreshOnForeground } from '../../hooks/useRefreshOnForeground'
 import { useRemote } from '../../hooks/useRemote'
 import PayNowButton from '../../components/PayNowButton'
 import { getErrorMessage } from '../../services/api'
-import { awaitingPayment, canCancel, cancelOrder, CODE_VISIBLE_STATUSES, fetchDeliveryCode, fetchOrder, fetchReceipt, isOnline, TERMINAL_PROBLEMS } from '../../services/orders'
-import { formatDateTime, formatPrice, humanize } from '../../utils/format'
+import { awaitingPayment, canCancel, cancelOrder, CODE_VISIBLE_STATUSES, fetchDeliveryCode, fetchOrder, fetchReceipt, fetchRiderLocation, isOnline, locationMapUrl, TERMINAL_PROBLEMS } from '../../services/orders'
+import { formatDateTime, formatPrice, humanize, timeAgo } from '../../utils/format'
 import { isObjectId } from '../../utils/ids'
 import { colors, radius, spacing } from '../../theme'
 
@@ -58,6 +58,22 @@ function DeliveryCode({ deliveryId }) {
         <AppText variant="small" style={{ textAlign: 'center' }}>
           Give this code to the rider when your order arrives. Please do not share it before.
         </AppText>
+      </Card>
+    </Section>
+  )
+}
+
+// Where the rider is, if they chose to share it while delivering. Nothing is shown (and nothing is
+// claimed) when they are not sharing.
+function RiderLocationCard({ deliveryId }) {
+  const remote = useRemote(`rider-location:${deliveryId}`, () => fetchRiderLocation(deliveryId))
+  if (remote.status !== 'ready' || !remote.data) return null
+  return (
+    <Section title="Your rider">
+      <Card style={{ gap: spacing.sm }}>
+        <AppText>Last seen {timeAgo(remote.data.recordedAt)} ago.</AppText>
+        <Button title="See on map" variant="outline" onPress={() => Linking.openURL(locationMapUrl(remote.data)).catch(() => {})} />
+        <Button title="Refresh" variant="outline" onPress={remote.reload} />
       </Card>
     </Section>
   )
@@ -162,6 +178,8 @@ function OrderView({ data, refreshing, onRefresh, onChanged }) {
           </Card>
         </Section>
       ) : null}
+
+      {delivery?.status === 'OUT_FOR_DELIVERY' ? <RiderLocationCard deliveryId={delivery._id} /> : null}
 
       {showCode ? <DeliveryCode deliveryId={delivery._id} /> : null}
 

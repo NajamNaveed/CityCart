@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 
 /**
- * Proof-of-delivery code (docs/11 §11b). The customer reads it out when the
+ * Proof-of-delivery code (docs/11 §19). The customer reads it out when the
  * order arrives and the rider types it into the partner app; only then can the
  * rider mark the delivery as delivered (and, for cash on delivery, collected).
  */

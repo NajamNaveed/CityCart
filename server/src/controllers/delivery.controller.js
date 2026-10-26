@@ -13,6 +13,7 @@ const {
   assignRider,
   getDeliveryCodeForCustomer,
 } = require('../services/delivery.service');
+const { getRiderLocation } = require('../services/riderLocation.service');
 const { OrderError } = require('../services/order.service');
 const { formatZodError } = require('../utils/formatZodError');
 
@@ -122,4 +123,16 @@ async function getCode(req, res, next) {
   }
 }
 
-module.exports = { list, getById, updateStatus, update, assign, getCode };
+// Where the rider is, for the order's customer and the brand's staff, while it is out for delivery.
+async function riderLocation(req, res, next) {
+  const params = objectIdParamSchema.safeParse(req.params);
+  if (!params.success) return invalid(res, params.error);
+  try {
+    const result = await getRiderLocation({ user: req.user, tenantBrandId: req.tenantBrandId, deliveryId: params.data.id });
+    return res.status(200).json({ success: true, ...result });
+  } catch (err) {
+    return handleError(err, res, next);
+  }
+}
+
+module.exports = { list, getById, updateStatus, update, assign, getCode, riderLocation };

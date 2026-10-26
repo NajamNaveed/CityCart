@@ -100,6 +100,16 @@ export async function fetchDeliveryCode(deliveryId) {
   return res.data.code
 }
 
+// Where the rider is, only while the order is out for delivery and the rider chose to share it
+// (docs/11 §30). { latitude, longitude, accuracy, recordedAt } or null.
+export async function fetchRiderLocation(deliveryId) {
+  const res = await api.get(`/deliveries/${deliveryId}/rider-location`)
+  return res.data.location
+}
+
+// A map link for a shared position: opens the phone's maps app, no map library needed.
+export const locationMapUrl = (point) => `https://www.google.com/maps/search/?api=1&query=${point.latitude},${point.longitude}`
+
 // The receipt of a paid order (docs/10 §28).
 export async function fetchReceipt(orderId) {
   const res = await api.get(`/receipts/order/${orderId}`)

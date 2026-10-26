@@ -70,6 +70,12 @@ const env = {
       return Number.isFinite(minutes) && minutes >= 5 ? Math.min(minutes, 240) : 30;
     })(),
   },
+  // Push notifications to the Partner app (docs/12 §31). Off unless PUSH_ENABLED=true, so development and
+  // tests never call the push service. EXPO_ACCESS_TOKEN is optional (Expo's "enhanced security").
+  push: {
+    enabled: (process.env.PUSH_ENABLED || '').trim().toLowerCase() === 'true',
+    accessToken: (process.env.EXPO_ACCESS_TOKEN || '').trim(),
+  },
   // How long a terminated brand's staff keep (read-only) access, in hours.
   // 0 = cut off immediately. Capped at 30 days.
   terminationGraceHours: (() => {

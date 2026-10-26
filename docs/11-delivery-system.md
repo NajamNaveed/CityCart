@@ -617,3 +617,49 @@ The MVP should prioritize reliable status-based fulfillment rather than complex 
 ## Next Document
 
 **12-notification-system.md — In-App Notifications, Real-Time Events, Order Notifications, and Notification Preferences**
+
+---
+
+# 30. Rider Live Location (added October 2026)
+
+A rider can let the customer and the brand see roughly where they are while an order is out for
+delivery. It is **the rider's choice**, built to collect as little as possible.
+
+## 30.1 Rules (never break these)
+
+1. **Opt-in.** A switch on the rider's Account screen, **off by default**, per phone. Turning it on
+   asks the phone's location permission. Signing out turns it off.
+2. **Only while delivering, and only while the app is open.** The app reports about every 30 seconds
+   (or 25 metres). There is no background tracking. The server accepts a position only if the rider
+   has a delivery `OUT_FOR_DELIVERY` (`409 NO_ACTIVE_DELIVERY` otherwise, and the app stays quiet for a minute).
+3. **Only the last point is kept**, one document per rider (`RiderLocation`), replaced on every
+   update. There is no history. The database deletes it two hours after the last update (TTL index);
+   stopping sharing, or signing out, deletes it at once.
+4. **Only these people can read it, and only for this delivery:** the order's customer, and that
+   brand's staff with `delivery.view`. The delivery is looked up with the caller's own scope first
+   (their order, or their brand's delivery), so nobody can follow someone else's rider. Anyone else gets `404`/`403`.
+5. **Only while the delivery is `OUT_FOR_DELIVERY`**, and only if the point is less than 10 minutes
+   old; otherwise the answer is `{ location: null }` and the apps show nothing (they never claim
+   a position they do not have). The rider's account id is never returned.
+
+## 30.2 API
+
+```text
+PUT    /api/v1/rider/deliveries/location       rider: { latitude, longitude, accuracy? }
+DELETE /api/v1/rider/deliveries/location       rider: forget my position now
+GET    /api/v1/deliveries/:id/rider-location   customer (own order) or brand with delivery.view: { location }
+```
+
+`location` is `{ latitude, longitude, accuracy, recordedAt }` or `null`. Updates are limited to 12 a minute per rider.
+A terminated brand's riders may still share (they are finishing deliveries on the road).
+
+## 30.3 Screens
+
+* Partner app, rider: Account, "Share my location while I deliver".
+* Partner app, records: the delivery's detail shows "Rider location" (last seen, Open in Maps, Refresh).
+* Shopper app and website: the order page shows "Your rider" (last seen, See on map) while it is out for delivery.
+  Maps open through a plain link (`https://www.google.com/maps/search/?api=1&query=lat,lng`); no map package is used.
+
+Related code: `models/riderLocation.model.js`, `services/riderLocation.service.js`,
+`controllers/riderDelivery.controller.js`, `controllers/delivery.controller.js`, `partner/src/services/location.js`.
+

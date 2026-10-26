@@ -32,6 +32,12 @@ export async function fetchShipment(id) {
   return res.data.delivery
 }
 
+// Where the rider of an out-for-delivery order is, if they chose to share it ({ location: null } otherwise).
+export async function fetchRiderLocation(deliveryId) {
+  const res = await api.get(`/deliveries/${deliveryId}/rider-location`)
+  return res.data.location
+}
+
 // --- Riders and assignment (riders.view to pick, delivery.manage to assign) ---
 export async function fetchActiveRiders() {
   const res = await api.get('/riders', { params: { isActive: true, limit: 50 } })

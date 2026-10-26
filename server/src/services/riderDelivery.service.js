@@ -7,7 +7,7 @@ const { DELIVERY_FINAL_STATUSES } = require('../config/deliveryTransitions');
 const { MAX_CODE_ATTEMPTS, codesMatch } = require('../utils/deliveryCode');
 
 /**
- * What a rider may see and do (docs/20 §4, docs/11 §11c). Every query is pinned
+ * What a rider may see and do (docs/20 §4, docs/20 §5.1). Every query is pinned
  * to BOTH the rider's brand and the rider themself, so a rider only ever reaches
  * deliveries assigned to them; anything else is "not found".
  *

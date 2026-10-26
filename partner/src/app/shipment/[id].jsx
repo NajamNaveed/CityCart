@@ -13,9 +13,9 @@ import StatusPill from '../../components/StatusPill'
 import { useAuth } from '../../hooks/useAuth'
 import { useRemote } from '../../hooks/useRemote'
 import { getErrorMessage } from '../../services/api'
-import { assignRider, fetchActiveRiders, fetchShipment } from '../../services/records'
-import { addressLine, isClosed, telUrl } from '../../utils/delivery'
-import { formatDateTime } from '../../utils/format'
+import { assignRider, fetchActiveRiders, fetchRiderLocation, fetchShipment } from '../../services/records'
+import { addressLine, isClosed, locationMapUrl, telUrl } from '../../utils/delivery'
+import { formatDateTime, timeAgo } from '../../utils/format'
 import { can } from '../../utils/permissions'
 import { colors, minTouch, radius, spacing } from '../../theme'
 
@@ -74,6 +74,29 @@ function RiderPicker({ delivery, onChanged }) {
   )
 }
 
+// Where the rider is, while the order is out for delivery and the rider chose to share it.
+function RiderWhereabouts({ deliveryId }) {
+  const remote = useRemote(`rider-location:${deliveryId}`, () => fetchRiderLocation(deliveryId))
+  const [error, setError] = useState('')
+  const point = remote.data
+  return (
+    <Card style={{ gap: spacing.xs }}>
+      <AppText variant="small">Rider location</AppText>
+      {remote.status === 'loading' ? <Skeleton height={24} /> : null}
+      {remote.status === 'error' ? <AppText variant="small">{remote.error}</AppText> : null}
+      {remote.status === 'ready' && !point ? <AppText variant="small">The rider is not sharing their location right now.</AppText> : null}
+      {remote.status === 'ready' && point ? (
+        <>
+          <AppText>Last seen {timeAgo(point.recordedAt)} ago</AppText>
+          <Button title="Open in Maps" variant="outline" onPress={() => Linking.openURL(locationMapUrl(point)).catch(() => setError('Could not open Maps on this phone.'))} style={{ marginTop: spacing.sm }} />
+        </>
+      ) : null}
+      {error ? <AppText variant="small" style={{ color: colors.danger }}>{error}</AppText> : null}
+      <Button title="Refresh" variant="outline" onPress={remote.reload} />
+    </Card>
+  )
+}
+
 function ShipmentDetail({ id, orderNumber }) {
   const { user } = useAuth()
   const remote = useRemote(`shipment:${id}`, () => fetchShipment(id))
@@ -120,6 +143,8 @@ function ShipmentDetail({ id, orderNumber }) {
             {delivery.address.phone ? <Button title={`Call ${delivery.address.phone}`} variant="outline" onPress={() => Linking.openURL(telUrl(delivery.address.phone)).catch(() => {})} style={{ marginTop: spacing.sm }} /> : null}
           </Card>
         ) : null}
+
+        {delivery.status === 'OUT_FOR_DELIVERY' && delivery.riderId ? <RiderWhereabouts deliveryId={delivery._id} /> : null}
 
         {canAssign && !closed ? <RiderPicker delivery={delivery} onChanged={setLatest} /> : null}
         {!canAssign && !closed ? <AppText variant="small">You can see this delivery but not change its rider.</AppText> : null}

@@ -33,6 +33,9 @@ export function mapsUrl(address) {
   return query ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}` : null
 }
 
+// A map link for a position the rider shared.
+export const locationMapUrl = (point) => `https://www.google.com/maps/search/?api=1&query=${point.latitude},${point.longitude}`
+
 // "House 5, Street 2, Faisalabad"
 export const addressLine = (address) => (address ? [address.address, address.city].filter(Boolean).join(', ') : '')
 

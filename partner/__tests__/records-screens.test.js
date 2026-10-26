@@ -3,6 +3,7 @@
  * rider assignment, receipts, and counting the cash riders hand over.
  */
 import React from 'react'
+import { Linking } from 'react-native'
 
 jest.setTimeout(30000)
 
@@ -222,11 +223,12 @@ describe('deliveries', () => {
 
 describe('one delivery and its rider', () => {
   const RIDERS = [{ _id: 'r1', name: 'Bilal Ahmed' }, { _id: 'r2', name: 'Imran Bashir' }]
-  const open = (auth = member(...ALL), delivery = DELIVERY) => {
+  const open = (auth = member(...ALL), delivery = DELIVERY, location = null) => {
     mockParams = { id: delivery._id, orderNumber: 'CC-2026-000042' }
     serve({
       [`GET /deliveries/${delivery._id}`]: { data: { delivery } },
       'GET /riders': { data: { riders: RIDERS } },
+      [`GET /deliveries/${delivery._id}/rider-location`]: { data: { location } },
       [`PATCH /deliveries/${delivery._id}/rider`]: (body) => ({ data: { delivery: { ...delivery, riderId: body.riderId, assignedAgent: RIDERS.find((r) => r._id === body.riderId)?.name } } }),
     })
     return show(<ShipmentScreen />, { auth })
@@ -268,6 +270,42 @@ describe('one delivery and its rider', () => {
     expect(screenText(screen)).toMatch(/You can see this delivery but not change its rider/)
     expect(api.get).not.toHaveBeenCalledWith('/riders', expect.anything())
     expect(has(screen, 'Remove rider')).toBe(false)
+  })
+
+  describe('where the rider is', () => {
+    const POINT = { latitude: 31.4181, longitude: 73.0776, accuracy: 12, recordedAt: new Date(Date.now() - 3 * 60 * 1000).toISOString() }
+
+    it('shows when the rider was last seen and opens it in Maps, while the order is out for delivery', async () => {
+      const spy = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined)
+      const screen = await open(member(...ALL), DELIVERY, POINT)
+      expect(screenText(screen)).toMatch(/Rider location/)
+      expect(screenText(screen)).toMatch(/Last seen 3m ago/)
+      await press(screen, 'Open in Maps')
+      expect(spy).toHaveBeenCalledWith('https://www.google.com/maps/search/?api=1&query=31.4181,73.0776')
+      spy.mockRestore()
+    })
+
+    it('says so, and claims nothing, when the rider is not sharing', async () => {
+      const screen = await open(member(...ALL), DELIVERY, null)
+      expect(screenText(screen)).toMatch(/not sharing their location right now/)
+      expect(has(screen, 'Open in Maps')).toBe(false)
+    })
+
+    it('is never even asked for while the delivery is not out for delivery, or has no rider', async () => {
+      await open(member(...ALL), { ...DELIVERY, status: 'PICKED_UP' }, POINT)
+      expect(api.get).not.toHaveBeenCalledWith('/deliveries/d1/rider-location')
+      api.get.mockClear()
+      await open(member(...ALL), { ...DELIVERY, riderId: undefined }, POINT)
+      expect(api.get).not.toHaveBeenCalledWith('/deliveries/d1/rider-location')
+    })
+
+    it('can be refreshed', async () => {
+      const screen = await open(member(...ALL), DELIVERY, POINT)
+      const before = api.get.mock.calls.filter(([url]) => url === '/deliveries/d1/rider-location').length
+      await press(screen, 'Refresh')
+      const after = api.get.mock.calls.filter(([url]) => url === '/deliveries/d1/rider-location').length
+      expect(after).toBe(before + 1)
+    })
   })
 
   it('a finished delivery cannot be reassigned', async () => {

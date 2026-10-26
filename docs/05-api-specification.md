@@ -1266,6 +1266,20 @@ total, at `GET /rider/deliveries/cash` (`{ cash: { count, total } }`). See
 
 ---
 
+# 22e. Device and Rider Location Endpoints
+
+```text
+PUT    /api/v1/devices/push-token                      riders, team members: { token, platform? }   (docs/12 §31)
+DELETE /api/v1/devices/push-token                      the same people: { token }
+PUT    /api/v1/rider/deliveries/location               rider: { latitude, longitude, accuracy? }    (docs/11 §30)
+DELETE /api/v1/rider/deliveries/location               rider
+GET    /api/v1/deliveries/:id/rider-location           customer (own order), brand with delivery.view: { location }
+```
+
+Errors: `409 NO_ACTIVE_DELIVERY` (the rider has nothing out for delivery), `429` (more than 12 location updates a minute).
+
+---
+
 # 22d. Online Payment Endpoints
 
 Details and rules: `10-payment-system.md` §29.

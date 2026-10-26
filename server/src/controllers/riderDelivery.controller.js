@@ -1,4 +1,5 @@
-const { riderListQuerySchema, riderStatusSchema, completeDeliverySchema } = require('../validators/delivery.validator');
+const { riderListQuerySchema, riderStatusSchema, completeDeliverySchema, riderLocationSchema } = require('../validators/delivery.validator');
+const { recordLocation, clearLocation } = require('../services/riderLocation.service');
 const { objectIdParamSchema } = require('../validators/common.validator');
 const {
   listRiderDeliveries,
@@ -81,4 +82,25 @@ async function cash(req, res, next) {
   }
 }
 
-module.exports = { list, getById, updateStatus, complete, cash };
+// The rider's phone reports where it is (only while they share and have a delivery out).
+async function shareLocation(req, res, next) {
+  const body = riderLocationSchema.safeParse(req.body);
+  if (!body.success) return invalid(res, body.error);
+  try {
+    await recordLocation({ ...who(req), ...body.data });
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    return handleError(err, res, next);
+  }
+}
+
+async function stopSharing(req, res, next) {
+  try {
+    await clearLocation({ riderId: req.user._id });
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+module.exports = { list, getById, updateStatus, complete, cash, shareLocation, stopSharing };

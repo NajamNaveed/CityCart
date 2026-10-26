@@ -6,6 +6,7 @@ const Brand = require('../models/brand.model');
 const { ROLES } = require('../config/roles');
 const { PERMISSIONS } = require('../config/permissions');
 const { emitToUser } = require('../sockets');
+const { sendPushToUsers } = require('./push.service');
 
 /**
  * Notification domain logic (docs/12-notification-system.md). Both halves of
@@ -59,6 +60,8 @@ async function notify({ userIds, type, title, message, data }) {
     for (const doc of docs) {
       emitToUser(doc.userId, toPayload(doc));
     }
+    // Phones that signed in to the Partner app also get it as a push (off unless PUSH_ENABLED=true).
+    await sendPushToUsers(ids, { title, body: message, data: { ...(data || {}), type } });
     return docs;
   } catch (err) {
     console.error(`[notifications] could not deliver "${type}": ${err.message}`);

@@ -980,7 +980,9 @@ Phase E  Online payments through a hosted gateway checkout with a signed   BUILT
          webhook. Built and tested with a TEST gateway; a real gateway adapter
          and real refunds are still to do (docs/20 §5.6). Card data is never stored.
 
-Phase F  Optional: push notification on assignment, rider live location.
+Phase F  Push notifications to the Partner app and opt-in rider location      BUILT
+         (last seen + map link). Tested with mocks; push needs an EAS build to try
+         on a phone (docs/20 §5.7).
 ```
 
 Each phase follows the dependency rule above: no new package without approval.

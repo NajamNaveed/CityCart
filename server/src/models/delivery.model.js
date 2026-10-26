@@ -76,7 +76,7 @@ const deliverySchema = new mongoose.Schema(
       trim: true,
     },
     // The rider (User, role RIDER, same brand) who delivers this order
-    // (docs/11 §11a, docs/20). assignedAgent keeps the display name: it is set
+    // (docs/11 §12, docs/20). assignedAgent keeps the display name: it is set
     // to the rider's name on assignment, or typed by hand when no rider is used.
     riderId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -85,7 +85,7 @@ const deliverySchema = new mongoose.Schema(
     assignedAt: {
       type: Date,
     },
-    // Six-digit proof-of-delivery code (docs/11 §11b). Shown only to the
+    // Six-digit proof-of-delivery code (docs/11 §19). Shown only to the
     // customer, never to the brand or rider, and never returned by default
     // (select: false): the rider types it in to complete the delivery.
     deliveryCode: {

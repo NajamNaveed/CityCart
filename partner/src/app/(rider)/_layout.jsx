@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router'
 import Feather from '@expo/vector-icons/Feather'
 import RequireRole from '../../components/RequireRole'
+import { useLocationSharing } from '../../hooks/useLocationSharing'
 import { useUnreadCount } from '../../hooks/useUnreadCount'
 import { colors, weights } from '../../theme'
 
@@ -12,6 +13,8 @@ const tab = (title, icon) => ({
 // The rider's four places: their deliveries, the cash they hold, alerts, and their account.
 export default function RiderTabs() {
   const { count, refresh } = useUnreadCount()
+  // Reports the rider's position while they have chosen to share it and a delivery is out.
+  useLocationSharing()
   return (
     <RequireRole role="RIDER">
       <Tabs

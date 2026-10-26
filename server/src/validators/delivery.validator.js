@@ -67,7 +67,15 @@ const completeDeliverySchema = z.object({
   code: z.string().trim().regex(CODE_PATTERN, `code must be ${CODE_LENGTH} digits`),
 });
 
+// A rider's position (docs/11 §30). Numbers only, in range; accuracy is the phone's estimate in metres.
+const riderLocationSchema = z.object({
+  latitude: z.number({ error: 'latitude must be a number' }).min(-90).max(90),
+  longitude: z.number({ error: 'longitude must be a number' }).min(-180).max(180),
+  accuracy: z.number().min(0).max(100000).optional(),
+});
+
 module.exports = {
+  riderLocationSchema,
   listDeliveriesQuerySchema,
   updateDeliveryStatusSchema,
   updateDeliverySchema,

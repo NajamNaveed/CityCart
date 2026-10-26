@@ -32,7 +32,20 @@
           "imageWidth": 140
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "CityCart Partner uses your location, only while you choose to share it and have a delivery out, so the customer and your brand can see where you are."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#1e3a2f",
+          "defaultChannel": "default"
+        }
+      ]
     ]
   }
 }

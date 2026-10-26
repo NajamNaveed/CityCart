@@ -73,4 +73,16 @@ const chatStartLimiter = rateLimit({
   message: json429('You have started too many conversations. Please try again later.'),
 });
 
-module.exports = { apiLimiter, authLimiter, paymentWriteLimiter, chatSendLimiter, chatStartLimiter };
+// A rider's phone reports its position about every half minute while delivering; this stops a
+// broken or abusive client from flooding the server. Per signed-in rider, after authenticate.
+const riderLocationLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 12,
+  keyGenerator: perUser,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  skip,
+  message: json429('Location updates are too frequent.'),
+});
+
+module.exports = { apiLimiter, authLimiter, paymentWriteLimiter, chatSendLimiter, chatStartLimiter, riderLocationLimiter };
