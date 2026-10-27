@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
-import { Bell, Check, ChevronDown, LayoutDashboard, LogOut, MapPin, Menu as MenuIcon, MessageCircle, Package, Search, ShoppingBag } from 'lucide-react'
+import { Bell, ChevronDown, LayoutDashboard, LogOut, MapPin, Menu as MenuIcon, MessageCircle, Package, Search, ShoppingBag } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useCart } from '../../hooks/useCart'
 import { useCity } from '../../hooks/useCity'
@@ -53,7 +53,7 @@ function SearchForm({ className = '', autoFocus = false, onSubmitted }) {
           type="search"
           autoFocus={autoFocus}
           placeholder="Search products…"
-          className="h-9.5 w-full rounded-md border border-line bg-paper pl-9 pr-3.5 text-[13px] text-ink placeholder-muted/50 outline-none transition focus:w-72 focus:border-ink focus:bg-white focus:ring-2 focus:ring-ink/10"
+          className="h-9.5 w-full rounded-md border border-line bg-paper pl-9 pr-3.5 text-[13px] text-ink placeholder-muted/50 outline-none transition focus:border-ink focus:bg-white focus:ring-2 focus:ring-ink/10"
         />
       </div>
     </form>
@@ -185,53 +185,13 @@ function DrawerLink({ to, children, onClick }) {
   )
 }
 
-// The drawer's city picker: a real list instead of a native select, so every
-// option renders the same way everywhere. Active city gets a clay check.
-function DrawerCityList() {
-  const { cities, cityId, setCityId } = useCity()
-  return (
-    <div>
-      <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted">City</p>
-      <div className="max-h-56 space-y-1 overflow-y-auto pr-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <button
-          type="button"
-          onClick={() => setCityId('')}
-          className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-[13.5px] transition ${
-            !cityId ? 'bg-paper font-semibold text-ink' : 'text-ink/70 hover:bg-paper hover:text-ink'
-          }`}
-        >
-          All cities
-          {!cityId && <Check className="h-3.5 w-3.5 text-clay" aria-hidden="true" />}
-        </button>
-        {cities.map((c) => (
-          <button
-            key={c._id}
-            type="button"
-            onClick={() => setCityId(c._id)}
-            className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-[13.5px] transition ${
-              cityId === c._id
-                ? 'bg-paper font-semibold text-ink'
-                : 'text-ink/70 hover:bg-paper hover:text-ink'
-            }`}
-          >
-            <span className="flex items-center gap-2">
-              <MapPin className="h-3.5 w-3.5 text-muted" aria-hidden="true" />
-              {c.name}
-            </span>
-            {cityId === c._id && <Check className="h-3.5 w-3.5 text-clay" aria-hidden="true" />}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-// The drawer's area row: the current block, or an invitation to set one.
+// The drawer's location row: city and area together, or an invitation to set them. The picker it opens changes both.
 function DrawerArea({ onOpen }) {
   const { block, openPicker } = useNearby()
+  const { city } = useCity()
   return (
     <div>
-      <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Your area</p>
+      <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Your location</p>
       <button
         type="button"
         onClick={() => {
@@ -242,77 +202,11 @@ function DrawerArea({ onOpen }) {
       >
         <span className="flex items-center gap-2">
           <MapPin className="h-3.5 w-3.5 text-clay" aria-hidden="true" />
-          {block ? block.name : 'Set your area'}
+          {block && city ? `${block.name}, ${city.name}` : block ? block.name : city ? city.name : 'Set your location'}
         </span>
         <span className="text-[12px] text-muted">Change</span>
       </button>
     </div>
-  )
-}
-
-// The navbar's city picker (large screens): same choices as the drawer's list,
-// as a dropdown so it stays compact next to the search field.
-function CityMenu() {
-  const { cities, city, cityId, setCityId } = useCity()
-  return (
-    <Menu
-      width="w-60"
-      trigger={({ open, toggle }) => (
-        <button
-          type="button"
-          onClick={toggle}
-          aria-expanded={open}
-          aria-label={`City: ${city ? city.name : 'All cities'}`}
-          className="flex h-9 max-w-36 items-center gap-1.5 rounded-md px-2 text-[13px] font-medium text-ink transition hover:bg-paper"
-        >
-          <MapPin className="h-4 w-4 shrink-0 text-clay" aria-hidden="true" />
-          <span className="truncate">{city ? city.name : 'All cities'}</span>
-          <ChevronDown
-            className={`h-3.5 w-3.5 shrink-0 text-muted transition-transform ${open ? 'rotate-180' : ''}`}
-            aria-hidden="true"
-          />
-        </button>
-      )}
-    >
-      {({ close }) => (
-        <div className="max-h-72 space-y-1 overflow-y-auto p-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <button
-            type="button"
-            onClick={() => {
-              setCityId('')
-              close()
-            }}
-            className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-[13.5px] transition ${
-              !cityId ? 'bg-paper font-semibold text-ink' : 'text-ink/70 hover:bg-paper hover:text-ink'
-            }`}
-          >
-            All cities
-            {!cityId && <Check className="h-3.5 w-3.5 text-clay" aria-hidden="true" />}
-          </button>
-          {cities.map((c) => (
-            <button
-              key={c._id}
-              type="button"
-              onClick={() => {
-                setCityId(c._id)
-                close()
-              }}
-              className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-[13.5px] transition ${
-                cityId === c._id
-                  ? 'bg-paper font-semibold text-ink'
-                  : 'text-ink/70 hover:bg-paper hover:text-ink'
-              }`}
-            >
-              <span className="flex items-center gap-2">
-                <MapPin className="h-3.5 w-3.5 text-muted" aria-hidden="true" />
-                {c.name}
-              </span>
-              {cityId === c._id && <Check className="h-3.5 w-3.5 text-clay" aria-hidden="true" />}
-            </button>
-          ))}
-        </div>
-      )}
-    </Menu>
   )
 }
 
@@ -377,13 +271,9 @@ export default function StoreNavbar() {
           <Link to="/" className="text-[22px] font-semibold tracking-tight text-ink">
             citycart<span className="text-clay">.</span>
           </Link>
-          {/* Mirrors DrawerCityList above lg; small screens pick a city in the drawer.
-              Lives beside the logo because the right cluster has no room to spare. */}
+          {/* ONE location control: it opens the picker where the shopper chooses the city and the area.
+              Lives beside the logo because the right cluster has no room to spare; small screens use the drawer. */}
           <div className="ml-2 hidden lg:block">
-            <CityMenu />
-          </div>
-          {/* The block/area chip needs the extra width of xl screens; smaller ones use the drawer. */}
-          <div className="hidden xl:block">
             <LocationChip />
           </div>
         </div>
@@ -446,7 +336,6 @@ export default function StoreNavbar() {
       <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title="Menu">
         <div className="space-y-5">
           <SearchForm autoFocus onSubmitted={() => setDrawerOpen(false)} />
-          <DrawerCityList />
           <DrawerArea onOpen={() => setDrawerOpen(false)} />
           {user && <QuickAccess />}
 

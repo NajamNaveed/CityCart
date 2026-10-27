@@ -15,7 +15,6 @@ import { useCity } from '../../hooks/useCity'
 import { useRatings } from '../../hooks/useRatings'
 import { useRemote } from '../../hooks/useRemote'
 import { fetchBrands, fetchProducts } from '../../services/catalog'
-import { API_URL, apiIsInsecure } from '../../services/config'
 import { shopHref } from '../../utils/nav'
 import { colors, spacing } from '../../theme'
 
@@ -131,12 +130,6 @@ export default function Home() {
         </>
       )}
 
-      {__DEV__ && API_URL ? (
-        <AppText variant="small" style={{ marginTop: spacing.xl }}>
-          Server: {API_URL}
-          {apiIsInsecure ? '  (plain http: fine for testing, but release builds need https)' : ''}
-        </AppText>
-      ) : null}
     </Screen>
   )
 }

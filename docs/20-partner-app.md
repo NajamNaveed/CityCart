@@ -382,6 +382,12 @@ What remains is the real gateway adapter and real refunds (§5.6 "Not built").
 
 What remains: try push on a real build, and the ideas in §5.7 "Known gaps".
 
+## 6.6 Next features (planned, not built)
+
+Three requests from the owner after testing are planned in `21-next-features-plan.md`: **G** a partner for the
+super admin, **H** substitution of unavailable items, **I** a payment proof photo at the door. Read it before
+building any of them; every decision there has a default awaiting the owner's approval.
+
 ## 7. Open decisions and known gaps
 
 * **Returns** are not built (§6.1): needs a design and the owner's decisions.
@@ -470,6 +476,7 @@ tests; add the same for new rules, in the same style.
 * **2026-10 Phase A** delivered: rider role and management, assignment, partner sign-in and rider endpoints, delivery code, web Riders page, demo data, docs.
 * **2026-10 Phase B** delivered: receipts, cash-on-delivery collection and settlement, rider cash view, demo data, docs.
 * **2026-10 Handoff** written; missing returns backend identified and added as Phase D0.
+* **2026-10 More fixes after testing:** the website's search box no longer grows over the message and notification icons, the two location controls are one (the picker already changes city and area), and the shopper app no longer prints the server address on the home screen. Plan for three new features written (`21`).
 * **2026-10 Fixes after the owner's testing:** one step after Picked up (Out for delivery; `IN_TRANSIT` stays a server status), filter chips no longer stretch to the screen's height (horizontal `ScrollView` needs `flexGrow: 0`), and the leftover `(records)/records.jsx` placeholder must be deleted by hand (Expo Router shows any file in the tab folder as a tab).
 * **2026-10 Phase F** delivered: push notifications to the Partner app (device tokens, Expo push sender, tap to open) and opt-in, foreground rider location with last-seen display for records staff and customers. Two packages added to `partner/` only.
 * **2026-10 Phase E** delivered: online payments with a built-in test gateway (provider layer, signed webhook, idempotent events, stock hold and release, confirm/cancel rules, Pay now in the shopper app and website, demo data). Real gateway adapter pending.
