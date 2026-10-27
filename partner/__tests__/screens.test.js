@@ -231,7 +231,8 @@ describe('one delivery', () => {
 
     expect(api.patch).toHaveBeenCalledWith('/rider/deliveries/d1/status', { status: 'PICKED_UP' })
     expect(screenText(screen)).toMatch(/Marked as picked up/)
-    expect(has(screen, 'On the way')).toBe(true) // the next steps appear
+    expect(has(screen, 'Out for delivery')).toBe(true) // the one next step appears
+    expect(has(screen, 'On the way')).toBe(false) // no duplicate step
     expect(has(screen, 'Picked up')).toBe(false)
   })
 

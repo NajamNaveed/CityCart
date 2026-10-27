@@ -5,16 +5,17 @@ import { getErrorMessage } from '../services/api'
  * server's delivery lifecycle (server/src/config/deliveryTransitions.js); the
  * server still decides, this only decides which buttons to show.
  *
- *   READY_FOR_PICKUP -> PICKED_UP -> IN_TRANSIT -> OUT_FOR_DELIVERY -> DELIVERED (with the code) | FAILED
- *   PICKED_UP -> OUT_FOR_DELIVERY directly, and FAILED -> OUT_FOR_DELIVERY to try again.
+ *   READY_FOR_PICKUP -> PICKED_UP -> OUT_FOR_DELIVERY -> DELIVERED (with the code) | FAILED
+ *   and FAILED -> OUT_FOR_DELIVERY to try again.
+ * The server also has IN_TRANSIT between picked up and out for delivery (the brand can set it from
+ * the website, for example for a courier). A rider carries the parcel from the brand to the customer
+ * in one trip, so the app offers only the one step: after "Picked up" comes "Out for delivery".
  * DELIVERED is not a button: it needs the customer's code.
  */
 const MOVES = {
   READY_FOR_PICKUP: [{ status: 'PICKED_UP', label: 'Picked up' }],
-  PICKED_UP: [
-    { status: 'IN_TRANSIT', label: 'On the way' },
-    { status: 'OUT_FOR_DELIVERY', label: 'Out for delivery' },
-  ],
+  PICKED_UP: [{ status: 'OUT_FOR_DELIVERY', label: 'Out for delivery' }],
+  // A delivery the brand already marked in transit still moves on the same way.
   IN_TRANSIT: [{ status: 'OUT_FOR_DELIVERY', label: 'Out for delivery' }],
   FAILED: [{ status: 'OUT_FOR_DELIVERY', label: 'Try again' }],
 }

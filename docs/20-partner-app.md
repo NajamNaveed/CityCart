@@ -248,7 +248,7 @@ OUT_FOR_DELIVERY` (re-attempt). `PICKED_UP` may also go straight to
 * **Rider screens:** *Deliveries* (To do / Finished, refreshes on open, every minute
   and on pull-down), *Delivery* detail (customer, address and note, **Call** and
   **Open in Maps** through plain `tel:` and `https` links, items, cash to collect,
-  status buttons that mirror the server lifecycle, **Enter code to complete**,
+  status buttons (Picked up, then **Out for delivery**: the server's `IN_TRANSIT` step exists for couriers and the website, but a rider's trip from the brand to the customer is one journey, so the app offers a single step), **Enter code to complete**,
   **Could not deliver** with a required reason), *Cash* (what the rider holds),
   *Alerts* (the inbox; opening a `DELIVERY_ASSIGNED` alert goes to that delivery) and
   *Account* (sign out). The wrong-code message shows tries left; a locked code says
@@ -470,6 +470,7 @@ tests; add the same for new rules, in the same style.
 * **2026-10 Phase A** delivered: rider role and management, assignment, partner sign-in and rider endpoints, delivery code, web Riders page, demo data, docs.
 * **2026-10 Phase B** delivered: receipts, cash-on-delivery collection and settlement, rider cash view, demo data, docs.
 * **2026-10 Handoff** written; missing returns backend identified and added as Phase D0.
+* **2026-10 Fixes after the owner's testing:** one step after Picked up (Out for delivery; `IN_TRANSIT` stays a server status), filter chips no longer stretch to the screen's height (horizontal `ScrollView` needs `flexGrow: 0`), and the leftover `(records)/records.jsx` placeholder must be deleted by hand (Expo Router shows any file in the tab folder as a tab).
 * **2026-10 Phase F** delivered: push notifications to the Partner app (device tokens, Expo push sender, tap to open) and opt-in, foreground rider location with last-seen display for records staff and customers. Two packages added to `partner/` only.
 * **2026-10 Phase E** delivered: online payments with a built-in test gateway (provider layer, signed webhook, idempotent events, stock hold and release, confirm/cancel rules, Pay now in the shopper app and website, demo data). Real gateway adapter pending.
 * **2026-10 Phase D** delivered: the records screens for brand team members (overview, orders, deliveries with rider assignment, receipts, cash hand-over), permission-based tabs, permissions loaded at sign-in, `StatusPill` for all statuses. No server changes.

@@ -6,7 +6,10 @@ import { CODE_LENGTH, isValidCode, sentence, validateLogin } from '../src/utils/
 describe('what a rider can do, by delivery status (mirrors the server lifecycle)', () => {
   it('moves forward one step at a time', () => {
     expect(nextMoves('READY_FOR_PICKUP').map((m) => m.status)).toEqual(['PICKED_UP'])
-    expect(nextMoves('PICKED_UP').map((m) => m.status)).toEqual(['IN_TRANSIT', 'OUT_FOR_DELIVERY'])
+    // one step after picked up: a rider's trip from the brand to the customer is one journey
+    expect(nextMoves('PICKED_UP').map((m) => m.label)).toEqual(['Out for delivery'])
+    expect(nextMoves('PICKED_UP').map((m) => m.status)).toEqual(['OUT_FOR_DELIVERY'])
+    // a delivery the brand already set to in transit still moves on the same way
     expect(nextMoves('IN_TRANSIT').map((m) => m.status)).toEqual(['OUT_FOR_DELIVERY'])
     expect(nextMoves('FAILED').map((m) => m.status)).toEqual(['OUT_FOR_DELIVERY']) // try again
   })

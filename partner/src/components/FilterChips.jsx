@@ -5,7 +5,14 @@ import { colors, radius, spacing, weights } from '../theme'
 // A row of filters that scrolls sideways. `options` is [[value, label], ...].
 export default function FilterChips({ options, value, onChange }) {
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: spacing.lg, paddingBottom: spacing.sm }}>
+    // flexGrow: 0 is essential: a horizontal ScrollView grows to fill the free height of its column by
+    // default, which made every chip as tall as the screen when the list below shared the space.
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={{ flexGrow: 0, flexShrink: 0 }}
+      contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: spacing.lg, paddingBottom: spacing.sm, alignItems: 'center' }}
+    >
       {options.map(([optionValue, label]) => {
         const selected = optionValue === value
         return (
