@@ -8,7 +8,9 @@ const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
 const requireTenant = require('../middleware/requireTenant');
 const requireBrandOwnership = require('../middleware/requireBrandOwnership');
+const requireAdminPermission = require('../middleware/requireAdminPermission');
 const validateObjectIdParam = require('../middleware/validateObjectIdParam');
+const { ADMIN_PERMISSIONS } = require('../config/adminPermissions');
 const { ROLES } = require('../config/roles');
 
 const router = express.Router();
@@ -21,23 +23,22 @@ router.post('/apply', authLimiter, apply); // public seller sign-up (creates an 
 router.get('/:id', getById);
 router.get('/:id/storefront', storefront);
 
-// Super Admin only
-router.post('/', authenticate, requireRole(ROLES.SUPER_ADMIN), create);
+// Platform-wide brand management: super admin, or a partner with admin.brands.
+router.post('/', authenticate, requireAdminPermission(ADMIN_PERMISSIONS.BRANDS), create);
 router.patch(
   '/:id/status',
   authenticate,
-  requireRole(ROLES.SUPER_ADMIN),
+  requireAdminPermission(ADMIN_PERMISSIONS.BRANDS),
   updateStatus
 );
 
-// Super Admin (any brand) or Brand Admin (own brand only) — the same
-// route serves both; requireBrandOwnership bypasses the ownership
-// comparison entirely for SUPER_ADMIN, and enforces it for BRAND_ADMIN
-// (docs/05 §9 — "SUPER_ADMIN, BRAND_ADMIN -> own brand only").
+// Super admin (any brand), a partner with admin.brands, or Brand Admin (own
+// brand only) — the same route serves both; requireBrandOwnership bypasses
+// platform admins and enforces the brand for BRAND_ADMIN (docs/05 §9).
 router.patch(
   '/:id',
   authenticate,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.BRAND_ADMIN),
+  requireAdminPermission(ADMIN_PERMISSIONS.BRANDS, { allowRoles: [ROLES.BRAND_ADMIN] }),
   requireTenant,
   validateObjectIdParam,
   requireBrandOwnership((req) => getBrandByIdRaw(req.params.id), {

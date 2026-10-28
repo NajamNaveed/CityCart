@@ -6,7 +6,7 @@ import { EmptyState, Skeleton } from '../../components/ui'
 import { PageHeader, Pager, StatusBadge, selectClass, tableHead, tableRow, tableShell } from '../../components/brand/Bits'
 import { formatDateTime, humanize } from '../../ui'
 
-const ROLES = ['CUSTOMER', 'BRAND_ADMIN', 'BRAND_EMPLOYEE', 'SUPER_ADMIN']
+const ROLES = ['CUSTOMER', 'BRAND_ADMIN', 'BRAND_EMPLOYEE', 'ADMIN_PARTNER', 'SUPER_ADMIN']
 
 export default function Users() {
   const [params, setParams] = useSearchParams()

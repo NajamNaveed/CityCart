@@ -62,8 +62,13 @@ function requireBrandOwnership(fetchResource, options = {}) {
       }
 
       // SUPER_ADMIN is platform-wide and bypasses brand ownership
-      // entirely (docs/02 §7).
-      if (req.user.role === ROLES.SUPER_ADMIN) {
+      // entirely (docs/02 §7). A platform-admin partner does too, but only
+      // after requireAdminPermission matched the route's admin area (it sets
+      // req.adminPartner).
+      if (
+        req.user.role === ROLES.SUPER_ADMIN ||
+        (req.user.role === ROLES.ADMIN_PARTNER && req.adminPartner)
+      ) {
         req[resourceKey] = resource;
         return next();
       }

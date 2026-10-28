@@ -50,14 +50,14 @@ async function listDeliveries(brandId, { status, riderId, page, limit } = {}) {
 
 /**
  * Access (docs/05 §22a, docs/11 §27): the owning brand, the customer who
- * owns the order, or SUPER_ADMIN. Anyone else gets a 404, so another
- * customer's address (or another brand's delivery) can't be probed.
+ * owns the order, or a platform admin (docs/21 §G). Anyone else gets a 404,
+ * so another customer's address (or another brand's delivery) can't be probed.
  */
 async function getDeliveryForUser(user, tenantBrandId, deliveryId) {
   const filter = { _id: deliveryId };
   if (user.role === 'CUSTOMER') {
     filter.customerId = user._id;
-  } else if (user.role !== 'SUPER_ADMIN') {
+  } else if (user.role !== ROLES.SUPER_ADMIN && user.role !== ROLES.ADMIN_PARTNER) {
     filter.brandId = tenantBrandId;
   }
   const delivery = await Delivery.findOne(filter);

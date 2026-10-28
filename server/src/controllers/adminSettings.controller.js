@@ -1,5 +1,6 @@
 const { platformSettingsSchema } = require('../validators/adminSettings.validator');
 const { getPlatformSettings, updatePlatformSettings } = require('../services/adminSettings.service');
+const { recordAdminAction } = require('../services/adminAction.service');
 const { formatZodError } = require('../utils/formatZodError');
 
 async function getSettings(req, res, next) {
@@ -23,6 +24,7 @@ async function patchSettings(req, res, next) {
 
   try {
     const settings = await updatePlatformSettings(parsedBody.data);
+    await recordAdminAction({ actor: req.user, action: 'settings.update', target: { type: 'PlatformSettings' } });
     return res.status(200).json({ success: true, message: 'Platform settings updated', settings });
   } catch (err) {
     return next(err);

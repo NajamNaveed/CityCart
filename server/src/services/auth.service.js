@@ -1,4 +1,5 @@
 const User = require('../models/user.model');
+const AdminPartner = require('../models/adminPartner.model');
 const { hashPassword, comparePassword } = require('../utils/password');
 const { signToken } = require('../utils/jwt');
 const { ROLES, STAFF_ROLES, PARTNER_ROLES } = require('../config/roles');
@@ -84,7 +85,7 @@ const PORTAL_ROLES = Object.freeze({
   customer: [ROLES.CUSTOMER],
   brand: [ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE],
   partner: PARTNER_ROLES,
-  admin: [ROLES.SUPER_ADMIN],
+  admin: [ROLES.SUPER_ADMIN, ROLES.ADMIN_PARTNER],
 });
 
 const PORTAL_ACCOUNT_TYPES = Object.freeze({
@@ -132,6 +133,15 @@ async function loginUser({ email, password }, portal = 'customer') {
     throw new AuthError(401, GENERIC_LOGIN_ERROR);
   }
 
+  // A deactivated partner record blocks the login even if the User row was
+  // not flipped for some reason (the deactivate path flips both).
+  if (user.role === ROLES.ADMIN_PARTNER) {
+    const partner = await AdminPartner.findOne({ userId: user._id });
+    if (!partner || !partner.isActive) {
+      throw new AuthError(401, GENERIC_LOGIN_ERROR);
+    }
+  }
+
   // Staff sessions are short-lived (docs/06 §9 — staff session security):
   // the token expires with the short staff cookie and is re-issued on every
   // authenticated staff request, so an active staff member never notices.
@@ -169,6 +179,9 @@ function toSafeUser(user) {
     ...(user.accessRestricted && {
       access: { restricted: true, expiresAt: user.accessExpiresAt },
     }),
+    // A partner's first sign-in (or after a reset): the dashboard must send
+    // them to choose a new password.
+    ...(user.mustChangePassword && { mustChangePassword: true }),
   };
 }
 

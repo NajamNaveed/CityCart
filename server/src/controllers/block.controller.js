@@ -14,6 +14,7 @@ const {
   BlockError,
 } = require('../services/block.service');
 const { formatZodError } = require('../utils/formatZodError');
+const { recordAdminAction } = require('../services/adminAction.service');
 
 function invalid(res, error) {
   return res.status(400).json({
@@ -66,6 +67,11 @@ async function create(req, res, next) {
 
   try {
     const block = await createBlock(parsed.data);
+    await recordAdminAction({
+      actor: req.user,
+      action: 'block.create',
+      target: { type: 'Block', id: block && block._id, label: block && block.name },
+    });
     return res.status(201).json({ success: true, message: 'Block created', block });
   } catch (err) {
     return sendError(err, res, next);
@@ -80,6 +86,11 @@ async function update(req, res, next) {
 
   try {
     const block = await updateBlock(params.data.id, body.data);
+    await recordAdminAction({
+      actor: req.user,
+      action: 'block.update',
+      target: { type: 'Block', id: block && block._id, label: block && block.name },
+    });
     return res.status(200).json({ success: true, message: 'Block updated', block });
   } catch (err) {
     return sendError(err, res, next);
@@ -92,6 +103,11 @@ async function remove(req, res, next) {
 
   try {
     const block = await deactivateBlock(params.data.id);
+    await recordAdminAction({
+      actor: req.user,
+      action: 'block.deactivate',
+      target: { type: 'Block', id: block && block._id, label: block && block.name },
+    });
     return res.status(200).json({ success: true, message: 'Block deactivated', block });
   } catch (err) {
     return sendError(err, res, next);

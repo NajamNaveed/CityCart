@@ -20,7 +20,7 @@ const { ALL_ROLES, BRAND_SCOPED_ROLES } = require('../config/roles');
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const accountTypeForRole = (role) => {
   if (role === 'CUSTOMER') return 'CUSTOMER';
-  if (role === 'SUPER_ADMIN') return 'PLATFORM_ADMIN';
+  if (role === 'SUPER_ADMIN' || role === 'ADMIN_PARTNER') return 'PLATFORM_ADMIN';
   return 'BRAND';
 };
 
@@ -50,6 +50,13 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: 0,
       min: 0,
+    },
+    // Set when a platform-admin partner is created or their password is
+    // reset: every request except /auth/me, /auth/password and /auth/logout
+    // is refused (docs/21 §G.2) until they choose their own password.
+    mustChangePassword: {
+      type: Boolean,
+      default: false,
     },
     role: {
       type: String,

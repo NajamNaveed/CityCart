@@ -4,10 +4,12 @@ const { list, getById, updateStatus, update, assign, getCode, riderLocation } = 
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
 const requirePermission = require('../middleware/requirePermission');
+const requireAdminPermission = require('../middleware/requireAdminPermission');
 const requireTenant = require('../middleware/requireTenant');
 const { ROLES } = require('../config/roles');
 const { forBrandUsers, BRAND_ROLES } = require('../middleware/forBrandUsers');
 const { PERMISSIONS } = require('../config/permissions');
+const { ADMIN_PERMISSIONS } = require('../config/adminPermissions');
 
 const router = express.Router();
 
@@ -33,7 +35,7 @@ router.get(
 router.get(
   '/:id',
   authenticate,
-  requireRole(ROLES.CUSTOMER, ROLES.SUPER_ADMIN, ...BRAND_ROLES),
+  requireAdminPermission(ADMIN_PERMISSIONS.ORDERS, { allowRoles: [ROLES.CUSTOMER, ...BRAND_ROLES] }),
   forBrandUsers(requirePermission(PERMISSIONS.DELIVERY_VIEW)),
   forBrandUsers(requireTenant),
   getById

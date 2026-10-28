@@ -132,14 +132,14 @@ const adminView = (r) => ({ ...brandView(r), brandId: r.brandId, customerId: r.c
 
 function viewFor(user) {
   if (user.role === ROLES.CUSTOMER) return customerView;
-  if (user.role === ROLES.SUPER_ADMIN) return adminView;
+  if (user.role === ROLES.SUPER_ADMIN || user.role === ROLES.ADMIN_PARTNER) return adminView;
   return brandView;
 }
 
-// Customers: their own. Brand users: their brand's (tenantBrandId). Super admin: all.
+// Customers: their own. Brand users: their brand's (tenantBrandId). Platform admins: all.
 function scopeFor(user, tenantBrandId) {
   if (user.role === ROLES.CUSTOMER) return { customerId: user._id };
-  if (user.role === ROLES.SUPER_ADMIN) return {};
+  if (user.role === ROLES.SUPER_ADMIN || user.role === ROLES.ADMIN_PARTNER) return {};
   return { brandId: tenantBrandId };
 }
 

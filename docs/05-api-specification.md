@@ -125,9 +125,18 @@ Users must not be allowed to register themselves as:
 
 ```text
 SUPER_ADMIN
+ADMIN_PARTNER
 BRAND_ADMIN
 BRAND_EMPLOYEE
 ```
+
+`POST /api/v1/auth/admin/login` accepts both `SUPER_ADMIN` and `ADMIN_PARTNER`
+(web only). The same generic `401` is returned for a wrong password, an
+unknown email, a deactivated partner, and an account using the wrong portal.
+A newly created or reset partner signs in with the temporary password and is
+then restricted to `GET /auth/me`, `PATCH /auth/password` and
+`POST /auth/logout` until they choose their own password; every other request
+answers `403` with `code: "PASSWORD_CHANGE_REQUIRED"`.
 
 ---
 
@@ -217,13 +226,27 @@ GET /api/v1/auth/me
 
 Returns the authenticated user's safe profile information.
 
+An `ADMIN_PARTNER` additionally receives its areas and mode:
+
+```json
+{ "role": "ADMIN_PARTNER", "permissions": ["admin.brands", "admin.orders"], "readOnly": false }
+```
+
+While `mustChangePassword` is set, the user object includes
+`"mustChangePassword": true`. This endpoint stays reachable in that state so the
+dashboard can show the password form.
+
 ## Change Password
 
 ```text
 PATCH /api/v1/auth/password
 ```
 
-Currently available to authenticated `BRAND_ADMIN` accounts. The request requires the current password, a new password, and its confirmation. Successful changes rotate the password version, invalidating other sessions while issuing a fresh cookie for the current staff tab.
+Available to authenticated `BRAND_ADMIN`, `SUPER_ADMIN` and `ADMIN_PARTNER`
+accounts (and anyone in the forced first-sign-in state). The request requires
+the current password, a new password, and its confirmation. Successful changes
+rotate the password version, invalidating other sessions while issuing a fresh
+cookie for the current staff tab, and clear `mustChangePassword`.
 
 ---
 
@@ -1005,6 +1028,100 @@ GET /api/v1/admin/orders/:id
 ```
 
 These endpoints must remain separate from brand-scoped endpoints where doing so improves authorization clarity.
+
+---
+
+# 18a. Platform Admin Partner Endpoints
+
+Feature G (`21-next-features-plan.md` §G). **Super Admin only** — a partner can
+never manage the team, whatever areas they hold.
+
+```text
+GET    /api/v1/admin/partners             list the team (page, limit)
+POST   /api/v1/admin/partners             add a partner
+PATCH  /api/v1/admin/partners/:id         name, phone, permissions, readOnly, isActive
+DELETE /api/v1/admin/partners/:id         deactivate (the seat is freed)
+PATCH  /api/v1/admin/partners/:id/password  set a new temporary password
+```
+
+Add body:
+
+```json
+{
+  "name": "Pat Partner",
+  "email": "pat@example.com",
+  "password": "Temp@12345",
+  "phone": "+923001234567",
+  "permissions": ["admin.brands", "admin.orders"],
+  "readOnly": false
+}
+```
+
+The role is never client-supplied: the endpoint only ever creates
+`ADMIN_PARTNER` accounts with `accountType: PLATFORM_ADMIN` and
+`mustChangePassword: true`. Answers:
+
+* `201` with the new partner (never the password hash);
+* `409` `PARTNER_LIMIT_REACHED` when 5 active partners already exist;
+* `409` when the email is already registered in the platform portal.
+
+`DELETE` deactivates both the `AdminPartner` record and the `User`, so the
+partner is signed out at once (the token stops working because every request
+reloads the user). Reactivation is `PATCH { "isActive": true }`.
+
+The password reset bumps `passwordVersion`, which invalidates every existing
+partner session, and sets `mustChangePassword` again.
+
+List response:
+
+```json
+{
+  "success": true,
+  "items": [
+    {
+      "_id": "partner_id",
+      "permissions": ["admin.brands"],
+      "readOnly": false,
+      "isActive": true,
+      "createdBy": "super_admin_id",
+      "createdAt": "2026-10-27T10:00:00.000Z",
+      "user": { "_id": "user_id", "name": "Pat Partner", "email": "pat@example.com",
+                "phone": "+923001234567", "isActive": true, "mustChangePassword": true }
+    }
+  ],
+  "pagination": { "page": 1, "limit": 20, "total": 1, "pages": 1 }
+}
+```
+
+## Admin audit log
+
+```text
+GET /api/v1/admin/activity            (Super Admin only; page, limit, action, actor)
+```
+
+Response: `{ success, items: [{ _id, action, actorRole, actor: { _id, name, email }, target, details, createdAt }], pagination }`.
+Every admin write by anyone calls this log (best-effort; a log failure never
+fails the action itself).
+
+## Admin area permissions in this document
+
+Every endpoint below that says "Super Admin only" (or "Super Admin") is now
+"Super Admin, or a partner holding the matching area":
+
+| Area                | Guards |
+| ------------------- | ------ |
+| `admin.brands`      | brand list/detail, approve, status, terminate, create |
+| `admin.users`       | `/admin/users` |
+| `admin.orders`      | `/admin/orders` and admin order detail |
+| `admin.reviews`     | `/admin/reviews` and review moderation |
+| `admin.locations`   | city and block writes |
+| `admin.settings`    | `/admin/settings` |
+| `admin.analytics`   | `/admin/analytics` |
+| `admin.payments`    | `/payments/events` and receipt readers for platform admins |
+
+A partner with `readOnly: true` is refused on every non-GET admin request with
+`403 READ_ONLY`; a missing area answers `403 PERMISSION_DENIED` plus the
+`permission` that would be needed.
 
 ---
 

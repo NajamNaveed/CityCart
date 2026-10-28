@@ -12,6 +12,7 @@ const { toSafeUser } = require('../services/auth.service');
 const { signToken } = require('../utils/jwt');
 const { AUTH_COOKIE_NAME, authCookieOptions } = require('../config/cookie');
 const { formatZodError } = require('../utils/formatZodError');
+const { recordAdminAction } = require('../services/adminAction.service');
 
 function invalid(res, error) {
   return res.status(400).json({ success: false, message: 'Validation failed.', errors: formatZodError(error) });
@@ -89,6 +90,12 @@ async function adminTerminate(req, res, next) {
       reason: body.data.reason,
       graceHours: body.data.graceHours,
       adminId: req.user._id,
+    });
+    await recordAdminAction({
+      actor: req.user,
+      action: 'brand.terminate',
+      target: { type: 'Brand', id: params.data.id },
+      details: body.data.reason,
     });
     return res.status(200).json({ success: true, message: 'Brand terminated', ...result });
   } catch (err) {

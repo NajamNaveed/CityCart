@@ -16,6 +16,10 @@ const {
 } = require('../services/brand.service');
 const { formatZodError } = require('../utils/formatZodError');
 const { getBrandStorefront, StorefrontError } = require('../services/storefront.service');
+const { recordAdminAction } = require('../services/adminAction.service');
+const { ROLES } = require('../config/roles');
+
+const isPlatformAdmin = (user) => user.role === ROLES.SUPER_ADMIN || user.role === ROLES.ADMIN_PARTNER;
 
 async function list(req, res, next) {
   const parsedQuery = listBrandsQuerySchema.safeParse(req.query);
@@ -82,6 +86,11 @@ async function create(req, res, next) {
     // req.user's brandId or an arbitrary status in the body, it's
     // dropped by Zod before reaching the service.
     const brand = await createBrand(parsedBody.data);
+    await recordAdminAction({
+      actor: req.user,
+      action: 'brand.create',
+      target: { type: 'Brand', id: brand && brand._id, label: brand && brand.name },
+    });
     return res.status(201).json({ success: true, message: 'Brand created', brand });
   } catch (err) {
     if (err instanceof BrandError) {
@@ -115,6 +124,15 @@ async function update(req, res, next) {
     // the requireBrandOwnership middleware (routes/brand.routes.js) —
     // reused here rather than fetching the brand a second time.
     const brand = await applyBrandUpdate(req.resource, parsedBody.data);
+    // Only a platform admin's edit is an admin action; the same route also
+    // serves a brand owner editing their own brand.
+    if (isPlatformAdmin(req.user)) {
+      await recordAdminAction({
+        actor: req.user,
+        action: 'brand.update',
+        target: { type: 'Brand', id: brand && brand._id, label: brand && brand.name },
+      });
+    }
     return res.status(200).json({ success: true, message: 'Brand updated', brand });
   } catch (err) {
     if (err instanceof BrandError) {
@@ -145,6 +163,12 @@ async function updateStatus(req, res, next) {
 
   try {
     const brand = await updateBrandStatus(parsedParams.data.id, parsedBody.data.status);
+    await recordAdminAction({
+      actor: req.user,
+      action: 'brand.status',
+      target: { type: 'Brand', id: brand && brand._id, label: brand && brand.name },
+      details: `Status changed to ${parsedBody.data.status}.`,
+    });
     return res.status(200).json({ success: true, message: 'Brand status updated', brand });
   } catch (err) {
     if (err instanceof BrandError) {

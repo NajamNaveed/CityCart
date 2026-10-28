@@ -15,7 +15,7 @@ const LOGIN_PATHS = {
 // keep their normal persistent session. The short-lived staff cookie on
 // the server is the backstop; this marker is the tab-close detector.
 const STAFF_TAB_KEY = 'citycart.staffTab'
-const STAFF_ROLES = ['BRAND_ADMIN', 'BRAND_EMPLOYEE', 'SUPER_ADMIN']
+const STAFF_ROLES = ['BRAND_ADMIN', 'BRAND_EMPLOYEE', 'SUPER_ADMIN', 'ADMIN_PARTNER']
 const isStaff = (role) => STAFF_ROLES.includes(role)
 
 export function AuthProvider({ children }) {
@@ -82,6 +82,14 @@ export function AuthProvider({ children }) {
     return res.data
   }, [])
 
+  // Re-reads the session after the user changes something about themselves
+  // (a partner choosing a password clears mustChangePassword server-side).
+  const refresh = useCallback(async () => {
+    const me = await api.get('/auth/me')
+    setUser(me.data.user)
+    return me.data.user
+  }, [])
+
   const logout = useCallback(async () => {
     try {
       await api.post('/auth/logout')
@@ -92,8 +100,8 @@ export function AuthProvider({ children }) {
   }, [])
 
   const value = useMemo(
-    () => ({ user, loading, login, register, applyForBrand, logout }),
-    [user, loading, login, register, applyForBrand, logout],
+    () => ({ user, loading, login, register, applyForBrand, logout, refresh }),
+    [user, loading, login, register, applyForBrand, logout, refresh],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

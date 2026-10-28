@@ -9,6 +9,9 @@
  */
 const ROLES = Object.freeze({
   SUPER_ADMIN: 'SUPER_ADMIN',
+  // A delegated platform admin (docs/21 §G): no brand, web only, and only
+  // the admin areas the super admin ticked for them (AdminPartner.permissions).
+  ADMIN_PARTNER: 'ADMIN_PARTNER',
   BRAND_ADMIN: 'BRAND_ADMIN',
   BRAND_EMPLOYEE: 'BRAND_EMPLOYEE',
   // Delivery rider of ONE brand (docs/20). Signs in only through the partner app.
@@ -24,11 +27,28 @@ const BRAND_SCOPED_ROLES = Object.freeze([ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYE
 
 // Roles whose sessions are short-lived and per-tab (docs/06 §9 — staff
 // session security): the brand dashboard and the platform admin panel.
-const STAFF_ROLES = Object.freeze([ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE, ROLES.RIDER, ROLES.SUPER_ADMIN]);
+const STAFF_ROLES = Object.freeze([
+  ROLES.BRAND_ADMIN,
+  ROLES.BRAND_EMPLOYEE,
+  ROLES.RIDER,
+  ROLES.SUPER_ADMIN,
+  ROLES.ADMIN_PARTNER,
+]);
+
+// The platform admin panel's roles (docs/21 §G). The super admin holds every
+// admin permission implicitly; a partner holds only AdminPartner.permissions.
+const PLATFORM_ADMIN_ROLES = Object.freeze([ROLES.SUPER_ADMIN, ROLES.ADMIN_PARTNER]);
 
 // Roles that may sign in through the CityCart Partner app (docs/20): riders and
 // brand team members (the order-records person). Brand owners and the super
 // admin stay on the web dashboards.
 const PARTNER_ROLES = Object.freeze([ROLES.RIDER, ROLES.BRAND_EMPLOYEE]);
 
-module.exports = { ROLES, ALL_ROLES, BRAND_SCOPED_ROLES, STAFF_ROLES, PARTNER_ROLES };
+module.exports = {
+  ROLES,
+  ALL_ROLES,
+  BRAND_SCOPED_ROLES,
+  STAFF_ROLES,
+  PARTNER_ROLES,
+  PLATFORM_ADMIN_ROLES,
+};

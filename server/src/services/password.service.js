@@ -12,7 +12,10 @@ async function replacePasswordHash({ userId, newPassword, expectedPasswordHash }
   const passwordHash = await hashPassword(newPassword);
   const updatedUser = await User.findOneAndUpdate(
     { _id: userId, ...(expectedPasswordHash !== undefined && { passwordHash: expectedPasswordHash }) },
-    { $set: { passwordHash }, $inc: { passwordVersion: 1 } },
+    {
+      $set: { passwordHash, mustChangePassword: false },
+      $inc: { passwordVersion: 1 },
+    },
     { new: true, runValidators: true }
   );
 

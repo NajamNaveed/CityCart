@@ -70,6 +70,8 @@ MongoDB
 ├── Orders
 ├── Payments
 ├── Reviews
+├── AdminPartners
+├── AdminActions
 └── Notifications
 ```
 
@@ -166,6 +168,7 @@ email
 accountType
 passwordHash
 passwordVersion
+mustChangePassword
 role
 brandId
 phone
@@ -181,6 +184,7 @@ Allowed values:
 
 ```text
 SUPER_ADMIN
+ADMIN_PARTNER
 BRAND_ADMIN
 BRAND_EMPLOYEE
 RIDER
@@ -188,6 +192,10 @@ CUSTOMER
 ```
 
 `RIDER` (added October 2026, `20-partner-app.md`) is a brand-scoped account with `accountType: BRAND`; riders are plain `User` records, not a separate collection.
+
+`ADMIN_PARTNER` (added October 2026, `21-next-features-plan.md` §G) is a delegated platform admin with `accountType: PLATFORM_ADMIN` and no `brandId`. Its ticked areas and read-only flag live on the `adminpartners` record (§12a).
+
+`mustChangePassword` is `false` for normal accounts. It is set when an admin partner is created or has their password reset, so the temporary password cannot be kept; the API then refuses everything except `/auth/me`, `/auth/password` and `/auth/logout` until the partner chooses their own password.
 
 ### `brandId`
 
@@ -203,6 +211,7 @@ Not required for:
 
 ```text
 SUPER_ADMIN
+ADMIN_PARTNER
 CUSTOMER
 ```
 
@@ -407,6 +416,76 @@ Employee permissions are defined in:
 ```text
 02-user-roles-and-permissions.md
 ```
+
+---
+
+# 12a. AdminPartner Model
+
+Collection:
+
+```text
+adminpartners
+```
+
+The delegated platform-admin record of an `ADMIN_PARTNER` user (mirrors the
+Employee model: the login lives on `User`, the platform-admin data here).
+Defined in `21-next-features-plan.md` §G.2.
+
+```text
+_id
+userId          → User (unique)
+permissions     [admin.brands | admin.users | admin.orders | admin.reviews |
+                 admin.locations | admin.settings | admin.analytics | admin.payments]
+readOnly        Boolean, default false
+isActive        Boolean, default true
+createdBy       → User (the Super Admin who added them)
+createdAt
+updatedAt
+```
+
+Constraints:
+
+* `userId` is unique: a user has at most one partner record.
+* At most **5** records with `isActive: true` are allowed; the service refuses
+  a sixth with `409 PARTNER_LIMIT_REACHED`, and deactivating one frees a seat.
+* `permissions` is a closed list (unlike Employee permissions, which are open
+  extensibility), stored with stable names so a renamed permission cannot grant
+  more than intended.
+* The Super Admin never has an `AdminPartner` record: the one-super-admin rule
+  in §7 is unchanged.
+
+Deactivation is mirrored on both records (`AdminPartner.isActive` and
+`User.isActive`) inside one transaction, so a deactivated partner cannot
+authenticate even with an already-issued token (the middleware reloads the
+User on every request).
+
+---
+
+# 12b. AdminAction Model
+
+Collection:
+
+```text
+adminactions
+```
+
+The platform audit log, written for every admin write by the Super Admin or an
+admin partner (`21-next-features-plan.md` §G.2). Visible to the Super Admin only.
+
+```text
+_id
+actor           → User (indexed)
+actorRole       snapshot of the role at the time of the action
+action          resource.action string, e.g. 'brand.terminate', 'settings.update'
+target          { type, id, label }
+details         short human-readable summary (max 500), never secrets
+createdAt
+updatedAt
+```
+
+`createdAt` is indexed descending for the Activity page. Logging is
+best-effort: if the log write fails, the completed action is not turned into an
+error response (the failure is reported on the server console).
 
 ---
 

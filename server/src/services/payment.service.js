@@ -4,20 +4,21 @@ const { runInTransaction } = require('../utils/transaction');
 const { OrderError } = require('./order.service');
 const { notifyPaymentReceived, notifyRefundIssued } = require('./notification.service');
 const { issueReceiptBestEffort } = require('./receipt.service');
+const { ROLES } = require('../config/roles');
 
 const toCents = (amount) => Math.round(amount * 100);
 const fromCents = (cents) => cents / 100;
 
 /**
  * Payment for an order. Access follows ORDER ownership (docs/05 §22): the
- * customer who owns the order, the brand that owns it, or SUPER_ADMIN.
- * Anyone else gets a 404 so order/payment ids can't be probed.
+ * customer who owns the order, the brand that owns it, or a platform admin
+ * (docs/21 §G). Anyone else gets a 404 so order/payment ids can't be probed.
  */
 async function getPaymentForOrder(user, tenantBrandId, orderId) {
   const filter = { _id: orderId };
   if (user.role === 'CUSTOMER') {
     filter.customerId = user._id;
-  } else if (user.role !== 'SUPER_ADMIN') {
+  } else if (user.role !== ROLES.SUPER_ADMIN && user.role !== ROLES.ADMIN_PARTNER) {
     filter.brandId = tenantBrandId;
   }
   const order = await Order.findOne(filter);

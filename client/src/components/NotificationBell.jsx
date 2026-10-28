@@ -27,14 +27,18 @@ function targetFor(notification, user) {
   const data = notification.data || {}
   if (data.orderId) {
     if (user.role === 'CUSTOMER') return `/orders/${data.orderId}`
-    if (user.role === 'SUPER_ADMIN') return `/admin/orders/${data.orderId}`
+    if (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN_PARTNER') return `/admin/orders/${data.orderId}`
     return `/brand/orders/${data.orderId}`
   }
   return null
 }
 
 const inboxPathFor = (role) =>
-  role === 'SUPER_ADMIN' ? '/admin/notifications' : role === 'CUSTOMER' ? '/notifications' : '/brand/notifications'
+  role === 'SUPER_ADMIN' || role === 'ADMIN_PARTNER'
+    ? '/admin/notifications'
+    : role === 'CUSTOMER'
+      ? '/notifications'
+      : '/brand/notifications'
 
 export default function NotificationBell() {
   const { user } = useAuth()

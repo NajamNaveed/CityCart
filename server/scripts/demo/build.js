@@ -93,7 +93,7 @@ function buildDataset({ now = new Date(), hashes }) {
     _id: new ObjectId(), name, email, passwordHash, role,
     accountType: role === 'CUSTOMER' ? 'CUSTOMER' : role === 'SUPER_ADMIN' ? 'PLATFORM_ADMIN' : 'BRAND',
     ...(brandId && { brandId }), phone,
-    avatar: monogram(name, 240), isActive, passwordVersion: 0,
+    avatar: monogram(name, 240), isActive, passwordVersion: 0, mustChangePassword: false,
     ...(restrictedUntil && { accessRestricted: true, accessExpiresAt: restrictedUntil }),
     createdAt, updatedAt: createdAt,
   });

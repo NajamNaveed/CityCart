@@ -3,6 +3,7 @@ const { registerUser, loginUser, toSafeUser, AuthError } = require('../services/
 const { AUTH_COOKIE_NAME, authCookieOptions, staffAuthCookieOptions } = require('../config/cookie');
 const { ROLES, STAFF_ROLES } = require('../config/roles');
 const Employee = require('../models/employee.model');
+const AdminPartner = require('../models/adminPartner.model');
 const { formatZodError } = require('../utils/formatZodError');
 const { changePasswordSchema } = require('../validators/password.validator');
 const { changePassword: changePasswordForUser, PasswordError } = require('../services/password.service');
@@ -154,6 +155,12 @@ async function me(req, res, next) {
     if (req.user.role === ROLES.BRAND_EMPLOYEE) {
       const employee = await Employee.findOne({ userId: req.user._id });
       user.permissions = employee && employee.isActive ? employee.permissions : [];
+    }
+    // A platform-admin partner's ticked areas and read-only mode (docs/21 §G).
+    if (req.user.role === ROLES.ADMIN_PARTNER) {
+      const partner = await AdminPartner.findOne({ userId: req.user._id });
+      user.permissions = partner && partner.isActive ? partner.permissions : [];
+      user.readOnly = Boolean(partner && partner.readOnly);
     }
     return res.status(200).json({ success: true, user });
   } catch (err) {

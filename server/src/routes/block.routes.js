@@ -2,8 +2,8 @@ const express = require('express');
 
 const { list, resolve, create, update, remove } = require('../controllers/block.controller');
 const authenticate = require('../middleware/authenticate');
-const requireRole = require('../middleware/requireRole');
-const { ROLES } = require('../config/roles');
+const requireAdminPermission = require('../middleware/requireAdminPermission');
+const { ADMIN_PERMISSIONS } = require('../config/adminPermissions');
 
 const router = express.Router();
 
@@ -11,10 +11,11 @@ const router = express.Router();
 router.get('/', list);
 router.get('/resolve', resolve); // must stay above any '/:id' route
 
-// Super Admin only (blocks are platform data, like cities).
-router.post('/', authenticate, requireRole(ROLES.SUPER_ADMIN), create);
-router.patch('/:id', authenticate, requireRole(ROLES.SUPER_ADMIN), update);
+// Super admin, or a partner with admin.locations (blocks are platform data,
+// like cities).
+router.post('/', authenticate, requireAdminPermission(ADMIN_PERMISSIONS.LOCATIONS), create);
+router.patch('/:id', authenticate, requireAdminPermission(ADMIN_PERMISSIONS.LOCATIONS), update);
 // Deactivation, not destructive deletion — branches reference blocks.
-router.delete('/:id', authenticate, requireRole(ROLES.SUPER_ADMIN), remove);
+router.delete('/:id', authenticate, requireAdminPermission(ADMIN_PERMISSIONS.LOCATIONS), remove);
 
 module.exports = router;

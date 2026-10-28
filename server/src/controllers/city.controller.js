@@ -13,6 +13,7 @@ const {
   CityError,
 } = require('../services/city.service');
 const { formatZodError } = require('../utils/formatZodError');
+const { recordAdminAction } = require('../services/adminAction.service');
 
 async function list(req, res, next) {
   const parsedQuery = listCitiesQuerySchema.safeParse(req.query);
@@ -65,6 +66,11 @@ async function create(req, res, next) {
 
   try {
     const city = await createCity(parsedBody.data);
+    await recordAdminAction({
+      actor: req.user,
+      action: 'city.create',
+      target: { type: 'City', id: city && city._id, label: city && city.name },
+    });
     return res.status(201).json({ success: true, message: 'City created', city });
   } catch (err) {
     if (err instanceof CityError) {
@@ -95,6 +101,11 @@ async function update(req, res, next) {
 
   try {
     const city = await updateCity(parsedParams.data.id, parsedBody.data);
+    await recordAdminAction({
+      actor: req.user,
+      action: 'city.update',
+      target: { type: 'City', id: city && city._id, label: city && city.name },
+    });
     return res.status(200).json({ success: true, message: 'City updated', city });
   } catch (err) {
     if (err instanceof CityError) {
@@ -116,6 +127,11 @@ async function remove(req, res, next) {
 
   try {
     const city = await deactivateCity(parsedParams.data.id);
+    await recordAdminAction({
+      actor: req.user,
+      action: 'city.deactivate',
+      target: { type: 'City', id: city && city._id, label: city && city.name },
+    });
     return res.status(200).json({ success: true, message: 'City deactivated', city });
   } catch (err) {
     if (err instanceof CityError) {

@@ -27,11 +27,12 @@ The backend must enforce all security rules defined in this document. Frontend r
 
 # 2. User Roles
 
-CityCart has five roles (`RIDER` was added in October 2026, see `20-partner-app.md`):
+CityCart has six roles (`RIDER` was added in October 2026, see `20-partner-app.md`; `ADMIN_PARTNER` is the delegated platform admin described in `21-next-features-plan.md` §G):
 
 | Role             | Scope            | Description                                |
 | ---------------- | ---------------- | ------------------------------------------ |
-| `SUPER_ADMIN`    | Platform-wide    | Manages the entire CityCart platform       |
+| `SUPER_ADMIN`    | Platform-wide    | Owns the entire CityCart platform          |
+| `ADMIN_PARTNER`  | Platform-wide    | A delegated admin holding only ticked areas; web dashboard only |
 | `BRAND_ADMIN`    | One brand        | Owns and manages one brand/store           |
 | `BRAND_EMPLOYEE` | One brand        | Performs assigned tasks within a brand     |
 | `RIDER`          | One brand        | Delivers that brand's orders; partner app only |
@@ -71,10 +72,11 @@ For example:
 ### Session behaviour per role
 
 `CUSTOMER` sessions are persistent in the usual way. Dashboard staff —
-`BRAND_ADMIN`, `BRAND_EMPLOYEE` and `SUPER_ADMIN` — have short-lived,
-per-tab sessions: closing the dashboard tab ends the session and signing in
-again is required. See `06-authentication-and-security.md` §9 (Staff Session
-Security).
+`BRAND_ADMIN`, `BRAND_EMPLOYEE`, `SUPER_ADMIN` and `ADMIN_PARTNER` — have
+short-lived, per-tab sessions: closing the dashboard tab ends the session and
+signing in again is required. See `06-authentication-and-security.md` §9 (Staff
+Session Security). An `ADMIN_PARTNER` signs in on `/admin/login` only; the
+Partner app and the other portals refuse the account.
 
 ---
 
@@ -264,6 +266,28 @@ payments.manage
 
 `payments.manage` guards the payment-status update endpoint (`05-api-specification.md`, §22) and should be treated as at least as sensitive as `orders.manage`.
 
+## 6.14 Admin Partner Permissions
+
+These are platform-level areas, not brand permissions. They are ticked per
+partner by the Super Admin (`docs/21-next-features-plan.md` §G) and checked by
+`requireAdminPermission` on every platform route:
+
+```text
+admin.brands      admin.users       admin.orders      admin.reviews
+admin.locations   admin.settings    admin.analytics    admin.payments
+```
+
+* The Super Admin is implicitly allowed in every area.
+* An `ADMIN_PARTNER` is allowed only in the areas their `AdminPartner` record
+  holds, and only while that record is active.
+* A partner whose record has `readOnly: true` may use read areas but every
+  non-GET admin request is refused with `403 READ_ONLY`.
+* Presets in the dashboard: **Full partner** (all areas) and **Read only**
+  (all areas, `readOnly: true`).
+* Partner management (`/admin/partners`) and the audit log (`/admin/activity`)
+  are **not** delegatable: they stay with the Super Admin regardless of the
+  areas ticked.
+
 ---
 
 # 7. Super Admin
@@ -299,6 +323,34 @@ The Super Admin is not restricted to a single brand.
 ```text
 scope = PLATFORM
 ```
+
+The single-super-admin rule is unchanged: an `ADMIN_PARTNER` is a different
+role with limited areas, never a second Super Admin.
+
+---
+
+# 7a. Admin Partner
+
+Role:
+
+```text
+ADMIN_PARTNER
+```
+
+A delegated platform administrator, created and managed only by the Super
+Admin (web: **Admin team**). It has no `brandId`; its account type is
+`PLATFORM_ADMIN`, like the Super Admin.
+
+* It holds the areas ticked on its `AdminPartner` record (§6.14) and may also
+  carry `readOnly`.
+* It is created with a temporary password and `mustChangePassword`; until it
+  chooses a new password, only `GET /auth/me`, `PATCH /auth/password` and
+  `POST /auth/logout` work (all other requests get `403 PASSWORD_CHANGE_REQUIRED`).
+* Deactivating, reactivating or resetting a partner is the Super Admin's alone.
+* Up to **5** active partners exist at once; deactivating one frees a seat.
+* It cannot touch the Super Admin's account in any way.
+* Every admin write by a partner (and by the Super Admin) is written to the
+  platform audit log, visible to the Super Admin only.
 
 ---
 
@@ -692,6 +744,14 @@ A `RIDER` account is created only by a Brand Admin, or an employee holding
 `riders.create`, inside that brand. The role and brand are never client-supplied,
 and a rider can never be created, edited or promoted by another rider.
 
+### Admin Partner
+
+An `ADMIN_PARTNER` account is created only through the Super Admin's partner
+endpoints (`POST /admin/partners`), never through public registration or any
+brand endpoint. The role, permissions, read-only flag and activation are
+server-controlled; a partner cannot create, edit, deactivate or reset another
+partner, and cannot promote anyone to `SUPER_ADMIN` or `ADMIN_PARTNER`.
+
 ### Customer
 
 Customers cannot change their own role.
@@ -703,6 +763,9 @@ Customers cannot change their own role.
 The following actions require strict authorization:
 
 * Changing user roles
+* Creating or deactivating an `ADMIN_PARTNER`
+* Changing a partner's areas or read-only flag
+* Resetting an admin partner's password
 * Changing employee permissions
 * Creating or deleting brands
 * Approving brands

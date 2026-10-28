@@ -11,7 +11,7 @@ export function safeNext(raw, fallback = '/') {
 
 // Where each kind of account lands after signing in.
 export function homeFor(role) {
-  if (role === 'SUPER_ADMIN') return '/admin'
+  if (role === 'SUPER_ADMIN' || role === 'ADMIN_PARTNER') return '/admin'
   if (role === 'BRAND_ADMIN' || role === 'BRAND_EMPLOYEE') return '/brand'
   return '/'
 }

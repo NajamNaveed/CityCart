@@ -3,6 +3,10 @@ const { objectIdParamSchema } = require('../validators/common.validator');
 const { getPaymentForOrder, updatePaymentStatus } = require('../services/payment.service');
 const { OrderError } = require('../services/order.service');
 const { formatZodError } = require('../utils/formatZodError');
+const { recordAdminAction } = require('../services/adminAction.service');
+const { ROLES } = require('../config/roles');
+
+const isPlatformAdmin = (user) => user.role === ROLES.SUPER_ADMIN || user.role === ROLES.ADMIN_PARTNER;
 
 function invalid(res, error) {
   return res.status(400).json({ success: false, message: 'Validation failed.', errors: formatZodError(error) });
@@ -39,6 +43,14 @@ async function updateStatus(req, res, next) {
       paymentId: params.data.id,
       ...body.data,
     });
+    if (isPlatformAdmin(req.user)) {
+      await recordAdminAction({
+        actor: req.user,
+        action: 'payment.status',
+        target: { type: 'Payment', id: params.data.id },
+        details: `Status set to ${body.data.status}.`,
+      });
+    }
     return res.status(200).json({ success: true, message: 'Payment status updated', payment });
   } catch (err) {
     return handleError(err, res, next);

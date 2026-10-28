@@ -21,6 +21,7 @@ const {
   setReviewApproval,
 } = require('../services/review.service');
 const { formatZodError } = require('../utils/formatZodError');
+const { recordAdminAction } = require('../services/adminAction.service');
 
 function invalid(res, error) {
   return res.status(400).json({ success: false, message: 'Validation failed.', errors: formatZodError(error) });
@@ -134,6 +135,12 @@ async function adminSetApproval(req, res, next) {
   if (!parsed.success) return invalid(res, parsed.error);
   try {
     const review = await setReviewApproval(req.params.id, parsed.data.isApproved);
+    await recordAdminAction({
+      actor: req.user,
+      action: 'review.moderate',
+      target: { type: 'Review', id: review && review._id },
+      details: parsed.data.isApproved ? 'Review shown.' : 'Review hidden.',
+    });
     return res.status(200).json({ success: true, message: parsed.data.isApproved ? 'Review shown' : 'Review hidden', review });
   } catch (err) {
     return handleError(err, res, next);

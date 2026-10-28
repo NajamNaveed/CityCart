@@ -80,6 +80,13 @@ function requirePermission(...permissions) {
           return next();
         }
 
+        case ROLES.ADMIN_PARTNER:
+          // Platform-admin partners reach a shared route only after
+          // requireAdminPermission has matched its admin area (it sets
+          // req.adminPartner). Without that, deny — the area check is the
+          // partner's authorization, not this brand-oriented middleware.
+          return req.adminPartner ? next() : deny();
+
         case ROLES.CUSTOMER:
         default:
           // Customers (and any unrecognized role) never hold

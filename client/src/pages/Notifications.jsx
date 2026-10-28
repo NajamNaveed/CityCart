@@ -23,14 +23,14 @@ import { btnPrimary, formatDateTime, wrap } from '../ui'
 const PAGE_SIZE = 20
 
 const homePathFor = (role) =>
-  role === 'SUPER_ADMIN' ? '/admin' : role === 'CUSTOMER' ? '/' : '/brand'
+  role === 'SUPER_ADMIN' || role === 'ADMIN_PARTNER' ? '/admin' : role === 'CUSTOMER' ? '/' : '/brand'
 
 // Where a notification click should land, per role.
 function targetFor(notification, user) {
   const data = notification?.data || {}
   if (data.orderId) {
     if (user?.role === 'CUSTOMER') return `/orders/${data.orderId}`
-    if (user?.role === 'SUPER_ADMIN') return `/admin/orders/${data.orderId}`
+    if (user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_PARTNER') return `/admin/orders/${data.orderId}`
     return `/brand/orders/${data.orderId}`
   }
   return null

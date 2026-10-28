@@ -44,10 +44,16 @@ Primary roles:
 
 ```text
 SUPER_ADMIN
+ADMIN_PARTNER
 BRAND_ADMIN
 BRAND_EMPLOYEE
 CUSTOMER
 ```
+
+`ADMIN_PARTNER` is a delegated platform admin introduced in October 2026
+(`21-next-features-plan.md` §G): it signs in on the web admin portal, holds only
+the platform areas the Super Admin ticked, and can be limited to read-only. It
+is not a second Super Admin and can never manage partners or the audit log.
 
 Authentication answers:
 
@@ -94,6 +100,7 @@ A public registration request must never be able to select:
 
 ```text
 SUPER_ADMIN
+ADMIN_PARTNER
 BRAND_ADMIN
 BRAND_EMPLOYEE
 ```
@@ -270,10 +277,10 @@ If refresh tokens are introduced, they must be:
 
 ### Staff Session Security (added October 2026)
 
-Dashboard staff — brand admins, brand employees and the platform admin — have
-stricter session rules than shoppers. A shopper's session persists for the
-standard configured lifetime; a staff member's session is short-lived,
-renewed on activity, and bound to their browser tab.
+Dashboard staff — brand admins, brand employees, the super admin and admin
+partners — have stricter session rules than shoppers. A shopper's session
+persists for the standard configured lifetime; a staff member's session is
+short-lived, renewed on activity, and bound to their browser tab.
 
 * Short-lived staff cookie: the brand and platform admin logins (and brand
   employee sign-ins) set the auth cookie with a short lifetime
@@ -383,6 +390,21 @@ req.user = {
 
 The exact implementation may differ, but controllers must never trust arbitrary client-supplied identity information.
 
+### Forced password change
+
+A newly created or password-reset admin partner carries
+`mustChangePassword: true`. After the user is loaded, the middleware refuses
+every request except `GET /auth/me`, `PATCH /auth/password` and
+`POST /auth/logout` with:
+
+```json
+{ "success": false, "message": "Choose a new password before using the dashboard.", "code": "PASSWORD_CHANGE_REQUIRED" }
+```
+
+Changing the password clears the flag and rotates `passwordVersion` (which also
+invalidates every existing session). This is how the temporary password the
+Super Admin handed over stops being usable.
+
 ---
 
 # 12. Account Status
@@ -464,6 +486,23 @@ Own customer resources
 ```
 
 Role checks must happen on the backend.
+
+### Admin partner areas
+
+An `ADMIN_PARTNER` passes the role check for the admin portal, then a second
+check (`requireAdminPermission`) decides each request:
+
+```text
+Is the user the SUPER_ADMIN?          → allowed everywhere
+Is the AdminPartner record active?    → otherwise 403 ADMIN_PARTNER_INACTIVE
+Does it hold the endpoint's area?     → otherwise 403 PERMISSION_DENIED + permission
+Is this a write while readOnly?       → otherwise 403 READ_ONLY
+```
+
+The record is reloaded on every request, so deactivating or editing a partner
+takes effect immediately, without waiting for a token to expire. Partner
+management and the audit log accept the `SUPER_ADMIN` role only — no area can
+open them.
 
 ---
 

@@ -41,7 +41,7 @@ function requireTenant(req, res, next) {
       .status(403)
       .json({ success: false, message: 'You are not authorized to perform this action.', code });
 
-  if (req.user.role === ROLES.SUPER_ADMIN) {
+  if (req.user.role === ROLES.SUPER_ADMIN || (req.user.role === ROLES.ADMIN_PARTNER && req.adminPartner)) {
     req.tenantBrandId = null;
     return next();
   }

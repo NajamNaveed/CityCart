@@ -5,6 +5,13 @@ const { ROLES, STAFF_ROLES, PARTNER_ROLES } = require('../config/roles');
 const { readBearerToken } = require('../utils/clientType');
 const { isAllowedWhenRestricted } = require('../config/restrictedAccess');
 
+// The only endpoints a first-login partner (mustChangePassword) may reach.
+const PASSWORD_CHANGE_ALLOWED = new Set([
+  'GET /api/v1/auth/me',
+  'PATCH /api/v1/auth/password',
+  'POST /api/v1/auth/logout',
+]);
+
 /**
  * Authentication middleware, per
  * docs/06-authentication-and-security.md §11 (Authentication Middleware):
@@ -96,6 +103,17 @@ async function authenticate(req, res, next) {
     }
 
     req.user = user;
+
+    // A partner created (or reset) by the super admin must choose their own
+    // password before the dashboard works (docs/21 §G.2). Only the three
+    // auth endpoints below are reachable until then.
+    if (user.mustChangePassword && !PASSWORD_CHANGE_ALLOWED.has(`${req.method} ${req.originalUrl.split('?')[0]}`)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Choose a new password before using the dashboard.',
+        code: 'PASSWORD_CHANGE_REQUIRED',
+      });
+    }
 
     // Sliding renewal (docs/06 §9 — staff session security): every
     // authenticated staff request re-issues the short-lived cookie, so an

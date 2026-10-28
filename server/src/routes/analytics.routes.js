@@ -3,10 +3,10 @@ const express = require('express');
 const { brandAnalytics, platformAnalytics } = require('../controllers/analytics.controller');
 const authenticate = require('../middleware/authenticate');
 const requirePermission = require('../middleware/requirePermission');
-const requireRole = require('../middleware/requireRole');
+const requireAdminPermission = require('../middleware/requireAdminPermission');
 const requireTenant = require('../middleware/requireTenant');
 const { PERMISSIONS } = require('../config/permissions');
-const { ROLES } = require('../config/roles');
+const { ADMIN_PERMISSIONS } = require('../config/adminPermissions');
 
 const router = express.Router();
 const brandAccess = [
@@ -17,7 +17,7 @@ const brandAccess = [
 
 router.get('/brand/analytics', ...brandAccess, brandAnalytics);
 router.get('/analytics/brand', ...brandAccess, brandAnalytics);
-router.get('/admin/analytics', authenticate, requireRole(ROLES.SUPER_ADMIN), platformAnalytics);
-router.get('/analytics/admin', authenticate, requireRole(ROLES.SUPER_ADMIN), platformAnalytics);
+router.get('/admin/analytics', authenticate, requireAdminPermission(ADMIN_PERMISSIONS.ANALYTICS), platformAnalytics);
+router.get('/analytics/admin', authenticate, requireAdminPermission(ADMIN_PERMISSIONS.ANALYTICS), platformAnalytics);
 
 module.exports = router;

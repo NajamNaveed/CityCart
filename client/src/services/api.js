@@ -34,7 +34,7 @@ api.interceptors.response.use(
 
 // The server's 403 message is deliberately generic; its `code` says why.
 const FORBIDDEN_MESSAGES = {
-  PERMISSION_DENIED: 'Your account does not have permission to do this. Ask the brand owner to update your access.',
+  PERMISSION_DENIED: 'Your account does not have permission to do this. Ask an administrator to update your access.',
   EMPLOYEE_INACTIVE: 'Your team account has been deactivated. Contact the brand owner.',
   NO_BRAND: 'This account is not linked to a brand.',
 }

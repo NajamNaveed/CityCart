@@ -48,7 +48,7 @@ const BrandAnalytics = lazy(() => import('./pages/brand/Analytics'))
 const InventoryHub = lazy(() => import('./pages/brand/InventoryHub'))
 const BrandReviews = lazy(() => import('./pages/brand/Reviews'))
 const AdminLayout = lazy(() => import('./components/admin/AdminLayout'))
-const AdminOverview = lazy(() => import('./pages/admin/Overview'))
+const AdminLanding = lazy(() => import('./pages/admin/Landing'))
 const AdminBrands = lazy(() => import('./pages/admin/Brands'))
 const AdminBrandDetail = lazy(() => import('./pages/admin/BrandDetail'))
 const AdminOrders = lazy(() => import('./pages/admin/Orders'))
@@ -59,6 +59,8 @@ const AdminSettings = lazy(() => import('./pages/admin/Settings'))
 const AdminAnalytics = lazy(() => import('./pages/admin/Analytics'))
 const AdminUsers = lazy(() => import('./pages/admin/Users'))
 const AdminReviews = lazy(() => import('./pages/admin/Reviews'))
+const AdminTeam = lazy(() => import('./pages/admin/Team'))
+const AdminActivity = lazy(() => import('./pages/admin/Activity'))
 
 function RouteFallback() {
   return <div className="flex min-h-[60vh] items-center justify-center text-sm text-muted">Loading…</div>
@@ -154,13 +156,13 @@ function App() {
                   </Route>
                 </Route>
 
-                {/* Super admin: unlinked, no shared layout */}
+                {/* Platform admin: unlinked; the super admin and their partners */}
                 <Route element={<GuestRoute />}>
                   <Route path="admin/login" element={<AdminLogin />} />
                 </Route>
-                <Route element={<ProtectedRoute roles={['SUPER_ADMIN']} loginPath="/admin/login" />}>
+                <Route element={<ProtectedRoute roles={['SUPER_ADMIN', 'ADMIN_PARTNER']} loginPath="/admin/login" />}>
                   <Route path="admin" element={<AdminLayout />}>
-                    <Route index element={<AdminOverview />} />
+                    <Route index element={<AdminLanding />} />
                     <Route path="brands" element={<AdminBrands />} />
                     <Route path="brands/:id" element={<AdminBrandDetail />} />
                     <Route path="orders" element={<AdminOrders />} />
@@ -171,6 +173,10 @@ function App() {
                     <Route path="settings" element={<AdminSettings />} />
                     <Route path="analytics" element={<AdminAnalytics />} />
                     <Route path="users" element={<AdminUsers />} />
+                    <Route element={<ProtectedRoute roles={['SUPER_ADMIN']} loginPath="/admin/login" />}>
+                      <Route path="team" element={<AdminTeam />} />
+                      <Route path="activity" element={<AdminActivity />} />
+                    </Route>
                     <Route path="notifications" element={<Notifications />} />
                   </Route>
                 </Route>
