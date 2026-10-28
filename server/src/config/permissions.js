@@ -42,6 +42,10 @@ const PERMISSIONS = Object.freeze({
 
   ORDERS_VIEW: 'orders.view',
   ORDERS_MANAGE: 'orders.manage',
+  // Proposing a substitution/removal when the brand cannot supply an order
+  // (docs/21 §H). Kept separate from orders.manage: changing what the
+  // customer will receive and pay is more sensitive than moving a status.
+  ORDERS_ADJUST: 'orders.adjust',
 
   // docs/02 §229-242: delivery is MVP scope; payments.manage guards the
   // payment-status endpoint (A6b) and is as sensitive as orders.manage.

@@ -14,6 +14,7 @@ import api, { getErrorMessage } from '../services/api'
 import StatusPill from '../components/StatusPill'
 import OrderItemReview from '../components/OrderItemReview'
 import PayNow from '../components/PayNow'
+import OrderChangePrompt from '../components/OrderChangePrompt'
 import ProductImage from '../components/ProductImage'
 import { Skeleton } from '../components/ui'
 import { formatDateTime, formatPrice, wrap } from '../ui'
@@ -195,7 +196,7 @@ function ProgressStepper({ history, orderStatus }) {
 
 export default function MyOrderDetail() {
   const { id } = useParams()
-  const [state, setState] = useState({ id: null, order: null, payment: null, delivery: null, error: '' })
+  const [state, setState] = useState({ id: null, order: null, payment: null, delivery: null, adjustments: [], adjustment: null, error: '' })
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState({ text: '', tone: 'ok' })
@@ -205,12 +206,41 @@ export default function MyOrderDetail() {
     let active = true
     api
       .get(`/orders/${id}`)
-      .then((res) => active && setState({ id, order: res.data.order, payment: res.data.payment, delivery: res.data.delivery, error: '' }))
-      .catch((err) => active && setState({ id, order: null, payment: null, delivery: null, error: getErrorMessage(err) }))
+      .then(
+        (res) =>
+          active &&
+          setState({
+            id,
+            order: res.data.order,
+            payment: res.data.payment,
+            delivery: res.data.delivery,
+            adjustments: res.data.adjustments || [],
+            adjustment: res.data.adjustment || null,
+            error: '',
+          }),
+      )
+      .catch(
+        (err) =>
+          active &&
+          setState({ id, order: null, payment: null, delivery: null, adjustments: [], adjustment: null, error: getErrorMessage(err) }),
+      )
     return () => {
       active = false
     }
   }, [id])
+
+  async function refresh() {
+    const res = await api.get(`/orders/${id}`)
+    setState({
+      id,
+      order: res.data.order,
+      payment: res.data.payment,
+      delivery: res.data.delivery,
+      adjustments: res.data.adjustments || [],
+      adjustment: res.data.adjustment || null,
+      error: '',
+    })
+  }
 
   // Once the order is delivered, load the customer's own reviews of its items.
   const delivered = state.order?.orderStatus === 'DELIVERED'
@@ -265,7 +295,7 @@ export default function MyOrderDetail() {
     )
   }
 
-  const { order, payment, delivery } = state
+  const { order, payment, delivery, adjustment } = state
   const a = order.shippingAddress || {}
   const problem = TERMINAL_PROBLEMS[order.orderStatus]
 
@@ -307,6 +337,10 @@ export default function MyOrderDetail() {
           </span>
         )}
       </div>
+
+      {adjustment?.status === 'PROPOSED' && (
+        <OrderChangePrompt order={order} adjustment={adjustment} onChanged={refresh} onMessage={setNotice} />
+      )}
 
       {/* Order progress — full width, above everything else */}
       <div className="mt-6 rounded-lg border border-line bg-white p-5 sm:p-6">

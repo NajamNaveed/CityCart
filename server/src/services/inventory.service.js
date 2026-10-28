@@ -440,7 +440,8 @@ async function deductStock(productId, quantity, { session } = {}) {
     return { deducted: true, inventory: updated };
   }
 
-  const existing = await Inventory.findOne({ productId }).session(session || null);
+  const existingQuery = Inventory.findOne({ productId });
+  const existing = await (session ? existingQuery.session(session) : existingQuery);
   if (existing && existing.trackInventory === false) {
     return { deducted: false, tracked: false };
   }
@@ -461,13 +462,13 @@ async function restockStock(productId, quantity, { session } = {}) {
   );
 }
 
-async function reserveStock(productId, quantity) {
+async function reserveStock(productId, quantity, { session } = {}) {
   assertPositiveInteger(quantity);
 
   const updated = await Inventory.findOneAndUpdate(
     { productId, trackInventory: true, $expr: { $gte: [AVAILABLE_EXPR, quantity] } },
     { $inc: { reservedQuantity: quantity } },
-    { new: true }
+    { new: true, session }
   );
   if (updated) {
     return { reserved: true, tracked: true, inventory: updated };
@@ -475,7 +476,8 @@ async function reserveStock(productId, quantity) {
 
   // The atomic update didn't match. Classify why (this read is only for
   // the error message — it never decides whether stock is reserved).
-  const existing = await Inventory.findOne({ productId });
+  const existingQuery = Inventory.findOne({ productId });
+  const existing = await (session ? existingQuery.session(session) : existingQuery);
   if (!existing) {
     throw new InventoryError(404, 'Inventory not found.');
   }
@@ -487,27 +489,62 @@ async function reserveStock(productId, quantity) {
 
 /**
  * INTERNAL (no HTTP route): releases previously reserved stock (e.g. a
- * cancelled checkout). One atomic conditional update matching only if
- * reservedQuantity >= qty, so reservedQuantity can never go negative and
- * available can never exceed quantity.
+ * cancelled checkout or a declined adjustment). One atomic conditional
+ * update matching only if reservedQuantity >= qty, so reservedQuantity can
+ * never go negative and available can never exceed quantity.
  */
-async function releaseStock(productId, quantity) {
+async function releaseStock(productId, quantity, { session } = {}) {
   assertPositiveInteger(quantity);
 
   const updated = await Inventory.findOneAndUpdate(
     { productId, reservedQuantity: { $gte: quantity } },
     { $inc: { reservedQuantity: -quantity } },
-    { new: true }
+    { new: true, session }
   );
   if (updated) {
     return updated;
   }
 
-  const existing = await Inventory.findOne({ productId });
+  const existingQuery = Inventory.findOne({ productId });
+  const existing = await (session ? existingQuery.session(session) : existingQuery);
   if (!existing) {
     throw new InventoryError(404, 'Inventory not found.');
   }
   throw new InventoryError(409, 'Cannot release more stock than is currently reserved.');
+}
+
+/**
+ * Turns reserved units into sold units (an accepted substitute): the physical
+ * quantity and the reservation both drop by the same amount, so the available
+ * quantity does not change. One atomic conditional update, so it can never
+ * drive either number negative or convert stock that is not reserved.
+ */
+async function convertReservedStock(productId, quantity, { session } = {}) {
+  assertPositiveInteger(quantity);
+
+  const updated = await Inventory.findOneAndUpdate(
+    {
+      productId,
+      $expr: {
+        $and: [
+          { $gte: ['$reservedQuantity', quantity] },
+          { $gte: ['$quantity', quantity] },
+        ],
+      },
+    },
+    { $inc: { quantity: -quantity, reservedQuantity: -quantity } },
+    { new: true, session }
+  );
+  if (updated) {
+    return updated;
+  }
+
+  const existingQuery = Inventory.findOne({ productId });
+  const existing = await (session ? existingQuery.session(session) : existingQuery);
+  if (!existing) {
+    throw new InventoryError(404, 'Inventory not found.');
+  }
+  throw new InventoryError(409, 'Cannot convert more stock than is currently reserved.');
 }
 
 module.exports = {
@@ -519,6 +556,7 @@ module.exports = {
   batchUpdateInventory,
   reserveStock,
   releaseStock,
+  convertReservedStock,
   deductStock,
   restockStock,
   getStockStatus,

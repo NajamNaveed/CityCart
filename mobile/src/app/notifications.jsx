@@ -19,7 +19,7 @@ import { colors, radius, spacing } from '../theme'
 // The same grouping as the web inbox: delivery, order, review, stock, else update.
 function visualsFor(type = '') {
   if (type.includes('DELIVER') || type === 'ORDER_SHIPPED' || type === 'ORDER_OUT_FOR_DELIVERY') return { icon: 'truck', color: colors.success, bg: colors.successSoft, label: 'Delivery' }
-  if (type.includes('ORDER') || type.includes('PAYMENT') || type.includes('REFUND')) return { icon: 'package', color: colors.warning, bg: colors.warningSoft, label: 'Order' }
+  if (type.includes('ORDER') || type.includes('PAYMENT') || type.includes('REFUND') || type.includes('ADJUSTMENT')) return { icon: 'package', color: colors.warning, bg: colors.warningSoft, label: 'Order' }
   if (type.includes('REVIEW')) return { icon: 'star', color: colors.clay, bg: colors.cream, label: 'Review' }
   if (type.includes('STOCK')) return { icon: 'alert-circle', color: colors.danger, bg: colors.dangerSoft, label: 'Inventory' }
   return { icon: 'bell', color: colors.info, bg: colors.infoSoft, label: 'Update' }

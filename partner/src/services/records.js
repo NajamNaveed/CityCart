@@ -18,7 +18,13 @@ export async function fetchOrders(status, page = 1) {
 
 export async function fetchOrder(id) {
   const res = await api.get(`/brand/orders/${id}`)
-  return { order: res.data.order, payment: res.data.payment, delivery: res.data.delivery }
+  return {
+    order: res.data.order,
+    payment: res.data.payment,
+    delivery: res.data.delivery,
+    adjustments: res.data.adjustments || [],
+    adjustment: res.data.adjustment || null,
+  }
 }
 
 // --- Deliveries (delivery.view) ---

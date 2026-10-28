@@ -139,6 +139,7 @@ products.delete
 
 orders.view
 orders.manage
+orders.adjust
 
 inventory.view
 inventory.manage
@@ -180,8 +181,11 @@ inventory.manage
 ```text
 orders.view
 orders.manage
+orders.adjust
 orders.cancel
 ```
+
+`orders.adjust` lets a team member propose a substitution or removal when the brand cannot supply an order (docs/21 §H); `orders.manage` alone does not.
 
 ## 6.5 Customer Permissions
 
@@ -816,6 +820,12 @@ or:
 orders.manage
 ```
 
+Proposing a change to an order (a substitute or a removal) additionally requires:
+
+```text
+orders.adjust
+```
+
 ### Super Admin
 
 Can access platform-wide orders.
@@ -866,6 +876,7 @@ inventory.manage
 ```text
 orders.view
 orders.manage
+orders.adjust
 orders.cancel
 ```
 

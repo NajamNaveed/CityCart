@@ -586,7 +586,9 @@ never created, edited or deleted through the API.
 * **Snapshot.** A receipt copies the order's items, totals, the brand name, the
   payment method and reference, who collected the cash, and the payment time. It
   never copies the customer's address or phone. Later changes to a product, a
-  brand or an address cannot alter it, and a refund does not change it.
+  brand or an address cannot alter it, and a refund does not change it. The one
+  exception is an accepted order adjustment, which rewrites an already-issued
+  online receipt to the final lines and total (§30).
 * **One per payment** (unique on `paymentId`), numbered `RC-<year>-<6 digits>` from
   an atomic yearly counter (`receipt-<year>`); a failed attempt may leave a gap,
   never a duplicate.
@@ -701,4 +703,67 @@ Code: `server/src/payments/`. A provider is one file with `name`, `label`,
 
 Related code: `services/onlinePayment.service.js`, `controllers/onlinePayment.controller.js`,
 `models/paymentEvent.model.js`, `routes/payment.routes.js`, `jobs/paymentExpiry.js`.
+
+---
+
+# 30. Money When an Order Changes (added October 2026)
+
+Feature H of `21-next-features-plan.md`: the brand cannot supply part of an order and proposes a change (rules in `08-order-management.md` §41). The money side is applied in the same transaction that rewrites the order lines.
+
+## 30.1 Cash on delivery
+
+```text
+proposal accepted or items removed
+        ↓
+Payment.amount = new order total
+```
+
+The rider collects the new total. Nothing is refunded because nothing was collected yet. The payment stays `PENDING` until the normal delivery hand-over.
+
+## 30.2 Online, already paid
+
+The new total may be **equal or lower**, never higher:
+
+```text
+new total == paid total    nothing changes
+new total <  paid total    difference = paid - new total
+                           Payment.refundedAmount += difference
+                           Payment.refunds[] += { amount, reason, by, at }
+                           Payment.status = PARTIALLY_REFUNDED
+                             (or REFUNDED when nothing remains)
+                           Order.paymentStatus stays PAID
+                           Order.total = new total
+new total >  paid total    409 ADJUSTMENT_INCREASES_TOTAL, nothing changes
+```
+
+The refund is a **record**, not a gateway call (see §29.5). The customer is notified with the standard refund notification. If the customer cancels the whole order instead, the remaining paid amount is refunded and the payment becomes `REFUNDED`.
+
+A refund can never exceed what was paid (`409 REFUND_EXCEEDS_PAID`). The payment update is conditional on the previous status and refunded amount, so a concurrent payment event cannot be overwritten (`409 PAYMENT_CHANGED`).
+
+## 30.3 Online, not paid yet
+
+An unpaid online order is on a stock hold and its amount is still what the customer is about to pay. It **cannot be adjusted** (`409 ONLINE_PAYMENT_NOT_COMPLETED`); the brand waits for payment, or rejects the order, or lets the hold expire.
+
+## 30.4 Receipts
+
+```text
+COD                 the receipt is issued at delivery, after any adjustment; nothing to sync
+paid online         the receipt already exists, so it is rewritten to the final
+                    items, subtotal and total in the same transaction
+```
+
+An online order increased by an adjustment is impossible, so the receipt's amount never becomes higher than the money received. Refunds are shown on the payment, not by editing the receipt again.
+
+## 30.5 Tests
+
+`server/tests/integration/orderAdjustments.integration.test.js` covers:
+
+```text
+COD amount follows the new total
+paid online lower total → PARTIALLY_REFUNDED / refund entry / order stays PAID
+paid online higher total → refused, nothing changes
+unpaid online order → proposal refused
+refund cannot exceed the paid amount
+```
+
 

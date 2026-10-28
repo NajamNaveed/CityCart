@@ -10,6 +10,7 @@ const STATUS_TONE = {
   OUT_FOR_DELIVERY: 'info', IN_TRANSIT: 'info', PICKED_UP: 'info', READY_FOR_PICKUP: 'info',
   REJECTED: 'bad', CANCELLED: 'bad', FAILED: 'bad', RETURNED: 'bad',
   REFUNDED: 'bad', PARTIALLY_REFUNDED: 'warn',
+  PROPOSED: 'warn', ACCEPTED: 'good', REMOVED: 'warn', WITHDRAWN: 'quiet', EXPIRED: 'quiet', ORDER_CANCELLED: 'bad',
   SUSPENDED: 'warn', TERMINATED: 'bad', DRAFT: 'quiet', INACTIVE: 'quiet', ARCHIVED: 'quiet',
 }
 

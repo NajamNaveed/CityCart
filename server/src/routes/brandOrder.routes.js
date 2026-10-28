@@ -1,6 +1,12 @@
 const express = require('express');
 
-const { list, getById, updateStatus } = require('../controllers/brandOrder.controller');
+const {
+  list,
+  getById,
+  updateStatus,
+  proposeAdjustment,
+  withdrawAdjustment,
+} = require('../controllers/brandOrder.controller');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
 const requirePermission = require('../middleware/requirePermission');
@@ -22,6 +28,23 @@ router.patch(
   requirePermission(PERMISSIONS.ORDERS_MANAGE),
   requireTenant,
   updateStatus
+);
+
+// Proposing a change to what the customer receives and pays is its own
+// permission (docs/21 §H.2), not covered by orders.manage.
+router.post(
+  '/:id/adjustments',
+  ...brandUser,
+  requirePermission(PERMISSIONS.ORDERS_ADJUST),
+  requireTenant,
+  proposeAdjustment
+);
+router.post(
+  '/:id/adjustments/:adjustmentId/withdraw',
+  ...brandUser,
+  requirePermission(PERMISSIONS.ORDERS_ADJUST),
+  requireTenant,
+  withdrawAdjustment
 );
 
 module.exports = router;

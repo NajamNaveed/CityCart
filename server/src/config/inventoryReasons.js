@@ -32,4 +32,21 @@ const MANUAL_ADJUSTMENT_REASONS = Object.freeze([
 
 const DEFAULT_ADJUSTMENT_REASON = 'MANUAL_ADJUSTMENT';
 
-module.exports = { ADJUSTMENT_REASONS, MANUAL_ADJUSTMENT_REASONS, DEFAULT_ADJUSTMENT_REASON };
+/**
+ * Stock movements produced by an accepted/proposed order adjustment
+ * (docs/21 §H.4, docs/09 §6). These are system reasons: a client can never
+ * choose them on the manual adjustment endpoint.
+ */
+const ADJUSTMENT_STOCK_REASONS = Object.freeze([
+  'SUBSTITUTION_RESERVED',
+  'SUBSTITUTION_RELEASED',
+  'SUBSTITUTION_FULFILLED',
+  'ADJUSTMENT_RESTOCKED',
+]);
+
+module.exports = {
+  ADJUSTMENT_REASONS,
+  MANUAL_ADJUSTMENT_REASONS,
+  DEFAULT_ADJUSTMENT_REASON,
+  ADJUSTMENT_STOCK_REASONS,
+};

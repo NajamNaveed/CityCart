@@ -12,6 +12,7 @@ const { activeProvider } = require('../payments');
 const env = require('../config/env');
 const { evaluateLine } = require('./cart.service');
 const { deductStock, restockStock, getStockStatus, InventoryError } = require('./inventory.service');
+const { closeActiveAdjustment, listAdjustmentsForOrder } = require('./orderAdjustmentStock.service');
 const {
   notifyBrandOfNewOrders,
   notifyBrandOfCancelledOrder,
@@ -326,11 +327,20 @@ async function getOrderForUser(user, orderId) {
   if (!order) {
     throw new OrderError(404, 'Order not found.');
   }
-  const [payment, delivery] = await Promise.all([
+  const [payment, delivery, adjustments] = await Promise.all([
     Payment.findOne({ orderId: order._id }),
     Delivery.findOne({ orderId: order._id }),
+    listAdjustmentsForOrder(order._id),
   ]);
-  return { order, payment, delivery: user.role === 'CUSTOMER' ? deliveryForCustomer(delivery) : delivery };
+  // The waiting proposal first for the screens; the full list is the history.
+  const adjustment = adjustments.find((a) => a.status === 'PROPOSED') || adjustments[0] || null;
+  return {
+    order,
+    payment,
+    delivery: user.role === 'CUSTOMER' ? deliveryForCustomer(delivery) : delivery,
+    adjustments,
+    adjustment,
+  };
 }
 
 /**
@@ -372,6 +382,8 @@ async function cancelMyOrder(userId, orderId) {
     for (const item of sorted) {
       await restockStock(item.productId, item.quantity, { session });
     }
+    // A waiting proposal ends with the order, its substitute reservation released.
+    await closeActiveAdjustment(order, { session, by: userId });
     await Payment.updateMany(
       { orderId: order._id, status: 'PENDING' },
       { $set: { status: 'CANCELLED' } },

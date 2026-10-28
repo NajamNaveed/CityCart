@@ -83,6 +83,10 @@ ORDER_OUT_FOR_DELIVERY
 ORDER_DELIVERED
 ORDER_CANCELLED
 
+ADJUSTMENT_PROPOSED
+ADJUSTMENT_ANSWERED
+ADJUSTMENT_EXPIRED
+
 LOW_STOCK
 OUT_OF_STOCK
 
@@ -116,6 +120,8 @@ Your order has been shipped.
 Your order is out for delivery.
 
 Your order has been delivered.
+
+The brand proposed a change to your order. Review it within 24 hours.
 ```
 
 Notifications should reference the relevant order where applicable.
@@ -136,6 +142,10 @@ Product "X" is low in stock.
 Product "Y" is out of stock.
 
 Customer requested a cancellation.
+
+The customer answered the proposed change.
+
+The proposed change expired without an answer.
 
 New review received.
 ```
@@ -630,4 +640,31 @@ It mirrors the inbox: the same title and text, plus the ids needed to open the r
 * **Not verified end to end.** The server and app logic are tested with mocks; sending to a real phone needs the
   build above and was not possible in the development sandbox.
 * The shopper app does not register for push yet (customers still get the in-app inbox).
+
+---
+
+# 32. Order Change Notifications (added October 2026)
+
+Feature H of `21-next-features-plan.md`: a brand cannot supply part of an order and proposes a change (docs/08 §41). Three notification types carry it.
+
+| Type | Recipient | When | Title / message |
+| ---- | --------- | ---- | --------------- |
+| `ADJUSTMENT_PROPOSED` | the customer who owns the order | the brand sends a proposal | “Your order needs a change” / review it within 24 hours |
+| `ADJUSTMENT_ANSWERED` | the brand's staff holding `orders.view` | the customer accepts, keeps the rest, or cancels | “Customer answered the proposed change” / what they chose |
+| `ADJUSTMENT_EXPIRED` | the brand's staff holding `orders.view` | 24 hours pass with no answer | “Proposed change expired” / the order is unchanged |
+
+Every one carries `orderId`, `orderNumber`, `brandId`, `adjustmentId` and `adjustmentStatus` in `data`, so the web inbox, the shopper app and the Partner app open the right order. A refund caused by the adjustment uses the existing `REFUND_ISSUED` notification (docs/10 §30), and a whole-order cancellation uses the normal `ORDER_CANCELLED` flow.
+
+Delivery:
+
+```text
+in-app inbox   always (persisted per user)
+socket         notify() emits to each recipient
+push           Partner app only, via the existing push bridge; data.orderId opens the order
+```
+
+Nothing is sent when a proposal is only viewed, withdrawn (the customer simply no longer sees it) or when a late answer is refused. Expiry notifications are produced by the timer in `jobs/adjustmentExpiry.js`; because expiry is one conditional update per proposal, a proposal can never notify twice.
+
+Tests: `server/tests/integration/orderAdjustments.integration.test.js` asserts all three types, their recipients, and that expiry changes nothing about the order.
+
 

@@ -12,6 +12,7 @@ jest.mock('../src/models/order.model');
 jest.mock('../src/models/payment.model');
 jest.mock('../src/models/delivery.model');
 jest.mock('../src/models/counter.model');
+jest.mock('../src/models/orderAdjustment.model');
 jest.mock('../src/models/product.model', () => {
   const actual = jest.requireActual('../src/models/product.model');
   return {
@@ -38,6 +39,7 @@ const Cart = require('../src/models/cart.model');
 const Order = require('../src/models/order.model');
 const Payment = require('../src/models/payment.model');
 const Counter = require('../src/models/counter.model');
+const OrderAdjustment = require('../src/models/orderAdjustment.model');
 const Product = require('../src/models/product.model');
 const Inventory = require('../src/models/inventory.model');
 const notifications = require('../src/services/notification.service');
@@ -99,7 +101,10 @@ function checkoutWorld({ lines, products, brands = [brandA, brandB], inventories
   Cart.updateOne.mockResolvedValue({});
 }
 
-beforeEach(() => jest.resetAllMocks());
+beforeEach(() => {
+  jest.resetAllMocks();
+  OrderAdjustment.find.mockReturnValue({ sort: () => Promise.resolve([]) });
+});
 
 describe('order access control', () => {
   it('401 when unauthenticated', async () => {

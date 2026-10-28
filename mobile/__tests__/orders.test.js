@@ -12,6 +12,7 @@ import {
   MAX_NOTE_WORDS,
   orderBody,
   placeOrder,
+  respondToAdjustment,
   rememberPlacedOrders,
   stageRows,
   takePlacedOrders,
@@ -109,12 +110,33 @@ describe('order requests', () => {
     expect((await fetchMyOrders()).items).toEqual([])
   })
 
-  it('read one order with its payment and delivery, and cancel it', async () => {
-    api.get.mockResolvedValue({ data: { order: { _id: 'o1' }, payment: { status: 'PENDING' }, delivery: null } })
-    expect(await fetchOrder('o1')).toEqual({ order: { _id: 'o1' }, payment: { status: 'PENDING' }, delivery: null })
+  it('read one order with its payment, delivery and change proposals, and cancel it', async () => {
+    api.get.mockResolvedValue({
+      data: {
+        order: { _id: 'o1' },
+        payment: { status: 'PENDING' },
+        delivery: null,
+        adjustments: [{ _id: 'a1', status: 'PROPOSED' }],
+        adjustment: { _id: 'a1', status: 'PROPOSED' },
+      },
+    })
+    expect(await fetchOrder('o1')).toEqual({
+      order: { _id: 'o1' },
+      payment: { status: 'PENDING' },
+      delivery: null,
+      adjustments: [{ _id: 'a1', status: 'PROPOSED' }],
+      adjustment: { _id: 'a1', status: 'PROPOSED' },
+    })
     api.patch.mockResolvedValue({ data: { order: { _id: 'o1', orderStatus: 'CANCELLED' } } })
     expect((await cancelOrder('o1')).orderStatus).toBe('CANCELLED')
     expect(api.patch).toHaveBeenCalledWith('/orders/o1/cancel')
+  })
+
+  it('answers a change proposal once, with the chosen action', async () => {
+    const result = { adjustment: { _id: 'a1', status: 'ACCEPTED' }, order: { _id: 'o1' }, refundAmount: 0 }
+    api.post.mockResolvedValue({ data: result })
+    expect(await respondToAdjustment('o1', 'a1', 'ACCEPT')).toEqual(result)
+    expect(api.post).toHaveBeenCalledWith('/orders/o1/adjustments/a1/respond', { action: 'ACCEPT' })
   })
 })
 

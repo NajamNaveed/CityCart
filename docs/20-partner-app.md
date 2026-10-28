@@ -287,7 +287,7 @@ mirrors the server's permission names; the server still checks every request):
 | Tab | Needs | Shows | Endpoints used |
 |---|---|---|---|
 | Overview | any of the three below | To pick up, On the road, Failed, Delivered counts (tap one to open Deliveries filtered), and cash still with riders | `GET /deliveries?status=&limit=1` (one small request per status), `GET /payments/cash/outstanding` |
-| Orders | `orders.view` | Orders with status filters; order detail with progress, items, totals, payment, customer (Call) and a link to its delivery | `GET /brand/orders`, `GET /brand/orders/:id` |
+| Orders | `orders.view` | Orders with status filters; order detail with progress, items, totals, payment, customer (Call), a link to its delivery, and a **read-only** history of any change proposal the brand sent | `GET /brand/orders`, `GET /brand/orders/:id` |
 | Deliveries | `delivery.view` | Deliveries with status filters; delivery detail with rider, tracking, address (Call). **Assign or remove a rider** with `delivery.manage` + `riders.view` | `GET /deliveries`, `GET /deliveries/:id`, `GET /riders`, `PATCH /deliveries/:id/rider` |
 | Money | `payments.view` | **Receipts** list and detail; **Cash**: who holds how much, then a hand-over screen (`/handover/:collectorId`): tick exactly the payments you received, confirm, settle (needs `payments.manage`; without it the person can look but not tick) | `GET /receipts`, `GET /receipts/:id`, `GET /payments/cash/outstanding`, `POST /payments/cash/settle` |
 | Account | everyone | Who is signed in, what they can see, sign out | none |
@@ -301,6 +301,9 @@ Behaviour worth knowing:
   the app (the server enforces the new permissions at once).
 * **The records tabs only read, except two actions** that belong to this person's job:
   assigning a rider and settling cash. Changing an order's status stays on the website.
+  **Change proposals are read-only in the Partner app** (status, note, before → after,
+  the customer's answer); proposing, withdrawing and answering stay on the websites
+  (docs/08 §41).
 * The overview never shows an error for something the person may not see: a part they
   have no permission for (or that fails) is simply left out.
 * The hand-over is two steps (tick, then "Yes, received") and all or nothing; a
@@ -482,3 +485,4 @@ tests; add the same for new rules, in the same style.
 * **2026-10 Phase E** delivered: online payments with a built-in test gateway (provider layer, signed webhook, idempotent events, stock hold and release, confirm/cancel rules, Pay now in the shopper app and website, demo data). Real gateway adapter pending.
 * **2026-10 Phase D** delivered: the records screens for brand team members (overview, orders, deliveries with rider assignment, receipts, cash hand-over), permission-based tabs, permissions loaded at sign-in, `StatusPill` for all statuses. No server changes.
 * **2026-10 Phase C** delivered: `partner/` app (sign-in, rider screens), delivery code and receipt in the shopper app and website, rider-deactivation guard, customer-safe delivery view, root scripts.
+* **2026-10 Phase H** delivered: order change proposals (substitution / removal) on the brand website and both customer clients; the Partner app shows each order's proposal history read-only. Server rules, stock, payments, notifications and docs updated.

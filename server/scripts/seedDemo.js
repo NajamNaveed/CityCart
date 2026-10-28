@@ -31,6 +31,8 @@ const MODELS = {
   employees: require('../src/models/employee.model'),
   carts: require('../src/models/cart.model'),
   orders: require('../src/models/order.model'),
+  orderAdjustments: require('../src/models/orderAdjustment.model'),
+  inventoryMovements: require('../src/models/inventoryMovement.model'),
   payments: require('../src/models/payment.model'),
   receipts: require('../src/models/receipt.model'),
   deliveries: require('../src/models/delivery.model'),

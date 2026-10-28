@@ -10,23 +10,23 @@ import { formatDateTime, formatPrice, humanize } from '../../ui'
 // Read-only: the super admin sees an order exactly as the brand and customer do, but cannot change it here.
 export default function OrderDetail() {
   const { id } = useParams()
-  const [state, setState] = useState({ id: null, order: null, payment: null, delivery: null, brandName: '', error: '' })
+  const [state, setState] = useState({ id: null, order: null, payment: null, delivery: null, adjustments: [], brandName: '', error: '' })
 
   useEffect(() => {
     let active = true
     api
       .get(`/orders/${id}`)
       .then(async (res) => {
-        const { order, payment, delivery } = res.data
+        const { order, payment, delivery, adjustments = [] } = res.data
         let brandName = ''
         try {
           brandName = (await api.get(`/admin/brands/${order.brandId}`)).data.brand.name
         } catch {
           /* the order is still shown without the brand name */
         }
-        if (active) setState({ id, order, payment, delivery, brandName, error: '' })
+        if (active) setState({ id, order, payment, delivery, adjustments, brandName, error: '' })
       })
-      .catch((err) => active && setState({ id, order: null, payment: null, delivery: null, brandName: '', error: getErrorMessage(err) }))
+      .catch((err) => active && setState({ id, order: null, payment: null, delivery: null, adjustments: [], brandName: '', error: getErrorMessage(err) }))
     return () => {
       active = false
     }
@@ -50,7 +50,7 @@ export default function OrderDetail() {
     )
   }
 
-  const { order, payment, delivery, brandName } = state
+  const { order, payment, delivery, adjustments, brandName } = state
   const a = order.shippingAddress || {}
 
   return (
@@ -120,6 +120,29 @@ export default function OrderDetail() {
         </section>
 
         <aside className="space-y-9 text-sm">
+          {adjustments.length > 0 && (
+            <section>
+              <h2 className="border-b border-line pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
+                Change proposals
+              </h2>
+              <ul className="mt-3.5 space-y-3">
+                {adjustments.map((adj) => (
+                  <li key={adj._id} className="rounded-md border border-line bg-white px-3.5 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <StatusBadge value={adj.status} />
+                      <span className="text-[12.5px] text-muted">{formatDateTime(adj.respondedAt || adj.createdAt)}</span>
+                    </div>
+                    <p className="mt-1.5 text-[12.5px] text-ink/90">{adj.note}</p>
+                    <p className="mt-1 text-[12.5px] text-muted">
+                      {formatPrice(adj.totalsBefore.total)} → {formatPrice(adj.totalsAfter.total)}
+                      {adj.response?.action ? ` · ${humanize(adj.response.action)}` : ''}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           <section>
             <h2 className="border-b border-line pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-muted">Customer</h2>
             <address className="mt-3.5 not-italic leading-relaxed text-ink/90">

@@ -4,6 +4,7 @@ import { ChevronLeft, TriangleAlert } from 'lucide-react'
 import api, { getErrorMessage } from '../../services/api'
 import { Notice, PageHeader, StatusBadge } from '../../components/brand/Bits'
 import DeliveryPanel from '../../components/brand/DeliveryPanel'
+import AdjustmentPanel from '../../components/brand/AdjustmentPanel'
 import { useCan } from '../../hooks/useCan'
 import { Skeleton } from '../../components/ui'
 import { formatDateTime, formatPrice, humanize } from '../../ui'
@@ -30,7 +31,7 @@ function SectionTitle({ children }) {
 export default function OrderDetail() {
   const { id } = useParams()
   const can = useCan()
-  const [state, setState] = useState({ id: null, order: null, payment: null, delivery: null, error: '' })
+  const [state, setState] = useState({ id: null, order: null, payment: null, delivery: null, adjustments: [], adjustment: null, error: '' })
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState({ text: '', tone: 'ok' })
   const [confirmReject, setConfirmReject] = useState(false)
@@ -38,8 +39,16 @@ export default function OrderDetail() {
   const fetchOrder = useCallback(
     () =>
       api.get(`/brand/orders/${id}`).then(
-        (res) => ({ id, order: res.data.order, payment: res.data.payment, delivery: res.data.delivery, error: '' }),
-        (err) => ({ id, order: null, payment: null, delivery: null, error: getErrorMessage(err) }),
+        (res) => ({
+          id,
+          order: res.data.order,
+          payment: res.data.payment,
+          delivery: res.data.delivery,
+          adjustments: res.data.adjustments || [],
+          adjustment: res.data.adjustment || null,
+          error: '',
+        }),
+        (err) => ({ id, order: null, payment: null, delivery: null, adjustments: [], adjustment: null, error: getErrorMessage(err) }),
       ),
     [id],
   )
@@ -87,10 +96,11 @@ export default function OrderDetail() {
     )
   }
 
-  const { order, payment, delivery } = state
+  const { order, payment, delivery, adjustments, adjustment } = state
   const actions = can('orders.manage') ? ACTIONS[order.orderStatus] || [] : []
   const a = order.shippingAddress || {}
   const rejected = order.orderStatus === 'REJECTED'
+  const waitingForCustomer = adjustment?.status === 'PROPOSED'
 
   return (
     <>
@@ -127,7 +137,14 @@ export default function OrderDetail() {
           <span className="mr-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Next step</span>
           {actions.map(([status, label, primary]) =>
             primary ? (
-              <button key={status} type="button" disabled={busy} onClick={() => move(status)} className={primaryBtn}>
+              <button
+                key={status}
+                type="button"
+                disabled={busy || (status === 'READY_FOR_SHIPMENT' && waitingForCustomer)}
+                title={status === 'READY_FOR_SHIPMENT' && waitingForCustomer ? 'Resolve the change proposal first.' : undefined}
+                onClick={() => move(status)}
+                className={primaryBtn}
+              >
                 {label}
               </button>
             ) : confirmReject ? (
@@ -162,6 +179,11 @@ export default function OrderDetail() {
               </button>
             ),
           )}
+          {waitingForCustomer && order.orderStatus === 'PROCESSING' && (
+            <p className="w-full text-[13px] text-warning">
+              The customer must answer the change proposal before this order can be marked ready for shipment.
+            </p>
+          )}
         </div>
       )}
 
@@ -171,6 +193,14 @@ export default function OrderDetail() {
           This order was rejected. Stock has been returned to your inventory.
         </p>
       )}
+
+      <AdjustmentPanel
+        order={order}
+        adjustments={adjustments}
+        adjustment={adjustment}
+        canAdjust={can('orders.adjust')}
+        onChanged={async () => setState(await fetchOrder())}
+      />
 
       {delivery && can('delivery.manage') && <DeliveryPanel key={delivery._id} delivery={delivery} onChanged={async () => setState(await fetchOrder())} />}
 

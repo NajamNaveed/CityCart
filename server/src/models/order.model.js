@@ -154,6 +154,14 @@ const orderSchema = new mongoose.Schema(
       default: 'PENDING',
       index: true,
     },
+    // The waiting adjustment proposal (docs/21 §H), if any. Guarded by an
+    // atomic compare-and-set when a proposal is sent and cleared when it is
+    // resolved; also gates moving the order to READY_FOR_SHIPMENT.
+    activeAdjustmentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'OrderAdjustment',
+      default: null,
+    },
     // Audit trail (docs/08 §36): who moved the order to which status, when.
     statusHistory: {
       type: [

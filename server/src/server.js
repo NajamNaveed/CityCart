@@ -5,9 +5,11 @@ const env = require('./config/env');
 const { connectDB, disconnectDB, describeConnectionError } = require('./config/db');
 const { initSockets, closeSockets } = require('./sockets');
 const { startPaymentExpiryJob } = require('./jobs/paymentExpiry');
+const { startAdjustmentExpiryJob } = require('./jobs/adjustmentExpiry');
 
 let httpServer;
 let stopPaymentExpiryJob;
+let stopAdjustmentExpiryJob;
 
 /**
  * Startup order matters: the database connection must succeed before the
@@ -37,6 +39,8 @@ async function start() {
   initSockets(httpServer);
   // Unpaid online orders give their stock back after their hold (docs/10 §29).
   stopPaymentExpiryJob = startPaymentExpiryJob();
+  // Unanswered change proposals expire after 24 hours (docs/21 §H).
+  stopAdjustmentExpiryJob = startAdjustmentExpiryJob();
   httpServer.listen(env.port, () => {
     // eslint-disable-next-line no-console
     console.log(
@@ -62,6 +66,7 @@ async function shutdown(signal) {
 
   try {
     if (stopPaymentExpiryJob) stopPaymentExpiryJob();
+    if (stopAdjustmentExpiryJob) stopAdjustmentExpiryJob();
     if (httpServer) {
       await new Promise((resolve, reject) => {
         httpServer.close((err) => (err ? reject(err) : resolve()));

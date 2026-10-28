@@ -64,10 +64,49 @@ const updateOrderStatusSchema = z.object({
   }),
 });
 
+// Order adjustments (docs/21 §H). The client picks the order line, how many
+// units the brand can supply, and optionally a same-brand substitute; prices
+// and brand ownership are resolved server-side.
+const objectId = z.string().refine((value) => mongoose.Types.ObjectId.isValid(value), {
+  message: 'Invalid id.',
+});
+
+const adjustmentLineSchema = z.object({
+  orderItemId: objectId,
+  supplyQuantity: z.number().int().min(0),
+  substitute: z
+    .object({
+      productId: objectId,
+      quantity: z.number().int().min(1),
+    })
+    .nullable()
+    .optional(),
+});
+
+const proposeAdjustmentSchema = z.object({
+  note: text(500),
+  restockRemoved: z.boolean().optional(),
+  lines: z.array(adjustmentLineSchema).min(1).max(50),
+});
+
+const respondAdjustmentSchema = z.object({
+  action: z.enum(['ACCEPT', 'REMOVE', 'CANCEL_ORDER'], {
+    error: 'action must be one of: ACCEPT, REMOVE, CANCEL_ORDER',
+  }),
+});
+
+const adjustmentParamsSchema = z.object({
+  id: objectId,
+  adjustmentId: objectId,
+});
+
 module.exports = {
   createOrderSchema,
   listOrdersQuerySchema,
   adminListOrdersQuerySchema,
   updateOrderStatusSchema,
+  proposeAdjustmentSchema,
+  respondAdjustmentSchema,
+  adjustmentParamsSchema,
   MAX_NOTE_WORDS,
 };

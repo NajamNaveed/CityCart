@@ -30,7 +30,7 @@ function OrderDetail({ id }) {
   const router = useRouter()
   const { user } = useAuth()
   const remote = useRemote(`order:${id}`, () => fetchOrder(id))
-  const { order, payment, delivery } = remote.data || {}
+  const { order, payment, delivery, adjustments = [] } = remote.data || {}
 
   let body
   if (remote.status === 'loading') {
@@ -67,6 +67,27 @@ function OrderDetail({ id }) {
               <View key={`${step.status}-${i}`} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md }}>
                 <AppText variant="label">{humanize(step.status)}</AppText>
                 <AppText variant="small">{formatDateTime(step.at)}</AppText>
+              </View>
+            ))}
+          </Card>
+        ) : null}
+
+        {adjustments.length ? (
+          <Card style={{ gap: spacing.sm }}>
+            <AppText variant="small">Change proposals</AppText>
+            {adjustments.map((adj) => (
+              <View key={adj._id} style={{ gap: 4, paddingTop: spacing.xs, borderTopWidth: 1, borderTopColor: colors.line }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }}>
+                  <StatusPill value={adj.status} />
+                  <AppText variant="small">{formatDateTime(adj.respondedAt || adj.createdAt)}</AppText>
+                </View>
+                <AppText variant="small" style={{ color: colors.ink }}>
+                  {adj.note}
+                </AppText>
+                <AppText variant="small">
+                  {formatPrice(adj.totalsBefore.total)} → {formatPrice(adj.totalsAfter.total)}
+                  {adj.response?.action ? ` · ${humanize(adj.response.action)}` : ''}
+                </AppText>
               </View>
             ))}
           </Card>

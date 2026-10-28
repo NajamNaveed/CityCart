@@ -6,6 +6,7 @@ jest.mock('../src/models/employee.model');
 jest.mock('../src/models/order.model');
 jest.mock('../src/models/payment.model');
 jest.mock('../src/models/delivery.model');
+jest.mock('../src/models/orderAdjustment.model');
 jest.mock('../src/utils/transaction', () => ({
   runInTransaction: (work) => work('SESSION'),
 }));
@@ -17,6 +18,7 @@ const Employee = require('../src/models/employee.model');
 const Order = require('../src/models/order.model');
 const Payment = require('../src/models/payment.model');
 const Delivery = require('../src/models/delivery.model');
+const OrderAdjustment = require('../src/models/orderAdjustment.model');
 const notifications = require('../src/services/notification.service');
 const receipts = require('../src/services/receipt.service');
 const app = require('../src/app');
@@ -74,7 +76,11 @@ const delivery = (overrides = {}) => ({
 });
 const listOf = (items) => ({ sort: () => ({ skip: () => ({ limit: () => Promise.resolve(items) }) }) });
 
-beforeEach(() => jest.resetAllMocks());
+beforeEach(() => {
+  jest.resetAllMocks();
+  // getOrderForUser also loads the order's adjustment history.
+  OrderAdjustment.find.mockReturnValue({ sort: () => Promise.resolve([]) });
+});
 
 describe('access to /api/v1/rider/deliveries', () => {
   it('401 when unauthenticated', async () => {

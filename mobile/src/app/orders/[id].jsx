@@ -17,6 +17,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { useRefreshOnForeground } from '../../hooks/useRefreshOnForeground'
 import { useRemote } from '../../hooks/useRemote'
 import PayNowButton from '../../components/PayNowButton'
+import OrderChangeCard from '../../components/OrderChangeCard'
 import { getErrorMessage } from '../../services/api'
 import { awaitingPayment, canCancel, cancelOrder, CODE_VISIBLE_STATUSES, fetchDeliveryCode, fetchOrder, fetchReceipt, fetchRiderLocation, isOnline, locationMapUrl, TERMINAL_PROBLEMS } from '../../services/orders'
 import { formatDateTime, formatPrice, humanize, timeAgo } from '../../utils/format'
@@ -92,7 +93,7 @@ function ReceiptNote({ orderId }) {
 
 function OrderView({ data, refreshing, onRefresh, onChanged }) {
   const router = useRouter()
-  const { order, payment, delivery } = data
+  const { order, payment, delivery, adjustment } = data
   const [cancelling, setCancelling] = useState(false)
   const [notice, setNotice] = useState('')
   const a = order.shippingAddress || {}
@@ -144,6 +145,17 @@ function OrderView({ data, refreshing, onRefresh, onChanged }) {
             {notice}
           </AppText>
         </View>
+      ) : null}
+
+      {adjustment?.status === 'PROPOSED' ? (
+        <OrderChangeCard
+          order={order}
+          adjustment={adjustment}
+          onDone={(message) => {
+            if (message) setNotice(message)
+            onRefresh()
+          }}
+        />
       ) : null}
 
       <Section title="Progress">

@@ -87,7 +87,20 @@ export async function fetchMyOrders(page = 1, limit = 10) {
 
 export async function fetchOrder(id) {
   const res = await api.get(`/orders/${id}`)
-  return { order: res.data.order, payment: res.data.payment, delivery: res.data.delivery }
+  return {
+    order: res.data.order,
+    payment: res.data.payment,
+    delivery: res.data.delivery,
+    adjustments: res.data.adjustments || [],
+    adjustment: res.data.adjustment || null,
+  }
+}
+
+// The customer's answer to a change proposal (docs/21 §H.3): accept it, keep only what the
+// brand can send, or cancel the whole order. The server applies exactly one answer.
+export async function respondToAdjustment(orderId, adjustmentId, action) {
+  const res = await api.post(`/orders/${orderId}/adjustments/${adjustmentId}/respond`, { action })
+  return res.data
 }
 
 // While the order is on its way the customer reads a six-digit code to the rider; the

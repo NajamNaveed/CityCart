@@ -14,6 +14,8 @@ const Inventory = require('../src/models/inventory.model');
 const Employee = require('../src/models/employee.model');
 const Cart = require('../src/models/cart.model');
 const Order = require('../src/models/order.model');
+const OrderAdjustment = require('../src/models/orderAdjustment.model');
+const InventoryMovement = require('../src/models/inventoryMovement.model');
 const Payment = require('../src/models/payment.model');
 const Delivery = require('../src/models/delivery.model');
 const Review = require('../src/models/review.model');
@@ -24,7 +26,7 @@ const { ALL_PERMISSIONS } = require('../src/config/permissions');
 
 const MODELS = {
   cities: City, blocks: Block, branches: Branch, conversations: Conversation, messages: Message, users: User, brands: Brand, stores: Store, categories: Category, products: Product,
-  inventories: Inventory, employees: Employee, carts: Cart, orders: Order, payments: Payment, receipts: Receipt,
+  inventories: Inventory, employees: Employee, carts: Cart, orders: Order, orderAdjustments: OrderAdjustment, inventoryMovements: InventoryMovement, payments: Payment, receipts: Receipt,
   deliveries: Delivery, reviews: Review, notifications: Notification, counters: Counter,
 };
 

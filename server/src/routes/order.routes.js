@@ -1,6 +1,6 @@
 const express = require('express');
 
-const { create, my, getById, cancel } = require('../controllers/order.controller');
+const { create, my, getById, cancel, respondAdjustment } = require('../controllers/order.controller');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
 const requireAdminPermission = require('../middleware/requireAdminPermission');
@@ -13,6 +13,13 @@ const router = express.Router();
 router.post('/', authenticate, requireRole(ROLES.CUSTOMER), create);
 router.get('/my', authenticate, requireRole(ROLES.CUSTOMER), my); // above '/:id'
 router.patch('/:id/cancel', authenticate, requireRole(ROLES.CUSTOMER), cancel);
+// The customer's answer to a brand's change proposal (accept / remove / cancel).
+router.post(
+  '/:id/adjustments/:adjustmentId/respond',
+  authenticate,
+  requireRole(ROLES.CUSTOMER),
+  respondAdjustment
+);
 
 // Customer (own order) or platform admin with admin.orders. Brand access is on
 // /brand/orders.

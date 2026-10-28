@@ -308,6 +308,62 @@ async function notifyBrandOfNewReview(review) {
   });
 }
 
+// --- Order adjustments (docs/21 §H.4) ------------------------------------
+
+function adjustmentData(adjustment, order) {
+  return {
+    ...orderData(order),
+    adjustmentId: String(adjustment._id),
+    adjustmentStatus: adjustment.status,
+  };
+}
+
+/** The brand proposed a change; the customer has 24 hours to answer. */
+async function notifyAdjustmentProposed(adjustment, order) {
+  if (!adjustment || !order) return;
+  await notify({
+    userIds: [adjustment.customerId],
+    type: 'ADJUSTMENT_PROPOSED',
+    title: 'Your order needs a change',
+    message: `The brand cannot fully supply order ${order.orderNumber} and proposed a change. Review it within 24 hours.`,
+    data: adjustmentData(adjustment, order),
+  });
+}
+
+const ADJUSTMENT_ANSWER = {
+  ACCEPTED: 'accepted the proposed change',
+  REMOVED: 'kept the available items and removed the rest',
+  ORDER_CANCELLED: 'cancelled the whole order',
+};
+
+/** The customer chose one of the three options. */
+async function notifyAdjustmentAnswered(adjustment, order) {
+  if (!adjustment || !order) return;
+  const staff = await brandStaffIds(order.brandId, { anyOf: [PERMISSIONS.ORDERS_VIEW] });
+  await notify({
+    userIds: staff,
+    type: 'ADJUSTMENT_ANSWERED',
+    title: 'Customer answered the proposed change',
+    message: `The customer ${ADJUSTMENT_ANSWER[adjustment.status] || 'answered the proposal'} for order ${order.orderNumber}.`,
+    data: adjustmentData(adjustment, order),
+  });
+}
+
+/** Nobody answered in time: nothing changed, the brand decides what to do. */
+async function notifyAdjustmentExpired(adjustment, order) {
+  if (!adjustment) return;
+  const staff = await brandStaffIds(adjustment.brandId, { anyOf: [PERMISSIONS.ORDERS_VIEW] });
+  await notify({
+    userIds: staff,
+    type: 'ADJUSTMENT_EXPIRED',
+    title: 'Proposed change expired',
+    message: order
+      ? `The customer did not answer the proposed change for order ${order.orderNumber} within 24 hours. The order is unchanged.`
+      : 'A proposed order change expired without an answer. The order is unchanged.',
+    data: order ? adjustmentData(adjustment, order) : { adjustmentId: String(adjustment._id), orderId: String(adjustment.orderId) },
+  });
+}
+
 async function notifySuperAdminsOfNewBrand({ brandId, brandName, ownerName }) {
   await notify({
     userIds: await superAdminIds(),
@@ -437,6 +493,9 @@ module.exports = {
   notifyBrandOfCancelledOrder: bestEffort(notifyBrandOfCancelledOrder),
   notifyPaymentReceived: bestEffort(notifyPaymentReceived),
   notifyRefundIssued: bestEffort(notifyRefundIssued),
+  notifyAdjustmentProposed: bestEffort(notifyAdjustmentProposed),
+  notifyAdjustmentAnswered: bestEffort(notifyAdjustmentAnswered),
+  notifyAdjustmentExpired: bestEffort(notifyAdjustmentExpired),
   notifyStockTransitions: bestEffort(notifyStockTransitions),
   notifyEmployeeCreated: bestEffort(notifyEmployeeCreated),
   notifyEmployeePermissionsChanged: bestEffort(notifyEmployeePermissionsChanged),

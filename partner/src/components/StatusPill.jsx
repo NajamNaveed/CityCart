@@ -9,6 +9,8 @@ const ACTIVE = { fg: colors.pine, bg: colors.pineSoft, border: 'rgba(30,58,47,0.
 const WAITING = { fg: colors.warning, bg: colors.warningSoft, border: 'rgba(180,83,9,0.25)' }
 
 // Orders, deliveries and payments share one set of looks.
+const NEUTRAL = { fg: colors.ink, bg: colors.paper, border: colors.line }
+
 const LOOKS = {
   DELIVERED: GOOD,
   PAID: GOOD,
@@ -22,8 +24,13 @@ const LOOKS = {
   SHIPPED: ACTIVE,
   PENDING: WAITING,
   READY_FOR_PICKUP: WAITING,
+  PROPOSED: WAITING,
+  ACCEPTED: GOOD,
+  REMOVED: WAITING,
+  ORDER_CANCELLED: TROUBLE,
+  WITHDRAWN: NEUTRAL,
+  EXPIRED: NEUTRAL,
 }
-const NEUTRAL = { fg: colors.ink, bg: colors.paper, border: colors.line }
 
 // A label for a delivery status; trouble and "on the road" stand out, the rest stay quiet.
 export default function StatusPill({ value }) {

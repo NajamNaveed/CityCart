@@ -484,11 +484,12 @@ May:
 * Reject orders
 * Process orders
 * Mark orders ready
+* Propose a change when items cannot be supplied (with `orders.adjust`)
 * Manage permitted order actions
 
 ### Brand Employee
 
-May perform order actions only when the relevant permission is assigned.
+May perform order actions only when the relevant permission is assigned. Proposing or withdrawing a change needs `orders.adjust`, which is separate from `orders.manage`.
 
 ### Super Admin
 
@@ -556,6 +557,8 @@ DELIVERED     → Return process
 The exact customer cancellation policy should be finalized before implementation.
 
 Cancellation must be performed by the backend.
+
+Cancelling an order that has a waiting change proposal closes the proposal (`ORDER_CANCELLED`), releases its substitute reservation and returns the order's stock (see §41).
 
 ---
 
@@ -836,6 +839,7 @@ Order shipped
 Order out for delivery
 Order delivered
 Order cancelled
+Order change proposed / answered / expired (see §41)
 ```
 
 Notifications are defined in:
@@ -1000,6 +1004,143 @@ This document is the authoritative specification for CityCart's order-management
 If AI-generated code or another document conflicts with this document, the conflict must be identified and resolved before implementation.
 
 Order integrity, inventory correctness, authorization, and historical pricing must not be compromised for convenience.
+
+---
+
+# 41. Order Adjustments (added October 2026)
+
+Feature H of `21-next-features-plan.md`: the brand cannot supply exactly what was ordered. Instead of silently shipping less or rejecting the whole order, the brand offers the customer a change.
+
+## 41.1 When a proposal is allowed
+
+```text
+PENDING       allowed
+CONFIRMED     allowed
+PROCESSING    allowed
+READY_FOR_SHIPMENT and later   refused (409 NOT_ADJUSTABLE)
+```
+
+* One proposal may wait per order at a time. `Order.activeAdjustmentId` is the gate and a partial unique index on `OrderAdjustment { orderId, status: 'PROPOSED' }` is the database backstop.
+* Resolved proposals stay as history; the brand may propose again later while the order is still in an adjustable status.
+* An online order must already be `PAID`; an unpaid online order is still on its payment hold and cannot be adjusted.
+* Only the brand can propose or withdraw. Only the customer who owns the order can answer. Brand employees need `orders.adjust` (separate from `orders.manage`).
+
+## 41.2 The proposal
+
+For every order line the brand is short on, the proposal states:
+
+```text
+how many units of the ordered product it can supply
+the missing units are either removed, or replaced by a same-brand substitute
+```
+
+A substitute is a different, active product of the same brand, with a quantity no larger than the missing units, priced at **today's** price. Original lines keep their purchase-time snapshot price (docs/08 §9).
+
+The proposal stores in `OrderAdjustment`:
+
+```text
+status                 PROPOSED | ACCEPTED | REMOVED | ORDER_CANCELLED | WITHDRAWN | EXPIRED
+note                   the message shown to the customer (required, max 500)
+lines                  per-line snapshot: ordered/supplied quantities, substitute, prices
+totalsBefore           the order's totals when proposed
+totalsAfter            totals if the customer accepts (supplies + substitutes)
+totalsAfterRemoval     totals if the customer keeps only supplies
+restockRemoved         whether missing units return to stock (default false)
+proposedBy, expiresAt  who proposed it and the 24-hour deadline
+response               action, user and time once resolved
+```
+
+Totals are computed by the backend. Delivery fee, discount and tax never change. Substitute stock is **reserved when the proposal is sent**; if it cannot be reserved the proposal is not created (`409 SUBSTITUTE_UNAVAILABLE`), so a substitute is never oversold.
+
+## 41.3 The customer's choices
+
+The customer sees the note, the affected lines, both possible totals and the deadline, and may:
+
+| Choice | What happens |
+| ------ | ------------ |
+| **Accept the change** | The order keeps the supplied units and adds the substitutes. Reserved substitute stock becomes sold stock. |
+| **Keep the rest / remove those items** | The order keeps only the supplied units; missing units are removed. Substitute stock is released. |
+| **Cancel the whole order** | The order becomes `CANCELLED`; all of its stock returns and any online payment is refunded. |
+
+The brand may withdraw the proposal while it waits. After **24 hours** the proposal expires: **nothing about the order changes**, reserved substitute stock is released, and the brand decides what to do next (usually reject or try another proposal).
+
+Only one of these outcomes can ever be applied: the `PROPOSED → resolved` transition is one conditional update inside the transaction that changes the order, its stock and its payment.
+
+## 41.4 Effects on the order
+
+On acceptance or removal the backend, in one transaction:
+
+1. Rewrites `order.items` from the proposal snapshots.
+2. Recomputes `subtotal` and `total`; delivery fee, discount and tax stay as they were.
+3. Applies the money rules (see §41.5).
+4. Releases or converts the reserved substitute stock and, only when `restockRemoved` was ticked, returns the missing units to stock.
+5. Clears `activeAdjustmentId` and updates an already-issued online receipt to the final lines (docs/10 §30).
+6. Resolves the proposal and notifies both sides.
+
+The proposal keeps the before/after totals, so the original order value is never lost; the order's `statusHistory` is untouched by an adjustment.
+
+If every line ends up removed, there is nothing left to fulfil and the order is cancelled; restocking then follows the proposal's `restockRemoved` tick.
+
+Delivery, rider assignment and the COD receipt are created **after** the final lines exist. Because a proposal is only possible before `READY_FOR_SHIPMENT`, no delivery or rider can be working from superseded lines.
+
+## 41.5 Payment effects
+
+```text
+COD                 Payment.amount becomes the new order total; the rider collects it.
+Online, paid        allowed only when the new total is NOT higher.
+                    An equal total changes nothing; a lower total records the
+                    difference in Payment.refundedAmount/refunds[] and sets
+                    PARTIALLY_REFUNDED (or REFUNDED). Order.paymentStatus stays PAID.
+Online, paid, higher total   refused (409 ADJUSTMENT_INCREASES_TOTAL)
+Online, not paid    proposal refused (409 ONLINE_PAYMENT_NOT_COMPLETED)
+```
+
+A customer who cancels the whole order gets the remaining paid amount refunded and the payment becomes `REFUNDED`. Payment rules are detailed in `10-payment-system.md` §30.
+
+## 41.6 Gates and edge cases
+
+* While a proposal waits, the brand **cannot** move the order to `READY_FOR_SHIPMENT` (`409 ADJUSTMENT_PENDING`); the final lines are not settled.
+* The customer can still cancel the whole order while a proposal waits; that closes the proposal as `ORDER_CANCELLED`.
+* A brand rejection also closes the waiting proposal and releases its reservation.
+* Two answers, an answer racing a withdrawal, or an answer racing the expiry sweep: exactly one wins, the others receive `409 ADJUSTMENT_NOT_PENDING` / `ADJUSTMENT_EXPIRED`.
+* A second proposal racing the first is refused (`409 ADJUSTMENT_PENDING`) by the atomic claim and the unique index.
+* An order that was already paid online cannot be adjusted to a higher total, even after the customer accepted; the whole acceptance is refused atomically.
+
+## 41.7 Visibility and notifications
+
+```text
+Customer       own proposals (website and shopper app)
+Brand          own brand's proposals (website; Partner app read-only)
+Super admin    read-only on the order detail (with admin.orders)
+Partner        read-only history (area admin.orders)
+Rider          nothing
+```
+
+Notifications (docs/12):
+
+```text
+ADJUSTMENT_PROPOSED   to the customer, when the brand sends it
+ADJUSTMENT_ANSWERED   to the brand's staff with orders.view, when the customer answers
+ADJUSTMENT_EXPIRED    to the brand's staff with orders.view, when 24 hours pass unanswered
+```
+
+A refund also sends the standard refund notification. Notifications carry `orderId` and `adjustmentId`, so the apps open the order.
+
+## 41.8 Tests
+
+Covered in `server/tests/brandOrders.test.js` and `server/tests/integration/orderAdjustments.integration.test.js`:
+
+```text
+propose / accept / remove / cancel / withdraw / expiry
+atomic stock reservation and conversion (no overselling)
+one proposal at a time (including races)
+READY_FOR_SHIPMENT gate
+COD and paid-online totals, lower-total refund, higher-total refusal
+unpaid online refusal
+tenant isolation (brand A cannot touch brand B's order)
+orders.adjust permission
+no double processing of an answer
+```
 
 ---
 

@@ -41,6 +41,7 @@ export const PERMISSION_GROUPS = [
     items: [
       ['orders.view', 'See orders'],
       ['orders.manage', 'Confirm, process and reject orders'],
+      ['orders.adjust', 'Propose a change when items cannot be supplied'],
     ],
   },
   {

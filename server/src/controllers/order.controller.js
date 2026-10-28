@@ -2,8 +2,11 @@ const {
   createOrderSchema,
   listOrdersQuerySchema,
   adminListOrdersQuerySchema,
+  respondAdjustmentSchema,
+  adjustmentParamsSchema,
 } = require('../validators/order.validator');
 const { objectIdParamSchema } = require('../validators/common.validator');
+const { respondToAdjustment } = require('../services/orderAdjustment.service');
 const {
   checkout,
   listMyOrders,
@@ -55,8 +58,37 @@ async function getById(req, res, next) {
   const params = objectIdParamSchema.safeParse(req.params);
   if (!params.success) return invalid(res, params.error);
   try {
-    const { order, payment, delivery } = await getOrderForUser(req.user, params.data.id);
-    return res.status(200).json({ success: true, order, payment, delivery });
+    const { order, payment, delivery, adjustments, adjustment } = await getOrderForUser(
+      req.user,
+      params.data.id
+    );
+    return res.status(200).json({ success: true, order, payment, delivery, adjustments, adjustment });
+  } catch (err) {
+    return handleError(err, res, next);
+  }
+}
+
+// POST /orders/:id/adjustments/:adjustmentId/respond — the customer's choice.
+async function respondAdjustment(req, res, next) {
+  const params = adjustmentParamsSchema.safeParse(req.params);
+  if (!params.success) return invalid(res, params.error);
+  const body = respondAdjustmentSchema.safeParse(req.body);
+  if (!body.success) return invalid(res, body.error);
+  try {
+    const outcome = await respondToAdjustment({
+      customerId: req.user._id,
+      orderId: params.data.id,
+      adjustmentId: params.data.adjustmentId,
+      action: body.data.action,
+      userId: req.user._id,
+    });
+    return res.status(200).json({
+      success: true,
+      message: 'Response recorded',
+      adjustment: outcome.adjustment,
+      order: outcome.order,
+      refundAmount: outcome.refund,
+    });
   } catch (err) {
     return handleError(err, res, next);
   }
@@ -85,4 +117,4 @@ async function adminList(req, res, next) {
   }
 }
 
-module.exports = { adminList, create, my, getById, cancel };
+module.exports = { adminList, create, my, getById, cancel, respondAdjustment };

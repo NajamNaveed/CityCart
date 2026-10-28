@@ -44,7 +44,7 @@ function getNotificationVisuals(type = '') {
       badge: 'Delivery',
     }
   }
-  if (type.includes('ORDER') || type.includes('PAYMENT') || type.includes('REFUND')) {
+  if (type.includes('ORDER') || type.includes('PAYMENT') || type.includes('REFUND') || type.includes('ADJUSTMENT')) {
     return {
       Icon: Package,
       color: 'bg-amber-50 text-amber-700 border-amber-200/60',

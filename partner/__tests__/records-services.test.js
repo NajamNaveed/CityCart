@@ -24,7 +24,13 @@ describe('orders and deliveries', () => {
 
   it('load one order with its payment and delivery, and one delivery', async () => {
     api.get.mockResolvedValue({ data: { order: { _id: 'o1' }, payment: { status: 'PENDING' }, delivery: { _id: 'd1' } } })
-    expect(await fetchOrder('o1')).toEqual({ order: { _id: 'o1' }, payment: { status: 'PENDING' }, delivery: { _id: 'd1' } })
+    expect(await fetchOrder('o1')).toEqual({
+      order: { _id: 'o1' },
+      payment: { status: 'PENDING' },
+      delivery: { _id: 'd1' },
+      adjustments: [],
+      adjustment: null,
+    })
     expect(api.get).toHaveBeenLastCalledWith('/brand/orders/o1')
     api.get.mockResolvedValue({ data: { delivery: { _id: 'd1' } } })
     expect(await fetchShipment('d1')).toEqual({ _id: 'd1' })

@@ -12,6 +12,7 @@ jest.mock('../src/models/order.model');
 jest.mock('../src/models/payment.model');
 jest.mock('../src/models/delivery.model');
 jest.mock('../src/models/counter.model');
+jest.mock('../src/models/orderAdjustment.model');
 jest.mock('../src/models/product.model', () => {
   const actual = jest.requireActual('../src/models/product.model');
   return {
@@ -27,6 +28,7 @@ jest.mock('../src/utils/transaction', () => ({
   runInTransaction: (work) => work('SESSION'),
 }));
 jest.mock('../src/services/notification.service');
+jest.mock('../src/services/orderAdjustment.service');
 
 const User = require('../src/models/user.model');
 const Employee = require('../src/models/employee.model');
@@ -34,7 +36,9 @@ const Order = require('../src/models/order.model');
 const Payment = require('../src/models/payment.model');
 const Delivery = require('../src/models/delivery.model');
 const Inventory = require('../src/models/inventory.model');
+const OrderAdjustment = require('../src/models/orderAdjustment.model');
 const notifications = require('../src/services/notification.service');
+const adjustments = require('../src/services/orderAdjustment.service');
 const app = require('../src/app');
 const { ROLES } = require('../src/config/roles');
 const { PERMISSIONS } = require('../src/config/permissions');
@@ -57,7 +61,10 @@ function asRole(role, permissions) {
   return { cookie: ['Cookie', getAuthCookie(user)], user };
 }
 
-beforeEach(() => jest.resetAllMocks());
+beforeEach(() => {
+  jest.resetAllMocks();
+  OrderAdjustment.find.mockReturnValue({ sort: () => Promise.resolve([]) });
+});
 
 describe('transition rules', () => {
   it('finds the legal source statuses for a target', () => {
@@ -290,5 +297,63 @@ describe('PATCH /api/v1/brand/orders/:id/status', () => {
     Order.findOneAndUpdate.mockResolvedValue(null);
     Order.findOne.mockReturnValue({ session: () => Promise.resolve(null) });
     expect((await patch(cookie, oid(), 'CONFIRMED')).status).toBe(404);
+  });
+});
+
+describe('order adjustment routes (docs/21 §H)', () => {
+  const propose = (cookie, id = oid(), body = { note: 'We only have one', lines: [{ orderItemId: oid(), supplyQuantity: 1 }] }) =>
+    request(app).post(`/api/v1/brand/orders/${id}/adjustments`).set(...cookie).send(body);
+  const withdraw = (cookie, id = oid(), adjustmentId = oid()) =>
+    request(app).post(`/api/v1/brand/orders/${id}/adjustments/${adjustmentId}/withdraw`).set(...cookie);
+
+  it('401 without a session', async () => {
+    expect((await request(app).post(`/api/v1/brand/orders/${oid()}/adjustments`).send({})).status).toBe(401);
+  });
+
+  it.each([ROLES.CUSTOMER, ROLES.SUPER_ADMIN, ROLES.ADMIN_PARTNER])('403 for %s', async (role) => {
+    const { cookie } = asRole(role);
+    expect((await propose(cookie)).status).toBe(403);
+    expect((await withdraw(cookie)).status).toBe(403);
+  });
+
+  it('a view-only or status-managing employee cannot propose a change', async () => {
+    let { cookie } = asRole(ROLES.BRAND_EMPLOYEE, [PERMISSIONS.ORDERS_VIEW, PERMISSIONS.ORDERS_MANAGE]);
+    expect((await propose(cookie)).status).toBe(403);
+    expect(adjustments.proposeAdjustment).not.toHaveBeenCalled();
+
+    ({ cookie } = asRole(ROLES.BRAND_EMPLOYEE, [PERMISSIONS.ORDERS_ADJUST]));
+    const res = await propose(cookie);
+    expect(res.status).toBe(201);
+    expect(adjustments.proposeAdjustment).toHaveBeenCalledWith(
+      expect.objectContaining({ brandId: brandId.toString(), orderId: expect.any(String), note: 'We only have one' })
+    );
+  });
+
+  it('a brand admin proposes and withdraws, scoped to its own brand', async () => {
+    const { cookie } = asRole(ROLES.BRAND_ADMIN);
+    const id = oid();
+    expect((await propose(cookie, id)).status).toBe(201);
+    expect((await withdraw(cookie, id)).status).toBe(200);
+    expect(adjustments.withdrawAdjustment).toHaveBeenCalledWith(
+      expect.objectContaining({ brandId: brandId.toString(), orderId: id.toString() })
+    );
+  });
+
+  it('400 for missing lines or a bad id', async () => {
+    const { cookie } = asRole(ROLES.BRAND_ADMIN);
+    expect((await propose(cookie, oid(), { note: 'x', lines: [] })).status).toBe(400);
+    expect((await propose(cookie, 'nope')).status).toBe(400);
+    expect((await withdraw(cookie, oid(), 'nope')).status).toBe(400);
+  });
+
+  it('service errors keep their status and code', async () => {
+    const { cookie } = asRole(ROLES.BRAND_ADMIN);
+    const { OrderError } = require('../src/services/order.service');
+    adjustments.proposeAdjustment.mockRejectedValue(
+      new OrderError(409, 'There is already a proposal waiting for this order.', { code: 'ADJUSTMENT_PENDING' })
+    );
+    const res = await propose(cookie);
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('ADJUSTMENT_PENDING');
   });
 });

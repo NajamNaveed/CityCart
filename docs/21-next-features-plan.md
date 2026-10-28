@@ -1,7 +1,8 @@
-# 21 — Next Features: Plan (not built yet)
+# 21 — Next Features: Plan
 
 Written October 2026, after the owner's full test of the Partner programme (`20-partner-app.md`).
-**Nothing here is built.** It is the plan the owner asked for first. Every "Decision" has a default
+**G (admin partner) and H (substitution) are built; I (payment proof photo) is not built yet.**
+It is the plan the owner asked for first. Every "Decision" has a default
 (what will be built unless the owner says otherwise).
 
 Recommended order: **G (admin partner), then H (substitution), then I (payment proof photo).**
@@ -11,6 +12,8 @@ app; I needs a new package, the camera, private photo storage and a real phone t
 ---
 
 # G. A partner for the super admin ("admin team")
+
+**Status: built (October 2026).**
 
 ## G.1 What exists today (facts)
 
@@ -60,6 +63,8 @@ G3 web pages; G4 audit log; G5 docs (`02`, `04`, `05`, `06`).
 ---
 
 # H. Substitution: the brand cannot supply what was ordered
+
+**Status: built (October 2026).** Rules are in `08-order-management.md` §41, stock in `09-inventory-management.md` §25, money in `10-payment-system.md` §30, notifications in `12-notification-system.md` §32, endpoints in `05-api-specification.md` §16–17.
 
 Example: the customer ordered 3 pieces; the brand finds 1 in good condition. The brand talks to the
 customer and offers another product, or the customer refuses. This chapter is everything attached to that.

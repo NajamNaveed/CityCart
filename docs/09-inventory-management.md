@@ -52,7 +52,7 @@ availableStock =
 quantity - reservedQuantity
 ```
 
-For the initial MVP, reservation behavior may remain simple, but the data model should support future reservation functionality.
+For the initial MVP reservations are used by substitute stock in an order-change proposal (§25).
 
 Example:
 
@@ -141,7 +141,13 @@ RETURNED
 ORDER_DEDUCTION
 ORDER_CANCELLATION
 CORRECTION
+SUBSTITUTION_RESERVED
+SUBSTITUTION_RELEASED
+SUBSTITUTION_FULFILLED
+ADJUSTMENT_RESTOCKED
 ```
+
+The last four are written only by the order-adjustment flow (§25); a client may never label a manual adjustment with them.
 
 Additional reasons may be introduced later.
 
@@ -282,6 +288,8 @@ Stock = 10
 Restocking must only happen once.
 
 The system must prevent duplicate cancellation requests from increasing stock multiple times.
+
+Cancelling an order that has a waiting change proposal also releases the proposal's reserved substitute stock exactly once (§25).
 
 ---
 
@@ -442,6 +450,7 @@ Inventory management is considered implemented when:
 * Out-of-stock products cannot be purchased.
 * Inventory changes are traceable.
 * Eligible cancellations restore inventory correctly.
+* Change proposals reserve, release and convert substitute stock correctly (§25).
 * Cross-brand inventory access is blocked.
 * Inventory operations have automated tests.
 
@@ -452,6 +461,64 @@ Inventory management is considered implemented when:
 This document is the authoritative specification for CityCart inventory management.
 
 Inventory correctness takes priority over convenience.
+
+---
+
+# 25. Stock During an Order Change (added October 2026)
+
+Feature H of `21-next-features-plan.md`: the brand proposes a substitute or a reduced quantity. Stock moves **inside the same transaction** as the proposal or the customer's answer, and every move is written to the `InventoryMovement` ledger with `orderId` and `adjustmentId`.
+
+## 25.1 Substitute stock is reserved when the proposal is sent
+
+```text
+brand proposes a substitute
+        ↓
+reserveStock(substitute, quantity)
+        ↓
+Inventory.reservedQuantity += quantity
+InventoryMovement { reason: SUBSTITUTION_RESERVED, reservedChange: +quantity }
+```
+
+`availableQuantity = quantity - reservedQuantity`, so the unit disappears from the storefront immediately. Reservation uses the same atomic conditional update as checkout; if the units are not available the whole proposal fails with `409 SUBSTITUTE_UNAVAILABLE` and nothing is written. Products without inventory tracking are not reserved. The quantities actually reserved are stored in `OrderAdjustment.stockReservations`.
+
+## 25.2 Resolution
+
+| Outcome | Stock movement | Ledger reason |
+| ------- | -------------- | ------------- |
+| Customer accepts | Reserved substitute units become sold: `quantity -= n`, `reservedQuantity -= n` | `SUBSTITUTION_FULFILLED` |
+| Customer keeps the rest | Reserved substitute units return: `reservedQuantity -= n` | `SUBSTITUTION_RELEASED` |
+| Brand withdraws | Same release | `SUBSTITUTION_RELEASED` |
+| Proposal expires | Same release | `SUBSTITUTION_RELEASED` |
+| Whole order cancelled / rejected | Same release; the order's own items are restocked by the cancellation path | `SUBSTITUTION_RELEASED` |
+
+## 25.3 Units the brand cannot supply
+
+The units that were ordered but cannot be supplied were deducted at checkout. They return to stock **only if the brand ticks “return these units to stock”** on the proposal (`restockRemoved`, default **off**), because missing or damaged units are usually not sellable.
+
+```text
+removed units (orderedQuantity - supplyQuantity)
+    ↓ only when restockRemoved = true
+quantity += removed
+InventoryMovement { reason: ADJUSTMENT_RESTOCKED, quantityChange: +removed }
+```
+
+If every line is removed the order is cancelled; restocking then follows the same tick. An explicit customer “cancel the whole order” returns everything regardless of the tick.
+
+Every release/restock is guarded by the atomic `PROPOSED → resolved` update, so two answers, an answer racing withdrawal, or an answer racing the expiry sweep can never move stock twice.
+
+## 25.4 Tests
+
+Integration coverage in `server/tests/integration/orderAdjustments.integration.test.js` asserts:
+
+```text
+reservation happens once at proposal time
+insufficient substitute stock refuses the proposal and writes nothing
+accept converts reserved → sold (no double deduction)
+remove/withdraw/expiry release exactly once
+removed units restock only when ticked
+whole-order cancel restocks everything
+concurrent answers never double-apply
+```
 
 ---
 

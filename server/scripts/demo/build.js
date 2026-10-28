@@ -60,7 +60,8 @@ function buildDataset({ now = new Date(), hashes }) {
 
   const ds = {
     cities: [], blocks: [], branches: [], conversations: [], messages: [], users: [], brands: [], stores: [], categories: [], products: [], inventories: [],
-    employees: [], carts: [], orders: [], payments: [], receipts: [], deliveries: [], reviews: [], notifications: [], counters: [],
+    employees: [], carts: [], orders: [], payments: [], receipts: [], deliveries: [], orderAdjustments: [], inventoryMovements: [],
+    reviews: [], notifications: [], counters: [],
   };
 
   // ── cities ──
@@ -443,6 +444,106 @@ function buildDataset({ now = new Date(), hashes }) {
   });
   for (const [year, seq] of Object.entries(receiptsPerYear)) ds.counters.push({ _id: `receipt-${year}`, seq });
 
+  // ── adjustments: a brand could not supply everything, so it proposed a change (docs/21 §H) ──
+  const orderEntryById = new Map(orders.map((entry) => [String(entry.order._id), entry]));
+  const inventoryFor = (productId) => ds.inventories.find((i) => String(i.productId) === String(productId));
+  const totalsSnapshot = (order, subtotal) => ({
+    subtotal, deliveryFee: order.deliveryFee, discount: order.discount, tax: order.tax,
+    total: subtotal + order.deliveryFee - order.discount + order.tax,
+  });
+
+  const addAdjustment = ({ order, status, at, supplyAllBut, wantSubstitute, respondedAt, action, responseNote, restockRemoved, noteText }) => {
+    const { brand } = orderEntryById.get(String(order._id));
+    const item = order.items[0];
+    const supplyQuantity = Math.max(0, item.quantity - supplyAllBut);
+    const missing = item.quantity - supplyQuantity;
+
+    let substitute = null;
+    if (wantSubstitute && missing > 0) {
+      const product = brand.products.find((p) => p.status === 'ACTIVE' && p.track !== false
+        && String(p._id) !== String(item.productId) && (inventoryFor(p._id)?.quantity || 0) >= missing);
+      if (product) {
+        substitute = {
+          productId: product._id, productName: product.name, sku: product.sku,
+          unitPrice: product.price, image: product.images[0], quantity: missing,
+        };
+      }
+    }
+
+    const suppliedValue = item.unitPrice * supplyQuantity;
+    const totalsBefore = totalsSnapshot(order, order.subtotal);
+    const totalsAfter = totalsSnapshot(order, order.subtotal - item.totalPrice + suppliedValue + (substitute ? substitute.unitPrice * substitute.quantity : 0));
+    const totalsAfterRemoval = totalsSnapshot(order, order.subtotal - item.totalPrice + suppliedValue);
+    const proposedBy = handler(brand, 'orders.adjust');
+
+    const adjustment = {
+      _id: new ObjectId(), orderId: order._id, brandId: order.brandId, customerId: order.customerId, status,
+      note: noteText,
+      lines: [{
+        orderItemId: item._id, productId: item.productId, productName: item.productName, sku: item.sku, image: item.image,
+        orderedQuantity: item.quantity, unitPrice: item.unitPrice, supplyQuantity, substitute,
+      }],
+      stockReservations: substitute ? [{ productId: substitute.productId, quantity: substitute.quantity }] : [],
+      restockRemoved: !!restockRemoved, totalsBefore, totalsAfter, totalsAfterRemoval, proposedBy: proposedBy._id,
+      expiresAt: new Date(at.getTime() + 24 * HOUR), respondedAt: respondedAt || null,
+      response: status === 'PROPOSED' ? null : { action, by: status === 'EXPIRED' ? undefined : order.customerId, at: respondedAt, note: responseNote },
+      createdAt: at, updatedAt: respondedAt || at,
+    };
+    if (adjustment.response && !adjustment.response.by) delete adjustment.response.by;
+    ds.orderAdjustments.push(adjustment);
+
+    if (status === 'PROPOSED') order.activeAdjustmentId = adjustment._id;
+    if (substitute) {
+      if (status === 'PROPOSED') {
+        const inventory = inventoryFor(substitute.productId);
+        inventory.reservedQuantity += substitute.quantity;
+        inventory.updatedAt = at;
+      }
+      const movement = (reason, quantityChange, reservedChange, when) => ds.inventoryMovements.push({
+        _id: new ObjectId(), productId: substitute.productId, brandId: order.brandId, orderId: order._id,
+        adjustmentId: adjustment._id, reason, quantityChange, reservedChange, by: proposedBy._id, createdAt: when,
+      });
+      movement('SUBSTITUTION_RESERVED', 0, substitute.quantity, at);
+      if (status !== 'PROPOSED') movement('SUBSTITUTION_RELEASED', 0, -substitute.quantity, respondedAt);
+    }
+  };
+
+  // An active proposal waiting for an answer, one the customer answered by cancelling, and one that ran out of time.
+  const adjustable = (status, used) => orders.find(({ order, brand }) => order.orderStatus === status
+    && !used.has(order._id)
+    && brand.products.filter((p) => p.status === 'ACTIVE' && p.track !== false).length >= 2);
+  const usedOrders = new Set();
+
+  const activeEntry = adjustable('CONFIRMED', usedOrders);
+  if (activeEntry) {
+    usedOrders.add(activeEntry.order._id);
+    addAdjustment({
+      order: activeEntry.order, status: 'PROPOSED', at: new Date(now.getTime() - 5 * HOUR), supplyAllBut: 1, wantSubstitute: true,
+      noteText: 'The last piece in this colour has a small mark, so we can send one less and offer a similar lawn suit at today\'s price instead.',
+    });
+  }
+  const cancelledEntry = adjustable('CANCELLED', usedOrders);
+  if (cancelledEntry) {
+    usedOrders.add(cancelledEntry.order._id);
+    const at = new Date(cancelledEntry.order.createdAt.getTime() + 2 * HOUR);
+    addAdjustment({
+      order: cancelledEntry.order, status: 'ORDER_CANCELLED', at, supplyAllBut: cancelledEntry.order.items[0].quantity,
+      wantSubstitute: false, respondedAt: new Date(at.getTime() + 3 * HOUR), action: 'CANCEL_ORDER',
+      responseNote: 'The customer preferred to cancel the whole order rather than take part of it.',
+      restockRemoved: true, noteText: 'This fabric is out of stock until next week. We can send the rest of the order, or you can cancel it.',
+    });
+  }
+  const pendingEntry = adjustable('PENDING', usedOrders);
+  if (pendingEntry) {
+    usedOrders.add(pendingEntry.order._id);
+    const at = new Date(now.getTime() - 30 * HOUR);
+    addAdjustment({
+      order: pendingEntry.order, status: 'EXPIRED', at, supplyAllBut: 1, wantSubstitute: true,
+      respondedAt: new Date(at.getTime() + 24 * HOUR), action: 'EXPIRED',
+      noteText: 'One unit was damaged in the workshop. We can replace it with the same product in another shade.',
+    });
+  }
+
   // ── reviews, written by customers whose orders were delivered ──
   const OPENERS = {
     5: ['Absolutely love it.', 'Better than I hoped.', 'Very happy with this order.'],
@@ -577,6 +678,27 @@ function buildDataset({ now = new Date(), hashes }) {
     if (payment.refunds.length) {
       const refund = payment.refunds[0];
       note(customer.doc._id, 'REFUND_ISSUED', 'A refund was issued', `${brand.def.name} refunded ${money(refund.amount)} for order ${order.orderNumber}.`, { ...ref, paymentId: payment._id }, new Date(refund.at.getTime() + 60 * 1000));
+    }
+  }
+
+  // Adjustment nudges (docs/21 §H.4): the customer is asked, then the brand hears the answer.
+  for (const adj of ds.orderAdjustments) {
+    const entry = orderEntryById.get(String(adj.orderId));
+    if (!entry) continue;
+    const ref = { orderId: adj.orderId, orderNumber: entry.order.orderNumber, brandId: adj.brandId, adjustmentId: adj._id };
+    note(adj.customerId, 'ADJUSTMENT_PROPOSED', 'A change to your order',
+      `${entry.brand.def.name} cannot supply everything in order ${entry.order.orderNumber}. Review what they can send and choose what happens next.`,
+      ref, new Date(adj.createdAt.getTime() + 60 * 1000));
+    if (adj.status !== 'PROPOSED') {
+      const expired = adj.status === 'EXPIRED';
+      const message = expired
+        ? `No answer was given to your proposed change on order ${entry.order.orderNumber} within 24 hours. The order was left unchanged.`
+        : `${entry.customer.name} cancelled order ${entry.order.orderNumber} after your proposed change.`;
+      brandReaders(entry.brand).forEach((u) => note(
+        u._id, expired ? 'ADJUSTMENT_EXPIRED' : 'ADJUSTMENT_ANSWERED',
+        expired ? 'A proposed change expired' : 'Customer answered your proposed change',
+        message, ref, new Date(adj.respondedAt.getTime() + 60 * 1000)
+      ));
     }
   }
 

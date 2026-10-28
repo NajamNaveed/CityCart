@@ -3,6 +3,7 @@ const Payment = require('../models/payment.model');
 const Delivery = require('../models/delivery.model');
 const { runInTransaction } = require('../utils/transaction');
 const { restockStock } = require('./inventory.service');
+const { closeActiveAdjustment, listAdjustmentsForOrder } = require('./orderAdjustmentStock.service');
 const { OrderError } = require('./order.service');
 const { notifyCustomerOfOrderStatus } = require('./notification.service');
 const { legalSourcesFor, brandNextStatuses } = require('../config/orderTransitions');
@@ -37,11 +38,13 @@ async function getBrandOrder(brandId, orderId) {
   if (!order) {
     throw new OrderError(404, 'Order not found.');
   }
-  const [payment, delivery] = await Promise.all([
+  const [payment, delivery, adjustments] = await Promise.all([
     Payment.findOne({ orderId: order._id }),
     Delivery.findOne({ orderId: order._id }),
+    listAdjustmentsForOrder(order._id),
   ]);
-  return { order, payment, delivery };
+  const adjustment = adjustments.find((a) => a.status === 'PROPOSED') || adjustments[0] || null;
+  return { order, payment, delivery, adjustments, adjustment };
 }
 
 /**
@@ -71,12 +74,27 @@ async function updateBrandOrderStatus({ brandId, orderId, status, userId }) {
     if (status === 'CONFIRMED') {
       filter.$or = [{ paymentMethod: 'COD' }, { paymentStatus: 'PAID' }];
     }
+    // While a change proposal waits, the order cannot move on to shipment
+    // (docs/21 §H.4): the final lines are not settled yet.
+    if (status === 'READY_FOR_SHIPMENT') {
+      filter.activeAdjustmentId = null;
+    }
     const order = await Order.findOneAndUpdate(filter, update, { new: true, session });
 
     if (!order) {
       const existing = await Order.findOne({ _id: orderId, brandId }).session(session);
       if (!existing) {
         throw new OrderError(404, 'Order not found.');
+      }
+      if (
+        status === 'READY_FOR_SHIPMENT' &&
+        existing.activeAdjustmentId &&
+        legalSourcesFor(status).includes(existing.orderStatus)
+      ) {
+        throw new OrderError(409, 'A change proposal is waiting for the customer. Resolve it before shipping.', {
+          code: 'ADJUSTMENT_PENDING',
+          adjustmentId: String(existing.activeAdjustmentId),
+        });
       }
       if (status === 'CONFIRMED' && existing.paymentMethod !== 'COD' && existing.paymentStatus !== 'PAID' && legalSourcesFor(status).includes(existing.orderStatus)) {
         throw new OrderError(409, 'This order has not been paid yet. Wait for the online payment to be confirmed.', {
@@ -101,6 +119,8 @@ async function updateBrandOrderStatus({ brandId, orderId, status, userId }) {
         { $set: { status: 'CANCELLED' } },
         { session }
       );
+      // A waiting proposal ends with the rejected order.
+      await closeActiveAdjustment(order, { session, by: userId });
     }
     // Delivery is created when the order reaches the fulfillment stage
     // (docs/11 §11). Only the request that won the atomic status change gets

@@ -946,6 +946,21 @@ GET /api/v1/orders/:id
 
 The order must belong to the authenticated customer unless the user is an authorized brand/platform administrator.
 
+Besides `order`, `payment` and `delivery`, the response carries the order's change proposals (docs/21 §H):
+
+```json
+{
+  "success": true,
+  "order": { },
+  "payment": { },
+  "delivery": { },
+  "adjustments": [ ],
+  "adjustment": { }
+}
+```
+
+`adjustments` is the full history, newest first. `adjustment` is the one waiting for an answer, or the latest proposal when none is waiting. Both are empty (`[]` / `null`) when the brand never proposed a change.
+
 ---
 
 ## Cancel My Order
@@ -957,6 +972,61 @@ PATCH /api/v1/orders/:id/cancel
 Cancellation is allowed only when the order is in an eligible state.
 
 The backend determines whether cancellation is allowed.
+
+A waiting change proposal is closed with the cancellation and its substitute reservation is released.
+
+---
+
+## Answer an Order Change
+
+```text
+POST /api/v1/orders/:id/adjustments/:adjustmentId/respond
+```
+
+Customer only, and only for their own order and proposal (docs/21 §H.3).
+
+Example:
+
+```json
+{
+  "action": "ACCEPT"
+}
+```
+
+| `action`     | Result |
+| ------------ | ------ |
+| `ACCEPT`     | Keep the units the brand can supply **and** the substitutes; the order is rewritten from the proposal. |
+| `REMOVE`     | Keep only the units the brand can supply; the affected lines' missing units are removed (no substitutes). |
+| `CANCEL_ORDER` | Cancel the whole order and return its stock. |
+
+The proposal, the order lines, the total and the payment change in one database transaction. Only the first answer is applied; a second answer, a withdrawal or the expiry sweep loses the atomic `PROPOSED → resolved` update.
+
+Response:
+
+```json
+{
+  "success": true,
+  "message": "Response recorded",
+  "adjustment": { },
+  "order": { },
+  "refundAmount": 0
+}
+```
+
+`refundAmount` is the part of an online payment returned because the new total is lower (docs/10 §30). It is `0` for cash on delivery.
+
+Errors:
+
+```text
+404  proposal not found (or not this customer's)
+409  ADJUSTMENT_NOT_PENDING   already answered, withdrawn or closed
+409  ADJUSTMENT_EXPIRED       the 24-hour window passed (nothing changes)
+409  ADJUSTMENT_INCREASES_TOTAL  online order would cost more
+409  ONLINE_PAYMENT_NOT_COMPLETED  the online payment is not paid yet
+409  REFUND_EXCEEDS_PAID      the refund would exceed what was paid
+409  ORDER_CHANGED            a concurrent request changed the order
+400  validation failed (unknown action, malformed ids)
+```
 
 ---
 
@@ -990,7 +1060,7 @@ Required:
 orders.view
 ```
 
-The order must belong to the user's brand.
+The order must belong to the user's brand. Like the customer endpoint, the response includes `adjustments` (history, newest first) and `adjustment` (the waiting proposal, or the latest one).
 
 ---
 
@@ -1016,6 +1086,113 @@ Example:
 
 The backend must validate legal status transitions.
 
+While a change proposal is waiting for the customer, `READY_FOR_SHIPMENT` is refused with:
+
+```json
+{
+  "success": false,
+  "message": "A change proposal is waiting for the customer. Resolve it before shipping.",
+  "code": "ADJUSTMENT_PENDING",
+  "adjustmentId": "..."
+}
+```
+
+The final lines are not settled until the proposal is answered, withdrawn or expired.
+
+---
+
+## Propose an Order Change
+
+```text
+POST /api/v1/brand/orders/:id/adjustments
+```
+
+Required:
+
+```text
+orders.adjust
+```
+
+Brand admin or employee, scoped to the authenticated user's brand. Allowed only while the order is `PENDING`, `CONFIRMED` or `PROCESSING`, and only when no other proposal is waiting (docs/21 §H.1–H.2).
+
+Example:
+
+```json
+{
+  "note": "The blue version is out of stock; we can send the grey one instead.",
+  "restockRemoved": false,
+  "lines": [
+    {
+      "orderItemId": "665f1c2a5b1e4c0012ab34cd",
+      "supplyQuantity": 1,
+      "substitute": { "productId": "665f1c2a5b1e4c0012ab9999", "quantity": 1 }
+    },
+    {
+      "orderItemId": "665f1c2a5b1e4c0012ab34ce",
+      "supplyQuantity": 0,
+      "substitute": null
+    }
+  ]
+}
+```
+
+| Field | Meaning |
+| ----- | ------- |
+| `note` | Required message shown to the customer (max 500 characters). |
+| `restockRemoved` | Optional, default `false`: return the units the brand cannot supply to stock. Leave off when the units are missing or damaged. |
+| `lines[].orderItemId` | An item id from this order. |
+| `lines[].supplyQuantity` | Units of the original product the brand can supply, `0..ordered`. |
+| `lines[].substitute` | Optional same-brand product + quantity, at today's price. The substitute replaces missing units only. |
+
+The backend validates every line against the order (item belongs to the order, at most once; supply never exceeds the ordered quantity; a substitute is a different, active product of the same brand), computes both totals server-side, reserves substitute stock in the same transaction, and returns `201`:
+
+```json
+{
+  "success": true,
+  "message": "Proposal sent to the customer",
+  "adjustment": { }
+}
+```
+
+The proposal expires 24 hours after it was sent. The customer is notified with `ADJUSTMENT_PROPOSED`.
+
+Errors:
+
+```text
+404  order or line not found (another brand's order is also 404)
+403  PERMISSION_DENIED (no orders.adjust)
+409  NOT_ADJUSTABLE            the order is past processing or already ended
+409  ADJUSTMENT_PENDING        another proposal is waiting
+409  ONLINE_PAYMENT_NOT_COMPLETED  an online order is not paid yet
+400  DUPLICATE_ORDER_ITEM / ORDER_ITEM_NOT_FOUND / NO_CHANGE
+400  SUBSTITUTE_WITHOUT_SHORTAGE / SUBSTITUTE_TOO_MANY / SUBSTITUTE_SAME_PRODUCT
+409  SUBSTITUTE_UNAVAILABLE    inactive/foreign product or not enough stock
+```
+
+---
+
+## Withdraw an Order Change
+
+```text
+POST /api/v1/brand/orders/:id/adjustments/:adjustmentId/withdraw
+```
+
+Required:
+
+```text
+orders.adjust
+```
+
+The brand takes back a proposal that is still waiting. Substitute stock is released, the order becomes adjustable again and the customer sees it as withdrawn. Only one withdrawal can win the atomic `PROPOSED → WITHDRAWN` update; a later answer or expiry receives `409 ADJUSTMENT_NOT_PENDING` (or `ADJUSTMENT_EXPIRED`).
+
+```json
+{
+  "success": true,
+  "message": "Proposal withdrawn",
+  "adjustment": { }
+}
+```
+
 ---
 
 # 18. Super Admin Order Endpoints
@@ -1028,6 +1205,8 @@ GET /api/v1/admin/orders/:id
 ```
 
 These endpoints must remain separate from brand-scoped endpoints where doing so improves authorization clarity.
+
+A platform admin's order detail is read-only and includes the order's `adjustments` and `adjustment` (docs/21 §H.4). Only the brand can propose, withdraw or answer a change; only the customer can answer it.
 
 ---
 
@@ -1950,7 +2129,7 @@ Orders created per brand
 GET /orders/my
 ```
 
-## Brand Order Processing
+## Brand Order Processing (including a change proposal)
 
 ```text
 GET /brand/orders
@@ -1958,6 +2137,14 @@ GET /brand/orders
 GET /brand/orders/:id
     ↓
 PATCH /brand/orders/:id/status
+    ↓
+POST /brand/orders/:id/adjustments       (brand cannot fully supply)
+    ↓
+customer: POST /orders/:id/adjustments/:adjustmentId/respond
+    ↓
+GET /brand/orders/:id   (answer, EXPIRED, or WITHDRAWN)
+    ↓
+PATCH /brand/orders/:id/status           (READY_FOR_SHIPMENT once no proposal waits)
 ```
 
 ## Product Management
