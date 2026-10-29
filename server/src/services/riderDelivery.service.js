@@ -1,8 +1,11 @@
 const Delivery = require('../models/delivery.model');
 const Order = require('../models/order.model');
 const Payment = require('../models/payment.model');
+const env = require('../config/env');
 const { OrderError } = require('./order.service');
 const { updateDeliveryStatus } = require('./delivery.service');
+const { proofBelongsToDelivery } = require('./paymentProof.service');
+const { isConfigured } = require('./upload.service');
 const { DELIVERY_FINAL_STATUSES } = require('../config/deliveryTransitions');
 const { MAX_CODE_ATTEMPTS, codesMatch } = require('../utils/deliveryCode');
 
@@ -27,10 +30,30 @@ const pickAddress = (a) => ({
   additionalInstructions: a.additionalInstructions,
 });
 
-function toRiderView(delivery, order) {
+// A payment is loaded only to tell the rider how it was collected and (afterwards)
+// whether its photo passed the brand's check. The reference and photo never leave
+// the brand's screens.
+const PAYMENT_VIEW_FIELDS = 'orderId collection.method collection.verification';
+
+async function paymentForOrder(orderId) {
+  const query = Payment.findOne({ orderId });
+  return query && typeof query.select === 'function' ? query.select(PAYMENT_VIEW_FIELDS) : null;
+}
+
+async function paymentsForOrders(orderIds) {
+  if (!orderIds.length) return [];
+  const query = Payment.find({ orderId: { $in: orderIds } });
+  return query && typeof query.select === 'function' ? query.select(PAYMENT_VIEW_FIELDS) : [];
+}
+
+function toRiderView(delivery, order, payment) {
   const d = typeof delivery.toObject === 'function' ? delivery.toObject() : delivery;
   const closed = DELIVERY_FINAL_STATUSES.includes(d.status);
   const cod = Boolean(order) && order.paymentMethod === 'COD';
+  const collection = payment && payment.collection;
+  const nonCash = Boolean(collection && collection.method && collection.method !== 'CASH');
+  const unpaid = cod && order.paymentStatus === 'PENDING';
+
   return {
     _id: d._id,
     orderNumber: order ? order.orderNumber : null,
@@ -43,8 +66,15 @@ function toRiderView(delivery, order) {
     address: closed || !d.address ? null : pickAddress(d.address),
     items: closed || !order ? [] : (order.items || []).map((i) => ({ productName: i.productName, quantity: i.quantity })),
     paymentMethod: order ? order.paymentMethod : null,
-    amountToCollect: cod && order.paymentStatus === 'PENDING' ? order.total : 0,
-    cashCollected: cod && order.paymentStatus === 'PAID',
+    amountToCollect: unpaid ? order.total : 0,
+    // A non-cash payment is never cash in the rider's pocket.
+    cashCollected: cod && order.paymentStatus === 'PAID' && !nonCash,
+    // What the app may offer at the door; without Cloudinary only cash is possible.
+    paymentOptions: unpaid
+      ? ['CASH', ...(isConfigured(env.cloudinary) ? ['BANK_TRANSFER', 'WALLET', 'CARD_MACHINE'] : [])]
+      : [],
+    // The rider sees only the state of their own proof, never its reference or photo.
+    proofStatus: nonCash ? collection.verification || null : null,
     currency: order ? order.currency || 'PKR' : 'PKR',
   };
 }
@@ -69,17 +99,22 @@ async function listRiderDeliveries({ brandId, riderId, scope = 'active', page, l
     Delivery.countDocuments(filter),
   ]);
   const orders = items.length ? await Order.find({ _id: { $in: items.map((d) => d.orderId) } }).select(ORDER_FIELDS) : [];
+  const payments = await paymentsForOrders(items.map((d) => d.orderId));
   const orderById = new Map(orders.map((o) => [String(o._id), o]));
+  const paymentByOrder = new Map(payments.map((p) => [String(p.orderId), p]));
 
   return {
-    items: items.map((d) => toRiderView(d, orderById.get(String(d.orderId)))),
+    items: items.map((d) => toRiderView(d, orderById.get(String(d.orderId)), paymentByOrder.get(String(d.orderId)))),
     pagination: { page: pageNumber, limit: limitNumber, total, pages: Math.ceil(total / limitNumber) },
   };
 }
 
 async function viewFor(delivery, brandId) {
-  const order = await Order.findOne({ _id: delivery.orderId, brandId }).select(ORDER_FIELDS);
-  return toRiderView(delivery, order);
+  const [order, payment] = await Promise.all([
+    Order.findOne({ _id: delivery.orderId, brandId }).select(ORDER_FIELDS),
+    paymentForOrder(delivery.orderId),
+  ]);
+  return toRiderView(delivery, order, payment);
 }
 
 async function getRiderDelivery({ brandId, riderId, id }) {
@@ -115,7 +150,7 @@ async function riderUpdateStatus({ brandId, riderId, id, status, failureReason }
  * MAX_CODE_ATTEMPTS the code locks; the brand can still complete the delivery
  * from the dashboard after speaking to the customer.
  */
-async function completeWithCode({ brandId, riderId, id, code }) {
+async function completeWithCode({ brandId, riderId, id, code, collection }) {
   const attempt = await Delivery.findOneAndUpdate(
     { _id: id, brandId, riderId, status: 'OUT_FOR_DELIVERY', codeAttempts: { $lt: MAX_CODE_ATTEMPTS } },
     { $inc: { codeAttempts: 1 } },
@@ -147,12 +182,24 @@ async function completeWithCode({ brandId, riderId, id, code }) {
     });
   }
 
+  if (collection && collection.method !== 'CASH') {
+    if (!isConfigured(env.cloudinary)) {
+      throw new OrderError(503, 'Payment proof photos are not set up on this server yet.', { code: 'PROOF_NOT_CONFIGURED' });
+    }
+    // Only a photo uploaded to THIS delivery's private folder is accepted: the
+    // rider cannot pass off someone else's proof, another delivery's, or another brand's.
+    if (!proofBelongsToDelivery({ brandId, deliveryId: id, publicId: collection.proof.publicId })) {
+      throw new OrderError(422, 'That photo does not belong to this delivery.', { code: 'PROOF_NOT_YOURS' });
+    }
+  }
+
   const delivery = await updateDeliveryStatus({
     brandId,
     deliveryId: id,
     status: 'DELIVERED',
     userId: riderId,
     riderId,
+    collection,
   });
   return viewFor(delivery, brandId);
 }

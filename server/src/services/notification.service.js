@@ -198,15 +198,43 @@ async function notifyBrandOfCancelledOrder(order, { expired = false } = {}) {
   });
 }
 
-/** COD cash collected — fires exactly once, from whichever site flips the payment. */
-async function notifyPaymentReceived(order) {
+/**
+ * Payment collected — fires exactly once, from whichever site flips the payment.
+ * A non-cash payment is paid but still unverified by the brand (docs/21 §I.3).
+ */
+async function notifyPaymentReceived(order, { nonCash = false } = {}) {
   if (!order) return;
   await notify({
     userIds: [order.customerId],
     type: 'PAYMENT_RECEIVED',
     title: 'Payment received',
-    message: `Your cash payment for order ${order.orderNumber} has been received.`,
+    message: nonCash
+      ? `Your payment for order ${order.orderNumber} has been received. The brand will verify it.`
+      : `Your cash payment for order ${order.orderNumber} has been received.`,
     data: orderData(order),
+  });
+}
+
+/**
+ * A non-cash proof was rejected; the owner must decide what happens next (collect
+ * again, write it off). Only brand owners/admins are flagged (docs/21 §I.3).
+ */
+async function notifyBrandOfRejectedProof({ brandId, orderId, orderNumber, paymentId, amount, note }) {
+  if (!brandId) return;
+  const owners = await User.find({ brandId, role: ROLES.BRAND_ADMIN, isActive: true }).select('_id');
+  await notify({
+    userIds: owners.map((u) => String(u._id)),
+    type: 'PAYMENT_PROOF_REJECTED',
+    title: 'Payment proof rejected',
+    message: `The payment of PKR ${amount} for order ${orderNumber} was rejected${note ? `: ${note}` : '.'} Decide what to do next.`,
+    data: {
+      brandId: String(brandId),
+      orderId: orderId ? String(orderId) : undefined,
+      orderNumber,
+      paymentId: paymentId ? String(paymentId) : undefined,
+      amount,
+      note: note || null,
+    },
   });
 }
 
@@ -492,6 +520,7 @@ module.exports = {
   notifyCustomerOfOrderStatus: bestEffort(notifyCustomerOfOrderStatus),
   notifyBrandOfCancelledOrder: bestEffort(notifyBrandOfCancelledOrder),
   notifyPaymentReceived: bestEffort(notifyPaymentReceived),
+  notifyBrandOfRejectedProof: bestEffort(notifyBrandOfRejectedProof),
   notifyRefundIssued: bestEffort(notifyRefundIssued),
   notifyAdjustmentProposed: bestEffort(notifyAdjustmentProposed),
   notifyAdjustmentAnswered: bestEffort(notifyAdjustmentAnswered),

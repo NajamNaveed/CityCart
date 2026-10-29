@@ -265,6 +265,9 @@ settledBy      who at the brand confirmed it
 * A rider sees only their own total (`GET /rider/deliveries/cash`).
 * Refunds do not change who collected the cash: a refunded payment is still cash
   that was collected, and it stays on the books until settled.
+* **Non-cash at the door** (bank transfer, wallet, card machine; §31) never sets
+  `collectedBy`. Nobody holds cash, so it never appears in a rider's balance, in
+  the outstanding list, or in a hand-over.
 
 ---
 
@@ -466,6 +469,7 @@ Payment received
 Payment failed
 Refund issued
 Refund partially issued
+Payment proof rejected (brand owner; §31.3)
 ```
 
 Notifications are handled by the notification system.
@@ -599,6 +603,12 @@ never created, edited or deleted through the API.
   the cash, the payment id, the reference). The brand: its own, with `payments.view`,
   including who collected the cash and the payment reference. Super admin: all.
   Riders: none. See `20-partner-app.md` §4.
+* **Paid at the door.** When a COD order was paid by bank transfer, wallet or card
+  machine, the receipt snapshots `collectionMethod`, `collectionWallet` and
+  `collectionReference` instead of a cash collector (§31). The customer sees how it
+  was paid (for example "wallet (JazzCash)"); the brand's view also sees the reference
+  and the proof's **live** check state. A cash collection still records the collector
+  as before, and its `collectionMethod` is `CASH`.
 * **Card and online** payments (Phase E) get the same receipt from the same code;
   only the confirmation of the payment differs (the gateway's signed webhook).
 
@@ -766,4 +776,136 @@ unpaid online order → proposal refused
 refund cannot exceed the paid amount
 ```
 
+---
 
+# 31. Payment at the Door (added October 2026)
+
+Feature I of `21-next-features-plan.md`. **Status: built and tested without a real phone**
+(the camera is the only part that needs one). The order is still cash on delivery;
+this records **how the customer actually paid when the rider arrived**, including a
+private photo of the confirmation or the card machine's slip.
+
+## 31.1 What is recorded
+
+`Payment.collection` is written inside the same transaction that marks the COD payment
+`PAID` (delivery completion). It is never supplied from a browser.
+
+```text
+method          CASH | BANK_TRANSFER | WALLET | CARD_MACHINE
+wallet          WALLET only: JAZZCASH | EASYPAISA | OTHER
+reference       the transaction id or the card machine's approval code (never a card number)
+proof           { publicId, fingerprint }  private Cloudinary asset (non-cash only)
+verification    SUBMITTED | VERIFIED | REJECTED
+verifiedBy      the team member who decided
+verifiedAt      when
+note            the decision's reason (required for REJECTED)
+duplicateReference / duplicateProof   flags for the verifier
+proofDeletedAt  set when the retention job removed the photo
+```
+
+A non-cash collection also changes the payment's own `method` (`BANK_TRANSFER`,
+`WALLET` or `CARD`) so reports and receipts say how it was paid. Cash keeps `COD`.
+**A non-cash payment is `PAID` immediately but unverified.** It never sets
+`collectedBy`, so it is absent from the rider's cash balance and from every hand-over
+list (§11a).
+
+## 31.2 What the rider does
+
+The rider enters the customer's delivery code, then chooses **Cash**, **Bank transfer**,
+**Wallet** (JazzCash, Easypaisa, Other) or **Card machine**:
+
+```text
+CASH           no reference, no photo
+non-cash       a camera photo and a reference are both required (3 to 100 characters)
+prepaid order  no choice at all; sending a collection is 409 PAYMENT_PREPAID
+```
+
+The photo never passes through the API. `POST /rider/deliveries/:id/proof-upload`
+returns a **signed Cloudinary upload** into a server-built folder; the app uploads to
+Cloudinary and sends only the resulting `publicId` and `etag` fingerprint. The server
+accepts the photo only if the path is inside **this brand's and this delivery's**
+folder, so a rider cannot attach someone else's proof (`422 PROOF_NOT_YOURS`). The
+upload request requires the delivery to be `OUT_FOR_DELIVERY` (`409 PROOF_NOT_ALLOWED`).
+Without Cloudinary configured the answer is `503 PROOF_NOT_CONFIGURED` and the apps
+offer cash only.
+
+A brand user completing a delivery from the dashboard has no collection step and is
+recorded as cash, exactly as before.
+
+## 31.3 Verification (the brand's control)
+
+A photo can be faked, so the money is not trusted until the brand matches it against
+its own bank, wallet or card-machine statement:
+
+```text
+SUBMITTED  -> VERIFIED   (payments.manage)  records verifiedBy/verifiedAt
+SUBMITTED  -> REJECTED   (payments.manage)  a reason is required; the brand owner is flagged
+VERIFIED / REJECTED -> anything else        409 PROOF_ALREADY_DECIDED, nothing changes
+```
+
+The decision is one conditional update, so two people cannot decide the same proof.
+A rejection notifies the brand's owners (`PAYMENT_PROOF_REJECTED`, `12-notification-system.md`).
+**No money moves automatically:** collecting again or writing it off is the brand's
+decision. The customer is not told whether the brand verified the photo.
+
+## 31.4 Privacy, links and retention
+
+* The photo is an **authenticated** Cloudinary asset, never public. The database stores
+  only its path and fingerprint, never image bytes.
+* Staff see it through `GET /payments/:id/proof`, which checks the caller's brand first
+  and returns a **signed link valid for 5 minutes** (`PAYMENT_PROOF_LINK_MINUTES`, 1–60).
+* Who can see a proof: brand users with `payments.view` (queue and link) and
+  `payments.manage` (decision), platform admins with `admin.payments`; the super admin.
+  **Not the customer, not other riders, not other brands.** The rider who took it sees
+  only `proofStatus` on their delivery.
+* Photos are deleted by a server job every six hours once **90 days** have passed since
+  the decision (`PAYMENT_PROOF_RETENTION_DAYS`, 1–3650). The payment keeps its method,
+  reference and decision; only `collection.proof` is removed and `proofDeletedAt` set.
+  A failed Cloudinary deletion is retried on the next run.
+* **Duplicate use is a flag, never a block:** the same reference or the same Cloudinary
+  fingerprint on another payment of the same brand sets `duplicateReference` /
+  `duplicateProof`, shown to the verifier as "Used before".
+
+## 31.5 Receipts
+
+The receipt snapshots `collectionMethod`, `collectionWallet` and `collectionReference`
+(§28). The customer only ever sees how it was paid; the brand's view also sees the
+reference and the live verification state. No photo is ever shown to the customer.
+
+## 31.6 API and errors
+
+Endpoints and request bodies are in `05-api-specification.md` §22. New error codes:
+
+```text
+503 PROOF_NOT_CONFIGURED       Cloudinary is not set up on this server
+404 PROOF_NOT_FOUND            the payment has no photo (or it was deleted)
+409 PROOF_NOT_ALLOWED          proof upload while the delivery is not out for delivery
+422 PROOF_NOT_YOURS            the photo path is not this brand's/delivery's
+409 PAYMENT_PREPAID            a collection was sent for an order paid up front
+409 PAYMENT_ALREADY_COLLECTED  a non-cash collection arrived after the payment was already collected
+409 PROOF_ALREADY_DECIDED      someone already verified/rejected this proof (with `verification`)
+```
+
+## 31.7 Configuration
+
+```text
+CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET   required for the camera flow
+PAYMENT_PROOF_LINK_MINUTES=5        signed link lifetime (1 to 60)
+PAYMENT_PROOF_RETENTION_DAYS=90     days after the decision before the photo is deleted (1 to 3650)
+```
+
+## 31.8 Tests
+
+```text
+server/tests/paymentProofs.test.js   queue scoping, signed link, decisions, duplicates, retention
+server/tests/riderDeliveries.test.js upload only for an own out-for-delivery, complete with collection,
+                                     prepaid/refusal, cash balance excludes non-cash
+server/tests/receipts.test.js        method/wallet/reference snapshot; brand sees live state, customer does not
+server/tests/seedDemo.test.js        demo door payments in all three states, deleted photo, owner flag
+partner/__tests__/                   rider method/camera/reference screens, the "To verify" queue and detail,
+                                     verify/reject flows; service request shapes; receipt check row
+mobile/__tests__/shopping-screens.test.js   the customer's receipt says how it was paid
+```
+
+Demo data (`npm run seed:demo`) includes verified, submitted, rejected and
+already-deleted proofs, a duplicate pair and a `PAYMENT_PROOF_REJECTED` notification.

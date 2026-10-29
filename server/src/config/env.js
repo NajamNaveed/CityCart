@@ -83,6 +83,19 @@ const env = {
     const hours = Number(raw);
     return raw !== '' && Number.isFinite(hours) && hours >= 0 ? Math.min(hours, 720) : 24;
   })(),
+  // Payment proof photos at the door (docs/21 §I.4). A staff member sees a proof
+  // through a signed link valid for linkMinutes; the photo is deleted from
+  // Cloudinary retentionDays after the brand verified or rejected it.
+  paymentProof: {
+    linkMinutes: (() => {
+      const minutes = Number((process.env.PAYMENT_PROOF_LINK_MINUTES || '').trim());
+      return Number.isFinite(minutes) && minutes >= 1 ? Math.min(minutes, 60) : 5;
+    })(),
+    retentionDays: (() => {
+      const days = Number((process.env.PAYMENT_PROOF_RETENTION_DAYS || '').trim());
+      return Number.isFinite(days) && days >= 1 ? Math.min(days, 3650) : 90;
+    })(),
+  },
 };
 
 module.exports = env;

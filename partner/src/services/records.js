@@ -84,6 +84,24 @@ export async function settleCash(collectorId, paymentIds) {
   return { settled: res.data.settled, total: res.data.total }
 }
 
+// --- Payment proofs to verify (payments.view to see, payments.manage to decide) ---
+// Only non-cash payments carry one (docs/21 §I.3). The photo itself is never in
+// the list: opening one asks for a short signed link (fetchProofLink).
+export async function fetchProofQueue(status = 'SUBMITTED', page = 1) {
+  const res = await api.get('/payments/proofs', { params: { status, page, limit: PAGE_SIZE } })
+  return pageOf(res, 'proofs')
+}
+
+export async function fetchProofLink(paymentId) {
+  const res = await api.get(`/payments/${paymentId}/proof`)
+  return res.data.proof
+}
+
+export async function decideProof(paymentId, verification, note) {
+  const res = await api.patch(`/payments/${paymentId}/proof`, { verification, ...(note && { note }) })
+  return res.data.proof
+}
+
 // --- Overview: a few small counts, only for what this person may see ---
 const COUNTED_DELIVERIES = ['READY_FOR_PICKUP', 'PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'FAILED', 'DELIVERED']
 

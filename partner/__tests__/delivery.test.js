@@ -1,6 +1,19 @@
 jest.mock('expo-secure-store', () => ({ getItemAsync: jest.fn(), setItemAsync: jest.fn(), deleteItemAsync: jest.fn(), WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'x' }))
 
-import { addressLine, canComplete, cashSummary, codeErrorMessage, isClosed, mapsUrl, nextMoves, telUrl } from '../src/utils/delivery'
+import {
+  addressLine,
+  canComplete,
+  cashSummary,
+  codeErrorMessage,
+  collectionPayload,
+  collectionReady,
+  isClosed,
+  mapsUrl,
+  nextMoves,
+  paymentMethodsFor,
+  proofErrorMessage,
+  telUrl,
+} from '../src/utils/delivery'
 import { CODE_LENGTH, isValidCode, sentence, validateLogin } from '../src/utils/validation'
 
 describe('what a rider can do, by delivery status (mirrors the server lifecycle)', () => {
@@ -77,11 +90,68 @@ describe('the delivery code messages', () => {
 })
 
 describe('the cash line', () => {
-  it('collect, collected or prepaid', () => {
+  it('collect, collected, a non-cash payment, or prepaid', () => {
     expect(cashSummary({ amountToCollect: 2450, cashCollected: false })).toEqual({ kind: 'collect', amount: 2450 })
     expect(cashSummary({ amountToCollect: 0, cashCollected: true })).toEqual({ kind: 'collected' })
+    expect(cashSummary({ amountToCollect: 0, cashCollected: false, proofStatus: 'SUBMITTED' })).toEqual({
+      kind: 'proof',
+      status: 'SUBMITTED',
+    })
     expect(cashSummary({ amountToCollect: 0, cashCollected: false })).toEqual({ kind: 'prepaid' })
     expect(cashSummary(null)).toEqual({ kind: 'none' })
+  })
+})
+
+describe('a payment taken at the door (docs/21 §I)', () => {
+  it('offers only what the server allows: cash alone when a photo cannot be stored', () => {
+    expect(paymentMethodsFor({ paymentOptions: ['CASH'] }).map((m) => m.method)).toEqual(['CASH'])
+    expect(paymentMethodsFor({ paymentOptions: ['CASH', 'BANK_TRANSFER', 'WALLET', 'CARD_MACHINE'] }).map((m) => m.label)).toEqual([
+      'Cash',
+      'Bank transfer',
+      'Wallet',
+      'Card machine',
+    ])
+    expect(paymentMethodsFor({})).toEqual([])
+  })
+
+  it('cash is ready at once; anything else needs a reference, a photo, and a wallet for a wallet payment', () => {
+    expect(collectionReady({ method: 'CASH' })).toBe(true)
+    expect(collectionReady({ method: 'BANK_TRANSFER', reference: 'FT-1' })).toBe(false) // no photo
+    expect(collectionReady({ method: 'BANK_TRANSFER', reference: 'FT-1', proof: { publicId: 'p' } })).toBe(true)
+    expect(collectionReady({ method: 'WALLET', reference: 'JC-1', proof: { publicId: 'p' } })).toBe(false) // no wallet
+    expect(collectionReady({ method: 'WALLET', wallet: 'JAZZCASH', reference: 'JC-1', proof: { publicId: 'p' } })).toBe(true)
+    expect(collectionReady({ method: 'CARD_MACHINE', reference: '  ', proof: { publicId: 'p' } })).toBe(false)
+    expect(collectionReady(null)).toBe(false)
+  })
+
+  it('sends exactly what the server accepts, and no card number', () => {
+    expect(collectionPayload({ method: 'CASH', reference: 'ignored', proof: { publicId: 'p' } })).toEqual({ method: 'CASH' })
+    expect(
+      collectionPayload({
+        method: 'WALLET',
+        wallet: 'JAZZCASH',
+        reference: ' JC-778812 ',
+        proof: { publicId: 'p', fingerprint: 'e' },
+      }),
+    ).toEqual({
+      method: 'WALLET',
+      wallet: 'JAZZCASH',
+      reference: 'JC-778812',
+      proof: { publicId: 'p', fingerprint: 'e' },
+    })
+    expect(collectionPayload({ method: 'BANK_TRANSFER', wallet: 'JAZZCASH', reference: 'FT-1', proof: { publicId: 'p' } })).toEqual({
+      method: 'BANK_TRANSFER',
+      reference: 'FT-1',
+      proof: { publicId: 'p' },
+    })
+  })
+
+  it('explains a refused photo in the rider’s terms', () => {
+    const fail = (data, status = 422) => ({ response: { status, data } })
+    expect(proofErrorMessage(fail({ code: 'PROOF_NOT_YOURS' }))).toMatch(/does not belong to this delivery/)
+    expect(proofErrorMessage(fail({ code: 'PROOF_NOT_CONFIGURED' }, 503))).toMatch(/take cash only/i)
+    expect(proofErrorMessage(fail({ code: 'PAYMENT_PREPAID' }, 409))).toMatch(/already paid/i)
+    expect(proofErrorMessage({ codeMessage: 'The photo could not be uploaded.' })).toBe('The photo could not be uploaded.')
   })
 })
 

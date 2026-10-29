@@ -10,6 +10,29 @@ const toCents = (amount) => Math.round(amount * 100);
 const fromCents = (cents) => cents / 100;
 
 /**
+ * The payment as an API caller may see it (docs/21 §I.4). The private photo path
+ * and its fingerprint never leave the server; the customer sees only how they
+ * paid, never the reference or the brand's check details.
+ */
+function toPaymentView(user, payment) {
+  if (!payment) return payment;
+  const out = typeof payment.toObject === 'function' ? payment.toObject() : { ...payment };
+  if (!out.collection) return out;
+  const collection = { ...out.collection };
+  delete collection.proof;
+  if (user.role === ROLES.CUSTOMER) {
+    return {
+      ...out,
+      collection: {
+        method: collection.method,
+        ...(collection.wallet && { wallet: collection.wallet }),
+      },
+    };
+  }
+  return { ...out, collection };
+}
+
+/**
  * Payment for an order. Access follows ORDER ownership (docs/05 §22): the
  * customer who owns the order, the brand that owns it, or a platform admin
  * (docs/21 §G). Anyone else gets a 404 so order/payment ids can't be probed.
@@ -29,7 +52,7 @@ async function getPaymentForOrder(user, tenantBrandId, orderId) {
   if (!payment) {
     throw new OrderError(404, 'Payment not found.');
   }
-  return payment;
+  return toPaymentView(user, payment);
 }
 
 /**
@@ -132,4 +155,4 @@ async function updatePaymentStatus({ userId, tenantBrandId, paymentId, status, r
   return updated;
 }
 
-module.exports = { getPaymentForOrder, updatePaymentStatus };
+module.exports = { getPaymentForOrder, updatePaymentStatus, toPaymentView };

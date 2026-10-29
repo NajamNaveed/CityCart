@@ -5,6 +5,8 @@
  */
 import React from 'react'
 import { Linking } from 'react-native'
+import * as ImagePicker from 'expo-image-picker'
+import { File } from 'expo-file-system'
 
 jest.setTimeout(30000)
 
@@ -29,6 +31,18 @@ jest.mock('expo-router', () => {
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default)
 jest.mock('@expo/vector-icons/Feather', () => () => null)
 jest.mock('expo-secure-store', () => ({ getItemAsync: jest.fn().mockResolvedValue(null), setItemAsync: jest.fn(), deleteItemAsync: jest.fn(), WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'x' }))
+jest.mock('expo-image-picker', () => ({
+  requestCameraPermissionsAsync: jest.fn(),
+  launchCameraAsync: jest.fn(),
+  CameraType: { back: 'back' },
+}))
+// The real File reads the phone's filesystem; the upload only needs its URI and existence.
+jest.mock('expo-file-system', () => ({
+  File: jest.fn(function (uri) {
+    this.uri = uri
+    this.exists = true
+  }),
+}))
 jest.mock('../src/services/api', () => ({
   __esModule: true,
   default: { get: jest.fn(), post: jest.fn(), patch: jest.fn() },
@@ -300,6 +314,204 @@ describe('one delivery', () => {
       await press(screen, 'Cancel')
       expect(has(screen, 'Enter code to complete')).toBe(true)
       expect(api.post).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('how the customer paid at the door', () => {
+    const withOptions = (over = {}) =>
+      delivery({ paymentOptions: ['CASH', 'BANK_TRANSFER', 'WALLET', 'CARD_MACHINE'], ...over })
+    const UPLOAD = {
+      uploadUrl: 'https://api.cloudinary.com/v1_1/demo/image/upload',
+      apiKey: 'key',
+      timestamp: 1700000000,
+      signature: 'sig',
+      folder: 'folder',
+      allowedFormats: 'jpg,png,webp',
+      type: 'authenticated',
+    }
+    const delivered = () =>
+      delivery({ status: 'DELIVERED', address: null, items: [], amountToCollect: 0, cashCollected: false, paymentOptions: [], proofStatus: 'SUBMITTED' })
+
+    const openPaymentStep = async (screen) => {
+      await press(screen, 'Enter code to complete')
+      await type(screen, "Customer's delivery code", '482913')
+      await press(screen, 'Continue')
+    }
+
+    it('asks how they paid after the code, and cash completes with only { method: CASH }', async () => {
+      const screen = await open(withOptions())
+      await openPaymentStep(screen)
+
+      expect(screenText(screen)).toMatch(/How did the customer pay\?/)
+      for (const label of ['Cash', 'Bank transfer', 'Wallet', 'Card machine']) expect(has(screen, label)).toBe(true)
+
+      api.post.mockResolvedValue({ data: { delivery: delivered() } })
+      await press(screen, 'Cash')
+      await press(screen, 'Complete delivery')
+
+      expect(api.post).toHaveBeenCalledWith('/rider/deliveries/d1/complete', { code: '482913', collection: { method: 'CASH' } })
+      expect(screenText(screen)).toMatch(/Delivered\. Thank you/)
+    })
+
+    it('a wallet payment takes a camera-only photo and sends the wallet, reference and private photo id', async () => {
+      const screen = await open(withOptions())
+      await openPaymentStep(screen)
+      await press(screen, 'Wallet')
+
+      expect(isDisabled(screen, 'Complete delivery')).toBe(true) // no reference and no photo yet
+      expect(screenText(screen)).toMatch(/never the card/)
+      expect(has(screen, 'JazzCash')).toBe(true)
+
+      ImagePicker.requestCameraPermissionsAsync.mockResolvedValue({ granted: true })
+      ImagePicker.launchCameraAsync.mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file://proof.jpg', fileName: 'proof.jpg', mimeType: 'image/jpeg' }],
+      })
+      global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ public_id: 'citycart/proof-1', etag: 'etag-1' }) })
+      api.post.mockImplementation((url) => {
+        if (url.endsWith('/proof-upload')) return Promise.resolve({ data: { upload: UPLOAD } })
+        return Promise.resolve({ data: { delivery: delivered() } })
+      })
+
+      await press(screen, 'Take photo')
+
+      expect(ImagePicker.launchCameraAsync).toHaveBeenCalledWith(expect.objectContaining({ exif: false, quality: 0.4 }))
+      expect(api.post).toHaveBeenCalledWith('/rider/deliveries/d1/proof-upload')
+      // Expo SDK 57's fetch reads files as bytes: the photo must be a File, not { uri }.
+      expect(File).toHaveBeenCalledWith('file://proof.jpg')
+      expect(global.fetch.mock.calls[0][0]).toBe(UPLOAD.uploadUrl)
+
+      await type(screen, 'Transaction ID or approval code', 'JC-778812')
+      expect(isDisabled(screen, 'Complete delivery')).toBe(false)
+      await press(screen, 'Complete delivery')
+
+      expect(api.post).toHaveBeenLastCalledWith('/rider/deliveries/d1/complete', {
+        code: '482913',
+        collection: {
+          method: 'WALLET',
+          wallet: 'JAZZCASH',
+          reference: 'JC-778812',
+          proof: { publicId: 'citycart/proof-1', fingerprint: 'etag-1' },
+        },
+      })
+    })
+
+    it('says the photo could not be uploaded, keeps it, and retries the same photo', async () => {
+      const screen = await open(withOptions())
+      await openPaymentStep(screen)
+      await press(screen, 'Wallet')
+
+      ImagePicker.requestCameraPermissionsAsync.mockResolvedValue({ granted: true })
+      ImagePicker.launchCameraAsync.mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file://proof.jpg', fileName: 'proof.jpg', mimeType: 'image/jpeg' }],
+      })
+      api.post.mockImplementation((url) => {
+        if (url.endsWith('/proof-upload')) return Promise.resolve({ data: { upload: UPLOAD } })
+        return Promise.resolve({ data: { delivery: delivered() } })
+      })
+
+      // Cloudinary is not reachable from the phone: the photo is still on the device.
+      global.fetch = jest.fn().mockRejectedValue(new TypeError('Network request failed'))
+      await press(screen, 'Take photo')
+
+      expect(screenText(screen)).toMatch(/photo could not be uploaded/)
+      expect(screenText(screen)).toMatch(/internet connection/)
+      expect(has(screen, 'Upload photo')).toBe(true)
+
+      await type(screen, 'Transaction ID or approval code', 'JC-778812')
+      expect(isDisabled(screen, 'Complete delivery')).toBe(true)
+
+      // The retry sends the photo that is already picked; the camera is not opened again.
+      global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ public_id: 'citycart/proof-1', etag: 'etag-1' }) })
+      await press(screen, 'Upload photo')
+
+      expect(ImagePicker.launchCameraAsync).toHaveBeenCalledTimes(1)
+      expect(File).toHaveBeenLastCalledWith('file://proof.jpg')
+      expect(isDisabled(screen, 'Complete delivery')).toBe(false)
+    })
+
+    it('shows why the photo service refused the photo, and stays incomplete', async () => {
+      const screen = await open(withOptions())
+      await openPaymentStep(screen)
+      await press(screen, 'Bank transfer')
+
+      ImagePicker.requestCameraPermissionsAsync.mockResolvedValue({ granted: true })
+      ImagePicker.launchCameraAsync.mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file://proof.heic', fileName: 'proof.heic', mimeType: 'image/heic' }],
+      })
+      api.post.mockImplementation((url) => {
+        if (url.endsWith('/proof-upload')) return Promise.resolve({ data: { upload: UPLOAD } })
+        return Promise.resolve({ data: { delivery: delivered() } })
+      })
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: { message: 'Invalid image file' } }),
+      })
+
+      await press(screen, 'Take photo')
+      await type(screen, 'Transaction ID or approval code', 'FT-1')
+
+      expect(screenText(screen)).toMatch(/400: Invalid image file/)
+      expect(has(screen, 'Upload photo')).toBe(true)
+      expect(isDisabled(screen, 'Complete delivery')).toBe(true)
+    })
+
+    it('asks for a new photo when the picked file has disappeared', async () => {
+      const screen = await open(withOptions())
+      await openPaymentStep(screen)
+      await press(screen, 'Card machine')
+      ImagePicker.requestCameraPermissionsAsync.mockResolvedValue({ granted: true })
+      ImagePicker.launchCameraAsync.mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file://gone.jpg', fileName: 'gone.jpg', mimeType: 'image/jpeg' }],
+      })
+      api.post.mockResolvedValue({ data: { upload: UPLOAD } })
+      global.fetch = jest.fn()
+      File.mockImplementationOnce(function (uri) {
+        this.uri = uri
+        this.exists = false
+      })
+
+      await press(screen, 'Take photo')
+
+      expect(screenText(screen)).toMatch(/no longer on the phone/)
+      expect(has(screen, 'Take photo')).toBe(true) // the next tap opens the camera
+      expect(global.fetch).not.toHaveBeenCalled()
+    })
+
+    it('says why no photo can be taken, and does not complete anything', async () => {
+      const screen = await open(withOptions())
+      await openPaymentStep(screen)
+      await press(screen, 'Bank transfer')
+      ImagePicker.requestCameraPermissionsAsync.mockResolvedValue({ granted: false })
+
+      await press(screen, 'Take photo')
+
+      expect(screenText(screen)).toMatch(/Allow the camera/)
+      expect(api.post).not.toHaveBeenCalled()
+    })
+
+    it('offers cash only when the server cannot store a photo', async () => {
+      const screen = await open(withOptions({ paymentOptions: ['CASH'] }))
+      await press(screen, 'Enter code to complete')
+      await type(screen, "Customer's delivery code", '482913')
+
+      expect(has(screen, 'Continue')).toBe(false)
+      expect(has(screen, 'Complete delivery')).toBe(true)
+      expect(has(screen, 'Wallet')).toBe(false)
+    })
+
+    it('shows a non-cash payment’s review state, never the photo', async () => {
+      const screen = await open(
+        delivery({ status: 'DELIVERED', address: null, items: [], amountToCollect: 0, cashCollected: false, proofStatus: 'SUBMITTED' }),
+      )
+
+      expect(screenText(screen)).toMatch(/Paid at the door/)
+      expect(screenText(screen)).toMatch(/Waiting for the brand to check the payment/)
+      expect(screenText(screen)).not.toMatch(/Sana Iqbal/)
     })
   })
 

@@ -92,6 +92,7 @@ OUT_OF_STOCK
 
 PAYMENT_RECEIVED
 PAYMENT_FAILED
+PAYMENT_PROOF_REJECTED
 REFUND_ISSUED
 
 EMPLOYEE_CREATED
@@ -147,8 +148,17 @@ The customer answered the proposed change.
 
 The proposed change expired without an answer.
 
+A payment proof at the door was rejected and needs a decision.
+
 New review received.
 ```
+
+**Payment at the door (added October 2026).** When a COD payment is collected, the
+customer gets `PAYMENT_RECEIVED`; for a non-cash payment the message says the brand
+will verify it. A rejection sends `PAYMENT_PROOF_REJECTED` only to the brand's owners
+(`BRAND_ADMIN`, active), with the order number, amount, payment id and the reason.
+Nothing is sent to the customer about verification or rejection (`10-payment-system.md`
+§31.3). See `21-next-features-plan.md` §I.
 
 Brand users should only receive information relevant to their brand and permissions.
 

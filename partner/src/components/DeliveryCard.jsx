@@ -36,7 +36,9 @@ export default function DeliveryCard({ delivery, onPress }) {
             Collect {formatPrice(cash.amount)}
           </AppText>
         ) : (
-          <AppText variant="small">{cash.kind === 'collected' ? 'Cash collected' : 'Paid online'}</AppText>
+          <AppText variant="small">
+            {cash.kind === 'collected' ? 'Cash collected' : cash.kind === 'proof' ? 'Paid at the door' : 'Paid online'}
+          </AppText>
         )}
         <AppText variant="small">{timeAgo(delivery.assignedAt || delivery.updatedAt)}</AppText>
       </View>

@@ -81,12 +81,24 @@ function RiderLocationCard({ deliveryId }) {
 }
 
 // The receipt of a paid order; nothing is shown until one exists.
+const PAID_BY = { CASH: 'cash', CARD: 'card machine', BANK_TRANSFER: 'bank transfer', WALLET: 'wallet', ONLINE_GATEWAY: 'online payment' }
+const WALLETS = { JAZZCASH: 'JazzCash', EASYPAISA: 'Easypaisa', OTHER: 'other wallet' }
+// How a COD order was paid at the door (docs/21 §I.5); absent on older receipts.
+function paidBy(receipt) {
+  if (!receipt.collectionMethod) return ''
+  const name = PAID_BY[receipt.collectionMethod] || receipt.collectionMethod.toLowerCase().replaceAll('_', ' ')
+  return receipt.collectionMethod === 'WALLET' && receipt.collectionWallet
+    ? `${name} (${WALLETS[receipt.collectionWallet] || receipt.collectionWallet})`
+    : name
+}
+
 function ReceiptNote({ orderId }) {
   const remote = useRemote(`receipt:${orderId}`, () => fetchReceipt(orderId))
   if (remote.status !== 'ready' || !remote.data) return null
+  const by = paidBy(remote.data)
   return (
     <AppText variant="small" style={{ fontSize: 12 }}>
-      Receipt {remote.data.receiptNumber}, issued {formatDateTime(remote.data.issuedAt)}.
+      Receipt {remote.data.receiptNumber}{by ? `, paid by ${by}` : ''}, issued {formatDateTime(remote.data.issuedAt)}.
     </AppText>
   )
 }

@@ -1,4 +1,4 @@
-import { formatPrice, humanize, timeAgo } from '../src/utils/format'
+import { formatPaymentMethod, formatPrice, humanize, timeAgo } from '../src/utils/format'
 
 describe('formatting', () => {
   it('prices look like the web app', () => {
@@ -9,6 +9,14 @@ describe('formatting', () => {
 
   it('statuses read as words', () => {
     expect(humanize('OUT_FOR_DELIVERY')).toBe('Out for delivery')
+  })
+
+  it('payment methods read as words, with the wallet when there is one', () => {
+    expect(formatPaymentMethod('CASH')).toBe('Cash')
+    expect(formatPaymentMethod('BANK_TRANSFER')).toBe('Bank transfer')
+    expect(formatPaymentMethod('WALLET', 'JAZZCASH')).toBe('Wallet, JazzCash')
+    expect(formatPaymentMethod('WALLET', null)).toBe('Wallet')
+    expect(formatPaymentMethod()).toBe('')
   })
 
   it('timeAgo gives short stamps', () => {

@@ -53,10 +53,65 @@ export function codeErrorMessage(err) {
   return getErrorMessage(err)
 }
 
-// The cash line shown on a delivery: what to collect, what was collected, or nothing for prepaid.
+// The cash line shown on a delivery: what to collect, what was collected, a
+// non-cash payment waiting on the brand, or nothing for prepaid (docs/21 §I).
 export function cashSummary(delivery) {
   if (!delivery) return { kind: 'none' }
   if (delivery.amountToCollect > 0) return { kind: 'collect', amount: delivery.amountToCollect }
   if (delivery.cashCollected) return { kind: 'collected' }
+  // A non-cash payment at the door: no cash, and the rider only sees whether the
+  // brand has checked it yet — never the reference or the photo.
+  if (delivery.proofStatus) return { kind: 'proof', status: delivery.proofStatus }
   return { kind: 'prepaid' }
+}
+
+// The methods the rider may offer, from the server (cash only when a proof cannot
+// be stored). Labels match server/src/config/paymentCollection.js.
+export const PAYMENT_METHODS = [
+  { method: 'CASH', label: 'Cash' },
+  { method: 'BANK_TRANSFER', label: 'Bank transfer' },
+  { method: 'WALLET', label: 'Wallet' },
+  { method: 'CARD_MACHINE', label: 'Card machine' },
+]
+export const WALLETS = [
+  { wallet: 'JAZZCASH', label: 'JazzCash' },
+  { wallet: 'EASYPAISA', label: 'Easypaisa' },
+  { wallet: 'OTHER', label: 'Other' },
+]
+
+export const paymentMethodsFor = (delivery) => {
+  const allowed = delivery?.paymentOptions || []
+  return PAYMENT_METHODS.filter((m) => allowed.includes(m.method))
+}
+
+// The app-side gate only saves a round trip; the server validates the same rules.
+export function collectionReady(pay) {
+  if (!pay?.method) return false
+  if (pay.method === 'CASH') return true
+  if ((pay.reference || '').trim().length < 3) return false
+  if (!pay.proof) return false
+  return pay.method !== 'WALLET' || Boolean(pay.wallet)
+}
+
+// What the complete call sends. Cash carries no reference and no photo.
+export function collectionPayload(pay) {
+  if (pay.method === 'CASH') return { method: 'CASH' }
+  return {
+    method: pay.method,
+    ...(pay.method === 'WALLET' && { wallet: pay.wallet }),
+    reference: pay.reference.trim(),
+    proof: pay.proof,
+  }
+}
+
+// A payment-proof problem explained to the rider, in their terms.
+export function proofErrorMessage(err) {
+  const data = err?.response?.data
+  if (err?.codeMessage) return err.codeMessage
+  if (data?.code === 'PROOF_NOT_CONFIGURED') return 'Payment photos are not set up yet. Ask the brand: take cash only.'
+  if (data?.code === 'PROOF_NOT_ALLOWED') return 'A photo can only be added while the delivery is out for delivery.'
+  if (data?.code === 'PROOF_NOT_YOURS') return 'That photo does not belong to this delivery. Take it again.'
+  if (data?.code === 'PAYMENT_PREPAID') return 'This order was already paid. There is nothing to collect.'
+  if (data?.code === 'PAYMENT_ALREADY_COLLECTED') return 'This payment was already collected.'
+  return getErrorMessage(err)
 }

@@ -53,10 +53,31 @@ const mockCheckoutChoiceSchema = z.object({
   choice: z.enum(['pay', 'fail']),
 });
 
+// --- Payment proofs taken at the door (docs/21 §I) ---
+const proofQueueQuerySchema = z.object({
+  status: z.enum(['SUBMITTED', 'VERIFIED', 'REJECTED']).optional(),
+  page: z.coerce.number().int().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(50).optional(),
+});
+
+const proofDecisionSchema = z
+  .object({
+    verification: z.enum(['VERIFIED', 'REJECTED'], { error: 'verification must be VERIFIED or REJECTED' }),
+    note: z.string().trim().min(1).max(300).optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.verification === 'REJECTED' && !value.note) {
+      ctx.addIssue({ code: 'custom', path: ['note'], message: 'note is required when rejecting a proof' });
+    }
+  });
+
 module.exports = {
   orderIdParamSchema,
   updatePaymentStatusSchema,
   listPaymentEventsQuerySchema,
   mockCheckoutParamsSchema,
   mockCheckoutChoiceSchema,
+  proofQueueQuerySchema,
+  proofDecisionSchema,
 };

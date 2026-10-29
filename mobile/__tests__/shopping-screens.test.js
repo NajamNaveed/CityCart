@@ -452,6 +452,17 @@ describe('Order detail', () => {
       expect(text).toContain('Receipt RC-2026-000012')
     })
 
+    it('says how a payment at the door was made', async () => {
+      const delivered = { ...ORDER, orderStatus: 'DELIVERED' }
+      serveWith(delivered, {
+        payment: { status: 'PAID' },
+        delivery: { _id: ID(9), status: 'DELIVERED' },
+        receipt: { receiptNumber: 'RC-2026-000012', issuedAt: '2026-10-20T10:00:00Z', collectionMethod: 'WALLET', collectionWallet: 'JAZZCASH' },
+      })
+      const text = screenText(await show(<OrderScreen />, auth()))
+      expect(text).toContain('paid by wallet (JazzCash)')
+    })
+
     it('does not look for a receipt on an unpaid order', async () => {
       serveWith(ORDER, { payment: { status: 'PENDING' }, receipt: { receiptNumber: 'RC-1', issuedAt: '2026-10-20T10:00:00Z' } })
       const text = screenText(await show(<OrderScreen />, auth()))

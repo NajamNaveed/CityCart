@@ -45,6 +45,13 @@
           "color": "#1e3a2f",
           "defaultChannel": "default"
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "CityCart Partner uses the camera only to photograph a payment confirmation or card-machine slip at the door.",
+          "photosPermission": "CityCart Partner does not open your photo library; payment proof photos are taken with the camera."
+        }
       ]
     ]
   }

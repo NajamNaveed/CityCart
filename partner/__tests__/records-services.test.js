@@ -3,8 +3,9 @@ jest.mock('../src/services/api', () => ({ __esModule: true, default: { get: jest
 
 import api from '../src/services/api'
 import {
-  assignRider, fetchActiveRiders, fetchCashCollectors, fetchCollectorCash, fetchOrder, fetchOrders, fetchOverview, fetchReceipt, fetchReceipts,
-  fetchShipment, fetchShipments, onTheRoad, ORDER_FILTERS, SHIPMENT_FILTERS, settleCash,
+  assignRider, decideProof, fetchActiveRiders, fetchCashCollectors, fetchCollectorCash, fetchOrder, fetchOrders, fetchOverview,
+  fetchProofLink, fetchProofQueue, fetchReceipt, fetchReceipts, fetchShipment, fetchShipments, onTheRoad, ORDER_FILTERS,
+  SHIPMENT_FILTERS, settleCash,
 } from '../src/services/records'
 
 beforeEach(() => jest.clearAllMocks())
@@ -82,6 +83,27 @@ describe('receipts and cash', () => {
     api.post.mockResolvedValue({ data: { settled: 2, total: 3350 } })
     expect(await settleCash('c1', ['p1', 'p2'])).toEqual({ settled: 2, total: 3350 })
     expect(api.post).toHaveBeenLastCalledWith('/payments/cash/settle', { collectorId: 'c1', paymentIds: ['p1', 'p2'] })
+  })
+})
+
+describe('payment proofs to verify', () => {
+  it('reads the queue with its own page of unverified proofs', async () => {
+    api.get.mockResolvedValue({ data: { proofs: [{ paymentId: 'p1' }], pagination: { page: 2, pages: 4 } } })
+    expect(await fetchProofQueue('SUBMITTED', 2)).toEqual({ items: [{ paymentId: 'p1' }], pagination: { page: 2, pages: 4 } })
+    expect(api.get).toHaveBeenLastCalledWith('/payments/proofs', { params: { status: 'SUBMITTED', page: 2, limit: 20 } })
+  })
+
+  it('asks for a short-lived photo link, and sends a decision with a reason only when rejecting', async () => {
+    api.get.mockResolvedValue({ data: { proof: { paymentId: 'p1', url: 'https://example.test/photo' } } })
+    expect(await fetchProofLink('p1')).toEqual({ paymentId: 'p1', url: 'https://example.test/photo' })
+    expect(api.get).toHaveBeenLastCalledWith('/payments/p1/proof')
+
+    api.patch.mockResolvedValue({ data: { proof: { paymentId: 'p1', verification: 'VERIFIED' } } })
+    expect(await decideProof('p1', 'VERIFIED')).toEqual({ paymentId: 'p1', verification: 'VERIFIED' })
+    expect(api.patch).toHaveBeenLastCalledWith('/payments/p1/proof', { verification: 'VERIFIED' })
+
+    await decideProof('p1', 'REJECTED', 'Not on the statement')
+    expect(api.patch).toHaveBeenLastCalledWith('/payments/p1/proof', { verification: 'REJECTED', note: 'Not on the statement' })
   })
 })
 

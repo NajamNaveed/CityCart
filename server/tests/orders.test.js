@@ -415,6 +415,30 @@ describe('GET /api/v1/orders/my and /:id', () => {
     expect(Order.findOne).toHaveBeenCalledWith({ _id: id.toString() });
   });
 
+  it('the customer never sees the private proof path, reference or check details', async () => {
+    const { cookie } = asRole();
+    const id = oid();
+    Order.findOne.mockResolvedValue({ _id: id, orderNumber: 'CC-1' });
+    Payment.findOne.mockResolvedValue({
+      method: 'WALLET',
+      status: 'PAID',
+      collection: {
+        method: 'WALLET',
+        wallet: 'JAZZCASH',
+        reference: 'JC-7788',
+        proof: { publicId: 'citycart/brands/b/deliveries/d/payment-proofs/a.jpg', fingerprint: 'etag-1' },
+        verification: 'SUBMITTED',
+        note: 'internal',
+      },
+    });
+
+    const res = await request(app).get(`/api/v1/orders/${id}`).set(...cookie);
+
+    expect(res.status).toBe(200);
+    expect(res.body.payment.collection).toEqual({ method: 'WALLET', wallet: 'JAZZCASH' });
+    expect(JSON.stringify(res.body)).not.toContain('payment-proofs');
+  });
+
   it('400 for an invalid id', async () => {
     const { cookie } = asRole();
     expect((await request(app).get('/api/v1/orders/nope').set(...cookie)).status).toBe(400);

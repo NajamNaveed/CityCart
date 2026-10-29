@@ -7,8 +7,10 @@ const { OrderError } = require('./order.service');
 const { notifyCustomerOfOrderStatus, notifyPaymentReceived, notifyRiderAssigned } = require('./notification.service');
 const { generateDeliveryCode } = require('../utils/deliveryCode');
 const { issueReceiptBestEffort } = require('./receipt.service');
+const { duplicateFlags } = require('./paymentProof.service');
 const { deliveryForCustomer } = require('../utils/deliveryView');
 const { ROLES } = require('../config/roles');
+const { PAYMENT_METHOD_FOR_COLLECTION } = require('../config/paymentCollection');
 const {
   DELIVERY_FINAL_STATUSES,
   ORDER_STATUS_FOR_DELIVERY,
@@ -81,7 +83,7 @@ async function getDeliveryForUser(user, tenantBrandId, deliveryId) {
  * double DELIVERED can't mark payment PAID twice). If the order is not in a
  * status the delivery step requires, everything is rolled back.
  */
-async function updateDeliveryStatus({ brandId, deliveryId, status, failureReason, userId, riderId }) {
+async function updateDeliveryStatus({ brandId, deliveryId, status, failureReason, userId, riderId, collection }) {
   // riderId is set only when a rider makes the change: the delivery must then be
   // assigned to that rider, so a rider can never move someone else's delivery.
   const owner = { brandId, ...(riderId && { riderId }) };
@@ -142,22 +144,66 @@ async function updateDeliveryStatus({ brandId, deliveryId, status, failureReason
       events.push({ kind: 'ORDER_STATUS', order, status: orderTarget });
 
       if (status === 'DELIVERED' && order.paymentMethod === 'COD') {
-        // Cash collected on delivery (docs/10 §6, §11). Conditional on
-        // PENDING so it can only ever flip once.
+        // Cash or another way at the door (docs/21 §I). Prepaid orders have
+        // nothing to collect and never carry a collection.
+        const isCash = !collection || collection.method === 'CASH';
+        // Conditional on PENDING so it can only ever flip once.
         await Order.updateOne({ _id: order._id }, { $set: { paymentStatus: 'PAID' } }, { session });
-        // The collector (the rider, or the team member completing it) holds the
-        // cash until the brand settles it (docs/10 §11a).
         const now = new Date();
+        const paymentUpdate = {
+          status: 'PAID',
+          paidAt: now,
+          confirmedBy: userId,
+          brandId: order.brandId,
+          'collection.method': isCash ? 'CASH' : collection.method,
+        };
+        if (isCash) {
+          // The collector (the rider, or the team member completing it) holds the
+          // cash until the brand settles it (docs/10 §11a).
+          paymentUpdate.collectedBy = userId;
+          paymentUpdate.collectedAt = now;
+        } else {
+          // Non-cash: paid, but the brand must check the proof. Nobody holds cash,
+          // so collectedBy is never set and it never enters a rider's cash balance.
+          paymentUpdate.method = PAYMENT_METHOD_FOR_COLLECTION[collection.method];
+          if (collection.wallet) paymentUpdate['collection.wallet'] = collection.wallet;
+          paymentUpdate['collection.reference'] = collection.reference;
+          paymentUpdate['collection.proof'] = collection.proof;
+          paymentUpdate['collection.verification'] = 'SUBMITTED';
+        }
+
         const cod = await Payment.findOneAndUpdate(
           { orderId: order._id, status: 'PENDING' },
-          { $set: { status: 'PAID', paidAt: now, confirmedBy: userId, brandId: order.brandId, collectedBy: userId, collectedAt: now } },
+          { $set: paymentUpdate },
           { session }
         );
+        if (cod && !isCash) {
+          // Duplicate use is flagged for the verifier, never blocked (docs/21 §I.4).
+          const flags = await duplicateFlags(
+            {
+              brandId: order.brandId,
+              paymentId: cod._id,
+              reference: collection.reference,
+              fingerprint: collection.proof.fingerprint,
+            },
+            session
+          );
+          if (flags.duplicateReference || flags.duplicateProof) {
+            await Payment.updateOne({ _id: cod._id }, { $set: { 'collection.duplicateReference': flags.duplicateReference, 'collection.duplicateProof': flags.duplicateProof } }, { session });
+          }
+        } else if (!cod && !isCash) {
+          // The payment was already collected some other way; a new proof would
+          // have nowhere to go. Undo this completion rather than lose it silently.
+          throw new OrderError(409, 'This payment has already been collected.', { code: 'PAYMENT_ALREADY_COLLECTED' });
+        }
         // The notification only accompanies the request that actually won
         // the payment flip, so a duplicate DELIVERED can't double-announce.
         if (cod) {
-          events.push({ kind: 'PAYMENT_RECEIVED', order, paymentId: cod._id });
+          events.push({ kind: 'PAYMENT_RECEIVED', order, paymentId: cod._id, nonCash: !isCash });
         }
+      } else if (status === 'DELIVERED' && collection) {
+        // A prepaid order needs no collection; refuse a proof rather than store it.
+        throw new OrderError(409, 'This order was paid up front; there is nothing to collect.', { code: 'PAYMENT_PREPAID' });
       }
     }
 
@@ -169,7 +215,7 @@ async function updateDeliveryStatus({ brandId, deliveryId, status, failureReason
     if (event.kind === 'ORDER_STATUS') {
       await notifyCustomerOfOrderStatus(event.order, event.status);
     } else if (event.kind === 'PAYMENT_RECEIVED') {
-      await notifyPaymentReceived(event.order);
+      await notifyPaymentReceived(event.order, ...(event.nonCash ? [{ nonCash: true }] : []));
       await issueReceiptBestEffort(event.paymentId);
     }
   }

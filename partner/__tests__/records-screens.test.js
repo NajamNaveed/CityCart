@@ -43,8 +43,9 @@ import Profile from '../src/app/(records)/profile'
 import OrderScreen from '../src/app/order/[id]'
 import ShipmentScreen from '../src/app/shipment/[id]'
 import ReceiptScreen from '../src/app/receipt/[id]'
+import ProofScreen from '../src/app/proof/[paymentId]'
 import HandoverScreen from '../src/app/handover/[collectorId]'
-import { cleanup, has, press, pressByLabel, RIDER, screenText, show, signedIn } from './helpers/screens'
+import { cleanup, has, isDisabled, press, pressByLabel, RIDER, screenText, show, signedIn, type } from './helpers/screens'
 
 const ALL = ['orders.view', 'delivery.view', 'delivery.manage', 'riders.view', 'payments.view', 'payments.manage']
 const member = (...permissions) => signedIn({ id: 'u2', name: 'Maryam Javed', email: 'maryam@example.com', role: 'BRAND_EMPLOYEE', permissions })
@@ -62,6 +63,12 @@ const DELIVERY = { _id: 'd1', orderId: 'o1', orderNumber: 'CC-2026-000042', stat
 const RECEIPT = {
   _id: 'x1', receiptNumber: 'RC-2026-000012', orderNumber: 'CC-2026-000042', brandName: 'Loom & Co.', billedTo: 'Sana Iqbal', method: 'COD', amount: 2450, subtotal: 2400, deliveryFee: 50, discount: 0, tax: 0,
   items: [{ productName: 'Printed lawn suit', quantity: 2, unitPrice: 1200, totalPrice: 2400 }], transactionReference: 'RCPT-000042', collectedByName: 'Shoaib Raza', issuedAt: NOW,
+}
+const PROOF = {
+  paymentId: 'p1', orderNumber: 'CC-2026-000042', amount: 2450, currency: 'PKR', method: 'WALLET', wallet: 'JAZZCASH',
+  reference: 'JC-7788', verification: 'SUBMITTED', submittedAt: NOW, verifiedAt: null, note: null,
+  duplicateReference: false, duplicateProof: false, proofAvailable: true,
+  url: 'https://api.cloudinary.com/v1_1/demo/image/download?x=1', expiresAt: NOW,
 }
 const page = (key, items) => ({ data: { [key]: items, pagination: { page: 1, pages: 1, total: items.length } } })
 
@@ -346,6 +353,98 @@ describe('money', () => {
     await press(screen, 'Cash')
     expect(screenText(screen)).toMatch(/No cash waiting/)
   })
+
+  it('lists the non-cash payments waiting to be checked, and opens one', async () => {
+    serve({ 'GET /receipts': page('receipts', []), 'GET /payments/proofs': page('proofs', [PROOF]) })
+    const screen = await show(<Money />, { auth: member(...ALL) })
+    await press(screen, 'To verify')
+    expect(api.get).toHaveBeenCalledWith('/payments/proofs', { params: { status: 'SUBMITTED', page: 1, limit: 20 } })
+    const text = screenText(screen)
+    expect(text).toMatch(/CC-2026-000042/)
+    expect(text).toMatch(/Wallet, JazzCash, JC-7788/)
+    expect(text).toMatch(/Rs 2,450/)
+    await pressByLabel(screen, 'CC-2026-000042')
+    expect(mockRouter.push).toHaveBeenCalledWith('/proof/p1')
+  })
+
+  it('marks a payment used before, and says so when nothing is waiting', async () => {
+    serve({ 'GET /receipts': page('receipts', []), 'GET /payments/proofs': page('proofs', []) })
+    let screen = await show(<Money />, { auth: member(...ALL) })
+    await press(screen, 'To verify')
+    expect(screenText(screen)).toMatch(/Nothing to verify/)
+
+    serve({ 'GET /receipts': page('receipts', []), 'GET /payments/proofs': page('proofs', [{ ...PROOF, duplicateProof: true }]) })
+    screen = await show(<Money />, { auth: member(...ALL) })
+    await press(screen, 'To verify')
+    expect(screenText(screen)).toMatch(/Used before/)
+  })
+})
+
+describe('checking a payment proof', () => {
+  const open = (auth = member(...ALL), proof = PROOF) => {
+    mockParams = { paymentId: 'p1' }
+    serve({
+      'GET /payments/p1/proof': { data: { proof } },
+      'PATCH /payments/p1/proof': (body) => ({ data: { proof: { paymentId: 'p1', verification: body.verification, verifiedAt: NOW, note: body.note || null } } }),
+    })
+    return show(<ProofScreen />, { auth })
+  }
+
+  it('shows the photo, the reference and the amount, then verifies only after asking', async () => {
+    const screen = await open()
+    expect(api.get).toHaveBeenCalledWith('/payments/p1/proof')
+    const text = screenText(screen)
+    expect(text).toMatch(/CC-2026-000042/)
+    expect(text).toMatch(/Rs 2,450/)
+    expect(text).toMatch(/Wallet, JazzCash/)
+    expect(text).toMatch(/JC-7788/)
+
+    await press(screen, 'Verify payment')
+    expect(screenText(screen)).toMatch(/Mark Rs 2,450 as verified\?/)
+    expect(api.patch).not.toHaveBeenCalled()
+
+    await press(screen, 'Yes, verified')
+    expect(api.patch).toHaveBeenCalledWith('/payments/p1/proof', { verification: 'VERIFIED' })
+    expect(screenText(screen)).toMatch(/Marked as verified/)
+  })
+
+  it('needs a reason before rejecting, and sends it', async () => {
+    const screen = await open()
+    await press(screen, 'Reject payment')
+    expect(isDisabled(screen, 'Reject payment')).toBe(true)
+    await type(screen, 'Why is it rejected?', '  Not on the statement ')
+    await press(screen, 'Reject payment')
+    expect(api.patch).toHaveBeenCalledWith('/payments/p1/proof', { verification: 'REJECTED', note: 'Not on the statement' })
+    expect(screenText(screen)).toMatch(/Rejected\. The brand owner has been told/)
+  })
+
+  it('warns when the reference or the photo was used before', async () => {
+    const screen = await open(member(...ALL), { ...PROOF, duplicateReference: true, duplicateProof: true })
+    const text = screenText(screen)
+    expect(text).toMatch(/The same reference was used on another payment/)
+    expect(text).toMatch(/The same photo was used on another payment/)
+  })
+
+  it('someone who may only see payments cannot decide', async () => {
+    const screen = await open(member('payments.view'))
+    expect(screenText(screen)).toMatch(/Only team members who manage payments can verify or reject/)
+    expect(has(screen, 'Verify payment')).toBe(false)
+  })
+
+  it('tells the person when someone else already checked it', async () => {
+    const screen = await open()
+    api.patch.mockRejectedValue(httpError(409, { code: 'PROOF_ALREADY_DECIDED', message: 'This payment proof has already been checked.' }))
+    await press(screen, 'Reject payment')
+    await type(screen, 'Why is it rejected?', 'Not on the statement')
+    await press(screen, 'Reject payment')
+    expect(screenText(screen)).toMatch(/Someone else already checked this payment/)
+  })
+
+  it('says when the photo is gone or the payment is not theirs to see', async () => {
+    mockParams = { paymentId: 'nope' }
+    serve({ 'GET /payments/nope/proof': httpError(404, { code: 'PROOF_NOT_FOUND', message: 'There is no photo for this payment.' }) })
+    expect(screenText(await show(<ProofScreen />, { auth: member(...ALL) }))).toMatch(/No photo here/)
+  })
 })
 
 describe('one receipt', () => {
@@ -360,6 +459,25 @@ describe('one receipt', () => {
     expect(text).toMatch(/Paid \| Rs 2,450/)
     expect(text).toMatch(/RCPT-000042/)
     expect(text).toMatch(/Shoaib Raza/)
+  })
+
+  it('says how a payment at the door was made, and whether the brand checked it', async () => {
+    mockParams = { id: 'x1' }
+    serve({
+      'GET /receipts/x1': {
+        data: {
+          receipt: {
+            ...RECEIPT, method: 'WALLET', collectionMethod: 'WALLET', collectionWallet: 'JAZZCASH', collectionReference: 'JC-7788',
+            proofVerification: 'VERIFIED', transactionReference: undefined, collectedByName: undefined,
+          },
+        },
+      },
+    })
+    const text = screenText(await show(<ReceiptScreen />, { auth: member(...ALL) }))
+    expect(text).toMatch(/Wallet, JazzCash/)
+    expect(text).toMatch(/JC-7788/)
+    expect(text).toMatch(/Payment check \| Checked/)
+    expect(text).not.toMatch(/Cash taken by/)
   })
 
   it('says when it is not found', async () => {

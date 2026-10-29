@@ -6,10 +6,12 @@ const { connectDB, disconnectDB, describeConnectionError } = require('./config/d
 const { initSockets, closeSockets } = require('./sockets');
 const { startPaymentExpiryJob } = require('./jobs/paymentExpiry');
 const { startAdjustmentExpiryJob } = require('./jobs/adjustmentExpiry');
+const { startPaymentProofRetentionJob } = require('./jobs/paymentProofRetention');
 
 let httpServer;
 let stopPaymentExpiryJob;
 let stopAdjustmentExpiryJob;
+let stopPaymentProofRetentionJob;
 
 /**
  * Startup order matters: the database connection must succeed before the
@@ -41,6 +43,8 @@ async function start() {
   stopPaymentExpiryJob = startPaymentExpiryJob();
   // Unanswered change proposals expire after 24 hours (docs/21 §H).
   stopAdjustmentExpiryJob = startAdjustmentExpiryJob();
+  // Checked payment-proof photos are deleted after their retention window (docs/21 §I.4).
+  stopPaymentProofRetentionJob = startPaymentProofRetentionJob();
   httpServer.listen(env.port, () => {
     // eslint-disable-next-line no-console
     console.log(
@@ -67,6 +71,7 @@ async function shutdown(signal) {
   try {
     if (stopPaymentExpiryJob) stopPaymentExpiryJob();
     if (stopAdjustmentExpiryJob) stopAdjustmentExpiryJob();
+    if (stopPaymentProofRetentionJob) stopPaymentProofRetentionJob();
     if (httpServer) {
       await new Promise((resolve, reject) => {
         httpServer.close((err) => (err ? reject(err) : resolve()));

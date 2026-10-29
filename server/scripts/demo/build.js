@@ -7,6 +7,7 @@
 const mongoose = require('mongoose');
 
 const { slugify } = require('../../src/utils/slugify');
+const { PAYMENT_METHOD_FOR_COLLECTION } = require('../../src/config/paymentCollection');
 const { CITIES, BLOCKS, BRANCHES, BRANDS, CHATS, LONG_CHAT, CUSTOMERS, ADMIN, CARTS, REMARKS } = require('./catalog');
 
 const { ObjectId } = mongoose.Types;
@@ -309,7 +310,11 @@ function buildDataset({ now = new Date(), hashes }) {
         const rejectedAt = new Date(brand.terminatedAt.getTime() + intBetween(5, 30) * 60 * 1000);
         events = [{ status: 'PENDING', at: new Date(brand.terminatedAt.getTime() - intBetween(20, 60) * HOUR) }, { status: 'REJECTED', at: rejectedAt }];
       } else {
-        const [lo, hi] = brandKey === 'gadgets' || brandKey === 'quick' ? [24 * 35, 24 * 65] : LAST_EVENT_HOURS[status];
+        // One old delivered order (loom's second) is from last quarter, so its checked
+        // payment proof can already be past the 90-day photo retention (docs/21 §I.4).
+        const [lo, hi] = brandKey === 'loom' && indexInBrand === 1 && status === 'DELIVERED'
+          ? [24 * 120, 24 * 128]
+          : brandKey === 'gadgets' || brandKey === 'quick' ? [24 * 35, 24 * 65] : LAST_EVENT_HOURS[status];
         lastEvent = ago(between(lo, hi) * HOUR);
         events = [];
         let cursor = lastEvent;
@@ -374,7 +379,7 @@ function buildDataset({ now = new Date(), hashes }) {
         const handedOver = finishedAt < ago(20 * DAY);
         Object.assign(payment, {
           paidAt: finishedAt, confirmedBy: collector._id, provider: 'Cash on Delivery', transactionReference: `RCPT-${pad(ds.orders.length, 6)}`,
-          brandId: brand.doc._id, collectedBy: collector._id, collectedAt: finishedAt,
+          brandId: brand.doc._id, collectedBy: collector._id, collectedAt: finishedAt, collection: { method: 'CASH' },
           ...(handedOver && { settledAt: new Date(finishedAt.getTime() + DAY), settledBy: brand.owner._id }),
         });
         receiptJobs.push({ order, payment, brand, collector });
@@ -427,6 +432,68 @@ function buildDataset({ now = new Date(), hashes }) {
   });
   for (const [year, seq] of Object.entries(perYear)) ds.counters.push({ _id: `order-${year}`, seq });
 
+  // ── a few COD orders were paid at the door by transfer, wallet or card (docs/21 §I) ──
+  // The money was received (the orders are paid), but nobody holds cash: each carries a
+  // private photo and a reference, and the brand has checked some of them.
+  const doorEntries = orders.filter(({ order, payment }) =>
+    order.paymentMethod === 'COD' && payment.status === 'PAID' && payment.paidAt && !payment.refunds.length && payment.collectedBy
+  );
+  // The order from last quarter: its photo was deleted after the 90-day retention.
+  const oldProof = doorEntries.find((e) => now - e.payment.paidAt > 100 * DAY);
+  const doorPlans = [
+    { entry: oldProof, method: 'BANK_TRANSFER', reference: 'HBL-778812', verification: 'VERIFIED', note: 'Matched the August bank statement.', deleted: true },
+    { method: 'WALLET', wallet: 'JAZZCASH', reference: 'JC-994412', verification: 'SUBMITTED', duplicateReference: true, duplicateProof: true },
+    { method: 'CARD_MACHINE', reference: 'APPR-552310', verification: 'REJECTED', note: 'No card settlement matches this approval code.' },
+    { method: 'WALLET', wallet: 'EASYPAISA', reference: 'EP-220145', verification: 'VERIFIED', note: 'Seen in the wallet statement.' },
+  ];
+  // The other three come from three different brands, so the queue is not all one shop's.
+  const usedBrands = new Set([String(oldProof?.order.brandId)]);
+  const remaining = doorEntries.filter((e) => e !== oldProof && !usedBrands.has(String(e.order.brandId)));
+  for (const plan of doorPlans.filter((p) => !p.entry)) {
+    plan.entry = remaining.find((e) => !usedBrands.has(String(e.order.brandId)));
+    if (plan.entry) usedBrands.add(String(plan.entry.order.brandId));
+  }
+
+  for (const plan of doorPlans) {
+    if (!plan.entry) continue;
+    const { order, payment, brand } = plan.entry;
+    const delivery = ds.deliveries.find((d) => String(d.orderId) === String(order._id));
+    if (!delivery) continue;
+    const folder = `citycart/brands/${brand.doc._id}/deliveries/${delivery._id}/payment-proofs`;
+    const verifiedAt = plan.verification === 'SUBMITTED' ? undefined : new Date(payment.paidAt.getTime() + 2 * HOUR);
+
+    payment.method = PAYMENT_METHOD_FOR_COLLECTION[plan.method];
+    // Non-cash money is never in a rider's hand: no collector, nothing to settle.
+    delete payment.collectedBy;
+    delete payment.collectedAt;
+    delete payment.settledAt;
+    delete payment.settledBy;
+    delete payment.transactionReference;
+    delete payment.provider;
+    payment.collection = {
+      method: plan.method,
+      ...(plan.wallet && { wallet: plan.wallet }),
+      reference: plan.reference,
+      proof: { publicId: `${folder}/${plan.reference.toLowerCase()}.jpg`, fingerprint: `etag-${plan.reference.toLowerCase()}` },
+      verification: plan.verification,
+      ...(verifiedAt && {
+        verifiedBy: brand.owner._id,
+        verifiedAt,
+        ...(plan.note && { note: plan.note }),
+      }),
+      ...(plan.duplicateReference && { duplicateReference: true }),
+      ...(plan.duplicateProof && { duplicateProof: true }),
+    };
+    if (plan.deleted) {
+      delete payment.collection.proof;
+      payment.collection.proofDeletedAt = new Date(verifiedAt.getTime() + 90 * DAY);
+    }
+
+    // The receipt shows who took the cash; a non-cash payment has nobody to name.
+    const job = receiptJobs.find((r) => r.payment === payment);
+    if (job) job.collector = null;
+  }
+
   // A receipt for every paid payment, numbered in the order the money came in (one counter per year).
   const receiptsPerYear = {};
   receiptJobs.sort((a, c) => a.payment.paidAt - c.payment.paidAt).forEach(({ order, payment, brand, collector }) => {
@@ -436,9 +503,15 @@ function buildDataset({ now = new Date(), hashes }) {
       _id: new ObjectId(), receiptNumber: `RC-${year}-${pad(receiptsPerYear[year], 6)}`, paymentId: payment._id, orderId: order._id,
       orderNumber: order.orderNumber, brandId: order.brandId, brandName: brand.def.name, customerId: order.customerId,
       billedTo: order.shippingAddress.name, method: payment.method, amount: payment.amount, currency: payment.currency,
+      ...(payment.collection && {
+        collectionMethod: payment.collection.method,
+        ...(payment.collection.wallet && { collectionWallet: payment.collection.wallet }),
+        ...(payment.collection.reference && { collectionReference: payment.collection.reference }),
+      }),
       items: order.items.map((i) => ({ productName: i.productName, quantity: i.quantity, unitPrice: i.unitPrice, totalPrice: i.totalPrice })),
       subtotal: order.subtotal, deliveryFee: order.deliveryFee, discount: order.discount, tax: order.tax,
-      transactionReference: payment.transactionReference, provider: payment.provider,
+      ...(payment.transactionReference && { transactionReference: payment.transactionReference }),
+      ...(payment.provider && { provider: payment.provider }),
       ...(collector && { collectedBy: collector._id, collectedByName: collector.name }), issuedAt: payment.paidAt, createdAt: payment.paidAt,
     });
   });
@@ -662,10 +735,17 @@ function buildDataset({ now = new Date(), hashes }) {
         case 'OUT_FOR_DELIVERY':
           note(customer.doc._id, 'ORDER_OUT_FOR_DELIVERY', 'Out for delivery today', `Order ${order.orderNumber} is out for delivery. Please keep ${money(order.total)} ready in cash.`, ref, at);
           break;
-        case 'DELIVERED':
+        case 'DELIVERED': {
           note(customer.doc._id, 'ORDER_DELIVERED', 'Your order was delivered', `Order ${order.orderNumber} has been delivered. We hope you love it. You can now leave a review.`, ref, at);
-          note(brand.owner._id, 'PAYMENT_RECEIVED', 'Cash payment received', `${money(order.total)} was collected on delivery for order ${order.orderNumber}.`, { ...ref, paymentId: payment._id }, at);
+          const door = payment.collection && payment.collection.method !== 'CASH';
+          const how = door ? { BANK_TRANSFER: 'bank transfer', WALLET: 'wallet', CARD_MACHINE: 'card machine' }[payment.collection.method] : '';
+          note(brand.owner._id, 'PAYMENT_RECEIVED', door ? 'Payment received at the door' : 'Cash payment received',
+            door
+              ? `${money(order.total)} was paid by ${how} for order ${order.orderNumber}. Check the photo and the reference before you count it.`
+              : `${money(order.total)} was collected on delivery for order ${order.orderNumber}.`,
+            { ...ref, paymentId: payment._id }, at);
           break;
+        }
         case 'REJECTED':
           note(customer.doc._id, 'ORDER_REJECTED', 'Your order could not be fulfilled', `${brand.def.name} could not fulfil order ${order.orderNumber}. You have not been charged.`, ref, at);
           break;
@@ -678,6 +758,12 @@ function buildDataset({ now = new Date(), hashes }) {
     if (payment.refunds.length) {
       const refund = payment.refunds[0];
       note(customer.doc._id, 'REFUND_ISSUED', 'A refund was issued', `${brand.def.name} refunded ${money(refund.amount)} for order ${order.orderNumber}.`, { ...ref, paymentId: payment._id }, new Date(refund.at.getTime() + 60 * 1000));
+    }
+    if (payment.collection?.verification === 'REJECTED') {
+      note(brand.owner._id, 'PAYMENT_PROOF_REJECTED', 'Payment proof rejected',
+        `The payment of ${money(payment.amount)} for order ${order.orderNumber} was rejected: ${payment.collection.note} Decide what to do next.`,
+        { ...ref, paymentId: payment._id, orderNumber: order.orderNumber, amount: payment.amount, note: payment.collection.note },
+        new Date(payment.collection.verifiedAt.getTime() + 60 * 1000));
     }
   }
 

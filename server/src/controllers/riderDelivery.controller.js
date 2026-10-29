@@ -1,5 +1,6 @@
 const { riderListQuerySchema, riderStatusSchema, completeDeliverySchema, riderLocationSchema } = require('../validators/delivery.validator');
 const { recordLocation, clearLocation } = require('../services/riderLocation.service');
+const { createProofUpload } = require('../services/paymentProof.service');
 const { objectIdParamSchema } = require('../validators/common.validator');
 const {
   listRiderDeliveries,
@@ -66,8 +67,21 @@ async function complete(req, res, next) {
   const body = completeDeliverySchema.safeParse(req.body);
   if (!body.success) return invalid(res, body.error);
   try {
-    const delivery = await completeWithCode({ ...who(req), id: params.data.id, code: body.data.code });
+    const delivery = await completeWithCode({ ...who(req), id: params.data.id, code: body.data.code, collection: body.data.collection });
     return res.status(200).json({ success: true, message: 'Delivery completed', delivery });
+  } catch (err) {
+    return handleError(err, res, next);
+  }
+}
+
+// Step one of a non-cash payment at the door: a signed upload into the delivery's
+// own private Cloudinary folder (the folder never comes from the request).
+async function proofUpload(req, res, next) {
+  const params = objectIdParamSchema.safeParse(req.params);
+  if (!params.success) return invalid(res, params.error);
+  try {
+    const upload = await createProofUpload({ ...who(req), deliveryId: params.data.id });
+    return res.status(200).json({ success: true, upload });
   } catch (err) {
     return handleError(err, res, next);
   }
@@ -103,4 +117,4 @@ async function stopSharing(req, res, next) {
   }
 }
 
-module.exports = { list, getById, updateStatus, complete, cash, shareLocation, stopSharing };
+module.exports = { list, getById, updateStatus, complete, proofUpload, cash, shareLocation, stopSharing };

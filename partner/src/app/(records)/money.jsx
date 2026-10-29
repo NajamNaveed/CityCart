@@ -1,7 +1,8 @@
-import { useState } from 'react'
-import { useRouter } from 'expo-router'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useFocusEffect, useRouter } from 'expo-router'
 import { Pressable, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import Feather from '@expo/vector-icons/Feather'
 import AppText from '../../components/ui/AppText'
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
@@ -13,12 +14,13 @@ import Screen from '../../components/ui/Screen'
 import Skeleton from '../../components/ui/Skeleton'
 import { usePagedList } from '../../hooks/usePagedList'
 import { useRemote } from '../../hooks/useRemote'
-import { fetchCashCollectors, fetchReceipts } from '../../services/records'
-import { formatDateTime, formatPrice, humanize } from '../../utils/format'
-import { colors, radius, spacing } from '../../theme'
+import { fetchCashCollectors, fetchProofQueue, fetchReceipts } from '../../services/records'
+import { formatDateTime, formatPaymentMethod, formatPrice } from '../../utils/format'
+import { colors, radius, spacing, weights } from '../../theme'
 
 const SEGMENTS = [
   ['receipts', 'Receipts'],
+  ['proofs', 'To verify'],
   ['cash', 'Cash'],
 ]
 
@@ -35,10 +37,69 @@ function Receipts({ segments }) {
       renderItem={({ item }) => (
         <ListRow
           title={item.receiptNumber}
-          subtitle={`${item.orderNumber}, ${humanize(item.method)}`}
+          subtitle={`${item.orderNumber}, ${formatPaymentMethod(item.collectionMethod || item.method, item.collectionWallet)}`}
           right={formatPrice(item.amount)}
           rightSub={formatDateTime(item.issuedAt)}
           onPress={() => router.push(`/receipt/${item._id}`)}
+        />
+      )}
+    />
+  )
+}
+
+// A reminder that the same reference or photo was used on another payment.
+function DuplicatePill() {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 8, paddingVertical: 2, borderColor: 'rgba(180,83,9,0.25)', backgroundColor: colors.warningSoft }}>
+      <Feather name="alert-triangle" size={12} color={colors.warning} />
+      <AppText variant="small" style={{ fontSize: 11, lineHeight: 16, letterSpacing: 0.6, textTransform: 'uppercase', color: colors.warning, fontWeight: weights.medium }}>
+        Used before
+      </AppText>
+    </View>
+  )
+}
+
+// Non-cash payments taken at the door wait here until someone checks the brand's
+// statement against the photo and the reference (docs/21 §I.3).
+function Proofs({ segments }) {
+  const router = useRouter()
+  const list = usePagedList('records-proofs', (page) => fetchProofQueue('SUBMITTED', page))
+
+  // Coming back from a decision shows the queue without that payment.
+  const refreshRef = useRef(list.refresh)
+  useEffect(() => {
+    refreshRef.current = list.refresh
+  })
+  const firstFocus = useRef(true)
+  useFocusEffect(
+    useCallback(() => {
+      if (firstFocus.current) {
+        firstFocus.current = false
+        return
+      }
+      refreshRef.current()
+    }, []),
+  )
+
+  return (
+    <ListScreen
+      title="Money"
+      header={segments}
+      list={list}
+      keyExtractor={(proof) => proof.paymentId}
+      empty={{
+        icon: 'check-circle',
+        title: 'Nothing to verify',
+        message: 'Non-cash payments taken at the door wait here until the money is checked.',
+      }}
+      renderItem={({ item }) => (
+        <ListRow
+          title={item.orderNumber || 'Payment'}
+          subtitle={`${formatPaymentMethod(item.method, item.wallet)}, ${item.reference}`}
+          right={formatPrice(item.amount)}
+          rightSub={formatDateTime(item.submittedAt)}
+          pill={item.duplicateReference || item.duplicateProof ? <DuplicatePill /> : null}
+          onPress={() => router.push(`/proof/${item.paymentId}`)}
         />
       )}
     />
@@ -105,5 +166,6 @@ function Cash({ segments }) {
 export default function Money() {
   const [segment, setSegment] = useState('receipts')
   const segments = <FilterChips options={SEGMENTS} value={segment} onChange={setSegment} />
+  if (segment === 'proofs') return <Proofs segments={segments} />
   return segment === 'receipts' ? <Receipts segments={segments} /> : <Cash segments={segments} />
 }

@@ -61,6 +61,11 @@ async function issueReceiptForPayment(paymentId) {
       customerId: order.customerId,
       billedTo: address.name,
       method: payment.method,
+      ...(payment.collection && {
+        collectionMethod: payment.collection.method,
+        ...(payment.collection.wallet && { collectionWallet: payment.collection.wallet }),
+        ...(payment.collection.reference && { collectionReference: payment.collection.reference }),
+      }),
       amount: payment.amount,
       currency: payment.currency || 'PKR',
       items: (order.items || []).map((i) => ({
@@ -108,6 +113,12 @@ const common = (r) => ({
   brandName: r.brandName,
   billedTo: r.billedTo,
   method: r.method,
+  // How the money was actually handed over at the door, when that is known. The
+  // customer may see this much; the photo and the fingerprint never leave the server.
+  ...(r.collectionMethod && {
+    collectionMethod: r.collectionMethod,
+    ...(r.collectionWallet && { collectionWallet: r.collectionWallet }),
+  }),
   amount: r.amount,
   currency: r.currency,
   items: r.items,
@@ -120,15 +131,27 @@ const common = (r) => ({
 
 // The customer sees their own receipt, without internal details (who collected the cash).
 const customerView = common;
-// The brand also sees the payment reference and who collected the cash.
+// The brand also sees the payment reference, who collected the cash, and (on one
+// receipt) whether a non-cash payment has been checked yet.
 const brandView = (r) => ({
   ...common(r),
   paymentId: r.paymentId,
   transactionReference: r.transactionReference,
+  ...(r.collectionReference && { collectionReference: r.collectionReference }),
   provider: r.provider,
   collectedByName: r.collectedByName,
 });
 const adminView = (r) => ({ ...brandView(r), brandId: r.brandId, customerId: r.customerId });
+
+const isBrandSide = (user) => user.role !== ROLES.CUSTOMER;
+
+// The check state is not snapshotted: it changes after the receipt is issued.
+async function withProofVerification(user, view) {
+  const proof = isBrandSide(user) && view.collectionMethod && view.collectionMethod !== 'CASH';
+  if (!proof) return view;
+  const payment = await Payment.findById(view.paymentId).select('collection.verification');
+  return { ...view, proofVerification: payment?.collection?.verification || null };
+}
 
 function viewFor(user) {
   if (user.role === ROLES.CUSTOMER) return customerView;
@@ -169,7 +192,7 @@ async function getReceipt(user, tenantBrandId, id) {
   if (!receipt) {
     throw new OrderError(404, 'Receipt not found.');
   }
-  return viewFor(user)(receipt);
+  return withProofVerification(user, viewFor(user)(receipt));
 }
 
 /**
@@ -190,7 +213,7 @@ async function getReceiptForOrder(user, tenantBrandId, orderId) {
   if (!receipt) {
     throw new OrderError(404, 'There is no receipt yet: the order has not been paid.', { code: 'NO_RECEIPT' });
   }
-  return viewFor(user)(receipt);
+  return withProofVerification(user, viewFor(user)(receipt));
 }
 
 module.exports = {

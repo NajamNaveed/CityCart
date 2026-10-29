@@ -1,6 +1,6 @@
 const express = require('express');
 
-const { list, getById, updateStatus, complete, cash, shareLocation, stopSharing } = require('../controllers/riderDelivery.controller');
+const { list, getById, updateStatus, complete, proofUpload, cash, shareLocation, stopSharing } = require('../controllers/riderDelivery.controller');
 const { riderLocationLimiter } = require('../middleware/rateLimiters');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
@@ -23,6 +23,7 @@ router.put('/location', riderLocationLimiter, shareLocation);
 router.delete('/location', stopSharing);
 router.get('/:id', getById);
 router.patch('/:id/status', updateStatus);
+router.post('/:id/proof-upload', proofUpload);
 router.post('/:id/complete', complete);
 
 module.exports = router;

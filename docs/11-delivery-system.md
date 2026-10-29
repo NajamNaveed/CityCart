@@ -378,6 +378,15 @@ DELIVERED
 
 The payment workflow may also update the payment status for COD orders when payment is collected.
 
+**How the customer paid (implemented October 2026).** A rider completes a COD
+delivery with the customer's code and then records the money: **Cash**, **Bank
+transfer**, **Wallet** (JazzCash, Easypaisa, Other) or **Card machine**. Cash works
+as before. Every other choice requires a camera photo of the confirmation or the
+machine's slip and a reference (transaction id or approval code), and the payment is
+`PAID` but **unverified** until the brand checks it. A prepaid order shows no choice.
+Rules, privacy and retention are in `10-payment-system.md` §31; the endpoints are in
+`05-api-specification.md` §22b.
+
 ---
 
 # 19. Proof of Delivery
@@ -390,6 +399,13 @@ Only the customer can read it. A rider can complete a delivery only by entering
 it; five wrong tries lock it, after which the brand completes the delivery from
 the dashboard. Brand users complete deliveries without it as before. See
 `20-partner-app.md` §7.
+
+**Payment proof at the door (implemented October 2026).** This is proof of *payment*,
+not proof of delivery. For a non-cash door payment the rider takes a camera-only photo
+and enters a reference. The photo is stored privately (never a public link), shown only
+to that brand's staff with payment permission through a short-lived signed link, and
+deleted 90 days after the brand decides. The customer never sees it; the rider sees only
+whether it is still waiting, verified or rejected. See `10-payment-system.md` §31.
 
 Future implementations may also support:
 

@@ -336,6 +336,24 @@ describe('demo dataset', () => {
     });
   });
 
+  it('shows money paid at the door, with its proof state and receipts saying how it was paid', () => {
+    const door = ds.payments.filter((p) => p.collection && p.collection.method !== 'CASH');
+    expect(door.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(door.map((p) => p.collection.verification))).toEqual(new Set(['SUBMITTED', 'VERIFIED', 'REJECTED']));
+    door.forEach((p) => {
+      expect(p.method).not.toBe('COD');
+      expect(p.collectedBy).toBeUndefined(); // non-cash money is never in a rider's hand
+      expect(p.collection.reference).toMatch(/\S/);
+      const receipt = ds.receipts.find((r) => id(r.paymentId) === id(p._id));
+      expect(receipt.collectionMethod).toBe(p.collection.method);
+      expect(receipt.collectedByName).toBeUndefined();
+    });
+    expect(door.some((p) => p.collection.wallet)).toBe(true);
+    expect(door.some((p) => p.collection.duplicateReference && p.collection.duplicateProof)).toBe(true);
+    expect(door.some((p) => p.collection.proofDeletedAt && !p.collection.proof)).toBe(true);
+    expect(ds.notifications.some((n) => n.type === 'PAYMENT_PROOF_REJECTED')).toBe(true);
+  });
+
   it('has orders paid online through the gateway, with their payment reference and stock-hold end', () => {
     const online = ds.payments.filter((p) => p.method === 'ONLINE_GATEWAY');
     expect(online.length).toBeGreaterThan(0);

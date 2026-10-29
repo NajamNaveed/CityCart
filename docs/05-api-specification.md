@@ -1520,6 +1520,11 @@ Required (brand users):
 payments.view
 ```
 
+The payment view never includes `collection.proof` (the private photo path and its
+fingerprint). A customer sees only `collection.method` and `collection.wallet`; brand
+users and admins also see the reference and verification state. See §22 "Door Payment
+Proofs" for the photo itself.
+
 ---
 
 ## Update Payment Status
@@ -1559,6 +1564,44 @@ listed payment is not an unsettled payment of this brand collected by that perso
 nothing changes and the answer is `409 CASH_CHANGED`. A rider sees only their own
 total, at `GET /rider/deliveries/cash` (`{ cash: { count, total } }`). See
 `10-payment-system.md` §11a.
+
+---
+
+## Door Payment Proofs
+
+How the customer actually paid at the door (`10-payment-system.md` §31). A non-cash
+collection is `PAID` but unverified until the brand checks its statement.
+
+```text
+POST  /api/v1/rider/deliveries/:id/proof-upload      rider, own delivery out for delivery
+GET   /api/v1/payments/proofs?status=&page=&limit=   brand payments.view / platform admin.payments
+GET   /api/v1/payments/:id/proof                     brand payments.view: details + signed link
+PATCH /api/v1/payments/:id/proof                     brand payments.manage: { verification, note? }
+```
+
+`proof-upload` answers `{ success: true, upload: { ... } }` with the signed Cloudinary
+parameters (`uploadUrl`, `apiKey`, `timestamp`, `folder`, `allowedFormats`,
+`type: "authenticated"`, `signature`). The app uploads the photo directly to Cloudinary
+and sends `publicId` and `fingerprint` (Cloudinary's `etag`) in the complete call
+(§22b); the server checks that the path belongs to this brand's and this delivery's
+folder.
+
+The queue (`status` defaults to `SUBMITTED`, oldest first) answers
+`{ proofs: [{ paymentId, orderNumber, amount, currency, method, wallet, reference,
+verification, submittedAt, verifiedAt, note, duplicateReference, duplicateProof,
+proofAvailable }], pagination }`. The photo's `publicId` and fingerprint are **never**
+returned. `GET /payments/:id/proof` returns the same item plus `{ url, expiresAt }`,
+a signed link valid for about 5 minutes.
+
+The decision body is `{ "verification": "VERIFIED" | "REJECTED", "note": "..." }`.
+`note` is required with `REJECTED` (1 to 300 characters), optional with `VERIFIED`.
+It answers `{ proof: { paymentId, verification, verifiedAt, note } }`. Every query is
+pinned to the caller's brand; another brand's payment is `404`. See
+`10-payment-system.md` §31.3 for the owner notification and the no-automatic-money rule.
+
+Errors: `503 PROOF_NOT_CONFIGURED`, `404 PROOF_NOT_FOUND` (no photo, or deleted),
+`409 PROOF_NOT_ALLOWED` (not out for delivery), `422 PROOF_NOT_YOURS`,
+`409 PAYMENT_PREPAID`, `409 PAYMENT_ALREADY_COLLECTED`, `409 PROOF_ALREADY_DECIDED`.
 
 ---
 
@@ -1612,6 +1655,12 @@ Who: customers see their own (without internal details), brand users their brand
 with `payments.view` (also the payment reference and who collected the cash), the
 super admin all, riders none. Another person's receipt is `404`. An unpaid order:
 `404` with `code: "NO_RECEIPT"`.
+
+A COD order paid at the door also carries `collectionMethod`, `collectionWallet`
+(wallet payments) and, for brand users and admins, `collectionReference`. When the
+payment was non-cash, the brand's single-receipt view adds `proofVerification`
+(`SUBMITTED`, `VERIFIED` or `REJECTED`), read live from the payment; customers never
+receive it. The photo itself is never part of a receipt.
 
 ---
 
@@ -1739,14 +1788,35 @@ account, every query is pinned to both, anything else is `404`):
 GET   /rider/deliveries?scope=active|history
 GET   /rider/deliveries/:id
 PATCH /rider/deliveries/:id/status      { status: PICKED_UP|IN_TRANSIT|OUT_FOR_DELIVERY|FAILED, failureReason? }
-POST  /rider/deliveries/:id/complete    { code }  six digits
+POST  /rider/deliveries/:id/proof-upload   signed upload for a door payment photo (docs/10 §31)
+POST  /rider/deliveries/:id/complete    { code, collection? }  six digits
 ```
+
+`collection` records how the customer paid at the door:
+
+```json
+{
+  "method": "CASH | BANK_TRANSFER | WALLET | CARD_MACHINE",
+  "wallet": "JAZZCASH | EASYPAISA | OTHER",
+  "reference": "transaction id or card-machine approval code",
+  "proof": { "publicId": "<cloudinary path>", "fingerprint": "<etag>" }
+}
+```
+
+It is optional; omitting it (or `method: "CASH"`) is cash. Cash must not carry
+`wallet`, `reference` or `proof` (`400`). Every non-cash method requires `wallet`
+for `WALLET`, a `reference` and a `proof`. A prepaid order refuses any collection
+(`409 PAYMENT_PREPAID`); a non-cash collection that arrives after the payment was
+already collected aborts the completion (`409 PAYMENT_ALREADY_COLLECTED`).
 
 A rider's delivery view contains: order number, status, address (only while the
 delivery is open), item names and quantities, `paymentMethod`, `amountToCollect`,
-`cashCollected`. Never the customer account, brand, prices or the code. `complete`
+`cashCollected`, and (for a non-cash door payment) `proofStatus`
+(`SUBMITTED`/`VERIFIED`/`REJECTED`) — never the reference or the photo. Never the
+customer account, brand, prices or the code. `complete`
 errors: `422 INVALID_CODE` (with `attemptsRemaining`), `429 CODE_LOCKED`,
-`409 INVALID_TRANSITION`, `409 NO_DELIVERY_CODE`. Deactivating a rider (`PATCH /riders/:id` with `isActive: false`) answers `409 RIDER_HAS_OPEN_DELIVERIES` while the rider still has open deliveries. Customers receive their delivery without `riderId`, `codeAttempts` or `deliveryCode`. See `20-partner-app.md`.
+`409 INVALID_TRANSITION`, `409 NO_DELIVERY_CODE`, plus the proof errors above.
+Deactivating a rider (`PATCH /riders/:id` with `isActive: false`) answers `409 RIDER_HAS_OPEN_DELIVERIES` while the rider still has open deliveries. Customers receive their delivery without `riderId`, `codeAttempts` or `deliveryCode`. See `20-partner-app.md`.
 
 ---
 

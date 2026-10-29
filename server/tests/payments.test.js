@@ -82,6 +82,30 @@ describe('GET /api/v1/payments/order/:orderId', () => {
     ({ cookie } = asRole(ROLES.BRAND_EMPLOYEE, []));
     expect((await request(app).get(`/api/v1/payments/order/${oid()}`).set(...cookie)).status).toBe(403);
   });
+
+  it('never returns the private proof; the customer sees only how they paid', async () => {
+    const id = oid();
+    const collection = {
+      method: 'WALLET',
+      wallet: 'JAZZCASH',
+      reference: 'JC-7788',
+      proof: { publicId: `citycart/brands/${brandId}/deliveries/${oid()}/payment-proofs/a.jpg`, fingerprint: 'etag-1' },
+      verification: 'SUBMITTED',
+      verifiedBy: oid(),
+      note: 'internal',
+    };
+    Order.findOne.mockResolvedValue({ _id: id });
+    Payment.findOne.mockResolvedValue({ status: 'PAID', collection });
+
+    let ctx = asRole(ROLES.CUSTOMER);
+    let res = await request(app).get(`/api/v1/payments/order/${id}`).set(...ctx.cookie);
+    expect(res.body.payment.collection).toEqual({ method: 'WALLET', wallet: 'JAZZCASH' });
+
+    ctx = asRole(ROLES.BRAND_ADMIN);
+    res = await request(app).get(`/api/v1/payments/order/${id}`).set(...ctx.cookie);
+    expect(res.body.payment.collection).toMatchObject({ method: 'WALLET', reference: 'JC-7788', verification: 'SUBMITTED' });
+    expect(res.body.payment.collection).not.toHaveProperty('proof');
+  });
 });
 
 describe('PATCH /api/v1/payments/:id/status — access', () => {

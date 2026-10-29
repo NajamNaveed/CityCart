@@ -15,6 +15,7 @@ const {
   updateBrandOrderStatus,
 } = require('../services/brandOrder.service');
 const { OrderError } = require('../services/order.service');
+const { toPaymentView } = require('../services/payment.service');
 const { formatZodError } = require('../utils/formatZodError');
 
 function invalid(res, error) {
@@ -52,7 +53,7 @@ async function getById(req, res, next) {
       req.tenantBrandId,
       params.data.id
     );
-    return res.status(200).json({ success: true, order, payment, delivery, adjustments, adjustment });
+    return res.status(200).json({ success: true, order, payment: toPaymentView(req.user, payment), delivery, adjustments, adjustment });
   } catch (err) {
     return handleError(err, res, next);
   }

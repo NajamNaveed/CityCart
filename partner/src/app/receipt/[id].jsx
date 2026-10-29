@@ -10,8 +10,11 @@ import EmptyState from '../../components/ui/EmptyState'
 import Skeleton from '../../components/ui/Skeleton'
 import { useRemote } from '../../hooks/useRemote'
 import { fetchReceipt } from '../../services/records'
-import { formatDateTime, formatPrice, humanize } from '../../utils/format'
+import { formatDateTime, formatPaymentMethod, formatPrice } from '../../utils/format'
 import { colors, spacing } from '../../theme'
+
+// The brand's view of a non-cash payment at the door: checked, waiting, or rejected.
+const PROOF_CHECKS = { SUBMITTED: 'Waiting to be checked', VERIFIED: 'Checked', REJECTED: 'Rejected' }
 
 function Row({ label, value, bold }) {
   return (
@@ -65,8 +68,11 @@ function ReceiptDetail({ id }) {
         </Card>
 
         <Card style={{ gap: spacing.sm }}>
-          <Row label="Method" value={humanize(receipt.method)} />
-          {receipt.transactionReference ? <Row label="Reference" value={receipt.transactionReference} /> : null}
+          <Row label="Method" value={formatPaymentMethod(receipt.collectionMethod || receipt.method, receipt.collectionWallet)} />
+          {receipt.collectionReference || receipt.transactionReference ? (
+            <Row label="Reference" value={receipt.collectionReference || receipt.transactionReference} />
+          ) : null}
+          {receipt.proofVerification ? <Row label="Payment check" value={PROOF_CHECKS[receipt.proofVerification] || receipt.proofVerification} /> : null}
           {receipt.collectedByName ? <Row label="Cash taken by" value={receipt.collectedByName} /> : null}
         </Card>
       </View>

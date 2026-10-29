@@ -350,7 +350,7 @@ describe('POST /api/v1/rider/deliveries/:id/complete', () => {
     });
     expect(Payment.findOneAndUpdate).toHaveBeenCalledWith(
       { orderId: order._id, status: 'PENDING' },
-      { $set: { status: 'PAID', paidAt: expect.any(Date), confirmedBy: user._id, brandId: order.brandId, collectedBy: user._id, collectedAt: expect.any(Date) } },
+      { $set: { status: 'PAID', paidAt: expect.any(Date), confirmedBy: user._id, brandId: order.brandId, collectedBy: user._id, collectedAt: expect.any(Date), 'collection.method': 'CASH' } },
       { session: 'SESSION' }
     );
     expect(notifications.notifyCustomerOfOrderStatus).toHaveBeenCalledWith(expect.anything(), 'DELIVERED');

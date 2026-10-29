@@ -1,7 +1,7 @@
 # 21 — Next Features: Plan
 
 Written October 2026, after the owner's full test of the Partner programme (`20-partner-app.md`).
-**G (admin partner) and H (substitution) are built; I (payment proof photo) is not built yet.**
+**G (admin partner), H (substitution) and I (payment proof photo) are built.**
 It is the plan the owner asked for first. Every "Decision" has a default
 (what will be built unless the owner says otherwise).
 
@@ -131,6 +131,10 @@ H4 notifications, expiry timer, seed data; H5 docs (`08`, `09`, `10`, `12`, `05`
 
 # I. Payment proof photo at the door (receipt photo and card machine)
 
+**Status: built (October 2026), except the camera and a real Cloudinary upload, which need a phone and an account.**
+Rules and the built behaviour are in `10-payment-system.md` §31; the Partner screens are in
+`20-partner-app.md` §5.8.
+
 ## I.1 The situation
 
 The order is cash on delivery, but at the door the customer pays another way: a bank transfer to the brand,
@@ -178,8 +182,9 @@ brand, this rider and this delivery**.
 
 ## I.7 What it needs
 
-* **New package, Partner app only:** `expo-image-picker` (camera). Photos are taken at reduced quality with location
-  data left out. No other package.
+* **New packages, Partner app only:** `expo-image-picker` (camera) and `expo-file-system` (the photo is sent as a
+  `File`, which Expo SDK 57's `expo/fetch` accepts). Photos are taken at reduced quality with location data left out.
+  No other package.
 * **Cloudinary must be configured** (the variables already exist). Without it the choice "bank/wallet/card" is hidden
   and only cash is offered.
 * A real phone to test (the camera).
@@ -200,3 +205,6 @@ is flagged and left to the brand (no automatic reversal).
 
 I1 model, private upload signing, endpoints, tests; I2 rider screens (method, camera, reference); I3 records
 verification queue; I4 receipts, retention job, seed data; I5 docs (`10`, `11`, `05`, `20`).
+
+All five steps are built. Documentation was updated in `10`, `11`, `05`, `04`, `12` and `20`; the
+remaining unverified part is the camera on a real phone and an upload to a real Cloudinary account.

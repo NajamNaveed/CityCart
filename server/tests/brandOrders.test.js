@@ -144,6 +144,29 @@ describe('GET /api/v1/brand/orders and /:id', () => {
     expect(res.body.payment.method).toBe('COD');
   });
 
+  it('the brand sees a door payment reference and check state, never the proof path', async () => {
+    const { cookie } = asRole(ROLES.BRAND_ADMIN);
+    const id = oid();
+    Order.findOne.mockResolvedValue({ _id: id });
+    Payment.findOne.mockResolvedValue({
+      method: 'WALLET',
+      collection: {
+        method: 'WALLET',
+        wallet: 'JAZZCASH',
+        reference: 'JC-7788',
+        proof: { publicId: 'citycart/brands/b/deliveries/d/payment-proofs/a.jpg', fingerprint: 'etag-1' },
+        verification: 'SUBMITTED',
+      },
+    });
+
+    const res = await request(app).get(`/api/v1/brand/orders/${id}`).set(...cookie);
+
+    expect(res.status).toBe(200);
+    expect(res.body.payment.collection).toMatchObject({ reference: 'JC-7788', verification: 'SUBMITTED' });
+    expect(res.body.payment.collection).not.toHaveProperty('proof');
+    expect(JSON.stringify(res.body)).not.toContain('payment-proofs');
+  });
+
   it('400 for an invalid id or status filter', async () => {
     const { cookie } = asRole(ROLES.BRAND_ADMIN);
     expect((await request(app).get('/api/v1/brand/orders/nope').set(...cookie)).status).toBe(400);

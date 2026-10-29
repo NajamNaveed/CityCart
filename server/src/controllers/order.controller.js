@@ -16,6 +16,7 @@ const {
   OrderError,
 } = require('../services/order.service');
 const { formatZodError } = require('../utils/formatZodError');
+const { toPaymentView } = require('../services/payment.service');
 
 function invalid(res, error) {
   return res.status(400).json({
@@ -62,7 +63,7 @@ async function getById(req, res, next) {
       req.user,
       params.data.id
     );
-    return res.status(200).json({ success: true, order, payment, delivery, adjustments, adjustment });
+    return res.status(200).json({ success: true, order, payment: toPaymentView(req.user, payment), delivery, adjustments, adjustment });
   } catch (err) {
     return handleError(err, res, next);
   }

@@ -183,6 +183,31 @@ describe('GET /api/v1/receipts/:id', () => {
     expect((await request(app).get(`/api/v1/receipts/${oid()}`).set(...cookie)).status).toBe(404);
     expect((await request(app).get('/api/v1/receipts/nope').set(...cookie)).status).toBe(400);
   });
+
+  it('the brand sees the live check state of a door payment; the customer sees only how it was paid', async () => {
+    const id = oid();
+    const paymentId = oid();
+    Receipt.findOne.mockResolvedValue(stored({ _id: id, paymentId, collectionMethod: 'WALLET', collectionWallet: 'JAZZCASH', collectionReference: 'JC-7788' }));
+    Payment.findById.mockReturnValue({ select: () => Promise.resolve({ collection: { verification: 'VERIFIED' } }) });
+
+    const ctx = asRole(ROLES.BRAND_ADMIN);
+    const res = await request(app).get(`/api/v1/receipts/${id}`).set(...ctx.cookie);
+    expect(res.status).toBe(200);
+    expect(res.body.receipt).toMatchObject({
+      collectionMethod: 'WALLET',
+      collectionWallet: 'JAZZCASH',
+      collectionReference: 'JC-7788',
+      proofVerification: 'VERIFIED',
+    });
+    expect(Payment.findById).toHaveBeenCalledWith(paymentId);
+
+    const customer = asRole(ROLES.CUSTOMER);
+    const own = await request(app).get(`/api/v1/receipts/${id}`).set(...customer.cookie);
+    expect(own.body.receipt).toMatchObject({ collectionMethod: 'WALLET', collectionWallet: 'JAZZCASH' });
+    expect(own.body.receipt).not.toHaveProperty('collectionReference');
+    expect(own.body.receipt).not.toHaveProperty('proofVerification');
+    expect(Payment.findById).toHaveBeenCalledTimes(1); // only the brand side needs the payment
+  });
 });
 
 describe('GET /api/v1/receipts/order/:orderId', () => {
@@ -281,6 +306,25 @@ describe('issuing a receipt', () => {
     // The customer's address and phone are not copied onto the receipt.
     expect(JSON.stringify(receipt)).not.toContain('secret street');
     expect(JSON.stringify(receipt)).not.toContain('+9230');
+  });
+
+  it('remembers how a COD order was paid at the door, with no cash collector', async () => {
+    const payment = paidPayment({
+      method: 'WALLET',
+      collectedBy: undefined,
+      collection: { method: 'WALLET', wallet: 'JAZZCASH', reference: 'JC-7788', verification: 'SUBMITTED' },
+    });
+    world(payment);
+
+    const receipt = await issueReceiptForPayment(payment._id);
+
+    expect(receipt).toMatchObject({
+      method: 'WALLET',
+      collectionMethod: 'WALLET',
+      collectionWallet: 'JAZZCASH',
+      collectionReference: 'JC-7788',
+    });
+    expect(receipt.collectedByName).toBeUndefined();
   });
 
   it('is idempotent: an existing receipt is returned and nothing new is written', async () => {

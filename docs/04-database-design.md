@@ -946,6 +946,7 @@ collectedBy
 collectedAt
 settledAt
 settledBy
+collection           how the customer paid at the door (docs/10 §31)
 refundedAmount
 refunds
 createdAt
@@ -953,6 +954,28 @@ updatedAt
 ```
 
 `brandId`, `collectedBy`, `collectedAt`, `settledAt` and `settledBy` record who holds cash-on-delivery money and when it was handed over (`10-payment-system.md` §11a). Index `{ brandId, collectedBy, settledAt }`.
+
+`collection` (added October 2026) is an embedded document written when a COD delivery
+is completed:
+
+```text
+method          CASH | BANK_TRANSFER | WALLET | CARD_MACHINE
+wallet          JAZZCASH | EASYPAISA | OTHER (WALLET only)
+reference       transaction id / approval code (never a card number)
+proof           { publicId, fingerprint }  private Cloudinary asset (non-cash only)
+verification    SUBMITTED | VERIFIED | REJECTED
+verifiedBy      User
+verifiedAt
+note            decision reason (required when REJECTED)
+duplicateReference / duplicateProof   booleans
+proofDeletedAt  set when the retention job removed the photo
+```
+
+A non-cash collection sets the payment's `method` too (`BANK_TRANSFER`, `WALLET` or
+`CARD`), `status: PAID`, and `collection.verification: SUBMITTED`; it never sets
+`collectedBy`. Indexes: `{ brandId, 'collection.verification', paidAt }` for the
+verification queue, `{ brandId, 'collection.reference' }` and
+`{ 'collection.proof.fingerprint' }` for duplicate flags.
 
 Initial payment method:
 
@@ -1004,12 +1027,20 @@ transactionReference
 provider
 collectedBy          the user who took the cash (never shown to customers)
 collectedByName
+collectionMethod     CASH | BANK_TRANSFER | WALLET | CARD_MACHINE (door payments)
+collectionWallet     JAZZCASH | EASYPAISA | OTHER (wallet only)
+collectionReference  the transaction id / approval code (brand and admin views only)
 issuedAt
 createdAt
 ```
 
 Indexes: `{ customerId, issuedAt }`, `{ brandId, issuedAt }`, `orderId`.
 Counter documents `receipt-<year>` allocate the numbers.
+
+The three `collection*` fields are a snapshot taken when the receipt is issued. The
+proof's verification state is **not** copied; the brand's single-receipt view reads it
+live from `payments.collection.verification` so a later decision is reflected without
+editing an issued receipt.
 
 ---
 

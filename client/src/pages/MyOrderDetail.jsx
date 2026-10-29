@@ -51,6 +51,17 @@ function DeliveryCode({ deliveryId }) {
 }
 
 // The receipt of a paid order; nothing is shown until one exists.
+const PAID_BY = { CASH: 'cash', CARD: 'card machine', BANK_TRANSFER: 'bank transfer', WALLET: 'wallet', ONLINE_GATEWAY: 'online payment' }
+const WALLETS = { JAZZCASH: 'JazzCash', EASYPAISA: 'Easypaisa', OTHER: 'other wallet' }
+// How a COD order was paid at the door (docs/21 §I.5); absent on older receipts.
+function paidBy(receipt) {
+  if (!receipt.collectionMethod) return ''
+  const name = PAID_BY[receipt.collectionMethod] || receipt.collectionMethod.toLowerCase().replaceAll('_', ' ')
+  return receipt.collectionMethod === 'WALLET' && receipt.collectionWallet
+    ? `${name} (${WALLETS[receipt.collectionWallet] || receipt.collectionWallet})`
+    : name
+}
+
 function ReceiptNote({ orderId }) {
   const [receipt, setReceipt] = useState(null)
   useEffect(() => {
@@ -65,9 +76,10 @@ function ReceiptNote({ orderId }) {
   }, [orderId])
 
   if (!receipt) return null
+  const by = paidBy(receipt)
   return (
     <p className="mt-2 text-[12.5px] text-muted">
-      Receipt {receipt.receiptNumber}, issued {formatDateTime(receipt.issuedAt)}.
+      Receipt {receipt.receiptNumber}{by ? `, paid by ${by}` : ''}, issued {formatDateTime(receipt.issuedAt)}.
     </p>
   )
 }

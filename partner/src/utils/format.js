@@ -21,6 +21,13 @@ export function formatDateTime(value) {
   return date.toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
+// "WALLET", "JAZZCASH" -> "Wallet, JazzCash"
+const WALLET_NAMES = { JAZZCASH: 'JazzCash', EASYPAISA: 'Easypaisa', OTHER: 'Other' }
+export function formatPaymentMethod(method, wallet) {
+  if (!method) return ''
+  return wallet ? `${humanize(method)}, ${WALLET_NAMES[wallet] || humanize(wallet)}` : humanize(method)
+}
+
 // Rough age for list stamps: "just now", "5m", "2h", "3d", then the date.
 export function timeAgo(value) {
   const date = new Date(value)

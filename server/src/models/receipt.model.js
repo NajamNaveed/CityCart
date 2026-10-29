@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { COLLECTION_METHODS, COLLECTION_WALLETS } = require('../config/paymentCollection');
 
 /**
  * Receipt model (docs/10 §28, docs/04 §26a).
@@ -32,6 +33,11 @@ const receiptSchema = new mongoose.Schema(
     customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     billedTo: { type: String },
     method: { type: String, enum: PAYMENT_METHODS, required: true },
+    // How a COD order was actually paid at the door (docs/21 §I.5), snapshotted when
+    // the receipt is issued. The verification state is read live from the payment.
+    collectionMethod: { type: String, enum: COLLECTION_METHODS },
+    collectionWallet: { type: String, enum: COLLECTION_WALLETS },
+    collectionReference: { type: String },
     amount: { type: Number, required: true, min: 0 },
     currency: { type: String, default: 'PKR' },
     items: { type: [receiptItemSchema], default: [] },

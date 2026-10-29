@@ -222,7 +222,7 @@ describe('PATCH /api/v1/deliveries/:id/status', () => {
     expect(Payment.findOneAndUpdate).toHaveBeenCalledWith(
       { orderId, status: 'PENDING' },
       // The collector holds the cash until the brand settles it.
-      { $set: { status: 'PAID', paidAt: expect.any(Date), confirmedBy: user._id, brandId, collectedBy: user._id, collectedAt: expect.any(Date) } },
+      { $set: { status: 'PAID', paidAt: expect.any(Date), confirmedBy: user._id, brandId, collectedBy: user._id, collectedAt: expect.any(Date), 'collection.method': 'CASH' } },
       { session: 'SESSION' }
     );
     // Delivered + cash collected, announced after the commit (docs/12 §5).

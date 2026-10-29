@@ -16,10 +16,11 @@ the work up cold. Read it first, then the documents it points to.
 | D | Records screens in the same app: orders, deliveries and rider assignment, receipts, cash hand-over (no returns tab until D0) | **Done** (not yet run on a real phone, see §5.5) |
 | E | Online payments: hosted gateway, signed webhook, stock hold and release, Pay now in the shopper app and website | **Built and tested with a built-in TEST gateway.** A real gateway adapter is still to do (needs the owner's sandbox account), see §5.6 |
 | F | Push notifications to the Partner app, and the rider sharing their location while delivering | **Built and tested with mocks**; push needs a real EAS build to try on a phone (see §5.7) |
+| I | Payment proof photo at the door: cash/bank/wallet/card, camera photo + reference, brand verification queue, private storage, receipts | **Built and tested with mocks**; the camera needs a real phone (see §5.8) |
 
 Server test suite: 940 tests before the programme, 1,047 after Phase A, 1,090
-after Phase B, 1,097 after Phase C (unchanged by Phase D), 1,158 after Phase E, 1,200 after Phase F. The Partner app has its own 179 tests and the
-shopper app (`mobile/`) 270. All pass; lint is clean everywhere. The real-MongoDB integration suite
+after Phase B, 1,097 after Phase C (unchanged by Phase D), 1,158 after Phase E, 1,200 after Phase F, 1,286 after Phases G–I. The Partner app has its own 204 tests and the
+shopper app (`mobile/`) 272. All pass; lint is clean everywhere. The real-MongoDB integration suite
 (`npm run test:integration`) could not be run by the author (no MongoDB binary
 download in the build sandbox) and should be run by the owner after applying
 each phase.
@@ -119,6 +120,16 @@ together).
 10. Do not add a new brand-scoped role without updating `02-user-roles-and-permissions.md`.
 11. Everything in `AGENTS.md` still applies (multi-tenancy §7, authorization §8,
     never trust client ownership data §9, payments §16, tests §26, dependencies §29).
+12. **Proof photos stay private** (Feature I). The upload folder is built by the
+    server from the brand and delivery; the rider cannot choose a path, and the
+    server accepts a photo only from this delivery's folder. Proofs are served only
+    as short-lived signed links to staff with `payments.view` (or a platform admin
+    with `admin.payments`); the customer, other riders and other brands never get
+    one. The rider sees only the proof's status.
+13. **A non-cash door payment is unverified money.** It is `PAID` with
+    `collection.verification: SUBMITTED`, never sets `collectedBy`, and is absent
+    from the rider's cash balance. Only `payments.manage` decides it; a rejection
+    needs a reason and flags the brand owner. No automatic reversal.
 
 ## 5. What is built
 
@@ -289,7 +300,7 @@ mirrors the server's permission names; the server still checks every request):
 | Overview | any of the three below | To pick up, On the road, Failed, Delivered counts (tap one to open Deliveries filtered), and cash still with riders | `GET /deliveries?status=&limit=1` (one small request per status), `GET /payments/cash/outstanding` |
 | Orders | `orders.view` | Orders with status filters; order detail with progress, items, totals, payment, customer (Call), a link to its delivery, and a **read-only** history of any change proposal the brand sent | `GET /brand/orders`, `GET /brand/orders/:id` |
 | Deliveries | `delivery.view` | Deliveries with status filters; delivery detail with rider, tracking, address (Call). **Assign or remove a rider** with `delivery.manage` + `riders.view` | `GET /deliveries`, `GET /deliveries/:id`, `GET /riders`, `PATCH /deliveries/:id/rider` |
-| Money | `payments.view` | **Receipts** list and detail; **Cash**: who holds how much, then a hand-over screen (`/handover/:collectorId`): tick exactly the payments you received, confirm, settle (needs `payments.manage`; without it the person can look but not tick) | `GET /receipts`, `GET /receipts/:id`, `GET /payments/cash/outstanding`, `POST /payments/cash/settle` |
+| Money | `payments.view` | **Receipts** list and detail; **To verify** (Feature I): door payments waiting for a check, with the photo and reference; **Cash**: who holds how much, then a hand-over screen (`/handover/:collectorId`): tick exactly the payments you received, confirm, settle (needs `payments.manage`; without it the person can look but not tick) | `GET /receipts`, `GET /receipts/:id`, `GET /payments/proofs`, `GET /payments/:id/proof`, `PATCH /payments/:id/proof`, `GET /payments/cash/outstanding`, `POST /payments/cash/settle` |
 | Account | everyone | Who is signed in, what they can see, sign out | none |
 
 Behaviour worth knowing:
@@ -299,8 +310,9 @@ Behaviour worth knowing:
   fails the new session is discarded. Permissions are read at sign-in and app start, so a
   change made by the brand owner takes effect the next time the person signs in or opens
   the app (the server enforces the new permissions at once).
-* **The records tabs only read, except two actions** that belong to this person's job:
-  assigning a rider and settling cash. Changing an order's status stays on the website.
+* **The records tabs only read, except three actions** that belong to this person's job:
+  assigning a rider, settling cash, and verifying or rejecting a door payment proof.
+  Changing an order's status stays on the website.
   **Change proposals are read-only in the Partner app** (status, note, before → after,
   the customer's answer); proposing, withdrawing and answering stay on the websites
   (docs/08 §41).
@@ -308,9 +320,15 @@ Behaviour worth knowing:
   have no permission for (or that fails) is simply left out.
 * The hand-over is two steps (tick, then "Yes, received") and all or nothing; a
   `CASH_CHANGED` answer clears the ticks, reloads the list and tells the person to count again.
+* **To verify** (Feature I) opens one payment's photo through a signed link that
+  expires in about five minutes; an expired image offers "Show photo again". A
+  person with `payments.view` but not `payments.manage` can read it and is told they
+  cannot decide. Verify asks for confirmation; Reject requires a reason. A duplicate
+  reference or photo shows "Used before". A second person deciding first answers
+  `409 PROOF_ALREADY_DECIDED`, and the screen reloads.
 * Route names are distinct from the rider's (`/overview`, `/orders`, `/shipments`, `/money`,
-  `/order/:id`, `/shipment/:id`, `/receipt/:id`, `/handover/:collectorId`) so one app can hold
-  both sets of screens.
+  `/order/:id`, `/shipment/:id`, `/receipt/:id`, `/handover/:collectorId`,
+  `/proof/:paymentId`) so one app can hold both sets of screens.
 * `StatusPill` covers order, delivery and payment statuses.
 * **Returns:** `Returned` chips already exist on the order and delivery filters but stay
   empty until Phase D0 makes returns possible; D0 then adds the request, approval and
@@ -340,11 +358,34 @@ Full rules, flow, outcome table and limits are in `10-payment-system.md` §29; t
 
 Rules and API are in `12-notification-system.md` §31 (push) and `11-delivery-system.md` §30 (location); summary for whoever continues.
 
-* **New packages (the only two of the whole programme):** `expo-location` and `expo-notifications`, in `partner/` only, installed with `npx expo install expo-location expo-notifications` (already in `package.json` and the lockfile). The shopper app, website and server gained **no** package (push uses Node's built-in `fetch`; maps open through a plain link).
+* **New packages in Phase F:** `expo-location` and `expo-notifications`, in `partner/` only, installed with `npx expo install expo-location expo-notifications` (already in `package.json` and the lockfile). The shopper app, website and server gained **no** package (push uses Node's built-in `fetch`; maps open through a plain link).
 * **Push:** the server stores each phone's token (`DeviceToken`) and, for every in-app notification, sends a push through Expo's push service when `PUSH_ENABLED=true`. The Partner app registers after sign-in, removes the token on sign-out, and opens the delivery/order when a notification is tapped. **It does nothing in Expo Go** (Android Expo Go cannot receive push; the app detects it) and until the app has an Expo project id. To try it on a phone: `cd partner && npx eas-cli init` (writes the project id), add Firebase (FCM) credentials in EAS for Android, `eas build --profile development --platform android`, set `PUSH_ENABLED=true` on the server. **Not tried on a real phone.**
 * **Rider location:** opt-in switch on the rider's Account screen (off by default, per phone, turned off on sign-out), foreground only (about every 30 s), accepted by the server only while a delivery is out, **only the last point is kept** (deleted after two hours, or at once when sharing stops), readable only by that order's customer and the brand's staff with `delivery.view`, only while out for delivery and fresh (under 10 minutes). The records delivery page, the shopper app's order page and the website's order page show "last seen" with an **Open in Maps** link (no map library).
 * **Verified:** server tests (push sending, token handling, location rules and who may read it), Partner app tests (push registration incl. Expo Go and missing project id, the sharing decision logic, the hook, the Account switch, sign-out cleanup), shopper and website cards; lint; a real Android bundle build.
 * **Known gaps and ideas:** no background tracking (needs special store permissions: ask the owner first); location is shown as "last seen" plus a map link, not a live moving map (a map package would be needed: ask the owner first); the shopper app does not register for push yet; push needs the EAS build described above; FCM/APNs credentials are the owner's to create.
+
+### 5.8 Phase I: payment proof photo at the door
+
+Rules, data, API and tests are in `10-payment-system.md` §31; this is the summary for whoever continues.
+
+* **Built, server:** `Payment.collection` (method, wallet, reference, private proof, verification, decision, duplicate flags, `proofDeletedAt`). A new `config/paymentCollection.js` defines the enums. `POST /rider/deliveries/:id/proof-upload` signs a Cloudinary **authenticated** upload into `citycart/brands/<brandId>/deliveries/<deliveryId>/payment-proofs` (folder built by the server). The complete call accepts `collection`; a non-cash one requires reference + proof, sets the payment `PAID` with `verification: SUBMITTED`, and never sets `collectedBy`. The server checks the photo path belongs to this brand and delivery (`422 PROOF_NOT_YOURS`). Prepaid orders refuse a collection (`409 PAYMENT_PREPAID`).
+* **Built, verification:** `GET /payments/proofs` (queue), `GET /payments/:id/proof` (details + signed link, `PAYMENT_PROOF_LINK_MINUTES`, default 5) and `PATCH /payments/:id/proof` (`VERIFIED`/`REJECTED`; reason required for rejection). One atomic decision, so a second person gets `409 PROOF_ALREADY_DECIDED`. A rejection notifies the brand's owners (`PAYMENT_PROOF_REJECTED`); no money moves automatically. Duplicate reference/photo are flags, not blocks. A six-hourly job deletes photos `PAYMENT_PROOF_RETENTION_DAYS` (default 90) after the decision.
+* **Built, rider screens:** after the code, "How did the customer pay?" — Cash, Bank transfer, Wallet (JazzCash/Easypaisa/Other) or Card machine. Non-cash opens the camera (`expo-image-picker`, camera only, reduced quality, no location), requires the reference, and warns "photograph the confirmation or the slip, never the card". The photo is sent as an `expo-file-system` `File`: Expo SDK 57's global fetch is `expo/fetch`, which reads a FormData file as bytes and rejects React Native's older `{ uri, name, type }` part. If the upload fails the photo stays on the screen, the rider is told what failed, and **Upload photo** retries it without reopening the camera. The completed screen shows the proof's status; a prepaid order shows no choice. With Cloudinary unconfigured the app offers cash only. **New packages, Partner app only:** `expo-image-picker` and `expo-file-system`.
+* **Built, records screens:** Money has a **To verify** segment (oldest first, "Used before" chips). The detail shows the signed photo, order, amount, method, reference and time; Verify needs a confirmation, Reject needs a reason. Read-only staff are told they cannot decide. Receipts show the method and, for brand staff, the reference and the live check state ("Waiting to be checked", "Checked", "Rejected").
+* **Built, customer side:** the receipt says how it was paid ("wallet (JazzCash)"), never the photo, reference or check state. Cash flow is unchanged and non-cash never appears in the rider's cash balance.
+* **Demo:** `npm run seed:demo` adds verified, submitted and rejected door payments, a duplicate pair, a photo already past retention, receipts with the method, and a `PAYMENT_PROOF_REJECTED` notification.
+* **Fixed after a phone report:** the first phone build uploaded the RN `{ uri, name, type }` part, which Expo SDK 57's `expo/fetch` rejects before sending; the error surfaced as "Cannot reach the server" and the photo was never stored, so **Complete delivery** stayed disabled. The upload now uses `expo-file-system`'s `File` (compatible with `expo/fetch` and React Native's fetch), shows the real reason, and keeps the photo for retry.
+* **Not verified:** the camera and a real Cloudinary account/upload end to end (no phone and no Cloudinary credentials in this environment), and the server's real-MongoDB integration tests. Signing, folder checks, queue scoping, decisions, duplicates, retention, the FormData/`File` upload shape and all screens are covered by mocked unit tests.
+
+Main files (server): `config/paymentCollection.js`, `models/payment.model.js`,
+`models/receipt.model.js`, `services/paymentProof.service.js`, `services/upload.service.js`,
+`services/delivery.service.js`, `services/receipt.service.js`, `services/notification.service.js`,
+`controllers/payment.controller.js`, `controllers/riderDelivery.controller.js`,
+`validators/payment.validator.js`, `validators/delivery.validator.js`,
+`jobs/paymentProofRetention.js`, `scripts/demo/build.js`.
+Partner app: `services/deliveries.js`, `services/records.js`,
+`app/delivery/[id].jsx`, `app/(records)/money.jsx`, `app/proof/[paymentId].jsx`,
+`app/receipt/[id].jsx`, `utils/delivery.js`, `utils/format.js`.
 
 ## 6. What is left
 
@@ -387,9 +428,9 @@ What remains: try push on a real build, and the ideas in §5.7 "Known gaps".
 
 ## 6.6 Next features (planned, not built)
 
-Three requests from the owner after testing are planned in `21-next-features-plan.md`: **G** a partner for the
-super admin, **H** substitution of unavailable items, **I** a payment proof photo at the door. Read it before
-building any of them; every decision there has a default awaiting the owner's approval.
+All three requests from the owner after testing have been built: **G** a partner for the super admin,
+**H** substitution of unavailable items, and **I** a payment proof photo at the door (see §5.8). The plan
+and its decisions remain in `21-next-features-plan.md`; the remaining ideas there are for future work.
 
 ## 7. Open decisions and known gaps
 
@@ -434,15 +475,16 @@ Run from `server/`: `npx eslint .` and `npx jest` (unit, mocked models, fast).
 Integration tests (`npm run test:integration`) need a real MongoDB binary.
 Client: `npm run lint` (oxlint) and `npx vite build` in `client/`.
 
-Partner app (`partner/`): `npm test` runs 142 tests: `api`, `storage`, `session`, `delivery` (rules and messages), `permissions`, `records-services` (request shapes), `paging`, `config`, `format`, `screens` (sign-in, who goes where, the rider's screens) and `records-screens` (overview, orders, deliveries and rider assignment, receipts, cash hand-over, account). Shopper app: five tests in `mobile/__tests__/shopping-screens.test.js` cover the code and receipt.
+Partner app (`partner/`): `npm test` runs 204 tests: `api`, `storage`, `session`, `delivery` (rules and messages, including the door-payment choices), `permissions`, `records-services` (request shapes, including proofs), `paging`, `config`, `format`, `screens` (sign-in, who goes where, the rider's screens; the door-payment photo upload, its failure messages and retry) and `records-screens` (overview, orders, deliveries and rider assignment, receipts, cash hand-over, the proof queue/detail and verify/reject, account). Shopper app: `mobile/` runs 272 tests; the order-screen tests cover the delivery code, the receipt and how a door payment was made.
 
 Partner-programme test files (`server/tests/`): `partnerAuth.test.js` (sign-in,
 token rules), `riders.test.js` (rider management and tenant isolation),
 `riderDeliveries.test.js` (rider endpoints, code logic, assignment, customer
-code), `riderModel.test.js` (schemas, role sets, restricted access),
-`receipts.test.js` (issuing, visibility), `cash.test.js` (outstanding, settle,
+code, door collections), `paymentProofs.test.js` (queue scoping, signed link,
+decisions, duplicates, retention), `riderModel.test.js` (schemas, role sets, restricted access),
+`receipts.test.js` (issuing, visibility, door-payment snapshots), `cash.test.js` (outstanding, settle,
 rider cash). Existing tests edited along the way: `brandOrders`,
-`brandOnboarding`, `deliveries`, `payments`, `seedDemo`.
+`brandOnboarding`, `deliveries`, `orders`, `payments`, `seedDemo`.
 
 Test patterns: models are auto-mocked with `jest.mock('../src/models/...')`;
 cookie users via `tests/helpers/testAuth.js` (`getAuthCookie`); partner users by
@@ -473,6 +515,13 @@ tests; add the same for new rules, in the same style.
 | `PAYMENT_PENDING` | 409 | The brand tried to confirm an online order that is not paid yet |
 | `PAID_ORDER_NOT_CANCELLABLE` | 409 | The customer tried to cancel an order already paid online |
 | `PAYMENT_EXPIRED` / `ALREADY_PAID` / `NOT_PAYABLE` / `NOT_ONLINE` | 409 | Starting a payment that cannot be started |
+| `PROOF_NOT_CONFIGURED` | 503 | Cloudinary is not set up, so no photo can be taken |
+| `PROOF_NOT_FOUND` | 404 | The payment has no photo (or it was deleted) |
+| `PROOF_NOT_ALLOWED` | 409 | A proof upload while the delivery is not out for delivery |
+| `PROOF_NOT_YOURS` | 422 | The photo path is not this brand's/delivery's |
+| `PAYMENT_PREPAID` | 409 | A collection was sent for an order paid up front |
+| `PAYMENT_ALREADY_COLLECTED` | 409 | A non-cash collection arrived after the payment was collected |
+| `PROOF_ALREADY_DECIDED` | 409 | Someone already verified/rejected this proof (`verification` in the body) |
 
 ## 11. Change log
 
@@ -486,3 +535,5 @@ tests; add the same for new rules, in the same style.
 * **2026-10 Phase D** delivered: the records screens for brand team members (overview, orders, deliveries with rider assignment, receipts, cash hand-over), permission-based tabs, permissions loaded at sign-in, `StatusPill` for all statuses. No server changes.
 * **2026-10 Phase C** delivered: `partner/` app (sign-in, rider screens), delivery code and receipt in the shopper app and website, rider-deactivation guard, customer-safe delivery view, root scripts.
 * **2026-10 Phase H** delivered: order change proposals (substitution / removal) on the brand website and both customer clients; the Partner app shows each order's proposal history read-only. Server rules, stock, payments, notifications and docs updated.
+* **2026-10 Phase I** delivered: payment at the door — the rider records cash, bank transfer, wallet or card machine (camera photo + reference for non-cash), the brand verifies or rejects the proof in a "To verify" queue, photos stay private and are deleted after 90 days, receipts say how it was paid. Demo data, docs and tests updated. Camera and a real Cloudinary upload not tried on a phone.
+* **2026-10 Phase I fix (phone):** the proof upload used React Native's `{ uri, name, type }` FormData part, which Expo SDK 57's global `expo/fetch` rejects; the report was "Cannot reach the server" and Complete never enabled. The photo is now an `expo-file-system` `File`, upload failures say what failed and keep the photo for **Upload photo** to retry.
