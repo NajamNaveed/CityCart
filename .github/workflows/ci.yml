@@ -125,13 +125,13 @@ jobs:
         env:
           HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
         if: ${{ env.HOOK != '' }}
-        run: curl -sf -X POST "$HOOK"
+        run: curl -fsS -X POST "$HOOK"
 
       - name: Trigger Vercel deploy (client)
         env:
           HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
         if: ${{ env.HOOK != '' }}
-        run: curl -sf -X POST "$HOOK"
+        run: curl -fsS -X POST "$HOOK"
 
       # Each step skips itself silently when its secret is not configured —
       # add the secrets (Settings → Secrets and variables → Actions) and the
