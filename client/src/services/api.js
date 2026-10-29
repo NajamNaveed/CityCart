@@ -18,9 +18,26 @@ const api = axios.create({
   withCredentials: true, // required for the HTTP-only auth cookie
 })
 
+// A misrouted API (or an SPA rewrite that swallows /api/*) answers with the
+// app's index.html. Treat that as a failed request so callers fall into their
+// error state instead of reading undefined fields and blanking the page.
+const HTML_RESPONSE_CODE = 'API_HTML_RESPONSE'
+
+function isHtml(data) {
+  return typeof data === 'string' && /^\s*<(!doctype|html)/i.test(data)
+}
+
 // Rate limiting surfaces as a toast instead of a page banner.
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (isHtml(response.data)) {
+      const error = new Error(HTML_RESPONSE_CODE)
+      error.code = HTML_RESPONSE_CODE
+      error.response = response
+      return Promise.reject(error)
+    }
+    return response
+  },
   (error) => {
     if (error.response?.status === 429) {
       toast('Too many requests were sent from this device. Wait a few minutes, then try again.', {
@@ -41,6 +58,7 @@ const FORBIDDEN_MESSAGES = {
 
 // Backend errors are always { success: false, message, errors? }.
 export function getErrorMessage(err, fallback = 'Something went wrong. Please try again.') {
+  if (err.code === HTML_RESPONSE_CODE) return 'The server is not responding correctly. Please try again in a moment.'
   if (!err.response) return 'Cannot reach the server. Check your connection.'
   const { code, message } = err.response.data || {}
   return FORBIDDEN_MESSAGES[code] || message || fallback

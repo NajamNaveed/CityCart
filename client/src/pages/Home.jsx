@@ -70,7 +70,7 @@ export default function Home() {
   }, [cityId, key])
 
   const loading = result.key !== key
-  const products = result.items
+  const products = Array.isArray(result.items) ? result.items : []
   const brandName = Object.fromEntries(brands.map((b) => [b._id, b.name]))
   const ratings = useRatings(products.map((p) => p._id))
   const featured = products.slice(0, 2)

@@ -655,8 +655,11 @@ Any infrastructure change must preserve:
 
 The repository now carries the deployment plumbing described above:
 
-* `client/vercel.json` — SPA rewrites so deep links (`/product/:id`,
-  `/brand/orders/:id`, a page refresh) serve `index.html` instead of 404.
+* `client/vercel.json` — proxies `/api/*` and `/socket.io/*` to Render and
+  serves `index.html` for deep links (`/product/:id`, `/brand/orders/:id`,
+  a page refresh). It uses the `routes` form because Vercel expands
+  `${RENDER_API_URL}` only in route `dest` values listed in the route's
+  `env` whitelist — `rewrites` destinations do not expand variables.
 * `render.yaml` (repository root) — Render Blueprint for the API: Node
   runtime, `server/` as root, `npm ci` build, `npm start` launch,
   `/health` as the health check. Secrets are marked `sync: false` — Render
@@ -670,11 +673,17 @@ The repository now carries the deployment plumbing described above:
 Remaining manual steps when deploying (nothing here needs code changes):
 
 1. Push the repository to GitHub; in Vercel create a project rooted at
-   `client/` (framework: Vite) and set `VITE_API_URL` to the API URL.
+   `client/` (framework: Vite, build `npm run build`, output `dist`), leave
+   `VITE_API_URL` EMPTY, and add `RENDER_API_URL` (see the proxy section
+   below).
 2. In Render, apply the Blueprint and fill in `MONGODB_URI` (Atlas),
    `JWT_SECRET`, and `CLIENT_URL` (the Vercel URL).
 3. Optionally enable Render's auto-deploy-on-push (already `true` in the
-   Blueprint) and Vercel's Git integration so CI + deploy run together.
+   Blueprint). `client/vercel.json` currently sets
+   `"git": { "deploymentEnabled": false }`, so Git pushes alone do NOT
+   deploy the frontend — deploy with `vercel --prod` or the CI deploy
+   hook below, or remove that setting to re-enable Vercel's Git
+   integration.
 
 ### Cross-domain cookies (October 2026 update)
 
@@ -704,6 +713,33 @@ Two fixes ship together; use BOTH:
 Known limitation with direct (un-proxied) cross-domain calls: Safari blocks
 third-party cookies entirely, so logins fail there regardless of SameSite.
 The same-origin proxy removes the problem instead of fighting it.
+
+### Blank page after the first second (October 2026 fix)
+
+Symptom: the deployed site paints for less than a second, then goes white.
+
+Cause: `/api/*` was not reaching Render. An unset or misspelled
+`RENDER_API_URL` makes the rewrite fall through to the SPA catch-all, so
+`/api/v1/products` answered **200 with `index.html`**. The client treated
+that as JSON, read `res.data.products` (`undefined`), then called
+`products.map(...)` during render; React unmounted the tree on the thrown
+error and left a blank page.
+
+Three guards now ship with the client:
+
+* `src/services/api.js` rejects any API response whose body is HTML, so
+  callers take their error path instead of reading undefined fields.
+* The landing data readers (`Home`, `useBrands`, `useRatings`) only accept
+  arrays/objects and fall back to empty states.
+* `src/components/ErrorBoundary.jsx` wraps the app, so any future render
+  error shows a reload card instead of a blank page.
+
+If the blank page ever reappears, check in this order: `RENDER_API_URL`
+is set and correct in Vercel (no trailing `/api/v1`), `VITE_API_URL` is
+empty, Deployment Protection is off, and the API answers
+`https://<render-host>/health` directly. A Browser devtools
+Network tab showing `text/html` for `/api/v1/*` confirms a routing
+problem, not a React problem.
 
 The CI workflow's gated deploy job (`.github/workflows/ci.yml`) triggers
 Render and Vercel deploy hooks after all tests pass — add

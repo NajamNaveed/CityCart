@@ -1,19 +1,8 @@
 {
-  "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "$RENDER_API_URL/api/:path*"
-    },
-    {
-      "source": "/socket.io/:path*",
-      "destination": "$RENDER_API_URL/socket.io/:path*"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
+  "routes": [
+    { "src": "/api/(.*)", "dest": "${RENDER_API_URL}/api/$1", "env": ["RENDER_API_URL"] },
+    { "src": "/socket.io/(.*)", "dest": "${RENDER_API_URL}/socket.io/$1", "env": ["RENDER_API_URL"] },
+    { "src": "/(.*)", "dest": "/index.html" }
   ],
-  "git": {
-    "deploymentEnabled": false
-  }
+  "git": { "deploymentEnabled": false }
 }

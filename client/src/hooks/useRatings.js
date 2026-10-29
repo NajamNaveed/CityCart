@@ -14,7 +14,7 @@ export function useRatings(productIds) {
     let active = true
     api
       .get('/reviews/summary', { params: { productIds: key } })
-      .then((res) => active && setState({ key, ratings: res.data.ratings }))
+      .then((res) => active && setState({ key, ratings: res.data?.ratings || {} }))
       .catch(() => active && setState({ key, ratings: {} }))
     return () => {
       active = false

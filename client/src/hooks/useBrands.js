@@ -10,7 +10,7 @@ export function useBrands(cityId) {
     let active = true
     api
       .get('/brands', { params: cityId ? { cityId } : {} })
-      .then((res) => active && setState({ key, brands: res.data.brands }))
+      .then((res) => active && setState({ key, brands: Array.isArray(res.data?.brands) ? res.data.brands : [] }))
       .catch(() => active && setState({ key, brands: [] }))
     return () => {
       active = false

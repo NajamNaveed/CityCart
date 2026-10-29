@@ -5,8 +5,9 @@
 # secrets in the dashboard (sync: false means "ask at deploy time").
 #
 # The client deploys separately on Vercel (framework auto-detected, SPA
-# rewrites in client/vercel.json). After both are live, set each side's
-# origin: CLIENT_URL on this service, VITE_API_URL in the Vercel build.
+# routes in client/vercel.json). After both are live, set CLIENT_URL on this
+# service and RENDER_API_URL in Vercel; leave VITE_API_URL empty there so the
+# browser calls the Vercel domain and the auth cookie stays first-party.
 
 services:
   - type: web
