@@ -16,6 +16,7 @@ const ADMIN_PERMISSIONS = Object.freeze({
   ORDERS: 'admin.orders',
   REVIEWS: 'admin.reviews',
   LOCATIONS: 'admin.locations', // cities and blocks (areas)
+  CATALOG: 'admin.catalog', // global categories and the shared product catalogue
   SETTINGS: 'admin.settings',
   ANALYTICS: 'admin.analytics',
   PAYMENTS: 'admin.payments', // gateway review list and payment status

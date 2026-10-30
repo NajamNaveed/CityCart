@@ -159,6 +159,30 @@ describe('POST /api/v1/products/import', () => {
     expect(byRow[7]).toMatch(/Same product name as row 2/);
   });
 
+  it('uses the global categories: rejects a parent with subcategories and an ambiguous name', async () => {
+    const { headers } = asBrandAdmin();
+    const grocery = { _id: oid(), name: 'Grocery', slug: 'grocery', parentId: null };
+    const ghee = { _id: oid(), name: 'Ghee', slug: 'ghee', parentId: grocery._id };
+    const otherParent = { _id: oid(), name: 'Bakery', slug: 'bakery', parentId: null };
+    const otherOther = { _id: oid(), name: 'Other', slug: 'other', parentId: grocery._id };
+    const bakeryOther = { _id: oid(), name: 'Other', slug: 'other', parentId: otherParent._id };
+    Category.find.mockResolvedValue([grocery, ghee, otherParent, otherOther, bakeryOther]);
+    const csv = [
+      HEADER,
+      'Dalda Ghee 1kg,,Ghee,1200,,,,,,,',
+      'Loose Item,,Grocery,100,,,,,,,',
+      'Mystery,,Other,100,,,,,,,',
+    ].join('\n');
+
+    const res = await post(headers, csv);
+
+    expect(res.body.created).toBe(1);
+    const byRow = Object.fromEntries(res.body.errors.map((e) => [e.row, e.messages.join(' ')]));
+    expect(byRow[3]).toMatch(/has subcategories/);
+    expect(byRow[4]).toMatch(/more than one parent/);
+    expect(Category.find).toHaveBeenCalledWith({ isActive: true }); // no brand filter any more
+  });
+
   it('updates an existing product matched by SKU instead of duplicating it', async () => {
     const { user, headers } = asBrandAdmin();
     const existing = { _id: oid(), brandId: user.brandId, sku: 'ML-1', slug: 'mehrunisa-lawn', save: jest.fn(async function s() { return this; }) };

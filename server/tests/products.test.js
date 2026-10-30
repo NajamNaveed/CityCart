@@ -412,11 +412,11 @@ describe('POST /api/v1/products', () => {
     expect(created.brandId).not.toBe(spoofed);
   });
 
-  it('denies a cross-brand category reference with 400', async () => {
+  it('rejects an inactive category with 400 (categories are global, but must be active)', async () => {
     const brandId = oid();
     const categoryId = oid();
     const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
-    Category.findById.mockResolvedValue({ _id: categoryId, brandId: oid() });
+    Category.findById.mockResolvedValue({ _id: categoryId, isActive: false });
 
     const res = await request(app)
       .post('/api/v1/products')
@@ -425,6 +425,41 @@ describe('POST /api/v1/products', () => {
 
     expect(res.status).toBe(400);
     expect(Product.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a category that still has subcategories with 400 (choose a leaf)', async () => {
+    const brandId = oid();
+    const categoryId = oid();
+    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
+    Category.findById.mockResolvedValue({ _id: categoryId, isActive: true, parentId: null });
+    Category.countDocuments.mockResolvedValue(3);
+
+    const res = await request(app)
+      .post('/api/v1/products')
+      .set(...asUser(admin))
+      .send(validBody(categoryId));
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/subcategory/i);
+    expect(Category.countDocuments).toHaveBeenCalledWith({ parentId: categoryId, isActive: true });
+    expect(Product.create).not.toHaveBeenCalled();
+  });
+
+  it('accepts any active leaf category, whichever brand uses it', async () => {
+    const brandId = oid();
+    const categoryId = oid();
+    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
+    Category.findById.mockResolvedValue({ _id: categoryId, isActive: true, parentId: oid() });
+    Category.countDocuments.mockResolvedValue(0);
+    Product.findOne.mockResolvedValue(null);
+    Product.create.mockImplementation(async (doc) => ({ _id: oid(), ...doc }));
+
+    const res = await request(app)
+      .post('/api/v1/products')
+      .set(...asUser(admin))
+      .send(validBody(categoryId));
+
+    expect(res.status).toBe(201);
   });
 
   it('rejects a nonexistent category with 400', async () => {
@@ -692,13 +727,13 @@ describe('PATCH /api/v1/products/:id', () => {
     expect(doc.categoryId).toBe(newCategoryId.toString());
   });
 
-  it('denies changing to a cross-brand category with 400', async () => {
+  it('denies changing to an inactive category with 400', async () => {
     const brandId = oid();
     const productId = oid();
     const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
     const save = jest.fn();
     Product.findById.mockResolvedValue({ _id: productId, brandId, save });
-    Category.findById.mockResolvedValue({ _id: oid(), brandId: oid() });
+    Category.findById.mockResolvedValue({ _id: oid(), isActive: false });
 
     const res = await request(app)
       .patch(`/api/v1/products/${productId.toString()}`)

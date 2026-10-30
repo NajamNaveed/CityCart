@@ -21,15 +21,6 @@ export const PERMISSION_GROUPS = [
     ],
   },
   {
-    title: 'Categories',
-    items: [
-      ['categories.view', 'See categories'],
-      ['categories.create', 'Add categories'],
-      ['categories.update', 'Rename categories'],
-      ['categories.delete', 'Remove categories'],
-    ],
-  },
-  {
     title: 'Stock',
     items: [
       ['inventory.view', 'See stock levels'],
@@ -87,8 +78,8 @@ export const PRESETS = [
   ['Order handler', ['orders.view', 'orders.manage', 'delivery.view', 'delivery.manage', 'riders.view']],
   [
     'Catalogue manager',
-    ['products.view', 'products.create', 'products.update', 'categories.view', 'categories.create', 'categories.update', 'inventory.view', 'inventory.manage'],
+    ['products.view', 'products.create', 'products.update', 'inventory.view', 'inventory.manage'],
   ],
   ['Customer support', ['messages.view', 'messages.manage', 'products.view', 'orders.view']],
-  ['View only', ['products.view', 'categories.view', 'inventory.view', 'orders.view', 'delivery.view']],
+  ['View only', ['products.view', 'inventory.view', 'orders.view', 'delivery.view']],
 ]

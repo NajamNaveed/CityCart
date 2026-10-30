@@ -241,12 +241,9 @@ Food
 Accessories
 ```
 
-Categories may be:
-
-* Platform-wide
-* Brand-specific
-
-The implementation must clearly distinguish between these two types.
+Categories are **platform-wide**: one tree (category, then subcategory) managed by
+the super admin. Brands do not create categories; they choose one for each
+product. (Marketplace v2, Phase 1 — see docs/22-marketplace-v2-plan.md.)
 
 Brand-specific categories must remain inside their brand's tenant boundary.
 

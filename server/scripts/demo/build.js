@@ -116,6 +116,7 @@ function buildDataset({ now = new Date(), hashes }) {
 
   // ── brands, stores, categories, products, inventory, staff ──
   const brands = [];
+  const globalCategoryByKey = new Map();
   for (const b of BRANDS) {
     const createdAt = ago(b.ageDays * DAY);
     const brandId = new ObjectId();
@@ -161,15 +162,25 @@ function buildDataset({ now = new Date(), hashes }) {
       return { def: br, doc };
     });
 
+    // Categories are GLOBAL (one tree for the platform). Each brand's category keys
+    // map onto shared documents, merged by "parent > name", so two brands that both
+    // sell in "Lawn Collection" use the very same category.
     const categoryByKey = {};
     for (const c of b.categories) {
-      const doc = {
-        _id: new ObjectId(), brandId, name: c.name, slug: slugify(c.name), description: c.description,
-        image: photo(`${b.key} ${c.key}`, 3, 800, 600), parentId: c.parent ? categoryByKey[c.parent]._id : null,
-        isActive: c.isActive !== false, createdAt: new Date(createdAt.getTime() + HOUR), updatedAt: new Date(createdAt.getTime() + HOUR),
-      };
+      const parentName = c.parent ? b.categories.find((x) => x.key === c.parent).name : '';
+      const globalKey = `${parentName}>${c.name}`;
+      let doc = globalCategoryByKey.get(globalKey);
+      if (!doc) {
+        doc = {
+          _id: new ObjectId(), name: c.name, slug: slugify(c.name), description: c.description,
+          image: photo(`${b.key} ${c.key}`, 3, 800, 600), parentId: c.parent ? categoryByKey[c.parent]._id : null,
+          order: ds.categories.length, isActive: c.isActive !== false,
+          createdAt: new Date(createdAt.getTime() + HOUR), updatedAt: new Date(createdAt.getTime() + HOUR),
+        };
+        globalCategoryByKey.set(globalKey, doc);
+        ds.categories.push(doc);
+      }
       categoryByKey[c.key] = doc;
-      ds.categories.push(doc);
     }
 
     const products = b.products.map((p, i) => {

@@ -167,20 +167,25 @@ function FormBody({ id, product, inventory, categories, branches }) {
             </label>
             <select id="categoryId" name="categoryId" value={form.categoryId} onChange={onChange} className={`h-11 ${inputClass} ${fieldErrors.categoryId ? 'border-clay' : ''}`} required>
               <option value="">Choose a category</option>
-              {categories.map((c) => (
-                <option key={c._id} value={c._id}>
-                  {c.name}
-                </option>
-              ))}
+              {categories.map((c) =>
+                c.children.length > 0 ? (
+                  <optgroup key={c._id} label={c.name}>
+                    {c.children.map((child) => (
+                      <option key={child._id} value={child._id}>
+                        {child.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : (
+                  <option key={c._id} value={c._id}>
+                    {c.name}
+                  </option>
+                )
+              )}
             </select>
             {fieldErrors.categoryId && <p className="mt-1.5 text-xs text-clay">{fieldErrors.categoryId}</p>}
             {categories.length === 0 && (
-              <p className="mt-1.5 text-xs text-muted">
-                You need a category first.{' '}
-                <Link to="/brand/categories" className="font-medium text-pine underline">
-                  Create one
-                </Link>
-              </p>
+              <p className="mt-1.5 text-xs text-muted">No categories exist yet. Ask the CityCart admin to add some.</p>
             )}
           </div>
           <div>
@@ -315,14 +320,13 @@ function FormBody({ id, product, inventory, categories, branches }) {
 
 export default function ProductForm() {
   const { id } = useParams()
-  const { user } = useAuth()
   const [data, setData] = useState({ key: null, product: null, inventory: null, categories: [], branches: [], error: '' })
   const key = id || 'new'
 
   useEffect(() => {
     let active = true
     Promise.all([
-      api.get('/categories', { params: { brandId: user.brandId } }),
+      api.get('/categories/tree'),
       id ? api.get(`/products/mine/${id}`) : Promise.resolve(null),
       // Branches are optional here: a failure just hides the picker.
       api.get('/branches/mine').catch(() => ({ data: { branches: [] } })),
@@ -336,7 +340,7 @@ export default function ProductForm() {
     return () => {
       active = false
     }
-  }, [id, key, user.brandId])
+  }, [id, key])
 
   if (data.key !== key)
     return (

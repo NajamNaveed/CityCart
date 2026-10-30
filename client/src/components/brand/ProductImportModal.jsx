@@ -56,7 +56,7 @@ export default function ProductImportModal({ open, onClose, onImported }) {
         Products without a status are saved as drafts.
       </p>
       <ul className="mt-3 list-disc space-y-1 pl-5 text-[12.5px] text-muted">
-        <li>Required columns: name, category, price. Categories and branches must already exist (use their names).</li>
+        <li>Required columns: name, category, price. The category must be a CityCart category (use its name); branches must already exist.</li>
         <li>Separate several photos or branches with a | sign. Leave branches empty to sell at all branches.</li>
         <li>Up to 500 products per file.</li>
       </ul>

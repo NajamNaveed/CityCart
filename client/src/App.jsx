@@ -35,7 +35,6 @@ const BrandLayout = lazy(() => import('./components/brand/BrandLayout'))
 const Overview = lazy(() => import('./pages/brand/Overview'))
 const BrandProducts = lazy(() => import('./pages/brand/Products'))
 const ProductForm = lazy(() => import('./pages/brand/ProductForm'))
-const Categories = lazy(() => import('./pages/brand/Categories'))
 const BrandOrders = lazy(() => import('./pages/brand/Orders'))
 const BrandMessages = lazy(() => import('./pages/brand/Messages'))
 const BrandOrderDetail = lazy(() => import('./pages/brand/OrderDetail'))
@@ -55,6 +54,7 @@ const AdminOrders = lazy(() => import('./pages/admin/Orders'))
 const AdminOrderDetail = lazy(() => import('./pages/admin/OrderDetail'))
 const AdminCities = lazy(() => import('./pages/admin/Cities'))
 const AdminBlocks = lazy(() => import('./pages/admin/Blocks'))
+const AdminCategories = lazy(() => import('./pages/admin/Categories'))
 const AdminSettings = lazy(() => import('./pages/admin/Settings'))
 const AdminAnalytics = lazy(() => import('./pages/admin/Analytics'))
 const AdminUsers = lazy(() => import('./pages/admin/Users'))
@@ -138,7 +138,6 @@ function App() {
                     <Route path="products" element={<BrandProducts />} />
                     <Route path="products/new" element={<ProductForm />} />
                     <Route path="products/:id" element={<ProductForm />} />
-                    <Route path="categories" element={<Categories />} />
                     <Route path="orders" element={<BrandOrders />} />
                     <Route path="messages" element={<BrandMessages />} />
                     <Route path="orders/:id" element={<BrandOrderDetail />} />
@@ -170,6 +169,7 @@ function App() {
                     <Route path="reviews" element={<AdminReviews />} />
                     <Route path="cities" element={<AdminCities />} />
                     <Route path="blocks" element={<AdminBlocks />} />
+                    <Route path="categories" element={<AdminCategories />} />
                     <Route path="settings" element={<AdminSettings />} />
                     <Route path="analytics" element={<AdminAnalytics />} />
                     <Route path="users" element={<AdminUsers />} />

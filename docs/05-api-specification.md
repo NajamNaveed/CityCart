@@ -562,6 +562,10 @@ Base:
 /api/v1/categories
 ```
 
+Categories are global (one tree for the platform, two levels deep). Reading is
+public. Writing needs the super admin, or an admin partner with `admin.catalog`
+(a read-only partner cannot write). Brands cannot create or edit categories.
+
 ## List Categories
 
 ```text
@@ -571,10 +575,20 @@ GET /api/v1/categories
 Query:
 
 ```text
-?brandId=
+?parentId=
 ```
 
-Public users may retrieve active categories.
+Public users may retrieve active categories only.
+
+---
+
+## Category Tree
+
+```text
+GET /api/v1/categories/tree
+```
+
+Returns the whole active tree: top-level categories, each with `children`.
 
 ---
 
@@ -592,13 +606,12 @@ GET /api/v1/categories/:id
 POST /api/v1/categories
 ```
 
-Required:
+Body: `name` (required), `description`, `image`, `parentId`, `order`.
 
-```text
-categories.create
-```
+Required: super admin, or admin partner with `admin.catalog`.
 
-The server determines the user's brand.
+`parentId` must be a top-level category (two levels only). A name must be
+unique among siblings (409 otherwise).
 
 ---
 
@@ -608,13 +621,11 @@ The server determines the user's brand.
 PATCH /api/v1/categories/:id
 ```
 
-Required:
+Required: super admin, or admin partner with `admin.catalog`.
 
-```text
-categories.update
-```
-
-The category must belong to the user's brand.
+`slug` never changes. A category that has subcategories cannot be moved under
+another category. Deactivating (`isActive: false`) is refused with 409 while
+products or subcategories depend on it.
 
 ---
 
@@ -624,13 +635,10 @@ The category must belong to the user's brand.
 DELETE /api/v1/categories/:id
 ```
 
-Required:
+Required: super admin, or admin partner with `admin.catalog`.
 
-```text
-categories.delete
-```
-
-The backend should check whether products or child categories depend on the category before deleting it.
+Soft delete (deactivation). Refused with 409 while products or child categories
+depend on the category.
 
 ---
 
@@ -1294,6 +1302,7 @@ Every endpoint below that says "Super Admin only" (or "Super Admin") is now
 | `admin.orders`      | `/admin/orders` and admin order detail |
 | `admin.reviews`     | `/admin/reviews` and review moderation |
 | `admin.locations`   | city and block writes |
+| `admin.catalog`     | category writes (and, later, the shared catalogue) |
 | `admin.settings`    | `/admin/settings` |
 | `admin.analytics`   | `/admin/analytics` |
 | `admin.payments`    | `/payments/events` and receipt readers for platform admins |

@@ -190,16 +190,18 @@ async function getProductByIdRaw(id) {
 }
 
 /**
- * docs/04 §35 rule 3: "Product and category brand IDs must match."
- * A product may only reference a category belonging to the same brand.
- * A missing category and a cross-brand category are reported
- * identically, so the response never confirms that a category exists in
- * another tenant.
+ * Categories are global (docs/22). A product must point at an ACTIVE category
+ * that has no active subcategories (a "leaf"): the customer browses by leaf.
+ * A missing category and an unusable one are reported with clear messages.
  */
-async function assertCategoryBelongsToBrand(categoryId, brandId) {
+async function assertCategoryUsable(categoryId) {
   const category = await Category.findById(categoryId);
-  if (!category || category.brandId.toString() !== brandId.toString()) {
-    throw new ProductError(400, 'Invalid categoryId — category not found in your brand.');
+  if (!category || category.isActive === false) {
+    throw new ProductError(400, 'Invalid categoryId — category not found.');
+  }
+  const activeChildren = await Category.countDocuments({ parentId: category._id, isActive: true });
+  if (activeChildren > 0) {
+    throw new ProductError(400, 'Choose a subcategory — this category has subcategories.');
   }
 }
 
@@ -226,7 +228,7 @@ async function normalizeBranchIds(branchIds, brandId) {
 }
 
 async function createProduct(brandId, data) {
-  await assertCategoryBelongsToBrand(data.categoryId, brandId);
+  await assertCategoryUsable(data.categoryId);
   if (data.branchIds !== undefined) {
     data = { ...data, branchIds: await normalizeBranchIds(data.branchIds, brandId) };
   }
@@ -255,7 +257,7 @@ async function createProduct(brandId, data) {
  */
 async function applyProductUpdate(product, data) {
   if (data.categoryId) {
-    await assertCategoryBelongsToBrand(data.categoryId, product.brandId);
+    await assertCategoryUsable(data.categoryId);
   }
   if (data.branchIds !== undefined) {
     data = { ...data, branchIds: await normalizeBranchIds(data.branchIds, product.brandId) };

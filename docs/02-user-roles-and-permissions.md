@@ -162,12 +162,10 @@ products.delete
 
 ## 6.2 Category Permissions
 
-```text
-categories.view
-categories.create
-categories.update
-categories.delete
-```
+Categories are global (Marketplace v2, docs/22). Brand staff no longer have
+category permissions: only the super admin, or an admin partner with
+`admin.catalog`, manages the category tree. Brands choose from it when they list
+a product.
 
 ## 6.3 Inventory Permissions
 
@@ -278,7 +276,7 @@ partner by the Super Admin (`docs/21-next-features-plan.md` §G) and checked by
 
 ```text
 admin.brands      admin.users       admin.orders      admin.reviews
-admin.locations   admin.settings    admin.analytics    admin.payments
+admin.locations   admin.catalog     admin.settings     admin.analytics    admin.payments
 ```
 
 * The Super Admin is implicitly allowed in every area.
@@ -887,10 +885,6 @@ products.view
 products.create
 products.update
 products.delete
-categories.view
-categories.create
-categories.update
-categories.delete
 ```
 
 Bundles are shortcuts for assigning permissions.

@@ -10,7 +10,6 @@
 
 const P = {
   productsAll: ['products.view', 'products.create', 'products.update', 'products.delete'],
-  categoriesAll: ['categories.view', 'categories.create', 'categories.update', 'categories.delete'],
   orders: ['orders.view', 'orders.manage'],
   delivery: ['delivery.view', 'delivery.manage'],
   stock: ['inventory.view', 'inventory.manage'],
@@ -18,7 +17,7 @@ const P = {
   // The person who keeps the records in the Partner app: sees orders, deliveries, riders, receipts and cash,
   // can give a delivery to a rider and mark rider cash as received, and changes nothing else.
   records: ['orders.view', 'delivery.view', 'delivery.manage', 'riders.view', 'payments.view', 'payments.manage'],
-  viewOnly: ['products.view', 'categories.view', 'inventory.view', 'orders.view', 'delivery.view'],
+  viewOnly: ['products.view', 'inventory.view', 'orders.view', 'delivery.view'],
 }
 
 const CITIES = [
@@ -41,7 +40,7 @@ const BRANDS = [
     },
     staff: [
       { name: 'Usman Tariq', email: 'usman.tariq@citycart.demo', phone: '+92 321 6638120', jobTitle: 'Order Handler', permissions: [...P.orders, ...P.delivery, ...P.messages] },
-      { name: 'Fatima Noor', email: 'fatima.noor@citycart.demo', phone: '+92 333 6107754', jobTitle: 'Catalogue Manager', permissions: [...P.productsAll, ...P.categoriesAll, ...P.stock] },
+      { name: 'Fatima Noor', email: 'fatima.noor@citycart.demo', phone: '+92 333 6107754', jobTitle: 'Catalogue Manager', permissions: [...P.productsAll, ...P.stock] },
       { name: 'Hira Anwar', email: 'hira.anwar@citycart.demo', phone: '+92 331 2750946', jobTitle: 'Records Keeper', permissions: P.records },
     ],
     // Delivery riders (role RIDER): they sign in on the partner app and see only their own deliveries.
@@ -203,7 +202,7 @@ const BRANDS = [
       contact: { phone: '+92 41 8791 8830', email: 'studio@sukoonhome.pk' }, hours: { open: '10:00', close: '19:00', closed: ['sun'] }, isActive: true,
     },
     riders: [{ name: 'Kamran Ali', email: 'kamran.ali@citycart.demo', phone: '+92 311 5530287' }],
-    staff: [{ name: 'Maryam Javed', email: 'maryam.javed@citycart.demo', phone: '+92 300 4417762', jobTitle: 'Catalogue Assistant', permissions: ['products.view', 'products.create', 'products.update', 'categories.view', 'inventory.view', 'inventory.manage'] }],
+    staff: [{ name: 'Maryam Javed', email: 'maryam.javed@citycart.demo', phone: '+92 300 4417762', jobTitle: 'Catalogue Assistant', permissions: ['products.view', 'products.create', 'products.update', 'inventory.view', 'inventory.manage'] }],
     categories: [
       { key: 'bedding', name: 'Bedding', description: 'Sheets, quilts and bed covers in natural fabrics.' },
       { key: 'cushions', name: 'Cushions & Rugs', description: 'Cushion covers, throws and handwoven rugs.' },
@@ -303,7 +302,7 @@ const BRANDS = [
       address: { addressLine: 'Shop 9, Peoples Colony No. 1 Market', city: 'Faisalabad', state: 'Punjab', country: 'Pakistan', postalCode: '38000' },
       contact: { phone: '+92 41 8553 981', email: 'studio@naqshjewellery.pk' }, hours: { open: '12:00', close: '21:00', closed: ['mon'] }, isActive: true,
     },
-    staff: [{ name: 'Komal Shahid', email: 'komal.shahid@citycart.demo', phone: '+92 301 8832006', jobTitle: 'Studio Manager', permissions: [...P.productsAll, ...P.categoriesAll, ...P.stock, ...P.orders, ...P.delivery, 'employees.view'] }],
+    staff: [{ name: 'Komal Shahid', email: 'komal.shahid@citycart.demo', phone: '+92 301 8832006', jobTitle: 'Studio Manager', permissions: [...P.productsAll, ...P.stock, ...P.orders, ...P.delivery, 'employees.view'] }],
     categories: [
       { key: 'earrings', name: 'Earrings', description: 'Jhumkas, studs and statement drops.' },
       { key: 'necklaces', name: 'Necklaces & Sets', description: 'Chokers, long haar and full bridal sets.' },

@@ -92,7 +92,7 @@ async function exportBrandProducts(brandId) {
   const products = await Product.find({ brandId, status: { $ne: 'ARCHIVED' } }).sort({ createdAt: 1 }).limit(MAX_EXPORT_ROWS);
   const ids = products.map((p) => p._id);
   const [categories, branches, inventories] = await Promise.all([
-    Category.find({ brandId }),
+    Category.find({}),
     Branch.find({ brandId }),
     ids.length ? Inventory.find({ brandId, productId: { $in: ids } }) : [],
   ]);
@@ -154,15 +154,24 @@ async function importBrandProducts(brandId, text, { dryRun = false, canManageSto
   }
 
   const [categories, branches, existing, inventories] = await Promise.all([
-    Category.find({ brandId }),
+    Category.find({ isActive: true }),
     Branch.find({ brandId }),
     Product.find({ brandId }),
     Inventory.find({ brandId }),
   ]);
+  // Categories are global. A name that appears under two parents is ambiguous,
+  // and a category with subcategories is not allowed (choose the subcategory).
+  const parentIds = new Set(categories.filter((c) => c.parentId).map((c) => String(c.parentId)));
   const categoryByKey = new Map();
+  const ambiguousKeys = new Set();
+  const addKey = (key, c) => {
+    if (!key) return;
+    if (categoryByKey.has(key) && String(categoryByKey.get(key)._id) !== String(c._id)) ambiguousKeys.add(key);
+    categoryByKey.set(key, c);
+  };
   categories.forEach((c) => {
-    categoryByKey.set(c.name.trim().toLowerCase(), c);
-    categoryByKey.set(String(c.slug || '').toLowerCase(), c);
+    addKey(c.name.trim().toLowerCase(), c);
+    addKey(String(c.slug || '').toLowerCase(), c);
   });
   const branchByName = new Map(branches.map((b) => [b.name.trim().toLowerCase(), b]));
   const bySku = new Map(existing.filter((p) => p.sku).map((p) => [p.sku, p]));
@@ -196,8 +205,11 @@ async function importBrandProducts(brandId, text, { dryRun = false, canManageSto
     if (sku && seenSku.has(sku)) messages.push(`Same SKU as row ${seenSku.get(sku)}.`);
 
     // ---- references
-    const category = categoryByKey.get(get('category').toLowerCase());
-    if (!category) messages.push(`Unknown category "${get('category')}". Create it first under Categories.`);
+    const categoryKey = get('category').toLowerCase();
+    const category = categoryByKey.get(categoryKey);
+    if (!category) messages.push(`Unknown category "${get('category')}". Use a category name from the CityCart category list.`);
+    else if (ambiguousKeys.has(categoryKey)) messages.push(`Category "${get('category')}" exists under more than one parent. Ask the platform admin for the exact name.`);
+    else if (parentIds.has(String(category._id))) messages.push(`"${get('category')}" has subcategories. Use one of its subcategories.`);
 
     const branchIds = [];
     for (const label of splitList(get('branches'))) {

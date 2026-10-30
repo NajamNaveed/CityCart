@@ -17,7 +17,6 @@ import {
   Truck,
   Users,
   Warehouse,
-  UtensilsCrossed,
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useChat } from '../../hooks/useChat'
@@ -30,7 +29,6 @@ import Menu from '../ui/Menu'
 const NAV = [
   ['/brand', 'Overview', true, null, LayoutDashboard],
   ['/brand/products', 'Products', false, 'products.view', ShoppingBag],
-  ['/brand/categories', 'Categories', false, 'categories.view', UtensilsCrossed],
   ['/brand/orders', 'Orders', false, 'orders.view', Package],
   ['/brand/messages', 'Messages', false, 'messages.view', MessageCircle],
   ['/brand/deliveries', 'Deliveries', false, 'delivery.view', Truck],

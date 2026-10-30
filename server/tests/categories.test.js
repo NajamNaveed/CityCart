@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 jest.mock('../src/models/user.model');
 jest.mock('../src/models/employee.model');
 jest.mock('../src/models/category.model');
-jest.mock('../src/models/brand.model');
+jest.mock('../src/models/adminPartner.model');
 // Factory mock: automock would turn Product.STATUSES into an empty array,
 // which product.validator.js (loaded via app) needs for its status enum.
 jest.mock('../src/models/product.model', () => {
@@ -20,23 +20,18 @@ jest.mock('../src/models/product.model', () => {
 });
 
 const User = require('../src/models/user.model');
-const Employee = require('../src/models/employee.model');
 const Category = require('../src/models/category.model');
-const Brand = require('../src/models/brand.model');
+const AdminPartner = require('../src/models/adminPartner.model');
 const Product = require('../src/models/product.model');
 const app = require('../src/app');
 const { ROLES } = require('../src/config/roles');
-const { PERMISSIONS } = require('../src/config/permissions');
+const { ADMIN_PERMISSIONS } = require('../src/config/adminPermissions');
 const { getAuthCookie } = require('./helpers/testAuth');
 
+const oid = () => new mongoose.Types.ObjectId();
+
 function makeFakeUser(overrides = {}) {
-  return {
-    _id: new mongoose.Types.ObjectId(),
-    role: ROLES.CUSTOMER,
-    brandId: undefined,
-    isActive: true,
-    ...overrides,
-  };
+  return { _id: oid(), role: ROLES.CUSTOMER, brandId: undefined, isActive: true, ...overrides };
 }
 
 function asUser(user) {
@@ -44,8 +39,27 @@ function asUser(user) {
   return ['Cookie', getAuthCookie(user)];
 }
 
-function oid() {
-  return new mongoose.Types.ObjectId();
+const superAdmin = () => makeFakeUser({ role: ROLES.SUPER_ADMIN });
+
+/** A partner account holding the given admin permissions. */
+function asPartner(permissions, over = {}) {
+  const user = makeFakeUser({ role: ROLES.ADMIN_PARTNER });
+  AdminPartner.findOne.mockResolvedValue({
+    _id: oid(),
+    userId: user._id,
+    permissions,
+    readOnly: false,
+    isActive: true,
+    ...over,
+  });
+  return asUser(user);
+}
+
+/** A saved Category document with a working save(). */
+function fakeCategory(over = {}) {
+  const doc = { _id: oid(), name: 'Grocery', slug: 'grocery', parentId: null, isActive: true, ...over };
+  doc.save = jest.fn().mockImplementation(async () => doc);
+  return doc;
 }
 
 beforeEach(() => {
@@ -54,546 +68,417 @@ beforeEach(() => {
 
 describe('GET /api/v1/categories (public)', () => {
   it('lists active categories with no authentication', async () => {
-    const activeBrand = oid();
-    Brand.find.mockResolvedValue([{ _id: activeBrand }]);
-    const sort = jest.fn().mockResolvedValue([{ name: 'Phones' }]);
+    const sort = jest.fn().mockResolvedValue([{ name: 'Grocery' }, { name: 'Bakery' }]);
     Category.find.mockReturnValue({ sort });
 
     const res = await request(app).get('/api/v1/categories');
 
     expect(res.status).toBe(200);
-    expect(res.body.categories).toHaveLength(1);
-    // Only categories of ACTIVE brands are public.
-    expect(Brand.find).toHaveBeenCalledWith({ status: 'ACTIVE' }, '_id');
-    expect(Category.find).toHaveBeenCalledWith({
-      brandId: { $in: [activeBrand] },
-      isActive: true,
-    });
+    expect(res.body.categories).toHaveLength(2);
+    expect(Category.find).toHaveBeenCalledWith({ isActive: true });
+    expect(sort).toHaveBeenCalledWith({ order: 1, name: 1 });
   });
 
-  it('filters by brandId', async () => {
-    const brandId = oid().toString();
-    Brand.find.mockResolvedValue([{ _id: brandId }]);
+  it('filters by parentId', async () => {
+    const parentId = oid().toString();
     Category.find.mockReturnValue({ sort: jest.fn().mockResolvedValue([]) });
 
-    const res = await request(app).get(`/api/v1/categories?brandId=${brandId}`);
+    const res = await request(app).get(`/api/v1/categories?parentId=${parentId}`);
 
     expect(res.status).toBe(200);
-    expect(Brand.find).toHaveBeenCalledWith({ status: 'ACTIVE', _id: brandId }, '_id');
-    expect(Category.find).toHaveBeenCalledWith({ brandId: { $in: [brandId] }, isActive: true });
+    expect(Category.find).toHaveBeenCalledWith({ isActive: true, parentId });
   });
 
-  it('rejects an invalid brandId with 400', async () => {
-    const res = await request(app).get('/api/v1/categories?brandId=nope');
+  it('rejects an invalid parentId with 400', async () => {
+    const res = await request(app).get('/api/v1/categories?parentId=nope');
     expect(res.status).toBe(400);
+    expect(Category.find).not.toHaveBeenCalled();
+  });
+
+  it('ignores a client-supplied ?isActive=false and still returns active categories only', async () => {
+    Category.find.mockReturnValue({ sort: jest.fn().mockResolvedValue([]) });
+    await request(app).get('/api/v1/categories?isActive=false');
+    expect(Category.find).toHaveBeenCalledWith({ isActive: true });
+  });
+});
+
+describe('GET /api/v1/categories/tree (public)', () => {
+  it('returns the whole active tree, not shadowed by /:id', async () => {
+    const parent = { _id: oid(), name: 'Grocery' };
+    const child = { _id: oid(), name: 'Cooking Oil & Ghee', parentId: parent._id };
+    Category.find.mockReturnValue({ sort: jest.fn().mockResolvedValue([parent, child]) });
+
+    const res = await request(app).get('/api/v1/categories/tree');
+
+    expect(res.status).toBe(200);
+    expect(res.body.categories).toHaveLength(1);
+    expect(res.body.categories[0].children[0].name).toBe('Cooking Oil & Ghee');
+    expect(Category.find).toHaveBeenCalledWith({ isActive: true });
   });
 });
 
 describe('GET /api/v1/categories/:id (public)', () => {
   it('returns an active category', async () => {
     const id = oid().toString();
-    Category.findOne.mockResolvedValue({ _id: id, name: 'Phones', isActive: true });
-
+    Category.findOne.mockResolvedValue({ _id: id, name: 'Grocery' });
     const res = await request(app).get(`/api/v1/categories/${id}`);
-
     expect(res.status).toBe(200);
     expect(Category.findOne).toHaveBeenCalledWith({ _id: id, isActive: true });
   });
 
-  it('returns 404 for a nonexistent or inactive category', async () => {
+  it('returns 404 for a missing or inactive category', async () => {
     Category.findOne.mockResolvedValue(null);
-    const res = await request(app).get(`/api/v1/categories/${oid().toString()}`);
+    const res = await request(app).get(`/api/v1/categories/${oid()}`);
     expect(res.status).toBe(404);
   });
 
   it('rejects an invalid id with 400', async () => {
-    const res = await request(app).get('/api/v1/categories/not-an-id');
-    expect(res.status).toBe(400);
+    expect((await request(app).get('/api/v1/categories/not-an-id')).status).toBe(400);
   });
 });
 
-describe('POST /api/v1/categories', () => {
-  it('rejects an unauthenticated request with 401', async () => {
-    const res = await request(app).post('/api/v1/categories').send({ name: 'Phones' });
-    expect(res.status).toBe(401);
-  });
-
-  it('creates a category for a BRAND_ADMIN using the authenticated brand', async () => {
-    const brandId = oid();
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
+describe('POST /api/v1/categories (platform admins only)', () => {
+  it('creates a top-level category as SUPER_ADMIN', async () => {
     Category.findOne.mockResolvedValue(null);
-    Category.create.mockImplementation(async (data) => data);
+    Category.create.mockImplementation(async (doc) => ({ _id: oid(), ...doc }));
 
     const res = await request(app)
       .post('/api/v1/categories')
-      .set(...asUser(admin))
-      .send({ name: 'Phones' });
+      .set(...asUser(superAdmin()))
+      .send({ name: 'Cooking Oil & Ghee' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.category.slug).toBe('cooking-oil-ghee');
+    expect(Category.create).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Cooking Oil & Ghee', parentId: null })
+    );
+    // The category has no brand at all.
+    expect(Category.create.mock.calls[0][0].brandId).toBeUndefined();
+  });
+
+  it('lets a partner with admin.catalog create one', async () => {
+    Category.findOne.mockResolvedValue(null);
+    Category.create.mockImplementation(async (doc) => ({ _id: oid(), ...doc }));
+
+    const res = await request(app)
+      .post('/api/v1/categories')
+      .set(...asPartner([ADMIN_PERMISSIONS.CATALOG]))
+      .send({ name: 'Bakery' });
+
+    expect(res.status).toBe(201);
+  });
+
+  it('denies a partner without admin.catalog (403)', async () => {
+    const res = await request(app)
+      .post('/api/v1/categories')
+      .set(...asPartner([ADMIN_PERMISSIONS.LOCATIONS]))
+      .send({ name: 'Bakery' });
+    expect(res.status).toBe(403);
+    expect(Category.create).not.toHaveBeenCalled();
+  });
+
+  it('denies a read-only partner (403)', async () => {
+    const res = await request(app)
+      .post('/api/v1/categories')
+      .set(...asPartner([ADMIN_PERMISSIONS.CATALOG], { readOnly: true }))
+      .send({ name: 'Bakery' });
+    expect(res.status).toBe(403);
+    expect(Category.create).not.toHaveBeenCalled();
+  });
+
+  it('denies a BRAND_ADMIN (403): brands only choose from the tree', async () => {
+    const brandAdmin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId: oid() });
+    const res = await request(app)
+      .post('/api/v1/categories')
+      .set(...asUser(brandAdmin))
+      .send({ name: 'Bakery' });
+    expect(res.status).toBe(403);
+    expect(Category.create).not.toHaveBeenCalled();
+  });
+
+  it('denies a CUSTOMER (403) and rejects unauthenticated requests (401)', async () => {
+    const customer = makeFakeUser();
+    expect(
+      (await request(app).post('/api/v1/categories').set(...asUser(customer)).send({ name: 'X' })).status
+    ).toBe(403);
+    expect((await request(app).post('/api/v1/categories').send({ name: 'X' })).status).toBe(401);
+  });
+
+  it('rejects a missing name with 400', async () => {
+    const res = await request(app)
+      .post('/api/v1/categories')
+      .set(...asUser(superAdmin()))
+      .send({ description: 'no name' });
+    expect(res.status).toBe(400);
+    expect(Category.create).not.toHaveBeenCalled();
+  });
+
+  it('creates a subcategory under a top-level parent', async () => {
+    const parent = fakeCategory();
+    Category.findById.mockResolvedValue(parent);
+    Category.findOne.mockResolvedValue(null);
+    Category.create.mockImplementation(async (doc) => ({ _id: oid(), ...doc }));
+
+    const res = await request(app)
+      .post('/api/v1/categories')
+      .set(...asUser(superAdmin()))
+      .send({ name: 'Ghee', parentId: parent._id.toString() });
 
     expect(res.status).toBe(201);
     expect(Category.create).toHaveBeenCalledWith(
-      expect.objectContaining({ brandId: brandId.toString(), name: 'Phones', slug: 'phones' })
+      expect.objectContaining({ parentId: parent._id.toString(), slug: 'ghee' })
     );
   });
 
-  it('ignores a client-supplied brandId and uses the authenticated brand', async () => {
-    const brandId = oid();
-    const spoofed = oid().toString();
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
-    Category.findOne.mockResolvedValue(null);
-    Category.create.mockImplementation(async (data) => data);
-
-    const res = await request(app)
-      .post('/api/v1/categories')
-      .set(...asUser(admin))
-      .send({ name: 'Phones', brandId: spoofed });
-
-    expect(res.status).toBe(201);
-    const created = Category.create.mock.calls[0][0];
-    expect(created.brandId).toBe(brandId.toString());
-    expect(created.brandId).not.toBe(spoofed);
-  });
-
-  it('checks slug uniqueness scoped to the brand (brandId + slug)', async () => {
-    const brandId = oid();
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
-    Category.findOne.mockResolvedValue({ slug: 'phones' });
-
-    const res = await request(app)
-      .post('/api/v1/categories')
-      .set(...asUser(admin))
-      .send({ name: 'Phones' });
-
-    expect(res.status).toBe(409);
-    expect(Category.findOne).toHaveBeenCalledWith({ brandId: brandId.toString(), slug: 'phones' });
-    expect(Category.create).not.toHaveBeenCalled();
-  });
-
-  it('allows a BRAND_EMPLOYEE with categories.create', async () => {
-    const brandId = oid();
-    const employee = makeFakeUser({ role: ROLES.BRAND_EMPLOYEE, brandId });
-    Employee.findOne.mockResolvedValue({
-      isActive: true,
-      permissions: [PERMISSIONS.CATEGORIES_CREATE],
-    });
-    Category.findOne.mockResolvedValue(null);
-    Category.create.mockImplementation(async (data) => data);
-
-    const res = await request(app)
-      .post('/api/v1/categories')
-      .set(...asUser(employee))
-      .send({ name: 'Phones' });
-
-    expect(res.status).toBe(201);
-  });
-
-  it('denies a BRAND_EMPLOYEE without categories.create', async () => {
-    const employee = makeFakeUser({ role: ROLES.BRAND_EMPLOYEE, brandId: oid() });
-    Employee.findOne.mockResolvedValue({ isActive: true, permissions: [] });
-
-    const res = await request(app)
-      .post('/api/v1/categories')
-      .set(...asUser(employee))
-      .send({ name: 'Phones' });
-
-    expect(res.status).toBe(403);
-  });
-
-  it('denies CUSTOMER with 403', async () => {
-    const res = await request(app)
-      .post('/api/v1/categories')
-      .set(...asUser(makeFakeUser({ role: ROLES.CUSTOMER })))
-      .send({ name: 'Phones' });
-    expect(res.status).toBe(403);
-  });
-
-  it('denies a brand user with a missing brandId with 403', async () => {
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId: undefined });
-
-    const res = await request(app)
-      .post('/api/v1/categories')
-      .set(...asUser(admin))
-      .send({ name: 'Phones' });
-
-    expect(res.status).toBe(403);
-    expect(Category.create).not.toHaveBeenCalled();
-  });
-
-  it('returns 400 (not 500) for SUPER_ADMIN, who has no brand context', async () => {
-    const res = await request(app)
-      .post('/api/v1/categories')
-      .set(...asUser(makeFakeUser({ role: ROLES.SUPER_ADMIN })))
-      .send({ name: 'Phones' });
-
-    expect(res.status).toBe(400);
-    expect(Category.create).not.toHaveBeenCalled();
-  });
-
-  it('rejects validation errors (missing name) with 400', async () => {
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId: oid() });
-    const res = await request(app)
-      .post('/api/v1/categories')
-      .set(...asUser(admin))
-      .send({});
-    expect(res.status).toBe(400);
-  });
-
-  it('rejects an invalid parentId format with 400', async () => {
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId: oid() });
-    const res = await request(app)
-      .post('/api/v1/categories')
-      .set(...asUser(admin))
-      .send({ name: 'Phones', parentId: 'bad' });
-    expect(res.status).toBe(400);
-  });
-
-  it('rejects a nonexistent parent category with 400', async () => {
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId: oid() });
+  it('rejects a parent that does not exist (400)', async () => {
     Category.findById.mockResolvedValue(null);
-
     const res = await request(app)
       .post('/api/v1/categories')
-      .set(...asUser(admin))
-      .send({ name: 'Phones', parentId: oid().toString() });
-
-    expect(res.status).toBe(400);
-  });
-
-  it("rejects a parent category belonging to another brand with 400", async () => {
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId: oid() });
-    Category.findById.mockResolvedValue({ _id: oid(), brandId: oid() });
-
-    const res = await request(app)
-      .post('/api/v1/categories')
-      .set(...asUser(admin))
-      .send({ name: 'Phones', parentId: oid().toString() });
-
+      .set(...asUser(superAdmin()))
+      .send({ name: 'Ghee', parentId: oid().toString() });
     expect(res.status).toBe(400);
     expect(Category.create).not.toHaveBeenCalled();
   });
 
-  it('accepts a same-brand parent category', async () => {
-    const brandId = oid();
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
-    Category.findById.mockResolvedValue({ _id: oid(), brandId });
-    Category.findOne.mockResolvedValue(null);
-    Category.create.mockImplementation(async (data) => data);
-
+  it('rejects a parent that is itself a subcategory: two levels only (400)', async () => {
+    Category.findById.mockResolvedValue(fakeCategory({ parentId: oid() }));
     const res = await request(app)
       .post('/api/v1/categories')
-      .set(...asUser(admin))
-      .send({ name: 'Phones', parentId: oid().toString() });
+      .set(...asUser(superAdmin()))
+      .send({ name: 'Too deep', parentId: oid().toString() });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/two levels/i);
+    expect(Category.create).not.toHaveBeenCalled();
+  });
 
-    expect(res.status).toBe(201);
+  it('rejects an invalid parentId format (400)', async () => {
+    const res = await request(app)
+      .post('/api/v1/categories')
+      .set(...asUser(superAdmin()))
+      .send({ name: 'Ghee', parentId: 'nope' });
+    expect(res.status).toBe(400);
+  });
+
+  it('refuses a duplicate name among siblings (409), checked by parent + slug', async () => {
+    Category.findOne.mockResolvedValue({ _id: oid() });
+    const res = await request(app)
+      .post('/api/v1/categories')
+      .set(...asUser(superAdmin()))
+      .send({ name: 'Grocery' });
+    expect(res.status).toBe(409);
+    expect(Category.findOne).toHaveBeenCalledWith({ parentId: null, slug: 'grocery' });
+    expect(Category.create).not.toHaveBeenCalled();
+  });
+
+  it('maps a database duplicate-key race to 409', async () => {
+    Category.findOne.mockResolvedValue(null);
+    Category.create.mockRejectedValue(Object.assign(new Error('dup'), { code: 11000 }));
+    const res = await request(app)
+      .post('/api/v1/categories')
+      .set(...asUser(superAdmin()))
+      .send({ name: 'Grocery' });
+    expect(res.status).toBe(409);
   });
 });
 
 describe('PATCH /api/v1/categories/:id', () => {
-  it('rejects an unauthenticated request with 401', async () => {
-    const res = await request(app)
-      .patch(`/api/v1/categories/${oid().toString()}`)
-      .send({ name: 'X' });
-    expect(res.status).toBe(401);
-  });
-
-  it('allows a BRAND_ADMIN to update their own category', async () => {
-    const brandId = oid();
-    const categoryId = oid();
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
-    const save = jest.fn().mockResolvedValue(true);
-    Category.findById.mockResolvedValue({ _id: categoryId, brandId, name: 'Old', save });
+  it('updates a category as SUPER_ADMIN and never changes its slug', async () => {
+    const cat = fakeCategory();
+    Category.findById.mockResolvedValue(cat);
 
     const res = await request(app)
-      .patch(`/api/v1/categories/${categoryId.toString()}`)
-      .set(...asUser(admin))
-      .send({ name: 'New' });
+      .patch(`/api/v1/categories/${cat._id}`)
+      .set(...asUser(superAdmin()))
+      .send({ name: 'Groceries', slug: 'hacked', order: 3 });
 
     expect(res.status).toBe(200);
-    expect(save).toHaveBeenCalled();
+    expect(cat.name).toBe('Groceries');
+    expect(cat.order).toBe(3);
+    expect(cat.slug).toBe('grocery'); // slug is stripped by the validator
+    expect(cat.save).toHaveBeenCalled();
   });
 
-  it('denies Brand A updating a Brand B category with 403', async () => {
-    const categoryId = oid();
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId: oid() });
-    const save = jest.fn();
-    Category.findById.mockResolvedValue({ _id: categoryId, brandId: oid(), name: 'B', save });
+  it('lets a partner with admin.catalog update, and denies a BRAND_ADMIN', async () => {
+    const cat = fakeCategory();
+    Category.findById.mockResolvedValue(cat);
 
-    const res = await request(app)
-      .patch(`/api/v1/categories/${categoryId.toString()}`)
-      .set(...asUser(admin))
-      .send({ name: 'Hacked' });
+    const ok = await request(app)
+      .patch(`/api/v1/categories/${cat._id}`)
+      .set(...asPartner([ADMIN_PERMISSIONS.CATALOG]))
+      .send({ name: 'Groceries' });
+    expect(ok.status).toBe(200);
 
-    expect(res.status).toBe(403);
-    expect(save).not.toHaveBeenCalled();
+    const brandAdmin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId: oid() });
+    const denied = await request(app)
+      .patch(`/api/v1/categories/${cat._id}`)
+      .set(...asUser(brandAdmin))
+      .send({ name: 'Mine' });
+    expect(denied.status).toBe(403);
   });
 
-  it('allows an authorized BRAND_EMPLOYEE in the same brand', async () => {
-    const brandId = oid();
-    const categoryId = oid();
-    const employee = makeFakeUser({ role: ROLES.BRAND_EMPLOYEE, brandId });
-    Employee.findOne.mockResolvedValue({
-      isActive: true,
-      permissions: [PERMISSIONS.CATEGORIES_UPDATE],
-    });
-    Category.findById.mockResolvedValue({
-      _id: categoryId,
-      brandId,
-      save: jest.fn().mockResolvedValue(true),
-    });
-
-    const res = await request(app)
-      .patch(`/api/v1/categories/${categoryId.toString()}`)
-      .set(...asUser(employee))
-      .send({ name: 'New' });
-
-    expect(res.status).toBe(200);
-  });
-
-  it('denies a BRAND_EMPLOYEE without categories.update', async () => {
-    const employee = makeFakeUser({ role: ROLES.BRAND_EMPLOYEE, brandId: oid() });
-    Employee.findOne.mockResolvedValue({ isActive: true, permissions: [] });
-
-    const res = await request(app)
-      .patch(`/api/v1/categories/${oid().toString()}`)
-      .set(...asUser(employee))
-      .send({ name: 'X' });
-
-    expect(res.status).toBe(403);
-  });
-
-  it('denies CUSTOMER with 403', async () => {
-    const res = await request(app)
-      .patch(`/api/v1/categories/${oid().toString()}`)
-      .set(...asUser(makeFakeUser({ role: ROLES.CUSTOMER })))
-      .send({ name: 'X' });
-    expect(res.status).toBe(403);
-  });
-
-  it('denies a brand user with a missing brandId with 403', async () => {
-    const res = await request(app)
-      .patch(`/api/v1/categories/${oid().toString()}`)
-      .set(...asUser(makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId: undefined })))
-      .send({ name: 'X' });
-    expect(res.status).toBe(403);
-  });
-
-  it('allows SUPER_ADMIN to update any brand category', async () => {
-    const categoryId = oid();
-    Category.findById.mockResolvedValue({
-      _id: categoryId,
-      brandId: oid(),
-      save: jest.fn().mockResolvedValue(true),
-    });
-
-    const res = await request(app)
-      .patch(`/api/v1/categories/${categoryId.toString()}`)
-      .set(...asUser(makeFakeUser({ role: ROLES.SUPER_ADMIN })))
-      .send({ name: 'New' });
-
-    expect(res.status).toBe(200);
-  });
-
-  it('cannot change brandId (field is stripped, never applied)', async () => {
-    const brandId = oid();
-    const categoryId = oid();
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
-    const doc = { _id: categoryId, brandId, name: 'Old', save: jest.fn().mockResolvedValue(true) };
-    Category.findById.mockResolvedValue(doc);
-
-    const res = await request(app)
-      .patch(`/api/v1/categories/${categoryId.toString()}`)
-      .set(...asUser(admin))
-      .send({ name: 'New', brandId: oid().toString() });
-
-    expect(res.status).toBe(200);
-    expect(doc.brandId).toBe(brandId);
-    expect(doc.name).toBe('New');
-  });
-
-  it('rejects an invalid category id with 400', async () => {
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId: oid() });
-    const res = await request(app)
-      .patch('/api/v1/categories/not-an-id')
-      .set(...asUser(admin))
-      .send({ name: 'X' });
-    expect(res.status).toBe(400);
-    expect(Category.findById).not.toHaveBeenCalled();
+  it('rejects an empty body (400) and an invalid id (400)', async () => {
+    const sa = superAdmin();
+    expect(
+      (await request(app).patch(`/api/v1/categories/${oid()}`).set(...asUser(sa)).send({})).status
+    ).toBe(400);
+    expect(
+      (await request(app).patch('/api/v1/categories/not-an-id').set(...asUser(sa)).send({ name: 'x' })).status
+    ).toBe(400);
   });
 
   it('returns 404 for a nonexistent category', async () => {
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId: oid() });
     Category.findById.mockResolvedValue(null);
-
     const res = await request(app)
-      .patch(`/api/v1/categories/${oid().toString()}`)
-      .set(...asUser(admin))
-      .send({ name: 'X' });
-
+      .patch(`/api/v1/categories/${oid()}`)
+      .set(...asUser(superAdmin()))
+      .send({ name: 'x' });
     expect(res.status).toBe(404);
   });
 
-  it('rejects an empty body with 400', async () => {
-    const brandId = oid();
-    const categoryId = oid();
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
-    Category.findById.mockResolvedValue({ _id: categoryId, brandId, save: jest.fn() });
-
+  it('rejects making a category its own parent (400)', async () => {
+    const cat = fakeCategory();
+    Category.findById.mockResolvedValue(cat);
     const res = await request(app)
-      .patch(`/api/v1/categories/${categoryId.toString()}`)
-      .set(...asUser(admin))
-      .send({});
+      .patch(`/api/v1/categories/${cat._id}`)
+      .set(...asUser(superAdmin()))
+      .send({ parentId: cat._id.toString() });
+    expect(res.status).toBe(400);
+    expect(cat.save).not.toHaveBeenCalled();
+  });
 
+  it('rejects moving a category that has subcategories under another one (400)', async () => {
+    const cat = fakeCategory();
+    const newParent = fakeCategory({ name: 'Bakery', slug: 'bakery' });
+    Category.findById.mockImplementation(async (id) =>
+      String(id) === String(cat._id) ? cat : newParent
+    );
+    Category.countDocuments.mockResolvedValue(2); // it has children
+    const res = await request(app)
+      .patch(`/api/v1/categories/${cat._id}`)
+      .set(...asUser(superAdmin()))
+      .send({ parentId: newParent._id.toString() });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/subcategories/i);
+    expect(cat.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects moving under a parent that is a subcategory (400)', async () => {
+    const cat = fakeCategory();
+    const deepParent = fakeCategory({ parentId: oid() });
+    Category.findById.mockImplementation(async (id) =>
+      String(id) === String(cat._id) ? cat : deepParent
+    );
+    const res = await request(app)
+      .patch(`/api/v1/categories/${cat._id}`)
+      .set(...asUser(superAdmin()))
+      .send({ parentId: deepParent._id.toString() });
     expect(res.status).toBe(400);
   });
 
-  it('rejects making a category its own parent with 400', async () => {
-    const brandId = oid();
-    const categoryId = oid();
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
-    Category.findById.mockResolvedValue({ _id: categoryId, brandId, save: jest.fn() });
-
+  it('moves a childless category under a top-level parent', async () => {
+    const cat = fakeCategory({ name: 'Ghee', slug: 'ghee' });
+    const parent = fakeCategory();
+    Category.findById.mockImplementation(async (id) => (String(id) === String(cat._id) ? cat : parent));
+    Category.countDocuments.mockResolvedValue(0);
+    Category.findOne.mockResolvedValue(null);
     const res = await request(app)
-      .patch(`/api/v1/categories/${categoryId.toString()}`)
-      .set(...asUser(admin))
-      .send({ parentId: categoryId.toString() });
+      .patch(`/api/v1/categories/${cat._id}`)
+      .set(...asUser(superAdmin()))
+      .send({ parentId: parent._id.toString() });
+    expect(res.status).toBe(200);
+    expect(String(cat.parentId)).toBe(String(parent._id));
+  });
 
-    expect(res.status).toBe(400);
+  it('refuses a move that would clash with a sibling slug (409)', async () => {
+    const cat = fakeCategory({ name: 'Ghee', slug: 'ghee' });
+    const parent = fakeCategory();
+    Category.findById.mockImplementation(async (id) => (String(id) === String(cat._id) ? cat : parent));
+    Category.countDocuments.mockResolvedValue(0);
+    Category.findOne.mockResolvedValue({ _id: oid() }); // sibling already uses "ghee"
+    const res = await request(app)
+      .patch(`/api/v1/categories/${cat._id}`)
+      .set(...asUser(superAdmin()))
+      .send({ parentId: parent._id.toString() });
+    expect(res.status).toBe(409);
+  });
+
+  it('refuses to deactivate a category that still has dependents (409)', async () => {
+    const cat = fakeCategory();
+    Category.findById.mockResolvedValue(cat);
+    Category.countDocuments.mockResolvedValue(0);
+    Product.countDocuments.mockResolvedValue(4);
+    const res = await request(app)
+      .patch(`/api/v1/categories/${cat._id}`)
+      .set(...asUser(superAdmin()))
+      .send({ isActive: false });
+    expect(res.status).toBe(409);
+    expect(cat.save).not.toHaveBeenCalled();
+  });
+
+  it('reactivates a category without a dependents check', async () => {
+    const cat = fakeCategory({ isActive: false });
+    Category.findById.mockResolvedValue(cat);
+    const res = await request(app)
+      .patch(`/api/v1/categories/${cat._id}`)
+      .set(...asUser(superAdmin()))
+      .send({ isActive: true });
+    expect(res.status).toBe(200);
+    expect(cat.isActive).toBe(true);
+    expect(Category.countDocuments).not.toHaveBeenCalled();
   });
 });
 
 describe('DELETE /api/v1/categories/:id', () => {
-  it('rejects an unauthenticated request with 401', async () => {
-    const res = await request(app).delete(`/api/v1/categories/${oid().toString()}`);
-    expect(res.status).toBe(401);
-  });
-
-  it('deactivates (soft-deletes) an own category with no dependents', async () => {
-    const brandId = oid();
-    const categoryId = oid();
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
-    const save = jest.fn().mockResolvedValue(true);
-    const doc = { _id: categoryId, brandId, isActive: true, save };
-    Category.findById.mockResolvedValue(doc);
+  it('deactivates (soft-deletes) a category with no dependents', async () => {
+    const cat = fakeCategory();
+    Category.findById.mockResolvedValue(cat);
     Category.countDocuments.mockResolvedValue(0);
     Product.countDocuments.mockResolvedValue(0);
 
     const res = await request(app)
-      .delete(`/api/v1/categories/${categoryId.toString()}`)
-      .set(...asUser(admin));
+      .delete(`/api/v1/categories/${cat._id}`)
+      .set(...asUser(superAdmin()));
 
     expect(res.status).toBe(200);
-    expect(doc.isActive).toBe(false);
-    expect(save).toHaveBeenCalled();
+    expect(cat.isActive).toBe(false);
+    expect(cat.save).toHaveBeenCalled();
   });
 
-  it('refuses with 409 while products depend on the category', async () => {
-    const brandId = oid();
-    const categoryId = oid();
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
-    const doc = { _id: categoryId, brandId, isActive: true, save: jest.fn() };
-    Category.findById.mockResolvedValue(doc);
+  it('refuses with 409 while subcategories depend on it', async () => {
+    const cat = fakeCategory();
+    Category.findById.mockResolvedValue(cat);
+    Category.countDocuments.mockResolvedValue(1);
+    Product.countDocuments.mockResolvedValue(0);
+    const res = await request(app)
+      .delete(`/api/v1/categories/${cat._id}`)
+      .set(...asUser(superAdmin()));
+    expect(res.status).toBe(409);
+    expect(cat.save).not.toHaveBeenCalled();
+  });
+
+  it('refuses with 409 while products depend on it', async () => {
+    const cat = fakeCategory();
+    Category.findById.mockResolvedValue(cat);
     Category.countDocuments.mockResolvedValue(0);
     Product.countDocuments.mockResolvedValue(3);
-
     const res = await request(app)
-      .delete(`/api/v1/categories/${categoryId.toString()}`)
-      .set(...asUser(admin));
-
-    expect(res.status).toBe(409);
-    expect(doc.isActive).toBe(true);
-  });
-
-  it('refuses with 409 while child categories depend on the category', async () => {
-    const brandId = oid();
-    const categoryId = oid();
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
-    Category.findById.mockResolvedValue({ _id: categoryId, brandId, save: jest.fn() });
-    Category.countDocuments.mockResolvedValue(2);
-    Product.countDocuments.mockResolvedValue(0);
-
-    const res = await request(app)
-      .delete(`/api/v1/categories/${categoryId.toString()}`)
-      .set(...asUser(admin));
-
+      .delete(`/api/v1/categories/${cat._id}`)
+      .set(...asUser(superAdmin()));
     expect(res.status).toBe(409);
   });
 
-  it('denies Brand A deleting a Brand B category with 403', async () => {
-    const categoryId = oid();
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId: oid() });
-    Category.findById.mockResolvedValue({ _id: categoryId, brandId: oid(), save: jest.fn() });
-
-    const res = await request(app)
-      .delete(`/api/v1/categories/${categoryId.toString()}`)
-      .set(...asUser(admin));
-
-    expect(res.status).toBe(403);
-  });
-
-  it('denies CUSTOMER with 403', async () => {
-    const res = await request(app)
-      .delete(`/api/v1/categories/${oid().toString()}`)
-      .set(...asUser(makeFakeUser({ role: ROLES.CUSTOMER })));
-    expect(res.status).toBe(403);
-  });
-
-  it('denies a BRAND_EMPLOYEE without categories.delete', async () => {
-    const employee = makeFakeUser({ role: ROLES.BRAND_EMPLOYEE, brandId: oid() });
-    Employee.findOne.mockResolvedValue({
-      isActive: true,
-      permissions: [PERMISSIONS.CATEGORIES_UPDATE],
-    });
-
-    const res = await request(app)
-      .delete(`/api/v1/categories/${oid().toString()}`)
-      .set(...asUser(employee));
-
-    expect(res.status).toBe(403);
-  });
-
-  it('allows SUPER_ADMIN to deactivate any brand category', async () => {
-    const categoryId = oid();
-    Category.findById.mockResolvedValue({
-      _id: categoryId,
-      brandId: oid(),
-      isActive: true,
-      save: jest.fn().mockResolvedValue(true),
-    });
-    Category.countDocuments.mockResolvedValue(0);
-    Product.countDocuments.mockResolvedValue(0);
-
-    const res = await request(app)
-      .delete(`/api/v1/categories/${categoryId.toString()}`)
-      .set(...asUser(makeFakeUser({ role: ROLES.SUPER_ADMIN })));
-
-    expect(res.status).toBe(200);
-  });
-
-  it('rejects an invalid id with 400', async () => {
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId: oid() });
-    const res = await request(app).delete('/api/v1/categories/bad-id').set(...asUser(admin));
-    expect(res.status).toBe(400);
-  });
-
-  it('returns 404 for a nonexistent category', async () => {
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId: oid() });
+  it('returns 404 for a nonexistent category and 400 for an invalid id', async () => {
     Category.findById.mockResolvedValue(null);
-
-    const res = await request(app)
-      .delete(`/api/v1/categories/${oid().toString()}`)
-      .set(...asUser(admin));
-
-    expect(res.status).toBe(404);
+    const sa = superAdmin();
+    expect((await request(app).delete(`/api/v1/categories/${oid()}`).set(...asUser(sa))).status).toBe(404);
+    expect((await request(app).delete('/api/v1/categories/nope').set(...asUser(sa))).status).toBe(400);
   });
-});
-describe('GET /api/v1/categories — hardening', () => {
-  it('ignores a client-supplied ?isActive=false and still returns active categories only', async () => {
-    Brand.find.mockResolvedValue([]);
-    const sort = jest.fn().mockResolvedValue([]);
-    Category.find.mockReturnValue({ sort });
 
-    const res = await request(app).get('/api/v1/categories?isActive=false');
-
-    expect(res.status).toBe(200);
-    expect(Category.find).toHaveBeenCalledWith({ brandId: { $in: [] }, isActive: true });
+  it('denies a BRAND_ADMIN (403)', async () => {
+    const brandAdmin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId: oid() });
+    const res = await request(app)
+      .delete(`/api/v1/categories/${oid()}`)
+      .set(...asUser(brandAdmin));
+    expect(res.status).toBe(403);
   });
 });

@@ -1,19 +1,15 @@
 const mongoose = require('mongoose');
 
 /**
- * Category model — brand-scoped product categories, optionally
- * hierarchical via parentId.
+ * Category model: ONE global tree owned by the platform (super admin), two
+ * levels deep (category -> subcategory). Brands do not create categories; they
+ * choose a leaf category for each product.
  *
- * Source of truth: docs/04-database-design.md, §13 (Category Model).
+ * Changed in Marketplace v2 Phase 1 (docs/22): categories used to belong to a
+ * single brand (`brandId`).
  */
 const categorySchema = new mongoose.Schema(
   {
-    brandId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Brand',
-      required: true,
-      index: true,
-    },
     name: {
       type: String,
       required: true,
@@ -33,12 +29,17 @@ const categorySchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
-    // Allows hierarchical categories (§13 example: Electronics > Phones).
+    // null = top-level. A parent must itself be top-level (two levels only).
     parentId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Category',
       default: null,
       index: true,
+    },
+    // Display order inside the same parent (lower first, then by name).
+    order: {
+      type: Number,
+      default: 0,
     },
     isActive: {
       type: Boolean,
@@ -50,11 +51,10 @@ const categorySchema = new mongoose.Schema(
   }
 );
 
-// Slugs are unique PER BRAND, not globally (docs/04 — two brands may each
-// have a category named "Phones"). This enforces it at the MongoDB level so
-// concurrent requests can't slip past the service-layer findOne check in
-// services/category.service.js.
-categorySchema.index({ brandId: 1, slug: 1 }, { unique: true });
+// A slug is unique among SIBLINGS (same parent). Two different parents may each
+// have a subcategory called "Other". Enforced here so concurrent requests can't
+// slip past the service-layer check.
+categorySchema.index({ parentId: 1, slug: 1 }, { unique: true });
 
 const Category = mongoose.model('Category', categorySchema);
 

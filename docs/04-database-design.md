@@ -435,7 +435,7 @@ Defined in `21-next-features-plan.md` §G.2.
 _id
 userId          → User (unique)
 permissions     [admin.brands | admin.users | admin.orders | admin.reviews |
-                 admin.locations | admin.settings | admin.analytics | admin.payments]
+                 admin.locations | admin.catalog | admin.settings | admin.analytics | admin.payments]
 readOnly        Boolean, default false
 isActive        Boolean, default true
 createdBy       → User (the Super Admin who added them)
@@ -501,30 +501,40 @@ categories
 
 ```text
 _id
-brandId
 name
 slug
 description
 image
 parentId
+order
 isActive
 createdAt
 updatedAt
 ```
 
-Categories are brand-scoped.
+Categories are **global**: one tree for the whole platform, owned by the super
+admin (or a partner with `admin.catalog`). They do not belong to a brand.
+(Changed in Marketplace v2, Phase 1 — see `docs/22-marketplace-v2-plan.md`.
+Categories used to be brand-scoped.)
 
 Example:
 
 ```text
-Brand A
- ├── Electronics
- │    ├── Phones
- │    └── Laptops
- └── Accessories
+Grocery
+ ├── Cooking Oil & Ghee
+ └── Pulses & Grains
+Bakery
+ └── Cakes
 ```
 
-`parentId` allows hierarchical categories.
+Rules:
+
+- `parentId` is `null` for a top-level category. The tree is **two levels
+  deep**: a parent must itself be top-level.
+- `slug` is unique among siblings (`{ parentId, slug }` unique index).
+- A product must point at an active **leaf** category (one with no active
+  subcategories).
+- A category with subcategories or products cannot be deactivated.
 
 ---
 

@@ -206,13 +206,15 @@ describe('demo dataset', () => {
     ds.brands.filter((b) => b.terminatedBy).forEach((b) => expect(users.has(id(b.terminatedBy))).toBe(true));
     ds.stores.forEach((s) => expect(brands.has(id(s.brandId))).toBe(true));
     ds.categories.forEach((c) => {
-      expect(brands.has(id(c.brandId))).toBe(true);
+      expect(c.brandId).toBeUndefined(); // categories are global
       if (c.parentId) expect(categories.has(id(c.parentId))).toBe(true);
     });
     ds.products.forEach((p) => {
       expect(brands.has(id(p.brandId))).toBe(true);
       const category = ds.categories.find((c) => id(c._id) === id(p.categoryId));
-      expect(category && id(category.brandId)).toBe(id(p.brandId)); // a product only uses its own brand's categories
+      expect(category).toBeDefined();
+      // a product points at a leaf: no category lists it as a parent
+      expect(ds.categories.some((c) => c.parentId && id(c.parentId) === id(p.categoryId))).toBe(false);
     });
     ds.inventories.forEach((i) => expect(id(productById.get(id(i.productId)).brandId)).toBe(id(i.brandId)));
     ds.employees.forEach((e) => {
