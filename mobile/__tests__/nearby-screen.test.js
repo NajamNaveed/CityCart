@@ -10,7 +10,11 @@ import TestRenderer, { act } from 'react-test-renderer'
 jest.setTimeout(30000)
 
 const mockRouter = { push: jest.fn(), navigate: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true), setParams: jest.fn() }
-const mockMapProps = { markers: [], circles: [], fit: jest.fn() }
+const mockMapProps = { scripts: [], onMessage: null }
+const lastMapData = () => {
+  const script = mockMapProps.scripts.at(-1)
+  return JSON.parse(script.slice(script.indexOf('renderMap(', script.indexOf('&&') + 2) + 'renderMap('.length, script.lastIndexOf('); true;')))
+}
 
 jest.mock('expo-router', () => ({ useRouter: () => mockRouter, useLocalSearchParams: () => ({}), Redirect: () => null, Link: ({ children }) => children }))
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default)
@@ -25,23 +29,16 @@ jest.mock('../src/services/api', () => ({
   setUnauthorizedHandler: jest.fn(),
 }))
 jest.mock('../src/services/location', () => ({ getShopperPosition: jest.fn() }))
-jest.mock('react-native-maps', () => {
+jest.mock('react-native-webview', () => {
   const React = require('react')
   const { View } = require('react-native')
-  const MapView = React.forwardRef(({ children, onMapReady }, ref) => {
-    React.useImperativeHandle(ref, () => ({ fitToCoordinates: mockMapProps.fit }))
-    React.useEffect(() => onMapReady && onMapReady(), [onMapReady])
-    return <View testID="map">{children}</View>
+  const WebView = React.forwardRef(({ onLoadEnd, onMessage }, ref) => {
+    mockMapProps.onMessage = onMessage
+    React.useImperativeHandle(ref, () => ({ injectJavaScript: (script) => mockMapProps.scripts.push(script) }))
+    React.useEffect(() => onLoadEnd && onLoadEnd(), [onLoadEnd])
+    return <View testID="map" />
   })
-  const Marker = (props) => {
-    mockMapProps.markers.push(props)
-    return null
-  }
-  const Circle = (props) => {
-    mockMapProps.circles.push(props)
-    return null
-  }
-  return { __esModule: true, default: MapView, Marker, Circle }
+  return { __esModule: true, WebView }
 })
 
 import api from '../src/services/api'
@@ -134,8 +131,7 @@ async function remember({ city = true, nearby } = {}) {
 
 beforeEach(async () => {
   jest.clearAllMocks()
-  mockMapProps.markers.length = 0
-  mockMapProps.circles.length = 0
+  mockMapProps.scripts.length = 0
   await AsyncStorage.clear()
   serve()
 })
@@ -231,18 +227,16 @@ describe('a remembered area', () => {
     const renderer = await open()
     await press(renderer, 'Map')
     expect(renderer.root.findAllByProps({ testID: 'map' }).length).toBeGreaterThan(0)
-    const pins = mockMapProps.markers.filter((m) => m.title === BRAND.name)
-    expect(pins).toHaveLength(2) // one per branch
-    expect(pins[0].coordinate).toEqual({ latitude: 31.401, longitude: 73.101 })
-    expect(mockMapProps.fit).toHaveBeenCalled()
-    expect(mockMapProps.circles).toHaveLength(0)
+    const first = lastMapData()
+    expect(first.pins.filter((p) => p.title === BRAND.name)).toHaveLength(2) // one per branch
+    expect(first.pins[0]).toMatchObject({ lat: 31.401, lng: 73.101, brandId: BRAND._id })
+    expect(first.radiusKm).toBeNull()
 
-    mockMapProps.circles.length = 0
     await press(renderer, '10 km')
-    expect(mockMapProps.circles.at(-1)).toMatchObject({ radius: 10000, center: { latitude: 31.4, longitude: 73.1 } })
+    expect(lastMapData()).toMatchObject({ radiusKm: 10, origin: { lat: 31.4, lng: 73.1 } })
 
-    // tapping a pin's label goes to that brand's products
-    pins[0].onCalloutPress()
+    // tapping a pin's button goes to that brand's products
+    mockMapProps.onMessage({ nativeEvent: { data: JSON.stringify({ type: 'brand', id: BRAND._id }) } })
     expect(mockRouter.navigate).toHaveBeenCalled()
   })
 })
