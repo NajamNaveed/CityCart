@@ -1,16 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { MapPinned } from 'lucide-react'
 import api, { getErrorMessage, getFieldErrors } from '../../services/api'
 import Field from '../../components/Field'
-import CoordinatesField from '../../components/CoordinatesField'
+import ZoneEditor from '../../components/admin/ZoneEditor'
 import { Notice, PageHeader, Pager, selectClass, StatusBadge } from '../../components/brand/Bits'
 import { usePaged } from '../../hooks/usePaged'
 import { EmptyState, Skeleton } from '../../components/ui'
-import { parseLatLng } from '../../utils/geo'
-import { btnDark, inputClass } from '../../ui'
-
-const EMPTY = { name: '', coords: '' }
-const COORDS_ERROR = 'Enter latitude and longitude, like 31.4186, 73.0790.'
+import { btnDark } from '../../ui'
 
 export default function Blocks() {
   const [cities, setCities] = useState(null)
@@ -18,9 +14,9 @@ export default function Blocks() {
   const [blocks, setBlocks] = useState(null)
   const [loadError, setLoadError] = useState('')
   const [reload, setReload] = useState(0)
-  const [form, setForm] = useState(EMPTY)
   const [fieldErrors, setFieldErrors] = useState({})
-  const [editing, setEditing] = useState(null) // { id, name, coords }
+  // The block being drawn: { id: null for a new block, name, ring: [[lat, lng], ...] }
+  const [draft, setDraft] = useState(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState({ text: '', tone: 'ok' })
 
@@ -53,6 +49,9 @@ export default function Blocks() {
 
   const list = blocks && blocks.cityId === cityId ? blocks.list : null
   const paged = usePaged(list, 10)
+  // The other active blocks, drawn as grey outlines while one is being edited.
+  const draftId = draft?.id
+  const others = useMemo(() => (list || []).filter((b) => b._id !== draftId && b.isActive), [list, draftId])
 
   async function run(action, success) {
     setBusy(true)
@@ -71,33 +70,41 @@ export default function Blocks() {
     }
   }
 
-  async function onAdd(e) {
-    e.preventDefault()
-    setFieldErrors({})
-    const point = parseLatLng(form.coords)
-    if (!point) {
-      setFieldErrors({ coords: COORDS_ERROR })
-      return
+  // What the admin should know after saving a zone: overlaps are fine but worth seeing,
+  // and shops that fall in no block can't be found by area.
+  function describeSaved(block, verb) {
+    const parts = [`Block ${verb}.`]
+    if (block.overlaps?.length) {
+      parts.push(`It overlaps ${block.overlaps.map((o) => o.name).join(', ')}. Shops inside an overlap appear in both blocks.`)
     }
-    const ok = await run(
-      () => api.post('/blocks', { cityId, name: form.name, latitude: point.lat, longitude: point.lng }),
-      'Block added.',
-    )
-    if (ok) setForm(EMPTY)
+    return {
+      text: parts.join(' '),
+      warn: block.branchesWithoutBlock > 0
+        ? ` ${block.branchesWithoutBlock} shop${block.branchesWithoutBlock === 1 ? ' is' : 's are'} now in no block. Brands should move their pin inside a block.`
+        : '',
+    }
   }
 
   async function onSave(e) {
     e.preventDefault()
-    const point = parseLatLng(editing.coords)
-    if (!point) {
-      setMessage({ text: COORDS_ERROR, tone: 'warn' })
-      return
+    setFieldErrors({})
+    setBusy(true)
+    setMessage({ text: '', tone: 'ok' })
+    try {
+      const body = { name: draft.name, polygon: draft.ring }
+      const res = draft.id
+        ? await api.patch(`/blocks/${draft.id}`, body)
+        : await api.post('/blocks', { ...body, cityId })
+      const { text, warn } = describeSaved(res.data.block, draft.id ? 'updated' : 'added')
+      setMessage({ text: text + warn, tone: warn ? 'warn' : 'ok' })
+      setDraft(null)
+      setReload((n) => n + 1)
+    } catch (err) {
+      setFieldErrors(getFieldErrors(err))
+      setMessage({ text: getErrorMessage(err), tone: 'warn' })
+    } finally {
+      setBusy(false)
     }
-    const ok = await run(
-      () => api.patch(`/blocks/${editing.id}`, { name: editing.name, latitude: point.lat, longitude: point.lng }),
-      'Block updated.',
-    )
-    if (ok) setEditing(null)
   }
 
   const setActive = (block, isActive) =>
@@ -110,7 +117,7 @@ export default function Blocks() {
     <>
       <PageHeader
         title="Blocks"
-        intro="The neighbourhoods inside each city. Shoppers are matched to the nearest block, and brands place their branches in one."
+        intro="The neighbourhoods inside each city, drawn as zones on the map. Zones may overlap: a shop inside an overlap belongs to both blocks. Brands place their branches inside a block."
       />
       <Notice tone={message.tone}>{message.text}</Notice>
 
@@ -135,21 +142,28 @@ export default function Blocks() {
             </select>
           </div>
 
-          <form onSubmit={onAdd} noValidate className="mb-8 grid gap-4 rounded-lg border border-line bg-white p-5 sm:grid-cols-[1fr_1fr_auto] sm:items-start">
-            <Field label="New block" id="b-name" name="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} error={fieldErrors.name} required />
-            <CoordinatesField
-              id="b-coords"
-              label="Centre point"
-              value={form.coords}
-              onChange={(coords) => setForm({ ...form, coords })}
-              error={fieldErrors.coords || fieldErrors.latitude}
-              hint="In Google Maps, right-click the middle of the block and click the coordinates to copy them."
-              required
-            />
-            <button type="submit" disabled={busy || !form.name.trim() || !form.coords.trim()} className={`${btnDark} h-11 sm:mt-[26px]`}>
-              Add
+          {draft ? (
+            <form onSubmit={onSave} noValidate className="mb-8 space-y-4 rounded-lg border border-line bg-white p-5">
+              <p className="font-medium text-ink">{draft.id ? `Edit ${draft.name || 'block'}` : 'Add a block'}</p>
+              <div className="max-w-sm">
+                <Field label="Block name" id="b-name" name="name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} error={fieldErrors.name} required />
+              </div>
+              <ZoneEditor ring={draft.ring} onChange={(ring) => setDraft((d) => ({ ...d, ring }))} others={others} />
+              {(fieldErrors.polygon || fieldErrors.latitude) && <p className="text-sm text-clay">{fieldErrors.polygon || fieldErrors.latitude}</p>}
+              <div className="flex gap-3">
+                <button type="submit" disabled={busy || !draft.name.trim() || draft.ring.length < 3} className={btnDark}>
+                  {busy ? 'Saving…' : 'Save block'}
+                </button>
+                <button type="button" onClick={() => setDraft(null)} className="inline-flex h-11 items-center rounded-md border border-line bg-white px-5 text-[13px] font-medium text-ink transition hover:border-ink">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+            <button type="button" onClick={() => setDraft({ id: null, name: '', ring: [] })} className={`${btnDark} mb-8`}>
+              Add a block
             </button>
-          </form>
+          )}
 
           {!list ? (
             <div className="space-y-2.5">
@@ -164,40 +178,21 @@ export default function Blocks() {
           <ul className="divide-y divide-line rounded-lg border border-line bg-white">
               {paged.items.map((b) => (
                 <li key={b._id} className="px-5 py-4">
-                  {editing?.id === b._id ? (
-                    <form onSubmit={onSave} className="flex flex-wrap items-center gap-3">
-                      <div className="min-w-0 flex-1 basis-48">
-                        <label htmlFor="edit-name" className="sr-only">
-                          Block name
-                        </label>
-                        <input id="edit-name" value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} className={`h-10 ${inputClass}`} required />
-                      </div>
-                      <div className="min-w-0 flex-1 basis-48">
-                        <label htmlFor="edit-coords" className="sr-only">
-                          Centre point
-                        </label>
-                        <input id="edit-coords" value={editing.coords} onChange={(e) => setEditing({ ...editing, coords: e.target.value })} placeholder="31.4186, 73.0790" className={`h-10 ${inputClass}`} required />
-                      </div>
-                      <button type="submit" disabled={busy || !editing.name.trim()} className="inline-flex h-9 items-center rounded-md bg-ink px-4 text-[12.5px] font-medium text-white transition hover:bg-ink-soft disabled:opacity-50">
-                        Save
-                      </button>
-                      <button type="button" onClick={() => setEditing(null)} className="inline-flex h-9 items-center rounded-md border border-line bg-white px-4 text-[12.5px] font-medium text-ink transition hover:border-ink">
-                        Cancel
-                      </button>
-                    </form>
-                  ) : (
-                    <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
                       <span>
                         <span className="font-medium text-ink">{b.name}</span>
                         <span className="ml-3 text-sm text-muted">
-                          {b.latitude.toFixed(4)}, {b.longitude.toFixed(4)}
+                          {b.polygon ? `${b.polygon.length} corners` : 'No outline yet. Edit it to draw one.'}
                         </span>
                       </span>
                       <span className="flex items-center gap-2.5 text-[12.5px] font-medium">
                         <StatusBadge value={b.isActive ? 'ACTIVE' : 'INACTIVE'} />
                         <button
                           type="button"
-                          onClick={() => setEditing({ id: b._id, name: b.name, coords: `${b.latitude}, ${b.longitude}` })}
+                          onClick={() => {
+                            setMessage({ text: '', tone: 'ok' })
+                            setDraft({ id: b._id, name: b.name, ring: b.polygon || [] })
+                          }}
                           className="rounded-md border border-line px-3 py-1.5 text-ink transition hover:border-ink"
                         >
                           Edit
@@ -213,7 +208,6 @@ export default function Blocks() {
                         )}
                       </span>
                     </div>
-                  )}
                 </li>
               ))}
             </ul>

@@ -1716,3 +1716,56 @@ Any major schema change should be documented before implementation.
 ```text
 05-api-specification.md
 ```
+
+---
+
+# Appendix: Location Models (Block and Branch)
+
+Marketplace v2, Phase 2 (`docs/22-marketplace-v2-plan.md`).
+
+## Block (zones)
+
+Collection: `blocks`. A block is a neighbourhood of a city, drawn as a zone.
+
+```text
+_id
+cityId
+name
+slug
+center      GeoJSON Point, always INSIDE the zone (derived from the outline)
+area        GeoJSON Polygon, one closed ring, counter-clockwise (optional)
+isActive
+createdAt
+updatedAt
+```
+
+Rules:
+
+- `area` is checked before it is stored: 3 to 100 corners, no repeated corners,
+  edges must not cross, and the size must be between 0.01 km² and 1000 km².
+- `center` is derived from the outline (the centroid, or a point inside the shape
+  when the centroid falls outside a concave one). It cannot be edited on its own
+  while an outline exists.
+- A block with no `area` is a legacy, centre-only block. It holds only the shops
+  whose home block it is, and is matched to shoppers by nearest centre.
+- **Zones may overlap.** A shop in the overlap belongs to every block holding it.
+- Indexes: `{ cityId, slug }` unique, `center` 2dsphere, `area` 2dsphere.
+
+## Branch
+
+```text
+_id
+brandId
+blockId     the shop's home block, chosen by the brand
+blockIds    every active block whose zone contains the shop's pin
+name, address, phone
+location    GeoJSON Point (the shop's pin)
+isActive
+```
+
+- The pin must lie **inside** the home block's outline (legacy blocks: within 25 km
+  of the centre). A new shop with no pin gets the block's centre.
+- `blockIds` is maintained by the server only: when a shop is created or moved,
+  and for every shop of the city when a zone is redrawn or a block is switched on
+  or off. A shop with an empty `blockIds` is in no block and cannot be found by
+  area; the admin is told how many such shops a change causes.

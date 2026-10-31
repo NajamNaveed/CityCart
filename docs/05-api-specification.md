@@ -680,6 +680,57 @@ DELETE /api/v1/admin/catalog/:id           archive (409 while stores list it)
 
 ---
 
+# 11.2 Block and Discovery Endpoints (zones)
+
+Marketplace v2, Phase 2.
+
+## Blocks
+
+```text
+GET    /api/v1/blocks               ?cityId=&isActive=          public
+GET    /api/v1/blocks/at            ?lat=&lng=                  public
+GET    /api/v1/blocks/resolve       ?lat=&lng=                  public (nearest centre)
+POST   /api/v1/blocks               super admin or admin.locations
+PATCH  /api/v1/blocks/:id           super admin or admin.locations
+DELETE /api/v1/blocks/:id           deactivates
+```
+
+A block is returned as `{ _id, cityId, name, slug, isActive, latitude, longitude,
+polygon }`. `latitude`/`longitude` is the centre. `polygon` is the outline as an
+open list of `[lat, lng]` pairs, or `null` for a block that has none.
+
+`POST` body: `cityId`, `name`, and either `polygon` (preferred) or `latitude` +
+`longitude`. `PATCH` accepts `name`, `polygon` (`null` removes the outline),
+`latitude` + `longitude` (only for a block with no outline) and `isActive`.
+A bad outline answers 400 with a message such as "The outline crosses itself."
+
+`POST` and `PATCH` return the block plus `overlaps` (other active blocks the zone
+touches) and, after a change that can move shops between blocks,
+`branchesWithoutBlock` (shops now in no block).
+
+`GET /blocks/at` answers "which blocks am I in?":
+
+```text
+{ containing: [block + distanceKm ...],   every active block whose zone holds the position
+  nearest:    [block + distanceKm ...] }  up to 5 other nearby blocks, for a border or outside position
+```
+
+`containing` has none, one, or several entries (where zones overlap).
+
+## Discover
+
+```text
+GET /api/v1/discover?scope=area&blockIds=a,b&lat=&lng=&radiusKm=
+```
+
+`scope=area` finds shops in any of the chosen blocks (1 to 10, one city). With
+`radiusKm` (0.5 to 50) it also limits to that distance around `lat`/`lng` (both
+required); without it the whole block(s). The response `meta.blocks` lists the
+blocks searched. `scope=block&blockId=` still works and now returns every shop
+whose zone holds the pin, so a shop in an overlap shows in both blocks.
+
+---
+
 # 12. Product Endpoints
 
 Base:

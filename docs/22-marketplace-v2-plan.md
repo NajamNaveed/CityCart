@@ -7,8 +7,9 @@ Status: **in progress.** Written after the project review with the head.
 | 0 Preparation | done (see Phase 0) |
 | 1a Global categories | **done** (server, tests, admin page, brand form, seed, docs) |
 | 1b Shared catalogue and listings | **done** (server, tests, admin Catalogue page, brand product form, CSV import, seed, docs) |
-| 2 Zones: polygon blocks | next |
-| 3 to 7 | not started |
+| 2 Zones: polygon blocks | **done** (server, tests, admin map editor, seed, docs) |
+| 3 Customer area flow, catalogue views, address book | next |
+| 4 to 7 | not started |
 
 This plan covers eight changes: real zones, customer area choice, global categories, a shared
 product catalogue, three separate apps, a picker role, returns, and saved addresses. It ends
@@ -77,7 +78,7 @@ The app keeps one state: `{ blockIds: [1..n], origin: {lat, lng, source: gps|pin
 7. **Map shows:** the selected block shape(s) in distinct colours, the radius circle, the origin pin, and **only the stores that pass the filter**.
 
 **Server**
-- `GET /discover/blocks?lat&lng` returns the blocks containing the point (0, 1 or many) plus the nearest blocks when there are none.
+- `GET /blocks/at?lat&lng` (built as `/blocks/at` rather than `/discover/blocks`) returns the blocks containing the point (0, 1 or many) plus the nearest blocks when there are none.
 - `GET /discover` takes `blockIds` (list) and optional `lat`, `lng`, `radiusKm`. A store matches when its `blockIds` overlap the list and, if a radius is set, a branch is within it. The old `scope=block|radius` is replaced by "area" (blockIds, with or without radius) and "city" (browse all).
 
 **Cart and checkout rules**
@@ -239,7 +240,10 @@ Split into **1a (global categories, done)** and **1b (catalogue and listings, do
 
 **Done when:** two brands list the same catalogue item, and an admin can merge two duplicates without breaking carts or orders.
 
-### Phase 2: Zones: polygon blocks (M)
+### Phase 2: Zones: polygon blocks (M) — done
+
+**How it was built:** `Branch.blockId` stays as the shop's home block (the brand chooses it), and the new `Branch.blockIds` lists every block holding the pin. The old `scope=block` and `scope=radius` stay working until Phase 3 moves the customer apps to `scope=area`; `scope=block` already returns overlap shops in both blocks. Blocks without an outline still work (centre only), so nothing breaks while the admin redraws them.
+
 - **Server:** `Block.area`, validation, `Branch.blockIds` with recompute, `GET /discover/blocks`, new `/discover` (blockIds, radius).
 - **Admin web:** polygon editor in `Blocks.jsx` with overlap hint, and a "branches outside every block" warning.
 - **Seed:** block shapes for the demo city (for example Samanabad, D Ground, Gulberg, Peoples Colony) in `scripts/data/`. Include **two overlapping blocks**, and branches placed in each case: inside one block, inside an overlap, and outside all.

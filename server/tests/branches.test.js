@@ -97,6 +97,7 @@ describe('POST /api/v1/brand/branches', () => {
     const block = makeBlock(cityId);
     Branch.countDocuments.mockResolvedValue(0);
     Block.findOne.mockResolvedValue(block);
+    Block.find.mockResolvedValue([block]); // the city's blocks, to work out which hold the shop
     Brand.findById.mockResolvedValue({ _id: admin.brandId, cityId });
     Branch.create.mockImplementation(async (data) => makeBranch(data.brandId, data.blockId, data));
     return { admin, block, headers: asUser(admin) };
@@ -230,6 +231,7 @@ describe('PATCH/DELETE /api/v1/brand/branches/:id', () => {
     Branch.findById.mockResolvedValue(branch);
     Block.findById.mockResolvedValue(oldBlock);
     Block.findOne.mockResolvedValue(newBlock);
+    Block.find.mockResolvedValue([newBlock]);
     Brand.findById.mockResolvedValue({ cityId });
 
     const res = await request(app)
@@ -240,6 +242,7 @@ describe('PATCH/DELETE /api/v1/brand/branches/:id', () => {
     expect(res.status).toBe(200);
     expect(branch.blockId).toBe(newBlock._id);
     expect(branch.location).toEqual(newBlock.center);
+    expect(branch.blockIds).toEqual([newBlock._id]); // follows the move
   });
 
   it('deactivates instead of deleting', async () => {
@@ -285,5 +288,107 @@ describe('GET /api/v1/branches/mine (read-only, any staff who can view products)
     const [h2, v2] = asUser(makeFakeUser({ role: ROLES.CUSTOMER }));
     expect((await request(app).get('/api/v1/branches/mine').set(h2, v2)).status).toBe(403);
     expect((await request(app).get('/api/v1/branches/mine')).status).toBe(401);
+  });
+});
+
+describe('shops and zones (blocks with a drawn outline)', () => {
+  const cityId = oid();
+  const ring = (rect) => {
+    const [[a, b], [c, d]] = rect; // [lat, lng] of two opposite corners
+    return { type: 'Polygon', coordinates: [[[b, a], [d, a], [d, c], [b, c], [b, a]]] };
+  };
+  // Two zones that overlap between lng 73.096 and 73.1.
+  const west = makeBlock(cityId, { name: 'D Ground', area: ring([[31.4, 73.09], [31.409, 73.1]]), center: { type: 'Point', coordinates: [73.095, 31.4045] } });
+  const east = makeBlock(cityId, { name: 'Peoples Colony', area: ring([[31.4, 73.096], [31.409, 73.106]]), center: { type: 'Point', coordinates: [73.101, 31.4045] } });
+
+  function setup(home) {
+    const admin = brandAdmin();
+    Branch.countDocuments.mockResolvedValue(0);
+    Block.findOne.mockResolvedValue(home);
+    Block.find.mockResolvedValue([west, east]);
+    Brand.findById.mockResolvedValue({ _id: admin.brandId, cityId });
+    Branch.create.mockImplementation(async (data) => makeBranch(admin.brandId, data.blockId, data));
+    return asUser(admin);
+  }
+
+  it('refuses a pin outside the chosen block\'s outline (400)', async () => {
+    const [h, v] = setup(west);
+    const res = await request(app)
+      .post('/api/v1/brand/branches')
+      .set(h, v)
+      .send({ name: 'Shop', blockId: west._id.toString(), latitude: 31.4045, longitude: 73.103 }); // inside Peoples Colony only
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/outside the selected block/);
+    expect(Branch.create).not.toHaveBeenCalled();
+  });
+
+  it('puts a shop in one block when its pin is in one zone', async () => {
+    const [h, v] = setup(west);
+    const res = await request(app)
+      .post('/api/v1/brand/branches')
+      .set(h, v)
+      .send({ name: 'Shop', blockId: west._id.toString(), latitude: 31.4045, longitude: 73.092 });
+    expect(res.status).toBe(201);
+    expect(Branch.create).toHaveBeenCalledWith(expect.objectContaining({ blockId: west._id, blockIds: [west._id] }));
+    expect(res.body.branch.blockIds).toEqual([west._id.toString()]);
+  });
+
+  it('puts a shop in BOTH blocks when its pin is in the overlap', async () => {
+    const [h, v] = setup(west);
+    const res = await request(app)
+      .post('/api/v1/brand/branches')
+      .set(h, v)
+      .send({ name: 'Faisal Chowk', blockId: west._id.toString(), latitude: 31.4045, longitude: 73.098 });
+    expect(res.status).toBe(201);
+    expect(Branch.create.mock.calls[0][0].blockIds).toEqual([west._id, east._id]);
+    expect(Branch.create.mock.calls[0][0].blockId).toBe(west._id); // home block is still the one chosen
+  });
+
+  it('defaults the pin to the block centre, which is inside its outline', async () => {
+    const [h, v] = setup(east);
+    await request(app).post('/api/v1/brand/branches').set(h, v).send({ name: 'Shop', blockId: east._id.toString() });
+    expect(Branch.create).toHaveBeenCalledWith(expect.objectContaining({ location: east.center, blockIds: [east._id] }));
+  });
+
+  it('works out the blocks again when the pin is moved', async () => {
+    const admin = brandAdmin();
+    const [h, v] = asUser(admin);
+    const branch = makeBranch(admin.brandId, west._id, { blockIds: [west._id], location: { type: 'Point', coordinates: [73.092, 31.4045] } });
+    Branch.findById.mockResolvedValue(branch);
+    Block.findById.mockResolvedValue(west);
+    Block.find.mockResolvedValue([west, east]);
+
+    const res = await request(app)
+      .patch(`/api/v1/brand/branches/${branch._id}`)
+      .set(h, v)
+      .send({ latitude: 31.4045, longitude: 73.098 });
+
+    expect(res.status).toBe(200);
+    expect(branch.blockIds).toEqual([west._id, east._id]);
+  });
+
+  it('refuses to move the pin outside the home block (400)', async () => {
+    const admin = brandAdmin();
+    const [h, v] = asUser(admin);
+    const branch = makeBranch(admin.brandId, west._id);
+    Branch.findById.mockResolvedValue(branch);
+    Block.findById.mockResolvedValue(west);
+    const res = await request(app)
+      .patch(`/api/v1/brand/branches/${branch._id}`)
+      .set(h, v)
+      .send({ latitude: 31.5, longitude: 73.2 });
+    expect(res.status).toBe(400);
+    expect(branch.save).not.toHaveBeenCalled();
+  });
+
+  it('keeps the blocks when only the name changes', async () => {
+    const admin = brandAdmin();
+    const [h, v] = asUser(admin);
+    const branch = makeBranch(admin.brandId, west._id, { blockIds: [west._id, east._id] });
+    Branch.findById.mockResolvedValue(branch);
+    Block.findById.mockResolvedValue(west);
+    await request(app).patch(`/api/v1/brand/branches/${branch._id}`).set(h, v).send({ name: 'New name' });
+    expect(branch.blockIds).toEqual([west._id, east._id]);
+    expect(Block.find).not.toHaveBeenCalled();
   });
 });

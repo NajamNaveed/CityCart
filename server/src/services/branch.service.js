@@ -2,6 +2,8 @@ const Branch = require('../models/branch.model');
 const Block = require('../models/block.model');
 const Brand = require('../models/brand.model');
 const { distanceKm, pointFromLatLng, latLngFromPoint } = require('../utils/geo');
+const { pointInRing, ringFromGeoJson } = require('../utils/polygon');
+const { blockIdsForPin } = require('./branchBlocks.service');
 
 /**
  * Branch service — a brand's physical shops (see models/branch.model.js).
@@ -27,6 +29,7 @@ function serializeBranch(branch, block) {
     _id: plain._id,
     brandId: plain.brandId,
     blockId: plain.blockId,
+    blockIds: plain.blockIds || [],
     blockName: block ? block.name : undefined,
     name: plain.name,
     address: plain.address,
@@ -53,7 +56,18 @@ async function loadBlockForBrand(blockId, brandId) {
   return block;
 }
 
-function assertPinNearBlock(latitude, longitude, block) {
+/**
+ * A block with a drawn boundary: the pin must be INSIDE it. An older centre-only
+ * block: the pin must be within MAX_PIN_DISTANCE_KM of its centre.
+ */
+function assertPinInBlock(latitude, longitude, block) {
+  if (block.area) {
+    const ring = ringFromGeoJson(block.area);
+    if (!ring || !pointInRing(latitude, longitude, ring)) {
+      throw new BranchError(400, 'The pin is outside the selected block. Drop it inside the block’s outline.');
+    }
+    return;
+  }
   const km = distanceKm({ lat: latitude, lng: longitude }, latLngFromPoint(block.center));
   if (km > MAX_PIN_DISTANCE_KM) {
     throw new BranchError(400, 'The pin is too far from the selected block. Check the location.');
@@ -83,7 +97,7 @@ async function createBranch(brandId, data) {
 
   let location;
   if (data.latitude !== undefined) {
-    assertPinNearBlock(data.latitude, data.longitude, block);
+    assertPinInBlock(data.latitude, data.longitude, block);
     location = pointFromLatLng(data.latitude, data.longitude);
   } else {
     location = block.center;
@@ -92,6 +106,7 @@ async function createBranch(brandId, data) {
   const branch = await Branch.create({
     brandId,
     blockId: block._id,
+    blockIds: await blockIdsForPin(location, block),
     name: data.name,
     address: data.address || '',
     phone: data.phone || '',
@@ -107,10 +122,12 @@ async function createBranch(brandId, data) {
  */
 async function updateBranch(branch, data) {
   let block = await Block.findById(branch.blockId);
+  let moved = false;
 
   if (data.blockId !== undefined && String(data.blockId) !== String(branch.blockId)) {
     block = await loadBlockForBrand(data.blockId, branch.brandId);
     branch.blockId = block._id;
+    moved = true;
     if (data.latitude === undefined) {
       branch.location = block.center;
     }
@@ -120,8 +137,13 @@ async function updateBranch(branch, data) {
     if (!block) {
       throw new BranchError(400, 'Branch block not found.');
     }
-    assertPinNearBlock(data.latitude, data.longitude, block);
+    assertPinInBlock(data.latitude, data.longitude, block);
     branch.location = pointFromLatLng(data.latitude, data.longitude);
+    moved = true;
+  }
+  // Which blocks hold the shop depends on its pin and home block.
+  if (moved && block) {
+    branch.blockIds = await blockIdsForPin(branch.location, block);
   }
 
   if (data.name !== undefined) branch.name = data.name;

@@ -7,6 +7,8 @@
 const mongoose = require('mongoose');
 
 const { slugify } = require('../../src/utils/slugify');
+const { innerPoint, toGeoJsonPolygon } = require('../../src/utils/polygon');
+const { computeBlockIds } = require('../../src/utils/blockMembership');
 const { PAYMENT_METHOD_FOR_COLLECTION } = require('../../src/config/paymentCollection');
 const { CITIES, BLOCKS, BRANCHES, BRANDS, CHATS, LONG_CHAT, CUSTOMERS, ADMIN, CARTS, REMARKS } = require('./catalog');
 
@@ -81,9 +83,12 @@ function buildDataset({ now = new Date(), hashes }) {
   const faisalabad = cityByKey.faisalabad;
   const blockBySlug = {};
   for (const blk of BLOCKS) {
+    // Each block has a drawn boundary; its centre is a point guaranteed to be inside it.
+    const inside = innerPoint(blk.polygon);
     const doc = {
       _id: new ObjectId(), cityId: faisalabad._id, name: blk.name, slug: slugify(blk.name),
-      center: { type: 'Point', coordinates: [blk.longitude, blk.latitude] }, isActive: true,
+      center: { type: 'Point', coordinates: [Math.round(inside.lng * 1e6) / 1e6, Math.round(inside.lat * 1e6) / 1e6] },
+      area: toGeoJsonPolygon(blk.polygon), isActive: true,
       createdAt: ago(290 * DAY), updatedAt: ago(290 * DAY),
     };
     blockBySlug[doc.slug] = doc;
@@ -154,9 +159,10 @@ function buildDataset({ now = new Date(), hashes }) {
       const [dLat, dLng] = br.off;
       const [lng, lat] = block.center.coordinates;
       const made = new Date(createdAt.getTime() + (1 + i) * DAY);
+      const location = { type: 'Point', coordinates: [Math.round((lng + dLng) * 1e6) / 1e6, Math.round((lat + dLat) * 1e6) / 1e6] };
       const doc = {
-        _id: new ObjectId(), brandId, blockId: block._id, name: br.name, address: br.address, phone: br.phone,
-        location: { type: 'Point', coordinates: [Math.round((lng + dLng) * 1e6) / 1e6, Math.round((lat + dLat) * 1e6) / 1e6] },
+        _id: new ObjectId(), brandId, blockId: block._id, blockIds: computeBlockIds(location, block._id, ds.blocks),
+        name: br.name, address: br.address, phone: br.phone, location,
         isActive: br.isActive !== false, createdAt: made, updatedAt: made,
       };
       ds.branches.push(doc);

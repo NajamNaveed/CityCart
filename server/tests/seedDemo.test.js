@@ -209,6 +209,27 @@ describe('demo dataset', () => {
     expect(ds.catalogProducts.filter((i) => i.status === 'ACTIVE' && i.scope === 'GLOBAL' && !listed.has(id(i._id))).length).toBeGreaterThanOrEqual(30);
   });
 
+  it('draws every block as a valid zone, with overlaps, gaps and shops placed to demonstrate each', () => {
+    const { validateRing, pointInRing, ringFromGeoJson } = require('../src/utils/polygon');
+    const { computeBlockIds } = require('../src/utils/blockMembership');
+    const rings = ds.blocks.map((b) => ringFromGeoJson(b.area));
+    rings.forEach((ring) => expect(validateRing(ring).ok).toBe(true));
+    // a block's centre sits inside its own outline
+    ds.blocks.forEach((b, i) => expect(pointInRing(b.center.coordinates[1], b.center.coordinates[0], rings[i])).toBe(true));
+
+    const holders = (lat, lng) => ds.blocks.filter((_, i) => pointInRing(lat, lng, rings[i])).map((b) => b.name);
+    expect(holders(31.427, 73.097).sort()).toEqual(['D Ground', 'Peoples Colony']); // an overlap
+    expect(holders(31.4225, 73.091)).toEqual([]); // a gap between blocks: nobody's block
+
+    // each shop's blocks are exactly the blocks holding its pin
+    ds.branches.forEach((br) => {
+      expect(br.blockIds.map(id).sort()).toEqual(computeBlockIds(br.location, br.blockId, ds.blocks).map(id).sort());
+      expect(br.blockIds.map(id)).toContain(id(br.blockId)); // inside its own home block
+    });
+    // at least one shop stands in an overlap and is found in two blocks
+    expect(ds.branches.some((br) => br.blockIds.length === 2)).toBe(true);
+  });
+
   it('has every reference pointing at something that exists', () => {
     const ids = (list) => new Set(list.map((d) => id(d._id)));
     const cities = ids(ds.cities);

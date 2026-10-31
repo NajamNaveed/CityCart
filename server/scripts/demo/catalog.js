@@ -455,6 +455,8 @@ const BRANCHES = {
   mehr: [
     { name: 'Mehr Menswear Gulberg', block: 'gulberg', address: 'Shop 14, Main Boulevard, Gulberg', phone: '+92 41 8733 2210', off: [-0.0005, 0.0006], only: null },
     { name: 'Mehr Menswear D Ground', block: 'd-ground', address: 'Shop 3, D Ground Market', phone: '+92 41 8544 9012', off: [0.0007, -0.0004], only: ['sk', 'kurta'] },
+    // Stands in the overlap of D Ground and Peoples Colony, so it is found in both blocks.
+    { name: 'Mehr Menswear Faisal Chowk', block: 'peoples-colony', address: 'Shop 5, Peoples Colony Road, between D Ground and Peoples Colony', phone: '+92 41 8546 3301', off: [0.00237, -0.00355], only: null },
     { name: 'Mehr Menswear Jinnah Colony', block: 'jinnah-colony', address: 'Shop 9, Jinnah Colony Chowk', phone: '+92 41 2640 118', off: [0.0003, 0.0005], only: ['kurta', 'waistcoat'] },
   ],
   sukoon: [
