@@ -205,7 +205,7 @@ describe('business events persist notifications (docs/12 §5-§6)', () => {
 
     const product = await Product.create({
       brandId: brand._id,
-      categoryId: oid(),
+      catalogProductId: oid(), categoryId: oid(),
       name: 'Lawn Suit',
       slug: `lawn-suit-${n}`,
       sku: `SKU-${n}`,

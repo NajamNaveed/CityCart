@@ -20,7 +20,22 @@ jest.mock('../src/models/product.model', () => {
   };
 });
 
+// Factory mock: the catalogue validator reads STATUSES/SCOPES off the model.
+jest.mock('../src/models/catalogProduct.model', () => {
+  const actual = jest.requireActual('../src/models/catalogProduct.model');
+  return {
+    find: jest.fn(),
+    findOne: jest.fn(),
+    findById: jest.fn(),
+    create: jest.fn(),
+    countDocuments: jest.fn(),
+    STATUSES: actual.STATUSES,
+    SCOPES: actual.SCOPES,
+  };
+});
+
 const User = require('../src/models/user.model');
+const CatalogProduct = require('../src/models/catalogProduct.model');
 const Employee = require('../src/models/employee.model');
 const Category = require('../src/models/category.model');
 const Brand = require('../src/models/brand.model');
@@ -355,198 +370,209 @@ describe('GET /api/v1/products/mine/:id (edit page)', () => {
   });
 });
 
-describe('POST /api/v1/products', () => {
-  const validBody = (categoryId) => ({
-    name: 'Phone X',
-    price: 999,
-    categoryId: categoryId.toString(),
-  });
+describe('POST /api/v1/products (a store lists a catalogue item)', () => {
+  const validBody = (itemId) => ({ catalogProductId: itemId.toString(), price: 999 });
+
+  /** A catalogue item the store may use, plus the mocks that make its category usable. */
+  function givenCatalogItem(over = {}) {
+    const item = {
+      _id: oid(),
+      name: 'Phone X',
+      description: 'A phone',
+      images: ['https://example.com/phone.png'],
+      categoryId: oid(),
+      status: 'ACTIVE',
+      scope: 'GLOBAL',
+      ...over,
+    };
+    CatalogProduct.findById.mockResolvedValue(item);
+    Category.findById.mockResolvedValue({ _id: item.categoryId, isActive: true });
+    Category.countDocuments.mockResolvedValue(0);
+    Product.findOne.mockResolvedValue(null);
+    Product.create.mockImplementation(async (data) => data);
+    return item;
+  }
+
+  const brandAdmin = (brandId = oid()) => makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
 
   it('rejects an unauthenticated request with 401', async () => {
     const res = await request(app).post('/api/v1/products').send(validBody(oid()));
     expect(res.status).toBe(401);
   });
 
-  it("creates a product using the authenticated user's brand (same-brand category allowed)", async () => {
+  it("creates a listing for the authenticated brand, copying the item's name, description, images and category", async () => {
     const brandId = oid();
-    const categoryId = oid();
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
-    Category.findById.mockResolvedValue({ _id: categoryId, brandId });
-    Product.findOne.mockResolvedValue(null);
-    Product.create.mockImplementation(async (data) => data);
+    const item = givenCatalogItem();
 
     const res = await request(app)
       .post('/api/v1/products')
-      .set(...asUser(admin))
-      .send(validBody(categoryId));
+      .set(...asUser(brandAdmin(brandId)))
+      .send({ ...validBody(item._id), sku: 'PX-1' });
 
     expect(res.status).toBe(201);
     expect(Product.create).toHaveBeenCalledWith(
       expect.objectContaining({
         brandId: brandId.toString(),
-        categoryId: categoryId.toString(),
+        catalogProductId: item._id,
+        categoryId: item.categoryId,
         name: 'Phone X',
         slug: 'phone-x',
+        description: 'A phone',
+        images: ['https://example.com/phone.png'],
         price: 999,
+        sku: 'PX-1',
       })
     );
   });
 
-  it('ignores a client-supplied brandId and uses the authenticated brand', async () => {
+  it('ignores a client-supplied brandId, name, description, images and categoryId', async () => {
     const brandId = oid();
-    const categoryId = oid();
-    const spoofed = oid().toString();
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
-    Category.findById.mockResolvedValue({ _id: categoryId, brandId });
-    Product.findOne.mockResolvedValue(null);
-    Product.create.mockImplementation(async (data) => data);
+    const item = givenCatalogItem();
 
     const res = await request(app)
       .post('/api/v1/products')
-      .set(...asUser(admin))
-      .send({ ...validBody(categoryId), brandId: spoofed });
+      .set(...asUser(brandAdmin(brandId)))
+      .send({
+        ...validBody(item._id),
+        brandId: oid().toString(),
+        name: 'Hijacked',
+        description: 'Hijacked',
+        images: ['https://evil.example/x.png'],
+        categoryId: oid().toString(),
+      });
 
     expect(res.status).toBe(201);
     const created = Product.create.mock.calls[0][0];
     expect(created.brandId).toBe(brandId.toString());
-    expect(created.brandId).not.toBe(spoofed);
+    expect(created.name).toBe('Phone X');
+    expect(created.description).toBe('A phone');
+    expect(created.categoryId).toBe(item.categoryId);
   });
 
-  it('rejects an inactive category with 400 (categories are global, but must be active)', async () => {
-    const brandId = oid();
-    const categoryId = oid();
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
-    Category.findById.mockResolvedValue({ _id: categoryId, isActive: false });
-
+  it('rejects a catalogue item that does not exist with 400', async () => {
+    CatalogProduct.findById.mockResolvedValue(null);
     const res = await request(app)
       .post('/api/v1/products')
-      .set(...asUser(admin))
-      .send(validBody(categoryId));
-
-    expect(res.status).toBe(400);
-    expect(Product.create).not.toHaveBeenCalled();
-  });
-
-  it('rejects a category that still has subcategories with 400 (choose a leaf)', async () => {
-    const brandId = oid();
-    const categoryId = oid();
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
-    Category.findById.mockResolvedValue({ _id: categoryId, isActive: true, parentId: null });
-    Category.countDocuments.mockResolvedValue(3);
-
-    const res = await request(app)
-      .post('/api/v1/products')
-      .set(...asUser(admin))
-      .send(validBody(categoryId));
-
-    expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/subcategory/i);
-    expect(Category.countDocuments).toHaveBeenCalledWith({ parentId: categoryId, isActive: true });
-    expect(Product.create).not.toHaveBeenCalled();
-  });
-
-  it('accepts any active leaf category, whichever brand uses it', async () => {
-    const brandId = oid();
-    const categoryId = oid();
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
-    Category.findById.mockResolvedValue({ _id: categoryId, isActive: true, parentId: oid() });
-    Category.countDocuments.mockResolvedValue(0);
-    Product.findOne.mockResolvedValue(null);
-    Product.create.mockImplementation(async (doc) => ({ _id: oid(), ...doc }));
-
-    const res = await request(app)
-      .post('/api/v1/products')
-      .set(...asUser(admin))
-      .send(validBody(categoryId));
-
-    expect(res.status).toBe(201);
-  });
-
-  it('rejects a nonexistent category with 400', async () => {
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId: oid() });
-    Category.findById.mockResolvedValue(null);
-
-    const res = await request(app)
-      .post('/api/v1/products')
-      .set(...asUser(admin))
+      .set(...asUser(brandAdmin()))
       .send(validBody(oid()));
-
     expect(res.status).toBe(400);
     expect(Product.create).not.toHaveBeenCalled();
   });
 
-  it('rejects an invalid categoryId format with 400', async () => {
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId: oid() });
+  it.each(['PENDING', 'REJECTED', 'ARCHIVED'])('rejects a %s catalogue item with 400', async (status) => {
+    const item = givenCatalogItem({ status });
     const res = await request(app)
       .post('/api/v1/products')
-      .set(...asUser(admin))
-      .send({ name: 'Phone', price: 5, categoryId: 'bad' });
+      .set(...asUser(brandAdmin()))
+      .send(validBody(item._id));
     expect(res.status).toBe(400);
-    expect(Category.findById).not.toHaveBeenCalled();
+    expect(Product.create).not.toHaveBeenCalled();
   });
 
-  it('checks slug uniqueness scoped to the brand (brandId + slug)', async () => {
+  it("rejects another store's PRIVATE catalogue item with 400, and accepts the store's own", async () => {
     const brandId = oid();
-    const categoryId = oid();
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
-    Category.findById.mockResolvedValue({ _id: categoryId, brandId });
-    Product.findOne.mockResolvedValue({ slug: 'phone-x' });
+    const foreign = givenCatalogItem({ scope: 'PRIVATE', brandId: oid() });
+    const denied = await request(app)
+      .post('/api/v1/products')
+      .set(...asUser(brandAdmin(brandId)))
+      .send(validBody(foreign._id));
+    expect(denied.status).toBe(400);
+    expect(Product.create).not.toHaveBeenCalled();
+
+    const own = givenCatalogItem({ scope: 'PRIVATE', brandId });
+    const ok = await request(app)
+      .post('/api/v1/products')
+      .set(...asUser(brandAdmin(brandId)))
+      .send(validBody(own._id));
+    expect(ok.status).toBe(201);
+  });
+
+  it("rejects an item whose category is inactive, or has subcategories now (400)", async () => {
+    const item = givenCatalogItem();
+    Category.findById.mockResolvedValue({ _id: item.categoryId, isActive: false });
+    const inactive = await request(app)
+      .post('/api/v1/products')
+      .set(...asUser(brandAdmin()))
+      .send(validBody(item._id));
+    expect(inactive.status).toBe(400);
+
+    Category.findById.mockResolvedValue({ _id: item.categoryId, isActive: true });
+    Category.countDocuments.mockResolvedValue(2);
+    const parent = await request(app)
+      .post('/api/v1/products')
+      .set(...asUser(brandAdmin()))
+      .send(validBody(item._id));
+    expect(parent.status).toBe(400);
+    expect(parent.body.message).toMatch(/subcategory/i);
+    expect(Product.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid catalogProductId format with 400', async () => {
+    const res = await request(app)
+      .post('/api/v1/products')
+      .set(...asUser(brandAdmin()))
+      .send({ catalogProductId: 'bad', price: 5 });
+    expect(res.status).toBe(400);
+    expect(CatalogProduct.findById).not.toHaveBeenCalled();
+  });
+
+  it('refuses to list the same item twice for one brand (409)', async () => {
+    const brandId = oid();
+    const item = givenCatalogItem();
+    Product.findOne.mockResolvedValue({ _id: oid(), catalogProductId: item._id });
 
     const res = await request(app)
       .post('/api/v1/products')
-      .set(...asUser(admin))
-      .send(validBody(categoryId));
+      .set(...asUser(brandAdmin(brandId)))
+      .send(validBody(item._id));
 
     expect(res.status).toBe(409);
-    expect(Product.findOne).toHaveBeenCalledWith({ brandId: brandId.toString(), slug: 'phone-x' });
+    expect(Product.findOne).toHaveBeenCalledWith({ brandId: brandId.toString(), catalogProductId: item._id });
+    expect(Product.create).not.toHaveBeenCalled();
   });
 
-  it('allows a BRAND_EMPLOYEE with products.create', async () => {
+  it('maps a database duplicate-key race to 409', async () => {
+    const item = givenCatalogItem();
+    Product.create.mockRejectedValue(Object.assign(new Error('dup'), { code: 11000 }));
+    const res = await request(app)
+      .post('/api/v1/products')
+      .set(...asUser(brandAdmin()))
+      .send(validBody(item._id));
+    expect(res.status).toBe(409);
+  });
+
+  it('allows a BRAND_EMPLOYEE with products.create and denies one without', async () => {
     const brandId = oid();
-    const categoryId = oid();
+    const item = givenCatalogItem();
     const employee = makeFakeUser({ role: ROLES.BRAND_EMPLOYEE, brandId });
-    Employee.findOne.mockResolvedValue({
-      isActive: true,
-      permissions: [PERMISSIONS.PRODUCTS_CREATE],
-    });
-    Category.findById.mockResolvedValue({ _id: categoryId, brandId });
-    Product.findOne.mockResolvedValue(null);
-    Product.create.mockImplementation(async (data) => data);
 
-    const res = await request(app)
+    Employee.findOne.mockResolvedValue({ isActive: true, permissions: [PERMISSIONS.PRODUCTS_CREATE] });
+    const ok = await request(app)
       .post('/api/v1/products')
       .set(...asUser(employee))
-      .send(validBody(categoryId));
+      .send(validBody(item._id));
+    expect(ok.status).toBe(201);
 
-    expect(res.status).toBe(201);
-  });
-
-  it('denies a BRAND_EMPLOYEE without products.create', async () => {
-    const employee = makeFakeUser({ role: ROLES.BRAND_EMPLOYEE, brandId: oid() });
     Employee.findOne.mockResolvedValue({ isActive: true, permissions: [] });
-
-    const res = await request(app)
+    const denied = await request(app)
       .post('/api/v1/products')
       .set(...asUser(employee))
-      .send(validBody(oid()));
-
-    expect(res.status).toBe(403);
+      .send(validBody(item._id));
+    expect(denied.status).toBe(403);
   });
 
-  it('denies CUSTOMER with 403', async () => {
-    const res = await request(app)
+  it('denies CUSTOMER and a brand user without a brandId with 403', async () => {
+    const customer = await request(app)
       .post('/api/v1/products')
       .set(...asUser(makeFakeUser({ role: ROLES.CUSTOMER })))
       .send(validBody(oid()));
-    expect(res.status).toBe(403);
-  });
+    expect(customer.status).toBe(403);
 
-  it('denies a brand user with a missing brandId with 403', async () => {
-    const res = await request(app)
+    const noBrand = await request(app)
       .post('/api/v1/products')
       .set(...asUser(makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId: undefined })))
       .send(validBody(oid()));
-    expect(res.status).toBe(403);
+    expect(noBrand.status).toBe(403);
     expect(Product.create).not.toHaveBeenCalled();
   });
 
@@ -559,31 +585,19 @@ describe('POST /api/v1/products', () => {
     expect(Product.create).not.toHaveBeenCalled();
   });
 
-  it('rejects validation errors with 400 (missing name, negative price, bad status)', async () => {
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId: oid() });
-    const categoryId = oid().toString();
+  it('rejects validation errors with 400 (missing item, negative price, bad status, string price)', async () => {
+    const admin = brandAdmin();
+    const id = oid().toString();
+    const send = (body) =>
+      request(app)
+        .post('/api/v1/products')
+        .set(...asUser(admin))
+        .send(body);
 
-    const missingName = await request(app)
-      .post('/api/v1/products')
-      .set(...asUser(admin))
-      .send({ price: 5, categoryId });
-    const negativePrice = await request(app)
-      .post('/api/v1/products')
-      .set(...asUser(admin))
-      .send({ name: 'P', price: -1, categoryId });
-    const badStatus = await request(app)
-      .post('/api/v1/products')
-      .set(...asUser(admin))
-      .send({ name: 'P', price: 1, categoryId, status: 'BOGUS' });
-    const stringPrice = await request(app)
-      .post('/api/v1/products')
-      .set(...asUser(admin))
-      .send({ name: 'P', price: '12', categoryId });
-
-    expect(missingName.status).toBe(400);
-    expect(negativePrice.status).toBe(400);
-    expect(badStatus.status).toBe(400);
-    expect(stringPrice.status).toBe(400);
+    expect((await send({ price: 5 })).status).toBe(400);
+    expect((await send({ catalogProductId: id, price: -1 })).status).toBe(400);
+    expect((await send({ catalogProductId: id, price: 1, status: 'BOGUS' })).status).toBe(400);
+    expect((await send({ catalogProductId: id, price: '12' })).status).toBe(400);
   });
 });
 
@@ -605,7 +619,7 @@ describe('PATCH /api/v1/products/:id', () => {
     const res = await request(app)
       .patch(`/api/v1/products/${productId.toString()}`)
       .set(...asUser(admin))
-      .send({ name: 'New', price: 10 });
+      .send({ price: 10 });
 
     expect(res.status).toBe(200);
     expect(save).toHaveBeenCalled();
@@ -702,60 +716,62 @@ describe('PATCH /api/v1/products/:id', () => {
     const res = await request(app)
       .patch(`/api/v1/products/${productId.toString()}`)
       .set(...asUser(admin))
-      .send({ name: 'New', brandId: oid().toString() });
+      .send({ price: 12, brandId: oid().toString() });
 
     expect(res.status).toBe(200);
     expect(doc.brandId).toBe(brandId);
-    expect(doc.name).toBe('New');
+    expect(doc.price).toBe(12);
   });
 
-  it('allows changing to a same-brand category', async () => {
+  it('does not let a store edit what the catalogue owns (name, description, images, category, item)', async () => {
     const brandId = oid();
     const productId = oid();
-    const newCategoryId = oid();
+    const catalogProductId = oid();
+    const categoryId = oid();
     const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
-    const doc = { _id: productId, brandId, save: jest.fn().mockResolvedValue(true) };
+    const doc = {
+      _id: productId,
+      brandId,
+      catalogProductId,
+      categoryId,
+      name: 'Phone X',
+      description: 'A phone',
+      images: ['https://example.com/phone.png'],
+      save: jest.fn().mockResolvedValue(true),
+    };
     Product.findById.mockResolvedValue(doc);
-    Category.findById.mockResolvedValue({ _id: newCategoryId, brandId });
 
     const res = await request(app)
       .patch(`/api/v1/products/${productId.toString()}`)
       .set(...asUser(admin))
-      .send({ categoryId: newCategoryId.toString() });
+      .send({
+        price: 20,
+        name: 'Hijacked',
+        description: 'Hijacked',
+        images: ['https://evil.example/x.png'],
+        categoryId: oid().toString(),
+        catalogProductId: oid().toString(),
+      });
 
     expect(res.status).toBe(200);
-    expect(doc.categoryId).toBe(newCategoryId.toString());
+    expect(doc.price).toBe(20);
+    expect(doc.name).toBe('Phone X');
+    expect(doc.description).toBe('A phone');
+    expect(doc.images).toEqual(['https://example.com/phone.png']);
+    expect(doc.categoryId).toBe(categoryId);
+    expect(doc.catalogProductId).toBe(catalogProductId);
+    expect(Category.findById).not.toHaveBeenCalled();
   });
 
-  it('denies changing to an inactive category with 400', async () => {
-    const brandId = oid();
+  it('rejects a body that only contains catalogue-owned fields (nothing left to change) with 400', async () => {
     const productId = oid();
-    const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
-    const save = jest.fn();
-    Product.findById.mockResolvedValue({ _id: productId, brandId, save });
-    Category.findById.mockResolvedValue({ _id: oid(), isActive: false });
-
-    const res = await request(app)
-      .patch(`/api/v1/products/${productId.toString()}`)
-      .set(...asUser(admin))
-      .send({ categoryId: oid().toString() });
-
-    expect(res.status).toBe(400);
-    expect(save).not.toHaveBeenCalled();
-  });
-
-  it('rejects a nonexistent new category with 400', async () => {
     const brandId = oid();
-    const productId = oid();
     const admin = makeFakeUser({ role: ROLES.BRAND_ADMIN, brandId });
     Product.findById.mockResolvedValue({ _id: productId, brandId, save: jest.fn() });
-    Category.findById.mockResolvedValue(null);
-
     const res = await request(app)
       .patch(`/api/v1/products/${productId.toString()}`)
       .set(...asUser(admin))
-      .send({ categoryId: oid().toString() });
-
+      .send({ name: 'Hijacked' });
     expect(res.status).toBe(400);
   });
 

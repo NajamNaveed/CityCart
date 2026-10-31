@@ -607,4 +607,26 @@ const REMARKS = {
   quick: { good: ['It arrived as described.'], bad: ['Not as pictured.', 'The quality was poor for the price.'] },
 }
 
+// One real-world item sold by three stores at different prices and stock levels.
+// In the shared catalogue it is a single product with three store listings
+// (docs/22: no duplicate product records).
+const SHARED_ITEM = {
+  n: 'Plain White Cotton Suit Length, 2.5 m',
+  m: 'Chenab Textile Mills',
+  size: { value: 2.5, unit: 'm' },
+  barcode: '8964000123456',
+  kw: 'white,cotton,fabric',
+  d: 'Plain white cotton cloth, 2.5 metres, for a shalwar kameez or a base to print and dye. Pre-shrunk, even weave, same cloth whichever shop you buy it from.',
+  a: { fabric: 'Cotton', length: '2.5 m', color: 'White', care: 'Cold wash' },
+};
+const SHARED_OFFERS = {
+  loom: { c: 'men', p: 2400, s: 60 },
+  rangrez: { c: 'custom', p: 2150, s: 120 },
+  mehr: { c: 'sk', p: 2550, s: 25 },
+};
+for (const brand of BRANDS) {
+  const offer = SHARED_OFFERS[brand.key];
+  if (offer) brand.products.push({ ...SHARED_ITEM, ...offer });
+}
+
 module.exports = { P, CITIES, BLOCKS, BRANCHES, BRANDS, CHATS, LONG_CHAT, CUSTOMERS, ADMIN, CARTS, REMARKS }

@@ -173,7 +173,24 @@ async function deactivateCategory(category) {
   return category.save();
 }
 
+/**
+ * Why a category cannot be used for a product or catalogue item, or null when it
+ * can: it must exist, be active, and have no active subcategories (a "leaf").
+ */
+async function getUnusableCategoryReason(categoryId) {
+  const category = await Category.findById(categoryId);
+  if (!category || category.isActive === false) {
+    return 'Invalid categoryId — category not found.';
+  }
+  const activeChildren = await Category.countDocuments({ parentId: category._id, isActive: true });
+  if (activeChildren > 0) {
+    return 'Choose a subcategory — this category has subcategories.';
+  }
+  return null;
+}
+
 module.exports = {
+  getUnusableCategoryReason,
   buildCategoryTree,
   getPublicCategoryTree,
   listPublicCategories,

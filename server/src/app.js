@@ -17,6 +17,8 @@ const brandRoutes = require('./routes/brand.routes');
 const storeRoutes = require('./routes/store.routes');
 
 const categoryRoutes = require('./routes/category.routes');
+const catalogRoutes = require('./routes/catalog.routes');
+const adminCatalogRoutes = require('./routes/adminCatalog.routes');
 const productRoutes = require('./routes/product.routes');
 
 const inventoryRoutes = require('./routes/inventory.routes');
@@ -99,6 +101,8 @@ app.use('/api/v1/brands', brandRoutes);
 app.use('/api/v1/stores', storeRoutes);
 
 app.use('/api/v1/categories', categoryRoutes);
+app.use('/api/v1/catalog', catalogRoutes);
+app.use('/api/v1/admin/catalog', adminCatalogRoutes);
 app.use('/api/v1/products', productRoutes);
 
 app.use('/api/v1/inventory', inventoryRoutes);

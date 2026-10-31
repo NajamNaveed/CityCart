@@ -26,6 +26,7 @@ const MODELS = {
   brands: require('../src/models/brand.model'),
   stores: require('../src/models/store.model'),
   categories: require('../src/models/category.model'),
+  catalogProducts: require('../src/models/catalogProduct.model'),
   products: require('../src/models/product.model'),
   inventories: require('../src/models/inventory.model'),
   employees: require('../src/models/employee.model'),

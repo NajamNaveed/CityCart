@@ -60,7 +60,7 @@ function buildDataset({ now = new Date(), hashes }) {
   const ago = (ms) => new Date(now.getTime() - ms);
 
   const ds = {
-    cities: [], blocks: [], branches: [], conversations: [], messages: [], users: [], brands: [], stores: [], categories: [], products: [], inventories: [],
+    cities: [], blocks: [], branches: [], conversations: [], messages: [], users: [], brands: [], stores: [], categories: [], catalogProducts: [], products: [], inventories: [],
     employees: [], carts: [], orders: [], payments: [], receipts: [], deliveries: [], orderAdjustments: [], inventoryMovements: [],
     reviews: [], notifications: [], counters: [],
   };
@@ -117,6 +117,7 @@ function buildDataset({ now = new Date(), hashes }) {
   // ── brands, stores, categories, products, inventory, staff ──
   const brands = [];
   const globalCategoryByKey = new Map();
+  const catalogBySlug = new Map();
   for (const b of BRANDS) {
     const createdAt = ago(b.ageDays * DAY);
     const brandId = new ObjectId();
@@ -190,9 +191,21 @@ function buildDataset({ now = new Date(), hashes }) {
       const parentKey = (b.categories.find((c) => c.key === p.c) || {}).parent;
       const carriers = branchDocs.filter(({ def }) => !def.only || def.only.includes(p.c) || (parentKey && def.only.includes(parentKey)));
       const branchIds = carriers.length === branchDocs.length ? [] : carriers.map(({ doc: br }) => br._id);
+      // The shared catalogue item: created once, then reused by every store that sells it.
+      let item = catalogBySlug.get(slugify(p.n));
+      if (!item) {
+        item = {
+          _id: new ObjectId(), name: p.n, slug: slugify(p.n), categoryId: categoryByKey[p.c]._id, description: p.d,
+          images: [photo(p.kw, 1), photo(p.kw, 2), photo(p.kw, 3)], scope: 'GLOBAL', status: 'ACTIVE', createdBy: admin._id,
+          ...(p.m && { manufacturer: p.m }), ...(p.size && { size: p.size }), ...(p.barcode && { barcode: p.barcode }),
+          createdAt: made, updatedAt: made,
+        };
+        catalogBySlug.set(item.slug, item);
+        ds.catalogProducts.push(item);
+      }
       const doc = {
-        _id: new ObjectId(), brandId, categoryId: categoryByKey[p.c]._id, name: p.n, slug: slugify(p.n), description: p.d,
-        images: [photo(p.kw, 1), photo(p.kw, 2), photo(p.kw, 3)], price: p.p,
+        _id: new ObjectId(), brandId, catalogProductId: item._id, categoryId: item.categoryId, name: item.name, slug: item.slug,
+        description: item.description, images: item.images, price: p.p,
         ...(p.cmp && { compareAtPrice: p.cmp }), sku: `${b.skuPrefix}-${pad(i + 1, 3)}`,
         isActive: status === 'ACTIVE' || status === 'DRAFT', status, attributes: p.a, branchIds, createdAt: made, updatedAt: made,
       };
@@ -247,6 +260,61 @@ function buildDataset({ now = new Date(), hashes }) {
     const match = brand.staff.find((s) => s.employee.isActive && s.employee.permissions.includes(permission));
     return match ? match.user : brand.owner;
   };
+
+  // ── catalogue-only items: in the shared catalogue, listed by no store yet ──
+  // These are the products the shipped sample CSV (sample-products-import.csv)
+  // lists for the first store, so the import demo works on a fresh database.
+  const sampleCatalog = require('./sample-catalog.json');
+  for (const row of sampleCatalog) {
+    const categoryDoc = ds.categories.find((c) => c.name === row.category && !ds.categories.some((x) => String(x.parentId) === String(c._id)));
+    if (!categoryDoc) throw new Error(`sample-catalog.json: unknown category "${row.category}"`);
+    if (catalogBySlug.has(slugify(row.name))) continue;
+    const made = new Date(now.getTime() - 20 * DAY);
+    const item = {
+      _id: new ObjectId(), name: row.name, slug: slugify(row.name), categoryId: categoryDoc._id, description: row.description,
+      images: row.images, scope: 'GLOBAL', status: 'ACTIVE', createdBy: admin._id, createdAt: made, updatedAt: made,
+    };
+    catalogBySlug.set(item.slug, item);
+    ds.catalogProducts.push(item);
+  }
+
+  // ── catalogue requests and a merged duplicate, so the admin queue is not empty ──
+  const brandDocOf = (key) => ds.brands.find((x) => x.name === BRANDS.find((b) => b.key === key).name);
+  const ownerOf = (brand) => ds.users.find((u) => u.role === 'BRAND_ADMIN' && String(u.brandId) === String(brand._id));
+  const leaf = (name) => ds.categories.find((c) => c.name === name);
+  const request = (brandKey, name, categoryName, extra) => {
+    const brand = brandDocOf(brandKey);
+    const made = ago(6 * DAY);
+    const item = {
+      _id: new ObjectId(), name, slug: slugify(name), categoryId: leaf(categoryName)._id, brandId: brand._id, createdBy: ownerOf(brand)._id,
+      images: [photo(slugify(name), 1)], createdAt: made, updatedAt: made, ...extra,
+    };
+    catalogBySlug.set(item.slug, item);
+    ds.catalogProducts.push(item);
+    return item;
+  };
+  // A store's own item, usable only by that store.
+  request('sukoon', 'Monogrammed Cushion Cover, made to order', 'Cushions & Rugs', {
+    description: 'Cushion cover embroidered with the buyer\'s initials. Made to order in about a week.', scope: 'PRIVATE', status: 'ACTIVE',
+  });
+  // Waiting for the platform admin.
+  request('zaitoon', 'Hand-Stitched Leather Slippers, Kids', 'Chappals & Sandals', {
+    description: 'Soft leather slippers for children, hand-stitched.', scope: 'GLOBAL', status: 'PENDING',
+  });
+  // Turned down, with the reason the store sees.
+  request('naqsh', 'Silver-Plated Anklet Pair', 'Earrings', {
+    description: 'Plain silver-plated anklets.', scope: 'GLOBAL', status: 'REJECTED',
+    reviewNote: 'Not a fit for the Earrings category. Please request it again under a jewellery category that fits.',
+    reviewedBy: admin._id, reviewedAt: ago(5 * DAY),
+  });
+  // A duplicate that an admin merged into the real item.
+  const shared = catalogBySlug.get(slugify('Plain White Cotton Suit Length, 2.5 m'));
+  const duplicateMade = ago(30 * DAY);
+  ds.catalogProducts.push({
+    _id: new ObjectId(), name: 'Plain White Cotton Suit Length 2.5m', slug: slugify('Plain White Cotton Suit Length 2.5m'),
+    categoryId: shared.categoryId, scope: 'GLOBAL', status: 'ARCHIVED', mergedIntoId: shared._id, createdBy: admin._id,
+    createdAt: duplicateMade, updatedAt: ago(25 * DAY),
+  });
 
   // ── open carts ──
   for (const [customerIndex, lines] of CARTS) {

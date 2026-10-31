@@ -6,8 +6,8 @@ import { downloadFile } from '../../utils/download'
 import { btnDark, btnOutline } from '../../ui'
 
 const TEMPLATE =
-  'name,sku,category,price,compareAtPrice,status,quantity,lowStockThreshold,description,images,branches\r\n' +
-  'Sample Lawn Suit,LAWN-001,Lawn Collection,4500,5200,ACTIVE,20,5,"Soft 3-piece lawn",https://example.com/photo.jpg,Gulberg Shop|D Ground Shop\r\n'
+  'name,barcode,sku,price,compareAtPrice,status,quantity,lowStockThreshold,branches\r\n' +
+  'Plain White Cotton Suit Length, 2.5 m,,WHITE-001,2400,2800,ACTIVE,20,5,Gulberg Shop|D Ground Shop\r\n'
 
 // Upload a CSV: "Check file" validates every row without saving, "Import" saves the valid ones.
 export default function ProductImportModal({ open, onClose, onImported }) {
@@ -56,8 +56,8 @@ export default function ProductImportModal({ open, onClose, onImported }) {
         Products without a status are saved as drafts.
       </p>
       <ul className="mt-3 list-disc space-y-1 pl-5 text-[12.5px] text-muted">
-        <li>Required columns: name, category, price. The category must be a CityCart category (use its name); branches must already exist.</li>
-        <li>Separate several photos or branches with a | sign. Leave branches empty to sell at all branches.</li>
+        <li>Required columns: name, price. The name (or barcode) must match a product in the CityCart catalogue, and branches must already exist. Products that are not in the catalogue can be requested from Add product.</li>
+        <li>Separate several branches with a | sign. Leave branches empty to sell at all branches. Name, photos and description come from the catalogue.</li>
         <li>Up to 500 products per file.</li>
       </ul>
       <button type="button" onClick={() => downloadFile(TEMPLATE, 'products-template.csv')} className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-pine underline">

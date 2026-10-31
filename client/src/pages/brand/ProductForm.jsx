@@ -4,7 +4,8 @@ import api, { getErrorMessage, getFieldErrors } from '../../services/api'
 import { useAuth } from '../../hooks/useAuth'
 import { useCan } from '../../hooks/useCan'
 import Field from '../../components/Field'
-import ImageUploader from '../../components/brand/ImageUploader'
+import CatalogPicker, { CatalogItemCard } from '../../components/brand/CatalogPicker'
+import { categoryLabelFor } from '../../utils/categoryLabel'
 import { Notice, PageHeader } from '../../components/brand/Bits'
 import { Skeleton } from '../../components/ui'
 import { btnPine, inputClass } from '../../ui'
@@ -19,12 +20,9 @@ const STATUS_OPTIONS = [
 
 function toForm(product, inventory) {
   return {
-    name: product?.name ?? '',
-    description: product?.description ?? '',
     price: product ? String(product.price) : '',
     compareAtPrice: product?.compareAtPrice != null ? String(product.compareAtPrice) : '',
     sku: product?.sku ?? '',
-    categoryId: product?.categoryId ?? '',
     status: product && product.status !== 'ARCHIVED' ? product.status : 'ACTIVE',
     quantity: String(inventory?.quantity ?? 0),
     lowStockThreshold: String(inventory?.lowStockThreshold ?? 0),
@@ -40,7 +38,8 @@ function FormBody({ id, product, inventory, categories, branches }) {
   const canArchive = can('products.delete')
   const initial = toForm(product, inventory)
   const [form, setForm] = useState(initial)
-  const [images, setImages] = useState(product?.images ?? [])
+  // The catalogue item this listing is for. Chosen first when adding; fixed when editing.
+  const [item, setItem] = useState(product ?? null)
   // Where the product is sold: every branch (an empty list) or only the chosen ones.
   const [branchIds, setBranchIds] = useState(product?.branchIds ?? [])
   const [branchMode, setBranchMode] = useState(product?.branchIds?.length ? 'selected' : 'all')
@@ -56,6 +55,10 @@ function FormBody({ id, product, inventory, categories, branches }) {
     e.preventDefault()
     setError('')
     setFieldErrors({})
+    if (!id && !item) {
+      setError('Choose a product from the catalogue first.')
+      return
+    }
     if (branchMode === 'selected' && branchIds.length === 0) {
       setError('Choose at least one branch, or sell the product at all branches.')
       window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -64,11 +67,8 @@ function FormBody({ id, product, inventory, categories, branches }) {
     setSaving(true)
 
     const payload = {
-      name: form.name,
-      description: form.description,
+      ...(!id && { catalogProductId: item._id }),
       price: Number(form.price),
-      categoryId: form.categoryId,
-      images,
       branchIds: branchMode === 'all' ? [] : branchIds,
       status: form.status,
       // Left out when empty: the API cannot clear these once set.
@@ -122,6 +122,29 @@ function FormBody({ id, product, inventory, categories, branches }) {
     }
   }
 
+  // Adding: first choose which catalogue product to list (outside the form, so searching never submits it).
+  if (!id && !item) {
+    return (
+      <>
+        <PageHeader
+          title="Add product"
+          intro="Choose the product from the CityCart catalogue, then set your own price and stock."
+          action={
+            <Link
+              to="/brand/products"
+              className="inline-flex items-center gap-1 rounded-md border border-line bg-white px-3.5 py-2 text-[13px] font-medium text-ink transition hover:border-ink"
+            >
+              Back to products
+            </Link>
+          }
+        />
+        <div className="max-w-3xl">
+          <CatalogPicker categories={categories} onSelect={setItem} />
+        </div>
+      </>
+    )
+  }
+
   return (
     <>
       <PageHeader
@@ -150,44 +173,14 @@ function FormBody({ id, product, inventory, categories, branches }) {
         )}
 
         <fieldset disabled={!canSave} className="min-w-0 space-y-5">
+        <CatalogItemCard
+          item={item}
+          categoryLabel={categoryLabelFor(categories, item.categoryId)}
+          onChange={id ? undefined : () => setItem(null)}
+        />
+
         <fieldset className="grid gap-5 rounded-lg border border-line bg-white p-6">
-          <legend className="sr-only">Details</legend>
-          <div className="sm:col-span-2">
-            <Field label="Name" id="name" name="name" value={form.name} onChange={onChange} error={fieldErrors.name} required />
-          </div>
-          <div className="sm:col-span-2">
-            <label htmlFor="description" className={labelClass}>
-              Description
-            </label>
-            <textarea id="description" name="description" rows={5} value={form.description} onChange={onChange} className={`${inputClass} py-3`} />
-          </div>
-          <div>
-            <label htmlFor="categoryId" className={labelClass}>
-              Category
-            </label>
-            <select id="categoryId" name="categoryId" value={form.categoryId} onChange={onChange} className={`h-11 ${inputClass} ${fieldErrors.categoryId ? 'border-clay' : ''}`} required>
-              <option value="">Choose a category</option>
-              {categories.map((c) =>
-                c.children.length > 0 ? (
-                  <optgroup key={c._id} label={c.name}>
-                    {c.children.map((child) => (
-                      <option key={child._id} value={child._id}>
-                        {child.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                ) : (
-                  <option key={c._id} value={c._id}>
-                    {c.name}
-                  </option>
-                )
-              )}
-            </select>
-            {fieldErrors.categoryId && <p className="mt-1.5 text-xs text-clay">{fieldErrors.categoryId}</p>}
-            {categories.length === 0 && (
-              <p className="mt-1.5 text-xs text-muted">No categories exist yet. Ask the CityCart admin to add some.</p>
-            )}
-          </div>
+          <legend className="sr-only">Visibility</legend>
           <div>
             <label htmlFor="status" className={labelClass}>
               Visibility
@@ -269,11 +262,6 @@ function FormBody({ id, product, inventory, categories, branches }) {
             </>
           )}
         </fieldset>
-
-        <div className="rounded-lg border border-line bg-white p-6">
-          <p className={labelClass}>Photos</p>
-          <ImageUploader images={images} onChange={setImages} name={form.name || 'Product'} />
-        </div>
 
         </fieldset>
 

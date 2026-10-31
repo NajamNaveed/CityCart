@@ -9,6 +9,7 @@ const User = require('../src/models/user.model');
 const Brand = require('../src/models/brand.model');
 const Store = require('../src/models/store.model');
 const Category = require('../src/models/category.model');
+const CatalogProduct = require('../src/models/catalogProduct.model');
 const Product = require('../src/models/product.model');
 const Inventory = require('../src/models/inventory.model');
 const Employee = require('../src/models/employee.model');
@@ -25,7 +26,7 @@ const Counter = require('../src/models/counter.model');
 const { ALL_PERMISSIONS } = require('../src/config/permissions');
 
 const MODELS = {
-  cities: City, blocks: Block, branches: Branch, conversations: Conversation, messages: Message, users: User, brands: Brand, stores: Store, categories: Category, products: Product,
+  cities: City, blocks: Block, branches: Branch, conversations: Conversation, messages: Message, users: User, brands: Brand, stores: Store, categories: Category, catalogProducts: CatalogProduct, products: Product,
   inventories: Inventory, employees: Employee, carts: Cart, orders: Order, orderAdjustments: OrderAdjustment, inventoryMovements: InventoryMovement, payments: Payment, receipts: Receipt,
   deliveries: Delivery, reviews: Review, notifications: Notification, counters: Counter,
 };
@@ -88,7 +89,8 @@ describe('demo dataset', () => {
     expect(unique(ds.brands.map((b) => b.slug))).toBe(true);
     expect(unique(ds.stores.map((s) => s.slug))).toBe(true);
     expect(unique(ds.stores.map((s) => id(s.brandId)))).toBe(true);
-    expect(unique(ds.categories.map((c) => `${id(c.brandId)}/${c.slug}`))).toBe(true);
+    expect(unique(ds.categories.map((c) => `${id(c.parentId)}/${c.slug}`))).toBe(true);
+    expect(unique(ds.catalogProducts.map((i) => i.barcode).filter(Boolean))).toBe(true);
     expect(unique(ds.products.map((p) => `${id(p.brandId)}/${p.slug}`))).toBe(true);
     expect(unique(ds.products.map((p) => p.sku))).toBe(true);
     expect(unique(ds.inventories.map((i) => id(i.productId)))).toBe(true);
@@ -192,6 +194,21 @@ describe('demo dataset', () => {
     expect(ds.conversations.some((c) => c.brandUnread > 0)).toBe(true);
   });
 
+  it('shares one catalogue item between several stores, with a queue of requests for the admin', () => {
+    const shared = ds.catalogProducts.find((i) => i.barcode);
+    const listings = ds.products.filter((p) => id(p.catalogProductId) === id(shared._id));
+    expect(listings.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(listings.map((p) => id(p.brandId))).size).toBe(listings.length); // one listing per store
+    expect(new Set(listings.map((p) => p.price)).size).toBeGreaterThan(1); // each store sets its own price
+    const byStatus = (s) => ds.catalogProducts.filter((i) => i.status === s);
+    expect(byStatus('PENDING').length).toBeGreaterThanOrEqual(1);
+    expect(byStatus('REJECTED')[0].reviewNote).toBeTruthy();
+    expect(ds.catalogProducts.some((i) => i.scope === 'PRIVATE' && i.brandId)).toBe(true);
+    // items no store lists yet exist for the sample CSV import
+    const listed = new Set(ds.products.map((p) => id(p.catalogProductId)));
+    expect(ds.catalogProducts.filter((i) => i.status === 'ACTIVE' && i.scope === 'GLOBAL' && !listed.has(id(i._id))).length).toBeGreaterThanOrEqual(30);
+  });
+
   it('has every reference pointing at something that exists', () => {
     const ids = (list) => new Set(list.map((d) => id(d._id)));
     const cities = ids(ds.cities);
@@ -215,6 +232,21 @@ describe('demo dataset', () => {
       expect(category).toBeDefined();
       // a product points at a leaf: no category lists it as a parent
       expect(ds.categories.some((c) => c.parentId && id(c.parentId) === id(p.categoryId))).toBe(false);
+    });
+    // Every listing points at a catalogue item and mirrors its name, category, description and images.
+    const items = new Map(ds.catalogProducts.map((i) => [id(i._id), i]));
+    ds.products.forEach((p) => {
+      const item = items.get(id(p.catalogProductId));
+      expect(item).toBeDefined();
+      expect(item.status).toBe('ACTIVE');
+      expect({ name: p.name, categoryId: id(p.categoryId), description: p.description, images: p.images }).toEqual({
+        name: item.name, categoryId: id(item.categoryId), description: item.description, images: item.images,
+      });
+    });
+    ds.catalogProducts.forEach((i) => {
+      expect(ds.categories.some((c) => id(c._id) === id(i.categoryId))).toBe(true);
+      if (i.brandId) expect(brands.has(id(i.brandId))).toBe(true);
+      if (i.mergedIntoId) expect(items.has(id(i.mergedIntoId))).toBe(true);
     });
     ds.inventories.forEach((i) => expect(id(productById.get(id(i.productId)).brandId)).toBe(id(i.brandId)));
     ds.employees.forEach((e) => {

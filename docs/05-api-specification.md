@@ -642,6 +642,44 @@ depend on the category.
 
 ---
 
+# 11.1 Catalogue Endpoints
+
+The shared product catalogue (Marketplace v2, Phase 1b).
+
+## For stores
+
+```text
+GET  /api/v1/catalog                 ?q=&categoryId=&page=&limit=
+GET  /api/v1/catalog/mine            the store's own requests and private items
+GET  /api/v1/catalog/:id
+POST /api/v1/catalog/requests        ask for a new item
+```
+
+Reading needs `products.view`, requesting needs `products.create`, and the account
+must belong to a brand. `GET /catalog` returns ACTIVE global items plus the store's
+own private items. `q` searches name, manufacturer and barcode.
+
+`POST /catalog/requests` body: `name`, `categoryId` (required), `manufacturer`,
+`description`, `images`, `size {value, unit}`, `barcode`, `private`.
+`private: true` creates a PRIVATE, ACTIVE item usable at once by that store;
+otherwise a GLOBAL item is created as PENDING for an admin to review.
+
+## For platform admins
+
+Required: super admin, or an admin partner with `admin.catalog`.
+
+```text
+GET    /api/v1/admin/catalog               ?status=&scope=&q=&categoryId=&page=&limit=
+POST   /api/v1/admin/catalog               create a GLOBAL, ACTIVE item
+PATCH  /api/v1/admin/catalog/:id           edit; refreshes every store listing
+POST   /api/v1/admin/catalog/:id/approve   PENDING -> ACTIVE
+POST   /api/v1/admin/catalog/:id/reject    body { note }; PENDING -> REJECTED
+POST   /api/v1/admin/catalog/:id/merge     body { intoId }
+DELETE /api/v1/admin/catalog/:id           archive (409 while stores list it)
+```
+
+---
+
 # 12. Product Endpoints
 
 Base:
@@ -698,6 +736,13 @@ products.create
 ```
 
 The backend automatically associates the product with the authenticated user's brand.
+
+A product is a store's listing of a catalogue item. Body: `catalogProductId`
+(required), `price` (required), and optionally `compareAtPrice`, `sku`, `status`,
+`isActive`, `branchIds`, `attributes`. The name, description, images and category
+are copied from the catalogue item and cannot be sent. The item must be ACTIVE and
+either GLOBAL or the store's own PRIVATE item. A store can list an item only once
+(409).
 
 ---
 

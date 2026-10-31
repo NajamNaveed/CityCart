@@ -21,6 +21,7 @@ require('../src/models/brand.model');
 require('../src/models/store.model');
 require('../src/models/employee.model');
 require('../src/models/category.model');
+require('../src/models/catalogProduct.model');
 require('../src/models/product.model');
 require('../src/models/inventory.model');
 require('../src/models/cart.model');

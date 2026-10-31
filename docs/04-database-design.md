@@ -546,11 +546,20 @@ Collection:
 products
 ```
 
+A `Product` is a store's **listing** of a shared catalogue item (see §14.1,
+Marketplace v2 Phase 1b, `docs/22-marketplace-v2-plan.md`). The store sets its
+own price, SKU, status, stock and branches. `name`, `description`, `images` and
+`categoryId` are **copied from the catalogue item** when the listing is created and
+refreshed whenever the catalogue item changes, so cart, orders, shop pages and
+search keep reading them from the product as before. A store cannot edit them on
+the listing.
+
 ### Fields
 
 ```text
 _id
 brandId
+catalogProductId
 categoryId
 name
 slug
@@ -566,6 +575,9 @@ createdAt
 updatedAt
 ```
 
+A store lists a catalogue item once (checked by the service for
+`{ brandId, catalogProductId }` and by the `{ brandId, slug }` unique index).
+
 Whether stock is tracked for a product is controlled by `Inventory.trackInventory` (§18), not by a separate field on Product. Keeping a single flag avoids the two documents disagreeing about which one is authoritative.
 
 ### Product status
@@ -578,6 +590,70 @@ ARCHIVED
 ```
 
 The exact publication workflow may be expanded later.
+
+---
+
+## 14.1 Catalogue Product Model
+
+Collection:
+
+```text
+catalogproducts
+```
+
+One record per real-world item ("Dalda Ghee 1 kg"), shared by every store that
+sells it. In this project "Brand" means a seller, so the maker of the item is
+called `manufacturer`.
+
+### Fields
+
+```text
+_id
+name
+slug
+manufacturer
+categoryId
+description
+images
+size { value, unit }
+barcode
+scope
+status
+brandId
+createdBy
+reviewNote
+reviewedBy
+reviewedAt
+mergedIntoId
+createdAt
+updatedAt
+```
+
+`scope`:
+
+```text
+GLOBAL   visible to every store once ACTIVE
+PRIVATE  usable by one store only (brandId); needs no approval
+```
+
+`status`:
+
+```text
+ACTIVE
+PENDING   a store asked for a new global item; waiting for an admin
+REJECTED  an admin turned the request down (reviewNote tells the store why)
+ARCHIVED  retired, or merged into another item (mergedIntoId)
+```
+
+Rules:
+
+- `barcode` is unique across the catalogue (sparse index).
+- A GLOBAL item's name (slug) is unique among GLOBAL items that are ACTIVE or
+  PENDING. A PRIVATE item's name is unique within its store.
+- `categoryId` must be an active leaf category (docs §13).
+- Merging moves every listing to the target item and archives the duplicate.
+  It is refused while one store lists both.
+- An item cannot be archived while a store still lists it.
 
 ---
 

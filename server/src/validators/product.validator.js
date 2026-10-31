@@ -25,14 +25,13 @@ const objectIdString = z.string().refine((value) => mongoose.Types.ObjectId.isVa
   message: 'Invalid id.',
 });
 
+// A listing is created from a catalogue item (docs/22). Its name, description,
+// images and category come from that item, so they are not accepted here.
 const createProductSchema = z.object({
-  name: z.string().trim().min(1, 'name is required'),
-  description: z.string().trim().optional(),
-  images: z.array(z.string().trim()).optional(),
+  catalogProductId: objectIdString,
   price: z.number().min(0, 'price must be >= 0'),
   compareAtPrice: z.number().min(0).optional(),
   sku: z.string().trim().optional(),
-  categoryId: objectIdString,
   attributes: z.record(z.string(), z.unknown()).optional(),
   branchIds: z.array(objectIdString).max(50).optional(),
   status: z.enum(Product.STATUSES).optional(),
@@ -41,13 +40,9 @@ const createProductSchema = z.object({
 
 const updateProductSchema = z
   .object({
-    name: z.string().trim().min(1, 'name is required'),
-    description: z.string().trim(),
-    images: z.array(z.string().trim()),
     price: z.number().min(0, 'price must be >= 0'),
     compareAtPrice: z.number().min(0),
     sku: z.string().trim(),
-    categoryId: objectIdString,
     attributes: z.record(z.string(), z.unknown()),
     branchIds: z.array(objectIdString).max(50),
     status: z.enum(Product.STATUSES),

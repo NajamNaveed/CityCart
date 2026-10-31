@@ -165,7 +165,7 @@ describe('terminateBrand (real MongoDB)', () => {
     const employeeUser = await User.create({ name: 'Emp', email: `emp${++n}@x.com`, passwordHash: 'x', role: 'BRAND_EMPLOYEE', brandId: brand._id });
     await Employee.create({ userId: employeeUser._id, brandId: brand._id, permissions: ['orders.view'] });
     const product = await Product.create({
-      brandId: brand._id, categoryId: oid(), name: `P${++n}`, slug: `p${n}`, sku: `S${n}`, price: 10, status: 'ACTIVE', isActive: true,
+      brandId: brand._id, catalogProductId: oid(), categoryId: oid(), name: `P${++n}`, slug: `p${n}`, sku: `S${n}`, price: 10, status: 'ACTIVE', isActive: true,
     });
     await Inventory.create({ productId: product._id, brandId: brand._id, quantity: 20 });
 

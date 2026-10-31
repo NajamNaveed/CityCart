@@ -55,6 +55,7 @@ const AdminOrderDetail = lazy(() => import('./pages/admin/OrderDetail'))
 const AdminCities = lazy(() => import('./pages/admin/Cities'))
 const AdminBlocks = lazy(() => import('./pages/admin/Blocks'))
 const AdminCategories = lazy(() => import('./pages/admin/Categories'))
+const AdminCatalogue = lazy(() => import('./pages/admin/Catalogue'))
 const AdminSettings = lazy(() => import('./pages/admin/Settings'))
 const AdminAnalytics = lazy(() => import('./pages/admin/Analytics'))
 const AdminUsers = lazy(() => import('./pages/admin/Users'))
@@ -170,6 +171,7 @@ function App() {
                     <Route path="cities" element={<AdminCities />} />
                     <Route path="blocks" element={<AdminBlocks />} />
                     <Route path="categories" element={<AdminCategories />} />
+                    <Route path="catalogue" element={<AdminCatalogue />} />
                     <Route path="settings" element={<AdminSettings />} />
                     <Route path="analytics" element={<AdminAnalytics />} />
                     <Route path="users" element={<AdminUsers />} />

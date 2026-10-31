@@ -1,5 +1,5 @@
 const Product = require('../models/product.model');
-const Category = require('../models/category.model');
+const CatalogProduct = require('../models/catalogProduct.model');
 const Branch = require('../models/branch.model');
 const Inventory = require('../models/inventory.model');
 const { parseCsv, toCsv } = require('../utils/csv');
@@ -14,8 +14,13 @@ const { updateInventory } = require('./inventory.service');
  *
  * Import goes through the SAME service functions as the dashboard form
  * (createProduct / applyProductUpdate / updateInventory), so every rule —
- * category ownership, branch ownership, unique names, stock limits — applies
- * row by row. `brandId` always comes from the caller's session, never the file.
+ * catalogue membership, branch ownership, one listing per item, stock limits —
+ * applies row by row. `brandId` always comes from the caller's session, never the file.
+ *
+ * Marketplace v2 (docs/22): a row lists an item that ALREADY exists in the shared
+ * catalogue. It is found by `barcode` when given, otherwise by `name`. A row can
+ * set only the store's own price, SKU, status, stock and branches; the item's
+ * name, category, description and images belong to the catalogue.
  */
 class CsvImportError extends Error {
   constructor(status, message) {
@@ -26,18 +31,16 @@ class CsvImportError extends Error {
 
 const COLUMNS = [
   'name',
+  'barcode',
   'sku',
-  'category',
   'price',
   'compareAtPrice',
   'status',
   'quantity',
   'lowStockThreshold',
-  'description',
-  'images',
   'branches',
 ];
-const REQUIRED_COLUMNS = ['name', 'category', 'price'];
+const REQUIRED_COLUMNS = ['name', 'price'];
 const IMPORT_STATUSES = ['ACTIVE', 'DRAFT', 'INACTIVE'];
 const MAX_IMPORT_ROWS = 500;
 const MAX_EXPORT_ROWS = 5000;
@@ -72,14 +75,10 @@ const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x))
 function isUnchanged(existing, data, inventory, stock) {
   if (existing.isActive === false) return false; // an archived product would be restored
   const checks = [
-    data.name === undefined || data.name === existing.name,
     data.sku === undefined || data.sku === existing.sku,
     data.price === undefined || data.price === existing.price,
     data.compareAtPrice === undefined || data.compareAtPrice === existing.compareAtPrice,
     data.status === undefined || data.status === existing.status,
-    data.description === undefined || data.description === existing.description,
-    data.categoryId === undefined || String(data.categoryId) === String(existing.categoryId),
-    data.images === undefined || JSON.stringify(data.images) === JSON.stringify(existing.images || []),
     data.branchIds === undefined || sameSet(asIds(data.branchIds), asIds(existing.branchIds)),
     stock.quantity === undefined || (inventory && inventory.quantity === stock.quantity),
     stock.lowStockThreshold === undefined || (inventory && inventory.lowStockThreshold === stock.lowStockThreshold),
@@ -91,12 +90,12 @@ async function exportBrandProducts(brandId) {
   // Archived products are removed from the shop, so they are left out: the file can always be imported back.
   const products = await Product.find({ brandId, status: { $ne: 'ARCHIVED' } }).sort({ createdAt: 1 }).limit(MAX_EXPORT_ROWS);
   const ids = products.map((p) => p._id);
-  const [categories, branches, inventories] = await Promise.all([
-    Category.find({}),
+  const [items, branches, inventories] = await Promise.all([
+    ids.length ? CatalogProduct.find({ _id: { $in: products.map((p) => p.catalogProductId) } }) : [],
     Branch.find({ brandId }),
     ids.length ? Inventory.find({ brandId, productId: { $in: ids } }) : [],
   ]);
-  const categoryName = new Map(categories.map((c) => [String(c._id), c.name]));
+  const barcodeOf = new Map(items.map((i) => [String(i._id), i.barcode || '']));
   const branchName = new Map(branches.map((b) => [String(b._id), b.name]));
   const stock = new Map(inventories.map((i) => [String(i.productId), i]));
 
@@ -105,15 +104,13 @@ async function exportBrandProducts(brandId) {
     const inv = stock.get(String(p._id));
     rows.push([
       p.name,
+      barcodeOf.get(String(p.catalogProductId)) || '',
       p.sku || '',
-      categoryName.get(String(p.categoryId)) || '',
       p.price,
       p.compareAtPrice ?? '',
       p.status,
       inv ? inv.quantity : '',
       inv ? inv.lowStockThreshold : '',
-      p.description || '',
-      (p.images || []).join('|'),
       (p.branchIds || []).map((id) => branchName.get(String(id))).filter(Boolean).join('|'),
     ]);
   }
@@ -153,29 +150,35 @@ async function importBrandProducts(brandId, text, { dryRun = false, canManageSto
     throw new CsvImportError(400, `A file can have at most ${MAX_IMPORT_ROWS} products. Split it into smaller files.`);
   }
 
-  const [categories, branches, existing, inventories] = await Promise.all([
-    Category.find({ isActive: true }),
+  // Find the catalogue items the file refers to (by barcode or by name), limited to
+  // what this store may use: active global items and its own private ones.
+  const cell = (row, column) => {
+    const index = columns.indexOf(column);
+    return index === -1 ? '' : String(row.cells[index] ?? '').trim();
+  };
+  const wantedSlugs = [...new Set(dataRows.map((r) => slugify(cell(r, 'name'))).filter(Boolean))];
+  const wantedBarcodes = [...new Set(dataRows.map((r) => cell(r, 'barcode')).filter(Boolean))];
+  const [catalogItems, branches, existing, inventories] = await Promise.all([
+    CatalogProduct.find({
+      status: 'ACTIVE',
+      $and: [
+        { $or: [{ scope: 'GLOBAL' }, { scope: 'PRIVATE', brandId }] },
+        { $or: [{ slug: { $in: wantedSlugs } }, { barcode: { $in: wantedBarcodes } }] },
+      ],
+    }),
     Branch.find({ brandId }),
     Product.find({ brandId }),
     Inventory.find({ brandId }),
   ]);
-  // Categories are global. A name that appears under two parents is ambiguous,
-  // and a category with subcategories is not allowed (choose the subcategory).
-  const parentIds = new Set(categories.filter((c) => c.parentId).map((c) => String(c.parentId)));
-  const categoryByKey = new Map();
-  const ambiguousKeys = new Set();
-  const addKey = (key, c) => {
-    if (!key) return;
-    if (categoryByKey.has(key) && String(categoryByKey.get(key)._id) !== String(c._id)) ambiguousKeys.add(key);
-    categoryByKey.set(key, c);
-  };
-  categories.forEach((c) => {
-    addKey(c.name.trim().toLowerCase(), c);
-    addKey(String(c.slug || '').toLowerCase(), c);
+  const itemByBarcode = new Map(catalogItems.filter((i) => i.barcode).map((i) => [i.barcode, i]));
+  const itemBySlug = new Map();
+  // The store's own private item wins over a global one with the same name.
+  catalogItems.forEach((i) => {
+    if (!itemBySlug.has(i.slug) || i.scope === 'PRIVATE') itemBySlug.set(i.slug, i);
   });
   const branchByName = new Map(branches.map((b) => [b.name.trim().toLowerCase(), b]));
   const bySku = new Map(existing.filter((p) => p.sku).map((p) => [p.sku, p]));
-  const bySlug = new Map(existing.map((p) => [p.slug, p]));
+  const byCatalogId = new Map(existing.map((p) => [String(p.catalogProductId), p]));
   const stockByProduct = new Map(inventories.map((i) => [String(i.productId), i]));
 
   const result = { dryRun, total: dataRows.length, created: 0, updated: 0, unchanged: 0, failed: 0, errors: [], warnings: [], ignoredColumns };
@@ -187,7 +190,7 @@ async function importBrandProducts(brandId, text, { dryRun = false, canManageSto
     if (result.errors.length < MAX_ERRORS_RETURNED) result.errors.push({ row: line, name, messages });
   };
 
-  const seenSlug = new Map();
+  const seenItem = new Map();
   const seenSku = new Map();
 
   for (const { cells, line } of dataRows) {
@@ -198,18 +201,18 @@ async function importBrandProducts(brandId, text, { dryRun = false, canManageSto
     const name = get('name');
     const messages = [];
 
-    // ---- duplicates inside the file
-    const slug = slugify(name);
-    if (slug && seenSlug.has(slug)) messages.push(`Same product name as row ${seenSlug.get(slug)}.`);
+    // ---- the catalogue item this row lists
+    const barcode = get('barcode');
+    const item = (barcode && itemByBarcode.get(barcode)) || itemBySlug.get(slugify(name));
+    if (!item) {
+      messages.push(
+        `"${name}" is not in the CityCart catalogue. Ask the CityCart admin to add it, or request it from your dashboard.`
+      );
+    } else if (seenItem.has(String(item._id))) {
+      messages.push(`Same product as row ${seenItem.get(String(item._id))}.`);
+    }
     const sku = get('sku');
     if (sku && seenSku.has(sku)) messages.push(`Same SKU as row ${seenSku.get(sku)}.`);
-
-    // ---- references
-    const categoryKey = get('category').toLowerCase();
-    const category = categoryByKey.get(categoryKey);
-    if (!category) messages.push(`Unknown category "${get('category')}". Use a category name from the CityCart category list.`);
-    else if (ambiguousKeys.has(categoryKey)) messages.push(`Category "${get('category')}" exists under more than one parent. Ask the platform admin for the exact name.`);
-    else if (parentIds.has(String(category._id))) messages.push(`"${get('category')}" has subcategories. Use one of its subcategories.`);
 
     const branchIds = [];
     for (const label of splitList(get('branches'))) {
@@ -218,9 +221,6 @@ async function importBrandProducts(brandId, text, { dryRun = false, canManageSto
       else messages.push(`Unknown branch "${label}".`);
     }
 
-    const images = splitList(get('images'));
-    if (images.some((url) => !/^https?:\/\//i.test(url))) messages.push('Every image must be a full http(s) link.');
-
     const status = get('status').toUpperCase();
     if (status && !IMPORT_STATUSES.includes(status)) {
       messages.push(`Status must be one of ${IMPORT_STATUSES.join(', ')}.`);
@@ -228,11 +228,8 @@ async function importBrandProducts(brandId, text, { dryRun = false, canManageSto
 
     // ---- numbers and stock
     const payload = {
-      name,
+      catalogProductId: item ? String(item._id) : undefined,
       price: get('price') === '' ? undefined : Number(get('price')),
-      categoryId: category ? String(category._id) : undefined,
-      description: get('description') || undefined,
-      images: images.length ? images : undefined,
       sku: sku || undefined,
       status: status || undefined,
       branchIds,
@@ -254,11 +251,16 @@ async function importBrandProducts(brandId, text, { dryRun = false, canManageSto
       fail(line, name, messages);
       continue;
     }
-    if (slug) seenSlug.set(slug, line);
+    seenItem.set(String(item._id), line);
     if (sku) seenSku.set(sku, line);
 
     // ---- create or update (matched by SKU, else by name)
-    const match = (sku && bySku.get(sku)) || bySlug.get(slug);
+    const bySkuMatch = sku && bySku.get(sku);
+    if (bySkuMatch && String(bySkuMatch.catalogProductId) !== String(item._id)) {
+      fail(line, name, [`SKU "${sku}" already belongs to another product of yours.`]);
+      continue;
+    }
+    const match = bySkuMatch || byCatalogId.get(String(item._id));
     if (match && isUnchanged(match, parsed.data, stockByProduct.get(String(match._id)), { quantity, lowStockThreshold })) {
       result.unchanged += 1;
       continue;
@@ -272,7 +274,9 @@ async function importBrandProducts(brandId, text, { dryRun = false, canManageSto
         let product;
         if (existingId) {
           product = await getProductByIdRaw(existingId);
-          await applyProductUpdate(product, data);
+          const changes = { ...data };
+          delete changes.catalogProductId; // the item a listing points at never changes
+          await applyProductUpdate(product, changes);
         } else {
           product = await createProduct(brandId, data);
         }

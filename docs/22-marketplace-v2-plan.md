@@ -6,8 +6,9 @@ Status: **in progress.** Written after the project review with the head.
 |---|---|
 | 0 Preparation | done (see Phase 0) |
 | 1a Global categories | **done** (server, tests, admin page, brand form, seed, docs) |
-| 1b Shared catalogue and listings | next |
-| 2 to 7 | not started |
+| 1b Shared catalogue and listings | **done** (server, tests, admin Catalogue page, brand product form, CSV import, seed, docs) |
+| 2 Zones: polygon blocks | next |
+| 3 to 7 | not started |
 
 This plan covers eight changes: real zones, customer area choice, global categories, a shared
 product catalogue, three separate apps, a picker role, returns, and saved addresses. It ends
@@ -227,7 +228,9 @@ Any one of these empties it:
 
 ### Phase 1: Global categories and shared catalogue, server and admin (L)
 
-Split into **1a (global categories, done)** and **1b (catalogue and listings, next)**.
+Split into **1a (global categories, done)** and **1b (catalogue and listings, done)**.
+
+**How 1b was built:** `Product` stays the store listing (cart, orders, inventory and reviews are unchanged). It gains `catalogProductId`, and its name, description, images and category are copied from the catalogue item and refreshed when the item changes. The customer-facing grouping ("one Dalda Ghee, three stores") is built in Phase 3.
 - **Server:** new `CatalogProduct` model, routes and service. Rework `Category` (no brand, parent/child). Convert `Product` into the listing (`catalogProductId`, unique per brand). Request, approve, reject and merge actions. Search by name, manufacturer and barcode.
 - **Admin web:** Categories page (tree) — **done in 1a**. Catalogue page (create, edit, import CSV), Requests queue, Merge tool — 1b.
 - **Brand web:** "add from catalogue" (search, then price, stock, branches), "request a new product", private item.
