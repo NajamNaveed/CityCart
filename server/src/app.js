@@ -23,6 +23,7 @@ const productRoutes = require('./routes/product.routes');
 
 const inventoryRoutes = require('./routes/inventory.routes');
 const cartRoutes = require('./routes/cart.routes');
+const addressRoutes = require('./routes/address.routes');
 const orderRoutes = require('./routes/order.routes');
 const brandOrderRoutes = require('./routes/brandOrder.routes');
 const deliveryRoutes = require('./routes/delivery.routes');
@@ -107,6 +108,7 @@ app.use('/api/v1/products', productRoutes);
 
 app.use('/api/v1/inventory', inventoryRoutes);
 app.use('/api/v1/cart', cartRoutes);
+app.use('/api/v1/addresses', addressRoutes);
 app.use('/api/v1/orders', orderRoutes);
 app.use('/api/v1/brand/orders', brandOrderRoutes);
 app.use('/api/v1/deliveries', deliveryRoutes);

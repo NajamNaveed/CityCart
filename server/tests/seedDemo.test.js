@@ -10,6 +10,7 @@ const Brand = require('../src/models/brand.model');
 const Store = require('../src/models/store.model');
 const Category = require('../src/models/category.model');
 const CatalogProduct = require('../src/models/catalogProduct.model');
+const Address = require('../src/models/address.model');
 const Product = require('../src/models/product.model');
 const Inventory = require('../src/models/inventory.model');
 const Employee = require('../src/models/employee.model');
@@ -26,7 +27,7 @@ const Counter = require('../src/models/counter.model');
 const { ALL_PERMISSIONS } = require('../src/config/permissions');
 
 const MODELS = {
-  cities: City, blocks: Block, branches: Branch, conversations: Conversation, messages: Message, users: User, brands: Brand, stores: Store, categories: Category, catalogProducts: CatalogProduct, products: Product,
+  cities: City, blocks: Block, branches: Branch, conversations: Conversation, messages: Message, users: User, brands: Brand, stores: Store, categories: Category, catalogProducts: CatalogProduct, addresses: Address, products: Product,
   inventories: Inventory, employees: Employee, carts: Cart, orders: Order, orderAdjustments: OrderAdjustment, inventoryMovements: InventoryMovement, payments: Payment, receipts: Receipt,
   deliveries: Delivery, reviews: Review, notifications: Notification, counters: Counter,
 };
@@ -228,6 +229,37 @@ describe('demo dataset', () => {
     });
     // at least one shop stands in an overlap and is found in two blocks
     expect(ds.branches.some((br) => br.blockIds.length === 2)).toBe(true);
+  });
+
+  it('gives customers saved addresses inside a block, and every order a delivery pin its store serves', () => {
+    const { ringFromGeoJson, pointInRing } = require('../src/utils/polygon');
+    const rings = new Map(ds.blocks.map((b) => [id(b._id), ringFromGeoJson(b.area)]));
+    const holding = (point) =>
+      ds.blocks.filter((b) => pointInRing(point.coordinates[1], point.coordinates[0], rings.get(id(b._id)))).map((b) => id(b._id));
+
+    // every saved address is somewhere we deliver, and each customer has exactly one default
+    ds.addresses.forEach((a) => expect(holding(a.location).length).toBeGreaterThan(0));
+    const customers = ds.users.filter((u) => u.role === 'CUSTOMER');
+    customers.forEach((c) => {
+      const mine = ds.addresses.filter((a) => id(a.userId) === id(c._id));
+      expect(mine.length).toBeGreaterThanOrEqual(1);
+      expect(mine.filter((a) => a.isDefault)).toHaveLength(1);
+      expect(mine.length).toBeLessThanOrEqual(10);
+    });
+    expect(ds.addresses.some((a) => a.label === 'Work')).toBe(true); // a customer with a second address
+
+    // each order's blocks are exactly the blocks holding its pin, and the store has a shop in one of them
+    ds.orders.forEach((o) => {
+      expect(o.deliveryBlockIds.map(id).sort()).toEqual(holding(o.deliveryLocation).sort());
+      const serves = ds.branches.some((br) => id(br.brandId) === id(o.brandId) && br.blockIds.some((b) => o.deliveryBlockIds.map(id).includes(id(b))));
+      expect(serves).toBe(true);
+      if (o.addressId) {
+        const saved = ds.addresses.find((a) => id(a._id) === id(o.addressId));
+        expect(id(saved.userId)).toBe(id(o.customerId));
+        expect(saved.location).toEqual(o.deliveryLocation);
+      }
+    });
+    expect(ds.orders.some((o) => o.addressId)).toBe(true);
   });
 
   it('has every reference pointing at something that exists', () => {

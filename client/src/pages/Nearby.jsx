@@ -1,10 +1,11 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { LayoutList, LocateFixed, Map as MapIcon, MapPin, Phone, Search, Store } from 'lucide-react'
+import { LayoutList, LocateFixed, Map as MapIcon, MapPin, Package, Phone, Search, Store } from 'lucide-react'
 import api, { getErrorMessage } from '../services/api'
 import { useCity } from '../hooks/useCity'
 import { useNearby } from '../hooks/useNearby'
 import { isRadius } from '../utils/range'
+import CatalogResults from '../components/nearby/CatalogResults'
 import LocationChip from '../components/nearby/LocationChip'
 import RangeSelector from '../components/nearby/RangeSelector'
 import ProductImage from '../components/ProductImage'
@@ -26,7 +27,7 @@ function nextRange(range) {
   return null
 }
 
-const rangeLabel = (range) => (range === 'city' ? 'the whole city' : isRadius(range) ? `${range} km` : 'this block')
+const rangeLabel = (range) => (range === 'city' ? 'the whole city' : isRadius(range) ? `${range} km` : 'your block')
 
 function ProductTile({ product }) {
   const soldOut = product.availability === 'OUT_OF_STOCK'
@@ -130,15 +131,15 @@ function ResultsSkeleton() {
 export default function Nearby() {
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
-  const [view, setView] = useState('list') // 'list' | 'map'
+  const [view, setView] = useState('list') // 'list' | 'map' | 'products'
   const openBrand = useCallback((brand) => navigate(`/shop?brandId=${brand._id}`), [navigate])
   const q = params.get('q') || ''
   const { city, cityId } = useCity()
-  const { block, blockId, coords, range, setRange, blocksReady, openPicker, detect, status } = useNearby()
+  const { selectedBlocks, blockIds, areaName, coords, origin, range, setRange, blocksReady, openPicker, detect, status } = useNearby()
 
   const [draft, setDraft] = useState(q)
   // The page number belongs to one set of filters; changing any of them starts again at page 1.
-  const filterKey = JSON.stringify([cityId, blockId, coords, range, q])
+  const filterKey = JSON.stringify([cityId, blockIds, coords, range, q])
   const [pageState, setPageState] = useState({ filterKey, page: 1 })
   const page = pageState.filterKey === filterKey ? pageState.page : 1
   const setPage = (next) => setPageState({ filterKey, page: next })
@@ -146,15 +147,28 @@ export default function Nearby() {
 
   // Distance and block searches need somewhere to measure from; without it we
   // search the whole city and say so.
-  const needsArea = (range === 'block' && !blockId) || (isRadius(range) && !blockId && !coords)
+  const hasArea = blockIds.length > 0
+  const needsArea = (range === 'block' && !hasArea) || (isRadius(range) && !hasArea && !coords)
 
   const query = useMemo(() => {
     if (!cityId || !blocksReady) return null
-    const base = { cityId, page, ...(q && { q }), ...(coords && { lat: coords.lat, lng: coords.lng }), ...(blockId && { blockId }) }
-    if (range === 'block' && blockId) return { ...base, scope: 'block' }
-    if (isRadius(range) && (blockId || coords)) return { ...base, scope: 'radius', radiusKm: range }
-    return { ...base, scope: 'city' }
-  }, [cityId, blocksReady, q, coords, blockId, range, page])
+    const base = { page, ...(q && { q }) }
+    // One or several chosen blocks (several where zones overlap), optionally within a range of the shopper.
+    if (hasArea && range !== 'city') {
+      return {
+        ...base,
+        scope: 'area',
+        blockIds: blockIds.join(','),
+        ...(origin && { lat: origin.lat, lng: origin.lng }),
+        ...(isRadius(range) && origin && { radiusKm: range }),
+      }
+    }
+    // Between blocks: a range around the shopper's position.
+    if (isRadius(range) && coords) {
+      return { ...base, cityId, scope: 'radius', radiusKm: range, lat: coords.lat, lng: coords.lng }
+    }
+    return { ...base, cityId, scope: 'city', ...(coords && { lat: coords.lat, lng: coords.lng }) }
+  }, [cityId, blocksReady, q, coords, origin, blockIds, hasArea, range, page])
 
   const key = JSON.stringify(query)
   useEffect(() => {
@@ -274,12 +288,13 @@ export default function Nearby() {
               {data.meta.totalBranches === 1 ? 'branch' : 'branches'}
               {q && <> for “{q}”</>}
               {range !== 'city' && !needsArea && <> within {rangeLabel(range)}</>}
-              {block && range !== 'block' && <> of {block.name}</>}
+              {areaName && range !== 'block' && <> of {areaName}</>}
             </p>
               <div role="group" aria-label="Results view" className="inline-flex overflow-hidden rounded-md border border-line bg-white text-[13px] font-medium">
                 {[
-                  ['list', 'List', LayoutList],
+                  ['list', 'Shops', LayoutList],
                   ['map', 'Map', MapIcon],
+                  ['products', 'Products', Package],
                 ].map(([value, label, Icon]) => (
                   <button
                     key={value}
@@ -294,9 +309,20 @@ export default function Nearby() {
                 ))}
               </div>
             </div>
-            {view === 'map' ? (
+            {view === 'products' ? (
+              hasArea && range !== 'city' ? (
+                <CatalogResults blockIds={blockIds} origin={origin} radiusKm={isRadius(range) ? range : null} q={q} />
+              ) : (
+                <p className="rounded-md bg-paper px-3.5 py-3 text-[13px] text-muted">
+                  Choose your area to compare products across the stores near you.{' '}
+                  <button type="button" onClick={openPicker} className="font-semibold text-ink underline">
+                    Choose area
+                  </button>
+                </p>
+              )
+            ) : view === 'map' ? (
               <Suspense fallback={<Skeleton className="h-[460px] w-full rounded-lg" />}>
-                <NearbyMap items={items} origin={data.meta.origin} radiusKm={data.meta.radiusKm} onOpenBrand={openBrand} />
+                <NearbyMap items={items} zones={selectedBlocks} origin={data.meta.origin} radiusKm={data.meta.radiusKm} onOpenBrand={openBrand} />
                 {data.pagination.pages > 1 && <p className="mt-2 text-xs text-muted">The map shows the shops on this page of results.</p>}
               </Suspense>
             ) : (
@@ -306,7 +332,7 @@ export default function Nearby() {
                 ))}
               </div>
             )}
-            {data.pagination.pages > 1 && (
+            {view !== 'products' && data.pagination.pages > 1 && (
               <div className="mt-7 flex items-center justify-between text-sm">
                 <button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)} className={`${btnOutline} h-9 px-4`}>
                   Previous

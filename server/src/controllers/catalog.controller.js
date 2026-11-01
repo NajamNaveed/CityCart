@@ -7,6 +7,9 @@ const {
   listCatalogQuerySchema,
 } = require('../validators/catalog.validator');
 const service = require('../services/catalog.service');
+const browse = require('../services/catalogBrowse.service');
+const { browseQuerySchema } = require('../validators/catalogBrowse.validator');
+const { objectIdParamSchema } = require('../validators/common.validator');
 const { formatZodError } = require('../utils/formatZodError');
 
 const { CatalogError } = service;
@@ -89,6 +92,41 @@ async function request(req, res, next) {
     return res.status(201).json({ success: true, item });
   } catch (err) {
     return fail(err, res, next);
+  }
+}
+
+// ---- shoppers (public) -----------------------------------------------------
+
+function browseFail(err, res, next) {
+  if (err instanceof browse.CatalogBrowseError) {
+    return res.status(err.status).json({ success: false, message: err.message });
+  }
+  return next(err);
+}
+
+// One card per real product in a shopping area, with every store's offer.
+async function browseCatalog(req, res, next) {
+  const query = browseQuerySchema.safeParse(req.query);
+  if (!query.success) return bad(res, query.error);
+  try {
+    const result = await browse.browseCatalog(query.data);
+    return res.status(200).json({ success: true, ...result });
+  } catch (err) {
+    return browseFail(err, res, next);
+  }
+}
+
+// One product and all its offers in the area (the product page).
+async function browseOffers(req, res, next) {
+  const params = objectIdParamSchema.safeParse(req.params);
+  if (!params.success) return bad(res, params.error);
+  const query = browseQuerySchema.safeParse(req.query);
+  if (!query.success) return bad(res, query.error);
+  try {
+    const result = await browse.getCatalogOffers(params.data.id, query.data);
+    return res.status(200).json({ success: true, ...result });
+  } catch (err) {
+    return browseFail(err, res, next);
   }
 }
 
@@ -182,6 +220,8 @@ async function remove(req, res, next) {
 }
 
 module.exports = {
+  browseCatalog,
+  browseOffers,
   listForBrand,
   listMine,
   getForBrand,

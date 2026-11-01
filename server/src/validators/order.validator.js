@@ -40,6 +40,19 @@ const shippingAddressSchema = z.object({
 // COD always; ONLINE_GATEWAY only while a payment provider is switched on (checked at checkout).
 const createOrderSchema = z.object({
   shippingAddress: shippingAddressSchema,
+  // The delivery pin. The server finds the blocks that hold it and checks every
+  // store in the cart delivers there (docs/22 §A).
+  deliveryLocation: z.object({
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180),
+  }),
+  // The saved address this came from (kept on the order for reference).
+  addressId: z
+    .string()
+    .refine((value) => mongoose.Types.ObjectId.isValid(value), { message: 'Invalid id.' })
+    .optional(),
+  // Save the address for next time.
+  saveAddress: z.object({ label: z.string().trim().min(1).max(40) }).optional(),
   paymentMethod: z.enum(['COD', 'ONLINE_GATEWAY'], { error: 'paymentMethod must be COD or ONLINE_GATEWAY' }),
 });
 

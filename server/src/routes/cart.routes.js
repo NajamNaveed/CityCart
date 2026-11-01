@@ -1,6 +1,6 @@
 const express = require('express');
 
-const { get, add, update, remove, clear } = require('../controllers/cart.controller');
+const { get, add, update, remove, clear, areaCheck } = require('../controllers/cart.controller');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
 const { ROLES } = require('../config/roles');
@@ -11,6 +11,7 @@ const router = express.Router();
 router.use(authenticate, requireRole(ROLES.CUSTOMER));
 
 router.get('/', get);
+router.post('/area-check', areaCheck); // which items could still be delivered in other blocks
 router.post('/items', add);
 router.patch('/items/:productId', update);
 router.delete('/items/:productId', remove);

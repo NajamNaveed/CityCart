@@ -43,7 +43,7 @@ function popupFor(brand, branch, onOpenBrand) {
 }
 
 // Shop locations as pins, the shopper's own position, and the search radius.
-export default function NearbyMap({ items, origin, radiusKm, onOpenBrand }) {
+export default function NearbyMap({ items, zones = [], origin, radiusKm, onOpenBrand }) {
   const container = useRef(null)
   const mapRef = useRef(null)
   const layerRef = useRef(null)
@@ -68,6 +68,13 @@ export default function NearbyMap({ items, origin, radiusKm, onOpenBrand }) {
     if (!map || !layer) return
     layer.clearLayers()
     const points = []
+
+    // The block(s) being shopped in, drawn as zones behind the shop pins.
+    for (const zone of zones) {
+      if (!zone.polygon) continue
+      L.polygon(zone.polygon, { color: '#1e3a2f', weight: 2, fillColor: '#1e3a2f', fillOpacity: 0.08, interactive: false }).addTo(layer)
+      points.push(...zone.polygon)
+    }
 
     for (const brand of items) {
       for (const branch of brand.branches) {
@@ -94,7 +101,7 @@ export default function NearbyMap({ items, origin, radiusKm, onOpenBrand }) {
     if (points.length === 0) map.setView(FALLBACK_CENTER, 12)
     else if (points.length === 1) map.setView(points[0], 15)
     else map.fitBounds(L.latLngBounds(points), { padding: [40, 40], maxZoom: 16 })
-  }, [items, origin, radiusKm, onOpenBrand])
+  }, [items, zones, origin, radiusKm, onOpenBrand])
 
   return <div ref={container} role="region" aria-label="Map of nearby shops" className="isolate z-0 h-[460px] w-full overflow-hidden rounded-lg border border-line" />
 }

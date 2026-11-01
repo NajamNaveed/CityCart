@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Banknote, Minus, Plus, ShoppingBag, Trash2 } from 'lucide-react'
 import api, { getErrorMessage } from '../services/api'
 import { useCart } from '../hooks/useCart'
+import { useNearby } from '../hooks/useNearby'
 import ProductImage from '../components/ProductImage'
 import { EmptyState, Skeleton } from '../components/ui'
 import { btnPrimary, formatPrice, wrap } from '../ui'
@@ -23,6 +24,9 @@ export default function Cart() {
   const [state, setState] = useState({ loading: true, cart: null, error: '' })
   const [busyId, setBusyId] = useState(null)
   const [notice, setNotice] = useState('')
+  const { blockIds, areaName, openPicker } = useNearby()
+  // Which items the stores in the cart can still deliver to the shopping area (read-only check).
+  const [areaCheck, setAreaCheck] = useState({ key: '', undeliverable: [] })
 
   useEffect(() => {
     let active = true
@@ -61,12 +65,68 @@ export default function Cart() {
   const { loading, cart, error } = state
   const hasIssues = cart?.groups.some((g) => g.items.some((i) => i.issue))
 
+  const cartKey = cart ? cart.groups.flatMap((g) => g.items.map((i) => i.productId)).sort().join(',') : ''
+  const checkKey = blockIds.length > 0 && cartKey ? `${blockIds.join(',')}|${cartKey}` : ''
+  useEffect(() => {
+    if (!checkKey) return undefined
+    let active = true
+    api
+      .post('/cart/area-check', { blockIds })
+      .then((res) => active && setAreaCheck({ key: checkKey, undeliverable: res.data.undeliverable }))
+      .catch(() => active && setAreaCheck({ key: checkKey, undeliverable: [] }))
+    return () => {
+      active = false
+    }
+  }, [checkKey, blockIds])
+  const undeliverable = areaCheck.key === checkKey ? areaCheck.undeliverable : []
+
+  async function removeUndeliverable() {
+    setBusyId('area')
+    setNotice('')
+    try {
+      let res
+      for (const item of undeliverable) res = await api.delete(`/cart/items/${item.productId}`)
+      if (res) {
+        setState({ loading: false, cart: res.data.cart, error: '' })
+        setCount(res.data.cart.itemCount)
+      }
+    } catch (err) {
+      setNotice(getErrorMessage(err))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   return (
     <div className={`${wrap} py-10`}>
       <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted">Your cart</p>
       <h1 className="font-display mt-2 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
         {cart ? `${cart.itemCount} ${cart.itemCount === 1 ? 'item' : 'items'}` : 'Review your items'}
       </h1>
+
+      {undeliverable.length > 0 && (
+        <div role="alert" className="mt-6 rounded-md bg-warning-soft px-4 py-3 text-[13.5px] text-warning">
+          <p className="font-semibold">
+            {undeliverable.length === 1 ? 'One item cannot' : `${undeliverable.length} items cannot`} be delivered to {areaName || 'your area'}
+          </p>
+          <ul className="mt-1 list-disc pl-5">
+            {undeliverable.map((u) => (
+              <li key={u.productId}>
+                {u.name || 'An item that is no longer sold'}
+                {u.brandName ? ` (${u.brandName})` : ''}
+              </li>
+            ))}
+          </ul>
+          <div className="mt-2.5 flex flex-wrap gap-4 font-semibold">
+            <button type="button" disabled={busyId === 'area'} onClick={removeUndeliverable} className="underline disabled:opacity-50">
+              Remove {undeliverable.length === 1 ? 'it' : 'them'}
+            </button>
+            <button type="button" onClick={openPicker} className="underline">
+              Change area
+            </button>
+          </div>
+        </div>
+      )}
 
       {loading && (
         <div className="mt-8 space-y-4">

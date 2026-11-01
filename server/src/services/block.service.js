@@ -231,7 +231,23 @@ async function blocksAtPoint({ lat, lng }) {
   };
 }
 
+/**
+ * The active blocks (of active cities) whose zone contains a position. Empty when
+ * the position is outside every zone, which means "we do not deliver there".
+ */
+async function activeBlocksContaining(lat, lng) {
+  const inside = await Block.find({
+    isActive: true,
+    area: { $geoIntersects: { $geometry: pointFromLatLng(lat, lng) } },
+  });
+  if (inside.length === 0) return [];
+  const cities = await City.find({ _id: { $in: [...new Set(inside.map((b) => String(b.cityId)))] }, isActive: true });
+  const live = new Set(cities.map((c) => String(c._id)));
+  return inside.filter((b) => live.has(String(b.cityId)));
+}
+
 module.exports = {
+  activeBlocksContaining,
   listBlocks,
   getBlockByIdRaw,
   createBlock,

@@ -7,7 +7,7 @@
 const mongoose = require('mongoose');
 
 const { slugify } = require('../../src/utils/slugify');
-const { innerPoint, toGeoJsonPolygon } = require('../../src/utils/polygon');
+const { innerPoint, toGeoJsonPolygon, ringFromGeoJson, pointInRing } = require('../../src/utils/polygon');
 const { computeBlockIds } = require('../../src/utils/blockMembership');
 const { PAYMENT_METHOD_FOR_COLLECTION } = require('../../src/config/paymentCollection');
 const { CITIES, BLOCKS, BRANCHES, BRANDS, CHATS, LONG_CHAT, CUSTOMERS, ADMIN, CARTS, REMARKS } = require('./catalog');
@@ -62,7 +62,7 @@ function buildDataset({ now = new Date(), hashes }) {
   const ago = (ms) => new Date(now.getTime() - ms);
 
   const ds = {
-    cities: [], blocks: [], branches: [], conversations: [], messages: [], users: [], brands: [], stores: [], categories: [], catalogProducts: [], products: [], inventories: [],
+    cities: [], blocks: [], branches: [], conversations: [], messages: [], users: [], brands: [], stores: [], categories: [], catalogProducts: [], addresses: [], products: [], inventories: [],
     employees: [], carts: [], orders: [], payments: [], receipts: [], deliveries: [], orderAdjustments: [], inventoryMovements: [],
     reviews: [], notifications: [], counters: [],
   };
@@ -118,6 +118,45 @@ function buildDataset({ now = new Date(), hashes }) {
   });
 
   const shoppers = customers.filter((c) => c.doc.isActive); // deactivated accounts do not place new orders
+
+  // ── saved addresses: every customer has a pin inside one of the blocks ──
+  const ringOfBlock = new Map(ds.blocks.map((b) => [String(b._id), ringFromGeoJson(b.area)]));
+  const blocksHolding = (lat, lng) => ds.blocks.filter((b) => b.isActive && pointInRing(lat, lng, ringOfBlock.get(String(b._id)))).map((b) => b._id);
+  // Streets that are not in one of the nine drawn blocks are placed in the nearest one.
+  const NEAREST_BLOCK = { 'Gulistan Colony': 'Peoples Colony', 'Civil Lines': 'Clock Tower', 'Canal Road': 'Gulberg' };
+  const pinIn = (block, step) => {
+    const [lng, lat] = block.center.coordinates;
+    const near = [lat + ((step * 37) % 5 - 2) * 0.0005, lng + ((step * 53) % 5 - 2) * 0.0005];
+    return blocksHolding(near[0], near[1]).some((id) => String(id) === String(block._id)) ? near : [lat, lng];
+  };
+  customers.forEach((c, i) => {
+    const named = ds.blocks.find((b) => c.address.includes(b.name));
+    const fallback = Object.keys(NEAREST_BLOCK).find((k) => c.address.includes(k));
+    const block = named || ds.blocks.find((b) => b.name === NEAREST_BLOCK[fallback]);
+    const [lat, lng] = pinIn(block, i);
+    c.pin = { type: 'Point', coordinates: [Math.round(lng * 1e6) / 1e6, Math.round(lat * 1e6) / 1e6] };
+    c.blockIds = blocksHolding(lat, lng);
+    const made = new Date(c.doc.createdAt.getTime() + DAY);
+    const home = {
+      _id: new ObjectId(), userId: c.doc._id, label: 'Home', fullName: c.name, phone: c.phone, addressLine: c.address,
+      city: c.city, state: c.state, postalCode: c.postalCode, country: 'Pakistan',
+      ...(c.note && { additionalInstructions: c.note }), location: c.pin, isDefault: true, createdAt: made, updatedAt: made,
+    };
+    c.addressId = home._id;
+    ds.addresses.push(home);
+    // The first few customers also saved a second address in another block (an office),
+    // which is how a customer shops for a block other than the one they live in.
+    if (i < 3) {
+      const office = ds.blocks[(ds.blocks.indexOf(block) + 3) % ds.blocks.length];
+      const [olat, olng] = pinIn(office, i + 7);
+      ds.addresses.push({
+        _id: new ObjectId(), userId: c.doc._id, label: 'Work', fullName: c.name, phone: c.phone, addressLine: `Office 2, ${office.name} Main Road`,
+        city: c.city, state: c.state, postalCode: c.postalCode, country: 'Pakistan',
+        location: { type: 'Point', coordinates: [Math.round(olng * 1e6) / 1e6, Math.round(olat * 1e6) / 1e6] },
+        isDefault: false, createdAt: new Date(made.getTime() + 3 * DAY), updatedAt: new Date(made.getTime() + 3 * DAY),
+      });
+    }
+  });
 
   // ── brands, stores, categories, products, inventory, staff ──
   const brands = [];
@@ -428,8 +467,17 @@ function buildDataset({ now = new Date(), hashes }) {
       // Some delivered orders were paid online, up front, through the (test) gateway: no cash for the rider to collect.
       const paidOnline = status === 'DELIVERED' && !flags.fullRefund && !flags.partRefund && ds.orders.length % 4 === 0;
 
+      // Delivered to the customer's pin when one of the store's shops serves that block;
+      // otherwise to a spot in the store's own block (an office or a friend's place).
+      const brandShops = ds.branches.filter((br) => String(br.brandId) === String(brand.doc._id) && br.isActive);
+      const servesHome = brandShops.some((br) => br.blockIds.some((id) => customer.blockIds.some((b) => String(b) === String(id))));
+      const delivery = servesHome
+        ? { location: customer.pin, blockIds: customer.blockIds, addressId: customer.addressId }
+        : (({ location, blockIds }) => ({ location, blockIds }))(brandShops[0] || ds.branches.find((br) => String(br.brandId) === String(brand.doc._id)));
+
       const order = {
         _id: new ObjectId(), orderNumber: '', customerId: customer.doc._id, brandId: brand.doc._id, items,
+        deliveryLocation: delivery.location, deliveryBlockIds: delivery.blockIds, ...(delivery.addressId && { addressId: delivery.addressId }),
         shippingAddress: {
           name: customer.name, phone: customer.phone, address: customer.address, city: customer.city, state: customer.state,
           country: 'Pakistan', postalCode: customer.postalCode, ...(customer.note && { additionalInstructions: customer.note }),

@@ -83,4 +83,4 @@ const discoverQuerySchema = z
     }
   });
 
-module.exports = { discoverQuerySchema, MIN_RADIUS_KM, MAX_RADIUS_KM };
+module.exports = { discoverQuerySchema, blockIdList, MIN_RADIUS_KM, MAX_RADIUS_KM };

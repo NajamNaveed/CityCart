@@ -47,3 +47,8 @@ export function formatDistance(km) {
   if (km < 1) return `${Math.round(km * 10) * 100} m`
   return `${km} km`
 }
+
+// A block as the API returns it ({ latitude, longitude, ... }) -> { lat, lng }.
+export function latLngOfBlock(block) {
+  return { lat: block.latitude, lng: block.longitude }
+}

@@ -23,4 +23,9 @@ const addItemSchema = z.object({ productId: objectIdString, quantity });
 const updateItemSchema = z.object({ quantity });
 const productIdParamSchema = z.object({ productId: objectIdString });
 
-module.exports = { addItemSchema, updateItemSchema, productIdParamSchema, MAX_ITEM_QUANTITY };
+// The blocks the customer would shop in instead (one, or several where zones overlap).
+const areaCheckSchema = z.object({
+  blockIds: z.array(objectIdString).min(1).max(10),
+});
+
+module.exports = { addItemSchema, updateItemSchema, productIdParamSchema, areaCheckSchema, MAX_ITEM_QUANTITY };

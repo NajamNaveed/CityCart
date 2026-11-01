@@ -21,6 +21,7 @@ import Cart from './pages/Cart'
 import Checkout from './pages/Checkout'
 import OrderPlaced from './pages/OrderPlaced'
 import MyOrders from './pages/MyOrders'
+import MyAddresses from './pages/MyAddresses'
 import Chat from './pages/Chat'
 import MyOrderDetail from './pages/MyOrderDetail'
 import Sell from './pages/Sell'
@@ -111,6 +112,7 @@ function App() {
                     <Route path="checkout" element={<Checkout />} />
                     <Route path="order-placed" element={<OrderPlaced />} />
                     <Route path="orders" element={<MyOrders />} />
+                    <Route path="addresses" element={<MyAddresses />} />
                     <Route path="chat" element={<Chat />} />
                     <Route path="orders/:id" element={<MyOrderDetail />} />
                   </Route>

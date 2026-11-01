@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const geoPointSchema = require('./geoPoint.schema');
 
 /**
  * Order model — one of the most important entities in CityCart.
@@ -107,6 +108,15 @@ const orderSchema = new mongoose.Schema(
       type: addressSnapshotSchema,
       required: true,
     },
+    // Where it is delivered (the pin) and the blocks that held the pin when the
+    // order was placed. `addressId` is the saved address it came from, if any; the
+    // snapshot above is what the order keeps, so editing that address changes nothing here.
+    deliveryLocation: { type: geoPointSchema },
+    deliveryBlockIds: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Block' }],
+      default: undefined,
+    },
+    addressId: { type: mongoose.Schema.Types.ObjectId, ref: 'Address' },
     subtotal: {
       type: Number,
       required: true,

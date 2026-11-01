@@ -6,11 +6,11 @@ import { useNearby } from '../../hooks/useNearby'
 // there is one, otherwise the city, otherwise an invitation to set it.
 export default function LocationChip({ className = '' }) {
   const { city } = useCity()
-  const { block, blocksReady, openPicker } = useNearby()
+  const { areaName, blocksReady, openPicker } = useNearby()
 
   // One control for city AND area: the area when there is one, otherwise the city, otherwise an invitation.
-  const label = block ? block.name : city ? city.name : 'Set location'
-  const title = block && city ? `${block.name}, ${city.name}` : label
+  const label = areaName || (city ? city.name : 'Set location')
+  const title = areaName && city ? `${areaName}, ${city.name}` : label
 
   return (
     <button

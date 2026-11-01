@@ -7,6 +7,10 @@ jest.mock('../src/models/brand.model');
 jest.mock('../src/models/store.model');
 jest.mock('../src/models/category.model');
 jest.mock('../src/models/inventory.model');
+jest.mock('../src/models/block.model');
+jest.mock('../src/models/city.model');
+jest.mock('../src/models/branch.model');
+jest.mock('../src/models/address.model');
 jest.mock('../src/models/cart.model');
 jest.mock('../src/models/order.model');
 jest.mock('../src/models/payment.model');
@@ -42,6 +46,10 @@ const Counter = require('../src/models/counter.model');
 const OrderAdjustment = require('../src/models/orderAdjustment.model');
 const Product = require('../src/models/product.model');
 const Inventory = require('../src/models/inventory.model');
+const Block = require('../src/models/block.model');
+const City = require('../src/models/city.model');
+const Branch = require('../src/models/branch.model');
+const Address = require('../src/models/address.model');
 const notifications = require('../src/services/notification.service');
 const app = require('../src/app');
 const { ROLES } = require('../src/config/roles');
@@ -61,7 +69,10 @@ const address = {
   country: 'Pakistan',
   additionalInstructions: 'Gate 2, ring the bell twice.',
 };
-const body = { shippingAddress: address, paymentMethod: 'COD' };
+// The delivery pin. The test world below puts it inside one zone that every store serves.
+const pin = { latitude: 31.4045, longitude: 73.095 };
+const body = { shippingAddress: address, paymentMethod: 'COD', deliveryLocation: pin };
+const zone = { _id: oid(), cityId: oid() };
 
 function asRole(role = ROLES.CUSTOMER) {
   const user = { _id: oid(), role, isActive: true, ...(role.includes('BRAND') && { brandId: oid() }) };
@@ -84,7 +95,11 @@ const mkProduct = (brand, o = {}) => ({
 });
 const mkInv = (p, o = {}) => ({ productId: p._id, availableQuantity: 10, trackInventory: true, ...o });
 
-function checkoutWorld({ lines, products, brands = [brandA, brandB], inventories }) {
+function checkoutWorld({ lines, products, brands = [brandA, brandB], inventories, serving = brands }) {
+  // The pin is inside one zone of an open city, and these stores have a shop in it.
+  Block.find.mockResolvedValue([zone]);
+  City.find.mockResolvedValue([{ _id: zone.cityId }]);
+  Branch.find.mockResolvedValue(serving.map((b) => ({ _id: oid(), brandId: b._id, blockIds: [zone._id] })));
   Cart.findOne.mockReturnValue(
     q({ items: lines.map(([p, quantity]) => ({ productId: p._id, brandId: p.brandId, quantity })) })
   );
@@ -103,6 +118,10 @@ function checkoutWorld({ lines, products, brands = [brandA, brandB], inventories
 
 beforeEach(() => {
   jest.resetAllMocks();
+  Address.exists.mockResolvedValue(true);
+  Block.find.mockResolvedValue([zone]);
+  City.find.mockResolvedValue([{ _id: zone.cityId }]);
+  Branch.find.mockResolvedValue([]);
   OrderAdjustment.find.mockReturnValue({ sort: () => Promise.resolve([]) });
 });
 
@@ -127,15 +146,15 @@ describe('POST /api/v1/orders (checkout)', () => {
   };
 
   it.each([
-    ['no address', { paymentMethod: 'COD' }],
-    ['no payment method', { shippingAddress: address }],
-    ['CARD not supported', { shippingAddress: { ...address, additionalInstructions: undefined }, paymentMethod: 'COD' }],
-    ['bad phone', { shippingAddress: { ...address, phone: 'abc' }, paymentMethod: 'COD' }],
-    ['missing city', { shippingAddress: { ...address, city: '' }, paymentMethod: 'COD' }],
-    ['missing delivery notes', { shippingAddress: { ...address, additionalInstructions: '   ' }, paymentMethod: 'COD' }],
+    ['no address', { paymentMethod: 'COD', deliveryLocation: pin }],
+    ['no payment method', { shippingAddress: address, deliveryLocation: pin }],
+    ['CARD not supported', { shippingAddress: { ...address, additionalInstructions: undefined }, paymentMethod: 'COD', deliveryLocation: pin }],
+    ['bad phone', { shippingAddress: { ...address, phone: 'abc' }, paymentMethod: 'COD', deliveryLocation: pin }],
+    ['missing city', { shippingAddress: { ...address, city: '' }, paymentMethod: 'COD', deliveryLocation: pin }],
+    ['missing delivery notes', { shippingAddress: { ...address, additionalInstructions: '   ' }, paymentMethod: 'COD', deliveryLocation: pin }],
     [
       'delivery notes over the word limit',
-      { shippingAddress: { ...address, additionalInstructions: 'word '.repeat(201) }, paymentMethod: 'COD' },
+      { shippingAddress: { ...address, additionalInstructions: 'word '.repeat(201) }, paymentMethod: 'COD', deliveryLocation: pin },
     ],
   ])('400 for %s', async (_n, payload) => {
     expect((await post(payload)).status).toBe(400);
@@ -143,7 +162,7 @@ describe('POST /api/v1/orders (checkout)', () => {
   });
 
   it('400 delivery-notes error names the field for the checkout form', async () => {
-    const res = await post({ shippingAddress: { ...address, additionalInstructions: '   ' }, paymentMethod: 'COD' });
+    const res = await post({ shippingAddress: { ...address, additionalInstructions: '   ' }, paymentMethod: 'COD', deliveryLocation: pin });
     const noteError = res.body.errors.find((e) => e.field === 'shippingAddress.additionalInstructions');
     expect(noteError).toBeDefined();
   });
@@ -157,6 +176,147 @@ describe('POST /api/v1/orders (checkout)', () => {
     Cart.findOne.mockReturnValue(q(null));
     res = await post();
     expect(res.status).toBe(400);
+  });
+
+  describe('delivery zone', () => {
+    const oneItem = (brand = brandA, over = {}) => {
+      const p = mkProduct(brand, over);
+      return { lines: [[p, 1]], products: [p], p };
+    };
+
+    it('400 OUTSIDE_DELIVERY_ZONE when no zone holds the pin, before the cart is read', async () => {
+      Block.find.mockResolvedValue([]);
+      const res = await post();
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('OUTSIDE_DELIVERY_ZONE');
+      expect(Cart.findOne).not.toHaveBeenCalled();
+    });
+
+    it('treats a zone of a closed city as no zone', async () => {
+      City.find.mockResolvedValue([]);
+      expect((await post()).body.code).toBe('OUTSIDE_DELIVERY_ZONE');
+    });
+
+    it('asks the database which active blocks hold the pin ([lng, lat])', async () => {
+      const { lines, products } = oneItem();
+      checkoutWorld({ lines, products });
+      await post();
+      expect(Block.find).toHaveBeenCalledWith({
+        isActive: true,
+        area: { $geoIntersects: { $geometry: { type: 'Point', coordinates: [73.095, 31.4045] } } },
+      });
+    });
+
+    it('409 NOT_DELIVERABLE for the items of a store with no shop in the zone, and creates nothing', async () => {
+      const a = mkProduct(brandA, { name: 'Served' });
+      const b = mkProduct(brandB, { name: 'Far away' });
+      checkoutWorld({ lines: [[a, 1], [b, 1]], products: [a, b], serving: [brandA] });
+
+      const res = await post();
+
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe('CHECKOUT_ISSUES');
+      expect(res.body.issues).toEqual([
+        expect.objectContaining({ productId: b._id.toString(), name: 'Far away', code: 'NOT_DELIVERABLE' }),
+      ]);
+      expect(Order.create).not.toHaveBeenCalled();
+      expect(Inventory.findOneAndUpdate).not.toHaveBeenCalled(); // no stock was taken
+    });
+
+    it('only counts active shops whose zone holds the pin', async () => {
+      const { lines, products } = oneItem();
+      checkoutWorld({ lines, products });
+      await post();
+      expect(Branch.find).toHaveBeenCalledWith({
+        brandId: { $in: [brandA._id.toString()] },
+        isActive: true,
+        blockIds: { $in: [zone._id] },
+      });
+    });
+
+    it('records the pin and the blocks that held it on every order, never taken from the client', async () => {
+      const a = mkProduct(brandA);
+      const b = mkProduct(brandB);
+      checkoutWorld({ lines: [[a, 1], [b, 1]], products: [a, b] });
+
+      const res = await post({ ...body, deliveryBlockIds: [oid().toString()] });
+
+      expect(res.status).toBe(201);
+      const [docs] = Order.create.mock.calls[0];
+      docs.forEach((d) => {
+        expect(d.deliveryLocation).toEqual({ type: 'Point', coordinates: [73.095, 31.4045] });
+        expect(d.deliveryBlockIds).toEqual([zone._id]);
+        expect(d.addressId).toBeUndefined();
+      });
+    });
+
+    it('400 without a delivery pin, and for an impossible one', async () => {
+      expect((await post({ shippingAddress: address, paymentMethod: 'COD' })).status).toBe(400);
+      expect((await post({ ...body, deliveryLocation: { latitude: 120, longitude: 73 } })).status).toBe(400);
+      expect(Cart.findOne).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('saved addresses', () => {
+    const { Types } = mongoose;
+    const savedId = new Types.ObjectId().toString();
+
+    it('links the order to a saved address of the same customer', async () => {
+      const p = mkProduct(brandA);
+      checkoutWorld({ lines: [[p, 1]], products: [p] });
+      const res = await post({ ...body, addressId: savedId });
+      expect(res.status).toBe(201);
+      expect(Order.create.mock.calls[0][0][0].addressId).toBe(savedId);
+      expect(Address.exists).toHaveBeenCalledWith({ _id: savedId, userId: expect.anything() });
+    });
+
+    it('400 ADDRESS_NOT_FOUND for an address that is not the customer\'s own', async () => {
+      Address.exists.mockResolvedValue(null);
+      const res = await post({ ...body, addressId: savedId });
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('ADDRESS_NOT_FOUND');
+      expect(Cart.findOne).not.toHaveBeenCalled();
+    });
+
+    it('saves the address for next time, after the order is placed', async () => {
+      const p = mkProduct(brandA);
+      checkoutWorld({ lines: [[p, 1]], products: [p] });
+      Address.countDocuments.mockResolvedValue(0);
+      Address.create.mockImplementation(async (d) => ({ ...d, _id: oid(), toObject() { return this; } }));
+
+      const res = await post({ ...body, saveAddress: { label: 'Home' } });
+
+      expect(res.status).toBe(201);
+      expect(Address.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          label: 'Home',
+          fullName: 'John Doe',
+          addressLine: 'Example Street',
+          location: { type: 'Point', coordinates: [73.095, 31.4045] },
+          isDefault: true, // the first address
+        })
+      );
+    });
+
+    it('never undoes an order because the address could not be saved', async () => {
+      const p = mkProduct(brandA);
+      checkoutWorld({ lines: [[p, 1]], products: [p] });
+      Address.countDocuments.mockResolvedValue(10); // address book full
+      const errors = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      const res = await post({ ...body, saveAddress: { label: 'Home' } });
+
+      expect(res.status).toBe(201);
+      expect(Address.create).not.toHaveBeenCalled();
+      errors.mockRestore();
+    });
+
+    it('does not save a second copy when an existing saved address was used', async () => {
+      const p = mkProduct(brandA);
+      checkoutWorld({ lines: [[p, 1]], products: [p] });
+      await post({ ...body, addressId: savedId, saveAddress: { label: 'Home' } });
+      expect(Address.create).not.toHaveBeenCalled();
+    });
   });
 
   it('splits a multi-brand cart into one order per brand, priced from the database', async () => {

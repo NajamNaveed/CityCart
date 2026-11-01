@@ -8,7 +8,7 @@ Status: **in progress.** Written after the project review with the head.
 | 1a Global categories | **done** (server, tests, admin page, brand form, seed, docs) |
 | 1b Shared catalogue and listings | **done** (server, tests, admin Catalogue page, brand product form, CSV import, seed, docs) |
 | 2 Zones: polygon blocks | **done** (server, tests, admin map editor, seed, docs) |
-| 3 Customer area flow, catalogue views, address book | next |
+| 3 Customer area flow, catalogue views, address book | **in progress**: 3a server done; 3b website done (area picker with overlaps, borders and map pin; range pills inside the chosen blocks; products grouped with offers; checkout with saved addresses and a delivery pin; cart delivery warning; saved-addresses page); 3c mobile customer app next, plus an "also sold by" list on the product page |
 | 4 to 7 | not started |
 
 This plan covers eight changes: real zones, customer area choice, global categories, a shared

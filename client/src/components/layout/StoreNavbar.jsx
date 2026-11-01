@@ -187,7 +187,7 @@ function DrawerLink({ to, children, onClick }) {
 
 // The drawer's location row: city and area together, or an invitation to set them. The picker it opens changes both.
 function DrawerArea({ onOpen }) {
-  const { block, openPicker } = useNearby()
+  const { areaName, openPicker } = useNearby()
   const { city } = useCity()
   return (
     <div>
@@ -202,7 +202,7 @@ function DrawerArea({ onOpen }) {
       >
         <span className="flex items-center gap-2">
           <MapPin className="h-3.5 w-3.5 text-clay" aria-hidden="true" />
-          {block && city ? `${block.name}, ${city.name}` : block ? block.name : city ? city.name : 'Set your location'}
+          {areaName && city ? `${areaName}, ${city.name}` : areaName || (city ? city.name : 'Set your location')}
         </span>
         <span className="text-[12px] text-muted">Change</span>
       </button>
@@ -355,6 +355,11 @@ export default function StoreNavbar() {
             {user?.role === 'CUSTOMER' && (
               <DrawerLink to="/orders" onClick={() => setDrawerOpen(false)}>
                 My orders
+              </DrawerLink>
+            )}
+            {user?.role === 'CUSTOMER' && (
+              <DrawerLink to="/addresses" onClick={() => setDrawerOpen(false)}>
+                Saved addresses
               </DrawerLink>
             )}
             {isStaff && (

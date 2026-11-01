@@ -1769,3 +1769,44 @@ isActive
   and for every shop of the city when a zone is redrawn or a block is switched on
   or off. A shop with an empty `blockIds` is in no block and cannot be found by
   area; the admin is told how many such shops a change causes.
+
+---
+
+# Appendix: Saved Addresses and Delivery Pins
+
+Marketplace v2, Phase 3.
+
+## Address
+
+Collection: `addresses`. A customer's saved delivery addresses (at most 10 each).
+
+```text
+_id
+userId
+label                    for example Home, Work
+fullName, phone
+addressLine, city, state, postalCode, country
+additionalInstructions   standing delivery notes, offered again at checkout
+location                 GeoJSON Point: the pin
+isDefault
+createdAt, updatedAt
+```
+
+- The pin must lie inside at least one active block (checked when saving), so a
+  saved address is always somewhere we deliver.
+- The blocks of an address are worked out from its pin when needed, never stored.
+- The first address is the default. Deleting the default promotes the most recent
+  remaining one.
+
+## Order delivery fields
+
+```text
+shippingAddress       snapshot of the address as typed (unchanged)
+deliveryLocation      GeoJSON Point: the delivery pin
+deliveryBlockIds      the active blocks that held the pin when the order was placed
+addressId             the saved address it came from, if any
+```
+
+The order keeps its own snapshot, so editing or deleting a saved address never
+changes an old order. `deliveryBlockIds` is worked out by the server, never taken
+from the client.

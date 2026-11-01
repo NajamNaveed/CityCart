@@ -731,6 +731,72 @@ whose zone holds the pin, so a shop in an overlap shows in both blocks.
 
 ---
 
+# 11.3 Address and Shopping-Area Endpoints
+
+Marketplace v2, Phase 3.
+
+## Saved addresses (customers only)
+
+```text
+GET    /api/v1/addresses
+POST   /api/v1/addresses
+PATCH  /api/v1/addresses/:id
+POST   /api/v1/addresses/:id/default
+DELETE /api/v1/addresses/:id
+```
+
+An address is returned with `latitude`, `longitude` (the pin) and `blocks` (the
+blocks that currently hold it). `POST` body: `label`, `fullName`, `phone`,
+`addressLine`, `city`, `latitude`, `longitude`, and optionally `state`,
+`postalCode`, `country`, `additionalInstructions`, `isDefault`. A pin outside every
+zone answers 400 `OUTSIDE_DELIVERY_ZONE`; an eleventh address answers 409
+`ADDRESS_LIMIT`. An address that is not the caller's answers 404.
+
+## Browsing the catalogue in a shopping area (public)
+
+```text
+GET /api/v1/catalog/browse?blockIds=a,b&lat=&lng=&radiusKm=&q=&categoryId=&sort=&page=&limit=
+GET /api/v1/catalog/browse/:catalogProductId?blockIds=a,b&lat=&lng=&radiusKm=
+```
+
+`blockIds` (required) is the shopper's area: one block, or several where zones
+overlap. `radiusKm` limits to shops within that distance of `lat`/`lng`. `sort` is
+`name` (default), `price` or `nearest` (needs a position). Each item is one real
+product with its `offers`, cheapest first:
+
+```text
+{ catalogProductId, name, manufacturer, size, images, minPrice, maxPrice,
+  offerCount, inStock, nearestKm,
+  offers: [ { productId, brandId, brandName, price, availability, branchCount, nearestKm } ] }
+```
+
+Adding to the cart uses an offer's `productId` (the store's listing).
+
+## Cart and checkout
+
+```text
+POST /api/v1/cart/area-check   body { blockIds: [...] }
+```
+
+Read-only. Answers `{ deliverable: [productId], undeliverable: [{ productId, name,
+brandName }] }`: which cart items a store can still deliver in those blocks. The app
+shows it when the customer changes shopping area and asks before removing items.
+
+`POST /api/v1/orders` now also takes:
+
+```text
+deliveryLocation   { latitude, longitude }   required: the delivery pin
+addressId          a saved address of the customer (kept on the order)
+saveAddress        { label }                 save this address for next time
+```
+
+The server finds the blocks holding the pin. No block: 400 `OUTSIDE_DELIVERY_ZONE`.
+A store with no active shop in those blocks: 409 `CHECKOUT_ISSUES`, with an issue
+`NOT_DELIVERABLE` for each of its items, and nothing is ordered. Saving the address
+is best-effort and never undoes an order.
+
+---
+
 # 12. Product Endpoints
 
 Base:
