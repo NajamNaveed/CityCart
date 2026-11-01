@@ -9,11 +9,14 @@ import EmptyState from '../../components/ui/EmptyState'
 import QuantityStepper from '../../components/ui/QuantityStepper'
 import Screen from '../../components/ui/Screen'
 import Skeleton from '../../components/ui/Skeleton'
+import LocationSheet from '../../components/LocationSheet'
 import ProductImage from '../../components/ProductImage'
 import RequireCustomer from '../../components/RequireCustomer'
 import { useAuth } from '../../hooks/useAuth'
 import { useCart } from '../../hooks/useCart'
+import { useNearby } from '../../hooks/useNearby'
 import { useRemote } from '../../hooks/useRemote'
+import { checkCartArea } from '../../services/addresses'
 import { cartHasIssues, cartIsEmpty, clampQuantity, fetchCart, issueText, MAX_CART_QTY, removeFromCart, setCartQuantity } from '../../services/cart'
 import { getErrorMessage } from '../../services/api'
 import { formatPrice } from '../../utils/format'
@@ -72,6 +75,10 @@ export default function CartScreen() {
   const cart = changed && changed.base === remote.data ? changed.cart : remote.data
   const [busyId, setBusyId] = useState(null)
   const [notice, setNotice] = useState('')
+  const { blockIds, areaName } = useNearby()
+  // Which items the stores in the cart can still deliver to the shopping area (a read-only check).
+  const [areaCheck, setAreaCheck] = useState({ key: '', undeliverable: [] })
+  const [areaPicker, setAreaPicker] = useState(false)
 
   // Coming back to this tab (after adding something on a product page) shows the current cart.
   const firstFocus = useRef(true)
@@ -113,6 +120,37 @@ export default function CartScreen() {
 
   const hasIssues = cartHasIssues(cart)
 
+  const cartKey = cart ? cart.groups.flatMap((g) => g.items.map((i) => i.productId)).sort().join(',') : ''
+  const checkKey = blockIds.length > 0 && cartKey ? `${blockIds.join(',')}|${cartKey}` : ''
+  useEffect(() => {
+    if (!checkKey) return undefined
+    let active = true
+    checkCartArea(blockIds)
+      .then((result) => active && setAreaCheck({ key: checkKey, undeliverable: result.undeliverable }))
+      .catch(() => active && setAreaCheck({ key: checkKey, undeliverable: [] }))
+    return () => {
+      active = false
+    }
+  }, [checkKey, blockIds])
+  const undeliverable = areaCheck.key === checkKey ? areaCheck.undeliverable : []
+
+  async function removeUndeliverable() {
+    setBusyId('area')
+    setNotice('')
+    try {
+      let next
+      for (const item of undeliverable) next = await removeFromCart(item.productId)
+      if (next) {
+        setChanged({ base: remote.data, cart: next })
+        setCount(next.itemCount)
+      }
+    } catch (err) {
+      setNotice(getErrorMessage(err))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   return (
     <Screen title="Cart" subtitle={cart && !cartIsEmpty(cart) ? `${cart.itemCount} ${cart.itemCount === 1 ? 'item' : 'items'}` : undefined} onRefresh={signedIn ? refresh : undefined} refreshing={remote.refreshing}>
       <RequireCustomer next="/cart" icon="shopping-cart" title="Sign in to see your cart" message="Your cart is saved to your account, so it is waiting for you on any device.">
@@ -132,6 +170,24 @@ export default function CartScreen() {
                 <AppText variant="small" style={{ color: colors.danger }}>
                   {notice}
                 </AppText>
+              </View>
+            ) : null}
+
+            {undeliverable.length > 0 ? (
+              <View accessibilityRole="alert" style={{ backgroundColor: colors.warningSoft, borderRadius: radius.md, padding: spacing.md, gap: spacing.sm }}>
+                <AppText variant="strong" style={{ color: colors.warning }}>
+                  {undeliverable.length === 1 ? 'One item cannot' : `${undeliverable.length} items cannot`} be delivered to {areaName || 'your area'}
+                </AppText>
+                {undeliverable.map((u) => (
+                  <AppText key={u.productId} variant="small" style={{ color: colors.warning }}>
+                    • {u.name || 'An item that is no longer sold'}
+                    {u.brandName ? ` (${u.brandName})` : ''}
+                  </AppText>
+                ))}
+                <View style={{ flexDirection: 'row', gap: spacing.md }}>
+                  <Button title={undeliverable.length === 1 ? 'Remove it' : 'Remove them'} variant="outline" onPress={removeUndeliverable} loading={busyId === 'area'} />
+                  <Button title="Change area" variant="outline" onPress={() => setAreaPicker(true)} />
+                </View>
               </View>
             ) : null}
 
@@ -188,6 +244,7 @@ export default function CartScreen() {
           </View>
         )}
       </RequireCustomer>
+      <LocationSheet visible={areaPicker} onClose={() => setAreaPicker(false)} />
     </Screen>
   )
 }

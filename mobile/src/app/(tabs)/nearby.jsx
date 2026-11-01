@@ -8,6 +8,7 @@ import Button from '../../components/ui/Button'
 import EmptyState from '../../components/ui/EmptyState'
 import SearchBar from '../../components/ui/SearchBar'
 import Skeleton from '../../components/ui/Skeleton'
+import CatalogResults from '../../components/CatalogResults'
 import LocationChip from '../../components/LocationChip'
 import LocationSheet from '../../components/LocationSheet'
 import NearbyBrandCard from '../../components/NearbyBrandCard'
@@ -28,8 +29,9 @@ function ViewToggle({ view, onChange }) {
   return (
     <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, overflow: 'hidden', backgroundColor: colors.surface }}>
       {[
-        ['list', 'List', 'list'],
+        ['list', 'Shops', 'list'],
         ['map', 'Map', 'map'],
+        ['products', 'Products', 'package'],
       ].map(([value, label, icon]) => (
         <Pressable
           key={value}
@@ -52,7 +54,7 @@ export default function Nearby() {
   const router = useRouter()
   const { city, cityId } = useCity()
   const nearby = useNearby()
-  const { ready, asked, block, blockId, coords, range, detect, setRange } = nearby
+  const { ready, asked, selectedBlocks, blockIds, areaName, coords, origin, range, detect, setRange } = nearby
 
   const [draft, setDraft] = useState('')
   const [view, setView] = useState('list')
@@ -61,15 +63,16 @@ export default function Nearby() {
 
   // First time here: ask for the position once, after the screen has had a moment to appear.
   useEffect(() => {
-    if (!ready || asked || blockId) return undefined
+    if (!ready || asked || blockIds.length > 0) return undefined
     const timer = setTimeout(detect, 700)
     return () => clearTimeout(timer)
-  }, [ready, asked, blockId, detect])
+  }, [ready, asked, blockIds.length, detect])
 
-  const query = discoverQuery({ cityId, blockId, coords, range, q })
+  const query = discoverQuery({ cityId, blockIds, coords, origin, range, q })
   const key = JSON.stringify(query)
   const list = usePagedList(key, (page) => (query ? fetchDiscover({ ...query, page }) : Promise.resolve(NOTHING)))
-  const areaMissing = Boolean(cityId) && needsArea({ range, blockId, coords })
+  const areaMissing = Boolean(cityId) && needsArea({ range, blockIds, coords })
+  const hasArea = blockIds.length > 0 && range !== 'city'
   const wider = nextRange(range)
 
   const openBrand = (brand) => router.navigate(shopHref({ brandId: brand._id }))
@@ -94,13 +97,13 @@ export default function Nearby() {
           </AppText>
         </Pressable>
       ) : null}
-      {cityId && !list.loading && !list.error && list.items.length > 0 ? (
+      {cityId && !list.loading && !list.error && (list.items.length > 0 || view === 'products') ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }}>
           <AppText variant="small" style={{ flex: 1 }} accessibilityLiveRegion="polite">
             {list.total} {list.total === 1 ? 'brand' : 'brands'} with {meta?.totalBranches ?? 0} {meta?.totalBranches === 1 ? 'branch' : 'branches'}
             {q ? ` for “${q}”` : ''}
             {range !== 'city' && !areaMissing ? ` within ${rangeLabel(range)}` : ''}
-            {block && range !== 'block' ? ` of ${block.name}` : ''}
+            {areaName && range !== 'block' ? ` of ${areaName}` : ''}
           </AppText>
           <ViewToggle view={view} onChange={setView} />
         </View>
@@ -145,11 +148,12 @@ export default function Nearby() {
   }
 
   const showMap = view === 'map' && cityId && !list.loading && !list.error && list.items.length > 0
+  const showProducts = view === 'products' && cityId
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: colors.paper }}>
       <FlatList
-        data={showMap ? [] : list.items}
+        data={showMap || showProducts ? [] : list.items}
         keyExtractor={(brand) => brand._id}
         contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.lg }}
         keyboardShouldPersistTaps="handled"
@@ -157,13 +161,25 @@ export default function Nearby() {
         ListHeaderComponent={
           <>
             {header}
+            {showProducts ? (
+              hasArea ? (
+                <CatalogResults blockIds={blockIds} origin={origin} range={range} q={q} />
+              ) : (
+                <Pressable onPress={() => setSheetOpen(true)} accessibilityRole="button" style={{ backgroundColor: colors.warningSoft, borderRadius: radius.md, padding: spacing.md }}>
+                  <AppText variant="small" style={{ color: colors.warning }}>
+                    Choose your area to compare products across the stores near you. <AppText variant="label" style={{ color: colors.warning }}>Choose area</AppText>
+                  </AppText>
+                </Pressable>
+              )
+            ) : null}
             {showMap ? (
               <View style={{ gap: spacing.md }}>
                 <NearbyMap
                   items={list.items}
+                  zones={selectedBlocks}
                   origin={meta?.origin}
                   radiusKm={meta?.radiusKm}
-                  originLabel={coords ? 'You are here' : block ? `Searching from ${block.name}` : 'Search centre'}
+                  originLabel={coords ? 'You are here' : areaName ? `Searching from ${areaName}` : 'Search centre'}
                   onOpenBrand={openBrand}
                 />
                 <AppText variant="small">
@@ -175,14 +191,14 @@ export default function Nearby() {
             ) : null}
           </>
         }
-        ListEmptyComponent={showMap ? null : empty}
+        ListEmptyComponent={showMap || showProducts ? null : empty}
         refreshing={list.refreshing}
         onRefresh={list.refresh}
-        onEndReached={showMap ? undefined : list.loadMore}
+        onEndReached={showMap || showProducts ? undefined : list.loadMore}
         onEndReachedThreshold={0.6}
         renderItem={({ item }) => <NearbyBrandCard brand={item} onOpenProduct={(product) => router.push(`/product/${product._id}`)} onSeeAll={() => openBrand(item)} />}
         ListFooterComponent={
-          showMap ? null : list.loadingMore ? (
+          showMap || showProducts ? null : list.loadingMore ? (
             <ActivityIndicator color={colors.clay} style={{ marginVertical: spacing.lg }} />
           ) : list.moreError ? (
             <Pressable onPress={list.loadMore} accessibilityRole="button" style={{ alignItems: 'center', padding: spacing.lg }}>

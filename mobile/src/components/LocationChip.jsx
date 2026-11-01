@@ -8,9 +8,9 @@ import { colors, radius, spacing } from '../theme'
 // "Gulberg ▾": the block being searched from; tapping it opens the location sheet.
 export default function LocationChip({ onPress }) {
   const { city } = useCity()
-  const { block } = useNearby()
-  const label = block ? block.name : city ? city.name : 'Set location'
-  const spoken = block && city ? `${block.name}, ${city.name}` : label
+  const { areaName } = useNearby()
+  const label = areaName || (city ? city.name : 'Set location')
+  const spoken = areaName && city ? `${areaName}, ${city.name}` : label
 
   return (
     <Pressable

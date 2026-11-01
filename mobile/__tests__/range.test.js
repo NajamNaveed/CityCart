@@ -32,7 +32,7 @@ describe('nextRange (the "try wider" suggestion)', () => {
 
 describe('rangeLabel', () => {
   it('reads naturally in a sentence', () => {
-    expect(rangeLabel('block')).toBe('this block')
+    expect(rangeLabel('block')).toBe('your block')
     expect(rangeLabel('city')).toBe('the whole city')
     expect(rangeLabel('10')).toBe('10 km')
   })

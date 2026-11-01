@@ -11,22 +11,25 @@ export const countWords = (value = '') => {
 }
 
 // { field: message } for anything the server would refuse; empty when the form is fine.
-export function validateCheckout(form) {
+// With a saved address only the delivery notes are checked: the rest was validated when it was saved.
+export function validateCheckout(form, { savedAddress = false } = {}) {
   const errors = {}
   const text = (v) => String(v ?? '').trim()
 
-  if (!text(form.fullName)) errors.fullName = 'Enter your full name.'
-  else if (text(form.fullName).length > 100) errors.fullName = 'That name is too long.'
+  if (!savedAddress) {
+    if (!text(form.fullName)) errors.fullName = 'Enter your full name.'
+    else if (text(form.fullName).length > 100) errors.fullName = 'That name is too long.'
 
-  if (!PHONE_PATTERN.test(text(form.phone))) errors.phone = 'Enter a valid phone number, like +92 300 1234567.'
+    if (!PHONE_PATTERN.test(text(form.phone))) errors.phone = 'Enter a valid phone number, like +92 300 1234567.'
 
-  if (!text(form.addressLine)) errors.addressLine = 'Enter your street address.'
-  else if (text(form.addressLine).length > 300) errors.addressLine = 'That address is too long.'
+    if (!text(form.addressLine)) errors.addressLine = 'Enter your street address.'
+    else if (text(form.addressLine).length > 300) errors.addressLine = 'That address is too long.'
 
-  if (!text(form.city)) errors.city = 'Enter your city.'
-  else if (text(form.city).length > 100) errors.city = 'That city name is too long.'
+    if (!text(form.city)) errors.city = 'Enter your city.'
+    else if (text(form.city).length > 100) errors.city = 'That city name is too long.'
 
-  if (text(form.postalCode).length > 20) errors.postalCode = 'That postal code is too long.'
+    if (text(form.postalCode).length > 20) errors.postalCode = 'That postal code is too long.'
+  }
 
   const words = countWords(form.additionalInstructions)
   if (words < 1) errors.additionalInstructions = 'Delivery notes are required: the courier needs them to reach you.'
@@ -36,9 +39,14 @@ export function validateCheckout(form) {
   return errors
 }
 
-// The server reads the cart itself; the app only sends where to deliver and how to pay.
-export function orderBody(form, paymentMethod = 'COD') {
+/**
+ * The server reads the cart itself; the app sends where to deliver (the typed address and the pin),
+ * how to pay, and whether to remember the address. `delivery` is
+ * { pin: { lat, lng }, addressId?, saveAs? } where saveAs is the label to save a NEW address under.
+ */
+export function orderBody(form, paymentMethod = 'COD', delivery = {}) {
   const text = (v) => String(v ?? '').trim()
+  const { pin, addressId, saveAs } = delivery
   return {
     paymentMethod,
     shippingAddress: {
@@ -49,7 +57,21 @@ export function orderBody(form, paymentMethod = 'COD') {
       ...(text(form.postalCode) && { postalCode: text(form.postalCode) }),
       additionalInstructions: text(form.additionalInstructions),
     },
+    ...(pin && { deliveryLocation: { latitude: pin.lat, longitude: pin.lng } }),
+    ...(addressId ? { addressId } : text(saveAs) && { saveAddress: { label: text(saveAs) } }),
   }
+}
+
+/** The sentence to show for a checkout the server refused because of where it should be delivered, or '' for other errors. */
+export function deliveryProblem(err) {
+  const data = err?.response?.data
+  const unserved = (data?.issues || []).filter((i) => i.code === 'NOT_DELIVERABLE')
+  if (unserved.length > 0) {
+    const stores = [...new Set(unserved.map((i) => i.brandName).filter(Boolean))]
+    return `${stores.length ? stores.join(' and ') : 'Some stores'} cannot deliver to this spot. Choose another delivery spot, or remove those items from your cart.`
+  }
+  if (data?.code === 'OUTSIDE_DELIVERY_ZONE') return 'We do not deliver to that spot yet. Tap inside a shaded area on the map.'
+  return ''
 }
 
 // "shippingAddress.phone" -> "phone", so server errors land under the right field.
@@ -57,8 +79,8 @@ export function checkoutFieldErrors(fieldErrors = {}) {
   return Object.fromEntries(Object.entries(fieldErrors).map(([field, message]) => [field.replace(/^shippingAddress\./, ''), message]))
 }
 
-export async function placeOrder(form, paymentMethod = 'COD') {
-  const res = await api.post('/orders', orderBody(form, paymentMethod))
+export async function placeOrder(form, paymentMethod = 'COD', delivery = {}) {
+  const res = await api.post('/orders', orderBody(form, paymentMethod, delivery))
   return res.data.orders
 }
 

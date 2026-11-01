@@ -8,7 +8,7 @@ import { isRadius, MAX_RADIUS_KM, MIN_RADIUS_KM } from '../utils/range'
 import { colors, fonts, minTouch, radius, spacing } from '../theme'
 
 const PRESETS = [
-  ['block', 'This block'],
+  ['block', 'Whole block'],
   ['2', '2 km'],
   ['5', '5 km'],
   ['10', '10 km'],

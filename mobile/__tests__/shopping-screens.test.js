@@ -45,7 +45,8 @@ import OrderPlaced from '../src/app/order-placed'
 import Orders from '../src/app/orders/index'
 import OrderScreen from '../src/app/orders/[id]'
 import ProductScreen from '../src/app/product/[id]'
-import { CUSTOMER, cleanup, press, pressByLabel, screenText, show, signedIn, signedOut, textOf, tick, type } from './helpers/screens'
+import { __map, lastMapData } from 'react-native-webview'
+import { CUSTOMER, cleanup, nearbyValue, press, pressByLabel, screenText, show, signedIn, signedOut, textOf, tick, type } from './helpers/screens'
 
 const ID = (n) => `64b7f0c2a1b2c3d4e5f6070${n}`
 const LAWN = { productId: ID(2), name: 'Mehrunisa Printed Lawn', image: '', unitPrice: 3600, quantity: 2, lineTotal: 7200 }
@@ -78,13 +79,19 @@ beforeEach(() => {
   mockRedirects.length = 0
   mockParams = {}
   rememberPlacedOrders([])
+  __map.scripts.length = 0
   api.get.mockImplementation(async (url) => {
     if (url === '/cart') return { data: { cart: CART } }
+    if (url === '/addresses') return { data: { addresses: [] } }
+    if (url === '/blocks/at') return { data: { containing: [D_GROUND], nearest: [] } }
     throw new Error(`unexpected GET ${url}`)
   })
 })
 
-const auth = () => ({ auth: signedIn() })
+// The shopper has dropped a pin inside D Ground, so checkout knows where to deliver.
+const D_GROUND = { _id: ID(9), name: 'D Ground', cityId: 'c1', latitude: 31.405, longitude: 73.095, polygon: [[31.4, 73.09], [31.4, 73.1], [31.41, 73.1], [31.41, 73.09]] }
+const PIN = { lat: 31.4045, lng: 73.095 }
+const auth = (nearby = {}) => ({ auth: signedIn(), nearby: nearbyValue({ blocks: [D_GROUND], coords: PIN, pinned: true, ...nearby }) })
 
 describe('Cart', () => {
   it('asks a signed-out visitor to sign in, and brings them back', async () => {
@@ -274,7 +281,7 @@ describe('Checkout', () => {
     const created = [{ _id: ID(5), orderNumber: 'CC-1', total: 7200, items: [{}] }, { _id: ID(6), orderNumber: 'CC-2', total: 2500, items: [{}] }]
     api.post.mockResolvedValue({ data: { orders: created } })
     const cart = { itemCount: 3, addItem: jest.fn(), setCount: jest.fn() }
-    const renderer = await show(<Checkout />, { auth: signedIn(), cart })
+    const renderer = await show(<Checkout />, { ...auth(), cart })
 
     await fill(renderer)
     await press(renderer, 'Place order · Rs 9,700')
@@ -283,6 +290,8 @@ describe('Checkout', () => {
     expect(api.post).toHaveBeenCalledWith('/orders', {
       paymentMethod: 'COD',
       shippingAddress: { fullName: 'Sana Iqbal', phone: '+92 300 1234567', addressLine: 'House 41, Street 5', city: 'Faisalabad', additionalInstructions: 'Blue gate, call on arrival.' },
+      deliveryLocation: { latitude: 31.4045, longitude: 73.095 },
+      saveAddress: { label: 'Home' }, // "save this address" is ticked by default
     })
     expect(cart.setCount).toHaveBeenCalledWith(0)
     expect(takePlacedOrders()).toEqual(created)
@@ -530,6 +539,8 @@ describe('paying online', () => {
   const serveCheckout = (methods) =>
     api.get.mockImplementation(async (url) => {
       if (url === '/cart') return { data: { cart: CART } }
+      if (url === '/addresses') return { data: { addresses: [] } }
+      if (url === '/blocks/at') return { data: { containing: [D_GROUND], nearest: [] } }
       if (url === '/payments/methods') {
         if (methods instanceof Error) throw methods
         return { data: { methods } }

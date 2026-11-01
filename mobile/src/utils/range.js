@@ -24,4 +24,4 @@ export function nextRange(range) {
   return null
 }
 
-export const rangeLabel = (range) => (range === 'city' ? 'the whole city' : isRadius(range) ? `${range} km` : 'this block')
+export const rangeLabel = (range) => (range === 'city' ? 'the whole city' : isRadius(range) ? `${range} km` : 'your block')

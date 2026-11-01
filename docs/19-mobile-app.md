@@ -39,7 +39,7 @@ CityCart/
 
 Every mobile screen mirrors a web customer page. Context providers, hooks and
 utilities are ported from `client/src`; screens are rewritten with native
-components. The map (web: Leaflet) is replaced by a native map component.
+components. The map is Leaflet in a web view (the same free OpenStreetMap map as the website).
 
 ## 3. Authentication
 
@@ -73,7 +73,7 @@ Installed once, inside `mobile/`, each with a stated reason:
 | expo-location | the shopper's position for Nearby |
 | expo-font, @expo-google-fonts/poppins, @expo-google-fonts/fraunces | the brand fonts, importing only the five weights used |
 | @expo/vector-icons | tab and button icons (Feather, the family Lucide came from) |
-| react-native-maps | the Nearby map (Android release builds need a Google Maps key) |
+| react-native-webview | the maps (Leaflet drawing free OpenStreetMap tiles): no API key, no billing account |
 
 ## 6. Phases
 
@@ -121,38 +121,58 @@ Everything here uses the public API, so no sign-in is needed.
 
 Tests: the paging rules, query building and helpers are unit tested, and `__tests__/screens.test.js` renders the real screens against a fake API (what is shown, loading and error states, and the Shop navigation rule).
 
-## 9. Nearby (Phase 4)
+## 9. Nearby and the shopping area
 
-The same feature as the web app's Nearby page, on the same public endpoints
-(`GET /blocks`, `GET /blocks/resolve`, `GET /discover`).
+The same feature as the website's Nearby page, on the same public endpoints
+(`GET /blocks`, `GET /blocks/at`, `GET /discover`, `GET /catalog/browse`).
+Marketplace v2 (docs/22) changed it from "one block" to a shopping **area**: one block,
+or several where zones overlap.
 
 * **Finding the shopper.** The first time the Nearby tab opens, the app asks for the
-  phone's position once (the system permission prompt appears then, not at launch). It
-  uses a recent known position when there is one (instant), otherwise waits up to 12
-  seconds for a fresh one. The server turns the position into a block and city.
-  Refusal, location switched off, a timeout and "outside every city we serve" each get
-  their own plain message, and a permission blocked for good offers **Open Settings**.
-  Choosing an area by hand never asks for the position.
+  phone's position once (the system permission prompt appears then, not at launch). The
+  server answers `GET /blocks/at` with every block whose zone holds the position:
+  * **one block**: chosen automatically.
+  * **an overlap**: every block there is chosen; the shopper can untick one (never the last).
+  * **between zones**: nothing is chosen yet and the nearest blocks, with distances, are
+    offered to tick.
+  * **nowhere we serve**: a plain message, then the manual list.
+  Refusal, location switched off and a timeout each get their own message, and a
+  permission blocked for good offers **Open Settings**.
+* **Shopping somewhere else.** "Pick a spot on the map" shows the city's blocks as zones;
+  tapping drops a pin, and the blocks holding the pin become the area (and the delivery
+  spot). Choosing blocks by hand (several allowed) measures from the blocks, not from the phone.
 * **Privacy.** The position is rounded to about 11 metres and saved only on the phone
   (`prefs`, not secure storage: it is not a credential). The server receives it only as
-  query parameters of the one search it answers; request logs drop query strings
-  (docs/06).
-* **Range.** This block, 2, 5, 10, 20 km, the whole city, or any custom distance from 0.5
-  to 50 km. A range that needs an area the shopper has not given falls back to the whole
-  city and says so. An empty result offers the next wider range.
-* **Results** are brands with their nearest distance, branches (Directions and Call),
-  and a few products, with "Only at ..." where a product is sold at some branches only.
-  They load ten brands at a time.
-* **Map.** `react-native-maps`: pins per branch, a marker at the search centre, and a
-  circle for a radius search. It uses the phone's own map: Apple Maps on iPhone (no
-  setup), Google Maps on Android. It works in Expo Go. **Android release builds need a
-  Google Maps API key**: set the `GOOGLE_MAPS_API_KEY` environment variable when building
-  (`app.config.js` passes it to the build), and restrict the key to the app's package name
-  in Google Cloud. Without a key the Android map is blank but everything else, including
-  Directions (which opens the maps app), works.
-* The area is kept in `context/NearbyProvider.jsx` and the rules (query building, saved
-  value checks, "find me" outcomes) in `services/nearby.js` and `services/location.js`,
-  both unit tested; the screen is covered by `__tests__/nearby-screen.test.js`.
+  query parameters of the one search it answers; request logs drop query strings (docs/06).
+* **Range.** Whole block, 2, 5, 10, 20 km, the whole city, or any custom distance from 0.5
+  to 50 km, applied inside the chosen blocks and measured from the phone, the pin, or the
+  centre of the one block chosen. An empty result offers the next wider range.
+* **Results** have three views: **Shops** (brands with branches, Directions and Call, and
+  a few products), **Map** and **Products**. Products shows each real product once, with
+  every store that sells it in the area as an offer ("from Rs 1,180 · 3 stores"; Compare
+  opens the offers, each linking to that store's product page). Sort by name, lowest price
+  or nearest store.
+* **Map.** `components/MapView.jsx` is a web view running Leaflet with OpenStreetMap
+  tiles. The app sends it data (block outlines, shop pins, the search centre and circle,
+  a dropped pin); it never receives markup, and every name is drawn as text. It needs an
+  internet connection and works in Expo Go and in release builds with nothing to configure.
+  OpenStreetMap's public tiles are for light use; a tile provider is a one-line change.
+* The area is kept in `context/NearbyProvider.jsx` and the rules in `services/nearby.js`
+  and `services/location.js`, both unit tested; the screens are covered by
+  `__tests__/nearby-screen.test.js`.
+
+## 9.1 Where an order goes
+
+* **Saved addresses** (`services/addresses.js`, `app/addresses.jsx`): the account tab lists
+  them with the blocks that hold them, and lets the shopper make one the default or delete it.
+* **Checkout** offers the saved addresses (the default is preselected and brings its
+  standing delivery notes), or a new address with a map to drop the delivery pin and a
+  "Save this address" option. The order sends `deliveryLocation`, and `addressId` or
+  `saveAddress`. A pin outside every zone, or a store that cannot deliver there, is
+  explained in words and nothing is ordered.
+* **Cart** shows a warning when the area chosen cannot be served by some stores in the
+  cart (`POST /cart/area-check`), with Remove and Change area.
+* Covered by `__tests__/delivery-screens.test.js` and `__tests__/addresses.test.js`.
 
 ## 10. Cart, checkout and orders (Phase 5)
 
@@ -234,12 +254,11 @@ screens against a fake server).
   Building needs an Expo account and the EAS CLI as a global tool:
   ```bash
   npm i -g eas-cli && eas login
-  eas secret:create --name GOOGLE_MAPS_API_KEY --value <key>   # release builds only
   npm run build:android            # production (AAB, for Play)
   npm run build:android:preview    # APK to install directly on a phone
   ```
-  `app.config.js` reads `GOOGLE_MAPS_API_KEY` from the environment, so the key
-  reaches release builds through the EAS secret and is never committed.
+  The maps need no key (they are OpenStreetMap in a web view). Set
+  `EXPO_PUBLIC_API_URL` for the build; cloud builds do not read your local `.env`.
 
 ### Device-test checklist
 
@@ -252,8 +271,8 @@ phone (Expo Go while developing, a preview APK for release behaviour):
    endless scroll, product photos and reviews, "Chat with seller" asks a
    visitor to sign in and returns to the same product.
 3. **Nearby** — the location-permission wording appears, blocks load, the map
-   shows pins and pans to results (tiles render in the release build — that is
-   what the Google Maps key is for), Directions opens the maps app.
+   shows zones and pins and pans to results (tiles need an internet connection),
+   tapping the map in the area picker drops a pin, Directions opens the maps app.
 4. **Cart and checkout** — quantities, remove, an out-of-stock line blocks
    checkout, a multi-brand cart splits into one order per brand on the
    confirmation, a pending order can be cancelled.
