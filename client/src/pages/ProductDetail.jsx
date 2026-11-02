@@ -18,6 +18,7 @@ import { useCart } from '../hooks/useCart'
 import ProductImage from '../components/ProductImage'
 import { optimizedUrl } from '../components/optimizeImage'
 import ReviewsSection from '../components/ReviewsSection'
+import AlsoSoldBy from '../components/nearby/AlsoSoldBy'
 import Stars from '../components/Stars'
 import { useProductReviews } from '../hooks/useProductReviews'
 import { EmptyState, Modal, Reveal } from '../components/ui'
@@ -351,6 +352,8 @@ function ProductView({ product, brand }) {
             )}
           </div>
         </div>
+
+        <AlsoSoldBy catalogProductId={product.catalogProductId} currentProductId={product._id} />
       </div>
 
       <ReviewsSection data={reviews} />

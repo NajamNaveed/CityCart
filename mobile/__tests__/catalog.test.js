@@ -1,7 +1,20 @@
 jest.mock('../src/services/api', () => ({ __esModule: true, default: { get: jest.fn() } }))
 
 import api from '../src/services/api'
-import { fetchBrands, fetchProduct, fetchProducts, fetchRatings, fetchReviews, PAGE_SIZE, productQuery, SORTS } from '../src/services/catalog'
+import {
+  CATALOG_PAGE_SIZE,
+  catalogQuery,
+  fetchBrands,
+  fetchCatalogBrowse,
+  fetchCatalogOffers,
+  fetchProduct,
+  fetchProducts,
+  fetchRatings,
+  fetchReviews,
+  PAGE_SIZE,
+  productQuery,
+  SORTS,
+} from '../src/services/catalog'
 
 beforeEach(() => jest.clearAllMocks())
 
@@ -84,5 +97,66 @@ describe('fetchers', () => {
     const result = await fetchReviews('p1', 2)
     expect(api.get).toHaveBeenCalledWith('/products/p1/reviews', { params: { limit: 5, page: 2 } })
     expect(result.reviews).toHaveLength(1)
+  })
+})
+
+describe('the shared catalogue', () => {
+  const GULBERG = '64b7f0c2a1b2c3d4e5f60704'
+  const DGROUND = '64b7f0c2a1b2c3d4e5f60707'
+
+  it('cannot browse the catalogue without an area', () => {
+    expect(catalogQuery({})).toBeNull()
+    expect(catalogQuery({ blockIds: [] })).toBeNull()
+    expect(catalogQuery({ blockIds: 'not-a-list' })).toBeNull()
+  })
+
+  it('asks for the chosen blocks as one comma-separated list, a page at a time', () => {
+    expect(catalogQuery({ blockIds: [GULBERG, DGROUND] })).toEqual({
+      blockIds: `${GULBERG},${DGROUND}`,
+      sort: 'name',
+      page: 1,
+      limit: CATALOG_PAGE_SIZE,
+    })
+  })
+
+  it('adds the search text, the position and a radius only when they apply', () => {
+    const origin = { lat: 31.4, lng: 73.1 }
+    expect(catalogQuery({ blockIds: [GULBERG], q: '  lawn ', sort: 'price', origin, range: '5' })).toEqual({
+      blockIds: GULBERG,
+      sort: 'price',
+      page: 1,
+      limit: CATALOG_PAGE_SIZE,
+      q: 'lawn',
+      lat: 31.4,
+      lng: 73.1,
+      radiusKm: '5',
+    })
+    // "This block" is not a radius, and a position alone is enough to measure distances.
+    expect(catalogQuery({ blockIds: [GULBERG], origin, range: 'block' })).toEqual(expect.objectContaining({ lat: 31.4, lng: 73.1 }))
+    expect(catalogQuery({ blockIds: [GULBERG], origin, range: 'block' })).not.toHaveProperty('radiusKm')
+    expect(catalogQuery({ blockIds: [GULBERG], origin: { lat: 31.4, lng: 73.1 }, range: 'city' })).not.toHaveProperty('radiusKm')
+    // Without a position there is nothing to measure from, so "nearest" becomes a name sort.
+    expect(catalogQuery({ blockIds: [GULBERG], sort: 'nearest' }).sort).toBe('name')
+    expect(catalogQuery({ blockIds: [GULBERG], sort: 'nearest', origin }).sort).toBe('nearest')
+  })
+
+  it('fetchCatalogBrowse reads the grouped products and their paging', async () => {
+    api.get.mockResolvedValue({ data: { items: [{ catalogProductId: 'c1' }], pagination: { page: 1, pages: 2, total: 13 }, meta: { totalOffers: 20 } } })
+    const query = catalogQuery({ blockIds: [GULBERG] })
+    const result = await fetchCatalogBrowse(query)
+    expect(api.get).toHaveBeenCalledWith('/catalog/browse', { params: query })
+    expect(result).toEqual({ items: [{ catalogProductId: 'c1' }], pagination: { page: 1, pages: 2, total: 13 }, meta: { totalOffers: 20 } })
+  })
+
+  it('fetchCatalogBrowse treats a missing list as empty', async () => {
+    api.get.mockResolvedValue({ data: {} })
+    expect(await fetchCatalogBrowse({ blockIds: GULBERG })).toEqual({ items: [], pagination: undefined, meta: undefined })
+  })
+
+  it('fetchCatalogOffers asks for one catalogue product inside the area', async () => {
+    api.get.mockResolvedValue({ data: { item: { catalogProductId: 'c1', offers: [{ productId: 'p1' }] } } })
+    const area = { blockIds: GULBERG, lat: 31.4, lng: 73.1 }
+    expect((await fetchCatalogOffers('c1', area)).item.offers).toHaveLength(1)
+    expect(api.get).toHaveBeenCalledWith('/catalog/browse/c1', { params: area })
   })
 })

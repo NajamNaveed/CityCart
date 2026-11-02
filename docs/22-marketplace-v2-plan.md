@@ -8,7 +8,7 @@ Status: **in progress.** Written after the project review with the head.
 | 1a Global categories | **done** (server, tests, admin page, brand form, seed, docs) |
 | 1b Shared catalogue and listings | **done** (server, tests, admin Catalogue page, brand product form, CSV import, seed, docs) |
 | 2 Zones: polygon blocks | **done** (server, tests, admin map editor, seed, docs) |
-| 3 Customer area flow, catalogue views, address book | **in progress**: 3a server done; 3b website done (area picker with overlaps, borders and map pin; range pills inside the chosen blocks; products grouped with offers; checkout with saved addresses and a delivery pin; cart delivery warning; saved-addresses page); 3c mobile customer app next, plus an "also sold by" list on the product page |
+| 3 Customer area flow, catalogue views, address book | **done**: 3a server; 3b website (area picker with overlaps, borders and map pin; range pills inside the chosen blocks; products grouped with offers; checkout with saved addresses and a delivery pin; cart delivery warning; saved-addresses page); 3c mobile customer app (same area flow, catalogue products with offers, address book, delivery pin at checkout, cart area warning) plus an area-only "also sold by" list on the website and mobile product pages |
 | 4 to 7 | not started |
 
 This plan covers eight changes: real zones, customer area choice, global categories, a shared
@@ -28,7 +28,7 @@ with the three Android APKs.
 | 5 | **Overlapping blocks:** the customer may select **one or several** blocks. He is never forced to pick only one. |
 | 6 | **APKs come last.** All three apps are built only after every phase below is done. |
 | 7 | **Security hardening is deferred.** It is not part of this plan. |
-| 8 | **New packages:** none beyond `react-native-webview` (already added for the free map). Polygon drawing and pin dropping reuse Leaflet. |
+| 8 | **New packages:** none beyond what the apps already install. The website draws polygons and drops pins with its existing Leaflet map; the customer app uses the `react-native-maps` it already depends on for Nearby (`<Polygon>` for block outlines, `onPress` for a dropped pin). No web view is needed. |
 | 9 | **No customer return request after delivery, for now.** Only the **door case** stays: the rider records accepted and rejected items while delivering, whether the order is half or full. A customer coming back later to return something is **not** handled in v2. |
 | 10 | **Development database:** a new database name (for example `citycart_v2`) on the same Atlas cluster, set in the local `server/.env`. The live Render site keeps the old database until the release phase. |
 
@@ -251,9 +251,12 @@ Split into **1a (global categories, done)** and **1b (catalogue and listings, do
 
 **Done when:** the admin draws blocks, and the discover endpoint returns correct stores for single, overlapping, border and outside points.
 
-### Phase 3: Customer area flow, catalogue views and address book (L)
+### Phase 3: Customer area flow, catalogue views and address book (L) — done
+
+**How it was built:** the website and the customer app share one server model. `GET /blocks/at` answers "which blocks hold this point?" with `{ containing, nearest }`; the apps turn that into found / overlap / border / outside. Both remember `{ blockIds, coords, pinned, range }` on the device and send `scope=area` to `/discover`, with the radius applied inside the selected blocks. Polygons are drawn on the existing maps (Leaflet on the web, `react-native-maps` `<Polygon>` on mobile) and tapping the map drops a delivery pin. `/catalog/browse` groups listings per catalogue product; `/catalog/browse/:catalogProductId` returns the area's offers or a 404 "not sold in your area", and the product page shows them as **area-only** "also sold by" (without an area it asks for one). Checkout requires a delivery location: a saved `addressId`, or a pin that `/blocks/at` puts inside a block, plus an optional `saveAddress`. The confirmation of "can these stores reach this spot?" stays on the server (`CHECKOUT_ISSUES` / `NOT_DELIVERABLE`, `OUTSIDE_DELIVERY_ZONE`), and the cart asks `POST /cart/area-check` to warn and offer removal. Tests: server scenarios in §A; website and mobile screen tests for single block, overlap, border, pin, catalogue offers, address CRUD and the checkout rules.
+
 - **Server:** `Address` collection and routes, checkout delivery rule (§A), cart area check.
-- **Website and mobile:** the shopping-area flow of §A (auto block, multi-select for overlaps, border case, pin mode, range pills, block shapes on the map). Mobile extends `NearbyMap.jsx` to draw polygons and accept a tapped point, still in the free Leaflet web view.
+- **Website and mobile:** the shopping-area flow of §A (auto block, multi-select for overlaps, border case, pin mode, range pills, block shapes on the map). Mobile extends `NearbyMap.jsx` to draw polygons and accept a tapped point with `react-native-maps` (no web view).
 - **Catalogue for customers:** grouped product cards, offers list on the product page, search in the area.
 - **Checkout:** saved addresses, save-this-address, block check with a clear message when the store does not serve the address.
 - **Tests:** every scenario in §A on the server, plus screen tests for the multi-select, border and pin flows, and address CRUD.
@@ -342,7 +345,7 @@ Demo data must include the scenarios of the walkthrough in §7, so each one can 
 | D9 | Product reviews stay on the listing. |
 | D10 | Up to 10 saved addresses per customer. |
 | D11 | Pin dropping only, no address search service. |
-| D12 | No new packages beyond `react-native-webview`. |
+| D12 | No new packages: Leaflet on the web, `react-native-maps` (already installed) on mobile. |
 
 ---
 

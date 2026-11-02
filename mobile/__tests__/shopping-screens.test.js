@@ -27,6 +27,16 @@ jest.mock('expo-router', () => {
 })
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default)
 jest.mock('@expo/vector-icons/Feather', () => () => null)
+jest.mock('react-native-maps', () => {
+  const React = require('react')
+  const { View } = require('react-native')
+  const MapView = React.forwardRef(({ children, onMapReady }, ref) => {
+    React.useImperativeHandle(ref, () => ({ fitToCoordinates: jest.fn() }))
+    React.useEffect(() => onMapReady && onMapReady(), [onMapReady])
+    return <View testID="map">{children}</View>
+  })
+  return { __esModule: true, default: MapView, Marker: () => null, Circle: () => null, Polygon: () => null }
+})
 jest.mock('expo-secure-store', () => ({ getItemAsync: jest.fn().mockResolvedValue(null), setItemAsync: jest.fn(), deleteItemAsync: jest.fn(), WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'x' }))
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'))
 jest.mock('../src/services/api', () => ({
@@ -45,7 +55,7 @@ import OrderPlaced from '../src/app/order-placed'
 import Orders from '../src/app/orders/index'
 import OrderScreen from '../src/app/orders/[id]'
 import ProductScreen from '../src/app/product/[id]'
-import { CUSTOMER, cleanup, press, pressByLabel, screenText, show, signedIn, signedOut, textOf, tick, type } from './helpers/screens'
+import { CUSTOMER, cleanup, nearbyValue, press, pressByLabel, screenText, show, signedIn, signedOut, textOf, tick, type } from './helpers/screens'
 
 const ID = (n) => `64b7f0c2a1b2c3d4e5f6070${n}`
 const LAWN = { productId: ID(2), name: 'Mehrunisa Printed Lawn', image: '', unitPrice: 3600, quantity: 2, lineTotal: 7200 }
@@ -71,6 +81,11 @@ const ORDER = {
 
 const httpError = (status, message, extra = {}) => Object.assign(new Error(message), { response: { status, data: { message, ...extra } } })
 
+const BLOCK = { _id: ID(9), name: 'Gulberg' }
+const POSITION = { lat: 31.4, lng: 73.1 }
+// A shopper with an area chosen, so checkout has a delivery spot to send.
+const nearby = () => nearbyValue({ blockIds: [BLOCK._id], selectedBlocks: [BLOCK], areaName: BLOCK.name, coords: POSITION, origin: POSITION })
+
 afterEach(cleanup)
 
 beforeEach(() => {
@@ -80,11 +95,14 @@ beforeEach(() => {
   rememberPlacedOrders([])
   api.get.mockImplementation(async (url) => {
     if (url === '/cart') return { data: { cart: CART } }
+    if (url === '/addresses') return { data: { addresses: [] } }
+    if (url === '/blocks/at') return { data: { containing: [BLOCK], nearest: [] } }
     throw new Error(`unexpected GET ${url}`)
   })
+  api.post.mockResolvedValue({ data: { deliverable: [], undeliverable: [] } })
 })
 
-const auth = () => ({ auth: signedIn() })
+const auth = () => ({ auth: signedIn(), nearby: nearby() })
 
 describe('Cart', () => {
   it('asks a signed-out visitor to sign in, and brings them back', async () => {
@@ -151,6 +169,46 @@ describe('Cart', () => {
     expect(text).toContain('Out of stock')
     expect(text).toContain('Remove or fix the items marked above')
     expect(text).not.toContain('Checkout')
+  })
+
+  it('warns when the shops in the cart cannot deliver to the chosen area, and removes those items', async () => {
+    let checks = 0
+    api.post.mockImplementation(async (url) => {
+      if (url === '/cart/area-check') {
+        checks += 1
+        // Once the item is removed, the fresh check has nothing to complain about.
+        return {
+          data: {
+            deliverable: [KURTA.productId],
+            undeliverable: checks === 1 ? [{ productId: LAWN.productId, name: LAWN.name, brandName: 'Loom & Co.' }] : [],
+          },
+        }
+      }
+      throw new Error(`unexpected POST ${url}`)
+    })
+    api.delete.mockResolvedValue({ data: { cart: cartOf(MEHR) } })
+    const near = nearby()
+    const renderer = await show(<CartScreen />, { auth: signedIn(), nearby: near })
+
+    expect(api.post).toHaveBeenCalledWith('/cart/area-check', { blockIds: [BLOCK._id] })
+    const text = screenText(renderer)
+    expect(text).toContain('One item cannot be delivered to Gulberg')
+    expect(text).toContain('Mehrunisa Printed Lawn (Loom & Co.)')
+
+    await press(renderer, 'Remove it')
+    expect(api.delete).toHaveBeenCalledWith(`/cart/items/${LAWN.productId}`)
+    expect(screenText(renderer)).not.toContain('Mehrunisa Printed Lawn')
+  })
+
+  it('offers to change the area instead', async () => {
+    api.post.mockImplementation(async (url) => {
+      if (url === '/cart/area-check') return { data: { deliverable: [], undeliverable: [{ productId: LAWN.productId, name: LAWN.name, brandName: 'Loom & Co.' }] } }
+      throw new Error(`unexpected POST ${url}`)
+    })
+    const near = nearby()
+    const renderer = await show(<CartScreen />, { auth: signedIn(), nearby: near })
+    await press(renderer, 'Change area')
+    expect(near.openPicker).toHaveBeenCalled()
   })
 
   it('invites the shopper to start shopping when the cart is empty', async () => {
@@ -259,14 +317,74 @@ describe('Checkout', () => {
     for (const expected of ['Delivery address', 'Full name', 'Cash on delivery', '2 × Mehrunisa Printed Lawn', '1 × Classic Kurta', 'Total to pay', 'Rs 9,700', 'becomes 2 separate orders', 'Place order · Rs 9,700']) expect(text).toContain(expected)
   })
 
+  it('delivers to a saved address without asking for the map pin again', async () => {
+    const ADDRESS = {
+      _id: ID(8),
+      label: 'Home',
+      isDefault: true,
+      fullName: 'Sana Iqbal',
+      phone: '+92 300 1234567',
+      addressLine: 'House 41, Street 5',
+      city: 'Faisalabad',
+      postalCode: '',
+      additionalInstructions: 'Blue gate',
+      latitude: 31.41,
+      longitude: 73.08,
+      blocks: [BLOCK],
+    }
+    api.get.mockImplementation(async (url) => {
+      if (url === '/cart') return { data: { cart: CART } }
+      if (url === '/addresses') return { data: { addresses: [ADDRESS] } }
+      throw new Error(`unexpected GET ${url}`)
+    })
+    api.post.mockResolvedValue({ data: { orders: [{ _id: ID(5), orderNumber: 'CC-1', total: 9700, items: [{}] }] } })
+    const renderer = await show(<Checkout />, auth())
+
+    const text = screenText(renderer)
+    expect(text).toContain('Home')
+    expect(text).toContain('Default')
+    expect(text).toContain('Delivering to Gulberg')
+    expect(text).not.toContain('Full name') // the saved address replaces the form
+    expect(renderer.root.findAll((n) => n.props.accessibilityLabel === 'Delivery notes')[0].props.value).toBe('Blue gate')
+
+    await press(renderer, 'Place order · Rs 9,700')
+    expect(api.post).toHaveBeenCalledWith('/orders', {
+      paymentMethod: 'COD',
+      shippingAddress: { fullName: 'Sana Iqbal', phone: '+92 300 1234567', addressLine: 'House 41, Street 5', city: 'Faisalabad', additionalInstructions: 'Blue gate' },
+      deliveryLocation: { latitude: 31.41, longitude: 73.08 },
+      addressId: ADDRESS._id,
+    })
+  })
+
+  it('will not send an order to a pin outside the delivery areas', async () => {
+    api.get.mockImplementation(async (url) => {
+      if (url === '/cart') return { data: { cart: CART } }
+      if (url === '/addresses') return { data: { addresses: [] } }
+      if (url === '/blocks/at') return { data: { containing: [], nearest: [{ _id: BLOCK._id, distanceKm: 0.4 }] } }
+      throw new Error(`unexpected GET ${url}`)
+    })
+    const renderer = await show(<Checkout />, auth())
+    await fill(renderer)
+    await press(renderer, 'Place order · Rs 9,700')
+    expect(screenText(renderer)).toContain('We do not deliver to that spot yet')
+    expect(api.post).not.toHaveBeenCalled()
+  })
+
+  it('names the stores that cannot reach the delivery spot', async () => {
+    api.post.mockRejectedValue(httpError(409, 'Some items cannot be delivered to this location.', { code: 'CHECKOUT_ISSUES', issues: [{ code: 'NOT_DELIVERABLE', brandName: 'Loom & Co.' }] }))
+    const renderer = await show(<Checkout />, auth())
+    await fill(renderer)
+    await press(renderer, 'Place order · Rs 9,700')
+    expect(screenText(renderer)).toContain('Loom & Co. cannot deliver to this spot')
+  })
+
   it('explains what is missing and sends nothing', async () => {
     const renderer = await show(<Checkout />, auth())
     await press(renderer, 'Place order · Rs 9,700')
     const text = screenText(renderer)
-    expect(text).toContain('Please check the highlighted fields.')
+    expect(text).toContain('Delivery notes are required')
     expect(text).toContain('Enter a valid phone number')
     expect(text).toContain('Enter your street address.')
-    expect(text).toContain('Delivery notes are required')
     expect(api.post).not.toHaveBeenCalled()
   })
 
@@ -274,7 +392,7 @@ describe('Checkout', () => {
     const created = [{ _id: ID(5), orderNumber: 'CC-1', total: 7200, items: [{}] }, { _id: ID(6), orderNumber: 'CC-2', total: 2500, items: [{}] }]
     api.post.mockResolvedValue({ data: { orders: created } })
     const cart = { itemCount: 3, addItem: jest.fn(), setCount: jest.fn() }
-    const renderer = await show(<Checkout />, { auth: signedIn(), cart })
+    const renderer = await show(<Checkout />, { auth: signedIn(), cart, nearby: nearby() })
 
     await fill(renderer)
     await press(renderer, 'Place order · Rs 9,700')
@@ -283,6 +401,8 @@ describe('Checkout', () => {
     expect(api.post).toHaveBeenCalledWith('/orders', {
       paymentMethod: 'COD',
       shippingAddress: { fullName: 'Sana Iqbal', phone: '+92 300 1234567', addressLine: 'House 41, Street 5', city: 'Faisalabad', additionalInstructions: 'Blue gate, call on arrival.' },
+      deliveryLocation: { latitude: POSITION.lat, longitude: POSITION.lng },
+      saveAddress: { label: 'Home' },
     })
     expect(cart.setCount).toHaveBeenCalledWith(0)
     expect(takePlacedOrders()).toEqual(created)
@@ -530,6 +650,8 @@ describe('paying online', () => {
   const serveCheckout = (methods) =>
     api.get.mockImplementation(async (url) => {
       if (url === '/cart') return { data: { cart: CART } }
+      if (url === '/addresses') return { data: { addresses: [] } }
+      if (url === '/blocks/at') return { data: { containing: [BLOCK], nearest: [] } }
       if (url === '/payments/methods') {
         if (methods instanceof Error) throw methods
         return { data: { methods } }
