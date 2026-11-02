@@ -62,7 +62,7 @@ function asRole(role, permissions) {
 const asRider = () => {
   const ctx = asRole(ROLES.RIDER);
   const token = signToken(
-    { userId: ctx.user._id, role: ROLES.RIDER, brandId, passwordVersion: 0, client: 'partner' },
+    { userId: ctx.user._id, role: ROLES.RIDER, brandId, passwordVersion: 0, client: 'delivery' },
     { expiresIn: '8h' }
   );
   return { header: ['Authorization', `Bearer ${token}`], user: ctx.user };

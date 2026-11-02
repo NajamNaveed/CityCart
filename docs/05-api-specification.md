@@ -194,17 +194,31 @@ of a seller or admin account is refused with `403 WEB_ONLY` on every endpoint.
 The web client does not send `X-Client` and never receives a token in a body.
 See docs/06 (Native App Sessions).
 
-### Partner app sign-in
+### Staff and Delivery app sign-in
+
+There are three native app types: shopper (`mobile/`), staff (`partner/`) and
+delivery (`delivery/`). Each has its own sign-in endpoint, and the server refuses
+an app that sends the wrong header.
 
 ```text
-POST /api/v1/auth/partner/login        (header X-Client: partner)
+POST /api/v1/auth/staff/login          (header X-Client: staff)
+POST /api/v1/auth/delivery/login       (header X-Client: delivery)
 ```
 
-Body `{ "email", "password" }`. Only `RIDER` and `BRAND_EMPLOYEE` accounts can
-sign in; any other account, a wrong password and an unknown email all answer the
-same `401`. Without the header: `403 PARTNER_APP_ONLY`. The response contains the
-token (marked as a partner token, one staff session long) and sets no cookie.
-See `20-partner-app.md`.
+Body `{ "email", "password" }`.
+
+* **Staff:** only `BRAND_EMPLOYEE` and `PICKER` accounts. Without the header:
+  `403 STAFF_APP_ONLY`.
+* **Delivery:** only `RIDER` accounts. Without the header:
+  `403 DELIVERY_APP_ONLY`.
+
+Any other account, a wrong password and an unknown email all answer the same
+`401`. The response contains the token (one staff session long) and sets no
+cookie. The token carries `client: "staff"` or `client: "delivery"`, and that
+mark is checked on every Bearer request: a staff token is refused for riders,
+a delivery token is refused for staff or shoppers, and any app token is refused
+for a brand owner, the super admin or a shopper (`403 WRONG_APP`). See
+`20-partner-app.md` (Staff) and `23-delivery-app.md` (Delivery).
 
 ---
 

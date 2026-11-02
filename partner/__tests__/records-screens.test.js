@@ -45,7 +45,7 @@ import ShipmentScreen from '../src/app/shipment/[id]'
 import ReceiptScreen from '../src/app/receipt/[id]'
 import ProofScreen from '../src/app/proof/[paymentId]'
 import HandoverScreen from '../src/app/handover/[collectorId]'
-import { cleanup, has, isDisabled, press, pressByLabel, RIDER, screenText, show, signedIn, type } from './helpers/screens'
+import { cleanup, has, isDisabled, PICKER, press, pressByLabel, screenText, show, signedIn, type } from './helpers/screens'
 
 const ALL = ['orders.view', 'delivery.view', 'delivery.manage', 'riders.view', 'payments.view', 'payments.manage']
 const member = (...permissions) => signedIn({ id: 'u2', name: 'Maryam Javed', email: 'maryam@example.com', role: 'BRAND_EMPLOYEE', permissions })
@@ -585,8 +585,8 @@ describe('account', () => {
     expect(auth.logout).toHaveBeenCalled()
   })
 
-  it('is never shown to a rider (the records screens belong to team members)', async () => {
+  it('is never shown to a picker (the records screens belong to team members)', async () => {
     mockParams = { id: 'o1' }
-    expect(screenText(await show(<OrderScreen />, { auth: signedIn(RIDER) }))).toBe('redirect:/')
+    expect(screenText(await show(<OrderScreen />, { auth: signedIn(PICKER) }))).toBe('redirect:/')
   })
 })

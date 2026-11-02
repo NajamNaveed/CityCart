@@ -16,11 +16,11 @@ beforeEach(async () => {
 })
 
 describe('tokenStore', () => {
-  it("keeps the token in secure storage under the partner app's OWN key, locked to this device", async () => {
+  it("keeps the token in secure storage under the staff app's OWN key, locked to this device", async () => {
     await tokenStore.set('abc.def.ghi')
 
-    // Not the shopper app's key: the two apps can share a phone and must never share a session.
-    expect(SecureStore.setItemAsync).toHaveBeenCalledWith('citycart.partner.session', 'abc.def.ghi', {
+    // Not the shopper or delivery app's key: the apps can share a phone and must never share a session.
+    expect(SecureStore.setItemAsync).toHaveBeenCalledWith('citycart.staff.session', 'abc.def.ghi', {
       keychainAccessible: 'WHEN_UNLOCKED_THIS_DEVICE_ONLY',
     })
     expect(tokenStore.get()).toBe('abc.def.ghi')
@@ -29,7 +29,7 @@ describe('tokenStore', () => {
   it('loads the saved token once at start', async () => {
     SecureStore.getItemAsync.mockResolvedValue('saved.token')
     expect(await tokenStore.load()).toBe('saved.token')
-    expect(SecureStore.getItemAsync).toHaveBeenCalledWith('citycart.partner.session')
+    expect(SecureStore.getItemAsync).toHaveBeenCalledWith('citycart.staff.session')
     expect(tokenStore.get()).toBe('saved.token')
   })
 

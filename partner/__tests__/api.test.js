@@ -36,13 +36,13 @@ function fakeNetwork(api, status = 200, data = { success: true }) {
 const httpError = (status, data = {}) => ({ response: { status, data } })
 
 describe('requests', () => {
-  it('always identify as the PARTNER app (not the shopper app) and use the configured server', async () => {
+  it('always identify as the STAFF app (not the shopper or delivery app) and use the configured server', async () => {
     const api = loadApi()
     const sent = fakeNetwork(api)
 
-    await api.default.get('/rider/deliveries')
+    await api.default.get('/orders')
 
-    expect(sent[0].headers.get('X-Client')).toBe('partner')
+    expect(sent[0].headers.get('X-Client')).toBe('staff')
     expect(sent[0].baseURL).toBe('https://api.example.com/api/v1')
   })
 
@@ -74,7 +74,7 @@ describe('a session the server ended', () => {
     await api.tokenStore.set('old.token')
     fakeNetwork(api, 401)
 
-    await expect(api.default.get('/rider/deliveries')).rejects.toBeDefined()
+    await expect(api.default.get('/orders')).rejects.toBeDefined()
     expect(handler).toHaveBeenCalledTimes(1)
   })
 
@@ -85,7 +85,7 @@ describe('a session the server ended', () => {
     await api.tokenStore.set('old.token')
     fakeNetwork(api, 401)
 
-    await expect(api.default.post('/auth/partner/login', {})).rejects.toBeDefined()
+    await expect(api.default.post('/auth/staff/login', {})).rejects.toBeDefined()
     expect(handler).not.toHaveBeenCalled()
   })
 
@@ -102,19 +102,20 @@ describe('a session the server ended', () => {
 describe('getErrorMessage', () => {
   const { getErrorMessage, getFieldErrors } = loadApi()
 
-  it('explains partner-only and web-only refusals in plain words', () => {
-    expect(getErrorMessage(httpError(403, { code: 'PARTNER_APP_ONLY', message: 'x' }))).toMatch(/Partner app/)
+  it('explains staff-only, wrong-app and web-only refusals in plain words', () => {
+    expect(getErrorMessage(httpError(403, { code: 'STAFF_APP_ONLY', message: 'x' }))).toMatch(/Staff app/)
+    expect(getErrorMessage(httpError(403, { code: 'WRONG_APP', message: 'x' }))).toMatch(/different CityCart app/)
     expect(getErrorMessage(httpError(403, { code: 'WEB_ONLY', message: 'x' }))).toMatch(/website/)
   })
 
   it("uses the server's message, and a calm one when the server cannot be reached", () => {
-    expect(getErrorMessage(httpError(409, { message: 'Delivery not found.' }))).toBe('Delivery not found.')
+    expect(getErrorMessage(httpError(409, { message: 'Order not found.' }))).toBe('Order not found.')
     expect(getErrorMessage(new Error('Network Error'))).toMatch(/Cannot reach the server/)
     expect(getErrorMessage({ code: 'ECONNABORTED' })).toMatch(/too long/)
   })
 
-  it("keeps the server's own message for a 429 (it can be about a locked code)", () => {
-    expect(getErrorMessage(httpError(429, { message: 'Too many wrong codes. Ask the brand to complete this delivery.' }))).toMatch(/wrong codes/)
+  it("keeps the server's own message for a 429", () => {
+    expect(getErrorMessage(httpError(429, { message: 'Too many attempts. Please wait a few minutes.' }))).toMatch(/wait a few minutes/)
     expect(getErrorMessage(httpError(429, {}))).toMatch(/Too many attempts/)
   })
 

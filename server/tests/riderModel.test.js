@@ -2,7 +2,7 @@
 const User = require('../src/models/user.model');
 const Delivery = require('../src/models/delivery.model');
 const mongoose = require('mongoose');
-const { ROLES, ALL_ROLES, BRAND_SCOPED_ROLES, STAFF_ROLES, PARTNER_ROLES } = require('../src/config/roles');
+const { ROLES, ALL_ROLES, BRAND_SCOPED_ROLES, STAFF_ROLES, STAFF_APP_ROLES, DELIVERY_APP_ROLES } = require('../src/config/roles');
 const { ALL_PERMISSIONS } = require('../src/config/permissions');
 const { isAllowedWhenRestricted } = require('../src/config/restrictedAccess');
 const { generateDeliveryCode, codesMatch, CODE_PATTERN, MAX_CODE_ATTEMPTS } = require('../src/utils/deliveryCode');
@@ -12,13 +12,15 @@ const Notification = require('../src/models/notification.model');
 describe('the RIDER role', () => {
   const base = { name: 'Bilal', email: 'bilal@example.com', passwordHash: 'x', role: 'RIDER' };
 
-  it('is a brand-scoped staff role that can use the partner app', () => {
+  it('is a brand-scoped staff role that can use the delivery app, and only that app', () => {
     expect(ALL_ROLES).toContain(ROLES.RIDER);
     expect(BRAND_SCOPED_ROLES).toContain(ROLES.RIDER);
     expect(STAFF_ROLES).toContain(ROLES.RIDER);
-    expect(PARTNER_ROLES.slice().sort()).toEqual(['BRAND_EMPLOYEE', 'PICKER', 'RIDER']);
-    expect(PARTNER_ROLES).not.toContain(ROLES.BRAND_ADMIN);
-    expect(PARTNER_ROLES).not.toContain(ROLES.SUPER_ADMIN);
+    expect(DELIVERY_APP_ROLES).toEqual(['RIDER']);
+    expect(STAFF_APP_ROLES.slice().sort()).toEqual(['BRAND_EMPLOYEE', 'PICKER']);
+    expect(STAFF_APP_ROLES).not.toContain(ROLES.BRAND_ADMIN);
+    expect(STAFF_APP_ROLES).not.toContain(ROLES.SUPER_ADMIN);
+    expect(DELIVERY_APP_ROLES).not.toContain(ROLES.BRAND_EMPLOYEE);
   });
 
   it('must belong to a brand, and is a BRAND account', () => {

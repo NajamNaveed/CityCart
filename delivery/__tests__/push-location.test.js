@@ -150,12 +150,11 @@ describe('push notifications', () => {
     await expect(unregisterPush()).resolves.toBeUndefined()
   })
 
-  it('a tap opens the right screen for the role, and nothing for data it does not understand', () => {
+  it('a tap on a rider notification opens the delivery, and nothing else', () => {
     expect(destinationFor('RIDER', { deliveryId: 'd1' })).toBe('/delivery/d1')
-    expect(destinationFor('BRAND_EMPLOYEE', { orderId: 'o1' })).toBe('/order/o1')
     expect(destinationFor('RIDER', { orderId: 'o1' })).toBeNull()
-    expect(destinationFor('BRAND_EMPLOYEE', { deliveryId: 'd1' })).toBeNull()
     expect(destinationFor('RIDER', null)).toBeNull()
+    expect(destinationFor('BRAND_EMPLOYEE', { deliveryId: 'd1' })).toBeNull()
     expect(destinationFor('CUSTOMER', { deliveryId: 'd1' })).toBeNull()
   })
 
@@ -265,9 +264,9 @@ describe('the sharing setting', () => {
     await setShareLocation(true)
     expect(getShareLocation()).toBe(true)
     expect(listener).toHaveBeenCalledWith(true)
-    expect(SecureStore.setItemAsync).toHaveBeenCalledWith('citycart.partner.shareLocation', '1')
+    expect(SecureStore.setItemAsync).toHaveBeenCalledWith('citycart.delivery.shareLocation', '1')
     await setShareLocation(false)
-    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('citycart.partner.shareLocation')
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('citycart.delivery.shareLocation')
     off()
     await setShareLocation(true)
     expect(listener).toHaveBeenCalledTimes(2) // no longer listening

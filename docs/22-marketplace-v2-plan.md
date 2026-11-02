@@ -10,7 +10,8 @@ Status: **in progress.** Written after the project review with the head.
 | 2 Zones: polygon blocks | **done** (server, tests, admin map editor, seed, docs) |
 | 3 Customer area flow, catalogue views, address book | **done**: 3a server; 3b website (area picker with overlaps, borders and map pin; range pills inside the chosen blocks; products grouped with offers; checkout with saved addresses and a delivery pin; cart delivery warning; saved-addresses page); 3c mobile customer app (same area flow, catalogue products with offers, address book, delivery pin at checkout, cart area warning) plus an area-only "also sold by" list on the website and mobile product pages |
 | 4 Picker and substitution | **done** (server, tests, partner picker screens, brand Team picker accounts, customer picker label, seed, docs) |
-| 5 to 7 | not started |
+| 5 Split the apps | **done** (three app-type sign-ins, new `delivery/` app, `partner/` reduced to the Staff app, rider tests moved, docs 20/23) |
+| 6 to 7 | not started |
 
 This plan covers eight changes: real zones, customer area choice, global categories, a shared
 product catalogue, three separate apps, a picker role, returns, and saved addresses. It ends
@@ -43,8 +44,8 @@ with the three Android APKs.
 | Discovery | `/discover` has `scope=block \| radius \| city`, one `blockId`, and `radiusKm`. |
 | Categories | Owned by **one brand each** (`brandId` on Category). |
 | Products | Owned by one brand each (`brandId`). Two stores selling the same item means two full records. |
-| Apps | `mobile/` (customer) and `partner/` (brand owner, staff **and** rider in one app). |
-| Riders | Role `RIDER`, belongs to one brand, signs in only through the partner app. |
+| Apps | `mobile/` (customer), `partner/` (staff: brand team and picker) and `delivery/` (rider). |
+| Riders | Role `RIDER`, belongs to one brand, signs in only through the delivery app. |
 | Substitution | Exists (`OrderAdjustment`: PROPOSED, ACCEPTED, REMOVED, ORDER_CANCELLED, WITHDRAWN, EXPIRED). The **brand** proposes, the customer answers. |
 | Returns | **None.** Delivery has a `RETURNED` status and payment has `PARTIALLY_REFUNDED`, but there is no return flow. |
 | Addresses | The order keeps an address snapshot. There is **no saved address book**. |
@@ -126,11 +127,16 @@ Two layers:
 |---|---|---|---|
 | Customer | `mobile/` | `com.citycart.app` | CUSTOMER |
 | **Delivery** (new) | `delivery/` | `com.citycart.delivery` | RIDER |
-| **Staff** (the current partner app, rider screens removed) | `partner/` | `com.citycart.partner` | BRAND_ADMIN, BRAND_EMPLOYEE, PICKER |
+| **Staff** (the old partner app, rider screens removed) | `partner/` | `com.citycart.staff` | BRAND_EMPLOYEE, PICKER |
 
-- The sign-in app-type check (a rider already signs in only through the partner app today) extends to three app types. Each app rejects roles that do not belong to it, and the server enforces it.
+Brand owners (`BRAND_ADMIN`) and the super admin stay **web-only**; the server
+refuses their tokens in every app. The table's earlier `BRAND_ADMIN` entry for
+the Staff app was not implemented: widening it is a security decision for the
+owner (see `20-partner-app.md` §7).
+
+- The sign-in app-type check now covers three app types. Each app rejects roles that do not belong to it, and the server enforces it.
 - The delivery app takes over: assigned deliveries, live location sharing, delivery code, payment-proof photo, and the new door-return screen (§F).
-- The staff app shows a different home per role: owner or manager (orders, products, team), picker (pick queue).
+- The staff app shows the picker's queue and pick screen; brand owners, managers and records staff use the website.
 - Shared code (API client, theme, secure storage, push registration) is **copied** into `delivery/` to keep the repo simple. Extracting a shared package is optional later.
 - Riders stay **brand-scoped** for now.
 
@@ -278,7 +284,24 @@ Split into **1a (global categories, done)** and **1b (catalogue and listings, do
 
 **Done when:** an order moves from placed through picking, a substitution answered by the customer, packed, and ready for the rider.
 
-### Phase 5: Split the apps (M)
+### Phase 5: Split the apps (M) — done
+
+**How it was built:** the server's `PARTNER_ROLES` became `STAFF_APP_ROLES`
+(`BRAND_EMPLOYEE`, `PICKER`) and `DELIVERY_APP_ROLES` (`RIDER`), with two
+separate doors: `POST /auth/staff/login` (`X-Client: staff`) and
+`POST /auth/delivery/login` (`X-Client: delivery`). Each refuses the other's
+header and roles (`403 STAFF_APP_ONLY` / `DELIVERY_APP_ONLY`); a bearer token
+carrying the wrong `client` claim is `403 WRONG_APP` on every endpoint. The old
+`/auth/partner/login` was removed. A new Expo package `delivery/` copied the
+rider screens, services and tests and renamed itself CityCart Delivery
+(`citycart-delivery`, `com.citycart.delivery`); `partner/` dropped the rider
+group, rider services and rider tests, and is now CityCart Staff
+(`citycart-staff`, `com.citycart.staff`) for brand team members and pickers.
+Push registration exists in both apps (different destinations); location
+sharing lives only in Delivery. Root scripts became `dev:staff`,
+`dev:delivery`, `test:staff`, `test:delivery` and `test:apps`. Full detail:
+`20-partner-app.md` §5.10 and `23-delivery-app.md`.
+
 - Create `delivery/` from the rider screens and shared code, with its own package, icon and name. Remove rider screens from `partner/` and rename its display name to the Staff app.
 - Extend the sign-in app-type check to three apps. Each app rejects the wrong roles.
 - Move push registration and rider location sharing to the delivery app.

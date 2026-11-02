@@ -33,7 +33,7 @@ app; I needs a new package, the camera, private photo storage and a real phone t
   partner does can touch the super admin's account. These are not delegatable permissions.
 * The super admin is implicitly allowed everywhere; a partner is allowed only where the permission matches.
   Every existing `requireRole(SUPER_ADMIN)` admin route becomes "super admin, or partner with the matching permission".
-* **Sign-in:** the existing `/admin/login` accepts both roles; web only (partners do not use the Partner app).
+* **Sign-in:** the existing `/admin/login` accepts both roles; web only (admin partners do not use the mobile apps).
   Session length is the short staff session. The partner is created with a temporary password and **must change it
   at first sign-in** (a `mustChangePassword` flag).
 * **Audit log:** a small `AdminAction` collection (actor, action, target, time) written for every admin write by
@@ -99,7 +99,7 @@ brand is told and decides.
 | **Payment, paid online** | Allowed only if the new total is **not higher**; the difference is recorded as a refund. An **unpaid** online order cannot be adjusted until it is paid. |
 | **Gate** | While a proposal is waiting, the brand cannot move the order to ready for shipment (`409 ADJUSTMENT_PENDING`). The customer can still cancel the order. |
 | **Delivery, rider, receipts** | Created later from the final lines; the receipt shows the final items. |
-| **Notifications** | `ADJUSTMENT_PROPOSED` (customer), `ADJUSTMENT_ANSWERED`, `ADJUSTMENT_EXPIRED` (brand), also as push for the Partner app. |
+| **Notifications** | `ADJUSTMENT_PROPOSED` (customer), `ADJUSTMENT_ANSWERED`, `ADJUSTMENT_EXPIRED` (brand), also as push for the Staff app. |
 | **Chat** | The notification links to the order; the existing chat is used to talk. (Automatic chat messages: later.) |
 | **Inventory ledger** | Every stock movement above is recorded with its own reason. |
 | **Who sees what** | The customer: their own proposals. The brand: its own. The super admin and partners: read only. Riders: nothing. |
@@ -120,7 +120,7 @@ when two answers arrive together.
 
 1. Substitute only products of the **same brand**. 2. Reserve the substitute **when proposing**. 3. 24-hour answer
 window, brand decides after expiry. 4. Delivery fee and discount unchanged. 5. Removed units back in stock only if ticked.
-6. Brand creates proposals on the **website** first; the Partner app only reads them.
+6. Brand creates proposals on the **website** first; the Staff app only reads them.
 
 ## H.8 Steps
 
@@ -182,7 +182,7 @@ brand, this rider and this delivery**.
 
 ## I.7 What it needs
 
-* **New packages, Partner app only:** `expo-image-picker` (camera) and `expo-file-system` (the photo is sent as a
+* **New packages, Delivery app only:** `expo-image-picker` (camera) and `expo-file-system` (the photo is sent as a
   `File`, which Expo SDK 57's `expo/fetch` accepts). Photos are taken at reduced quality with location data left out.
   No other package.
 * **Cloudinary must be configured** (the variables already exist). Without it the choice "bank/wallet/card" is hidden

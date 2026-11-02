@@ -495,7 +495,7 @@ May perform order actions only when the relevant permission is assigned. Proposi
 
 ### Picker
 
-The picker works through the Partner app, brand-scoped and with no brand-team
+The picker works through the Staff app, brand-scoped and with no brand-team
 permissions:
 
 * sees the picked brand's accepted orders (`CONFIRMED`) and orders in picking
@@ -1124,7 +1124,7 @@ A customer who cancels the whole order gets the remaining paid amount refunded a
 
 ```text
 Customer       own proposals (website and shopper app)
-Brand          own brand's proposals (website; Partner app read-only)
+Brand          own brand's proposals (website; Staff app read-only)
 Picker         the waiting proposal of an order they are picking (note and expiry only)
 Super admin    read-only on the order detail (with admin.orders)
 Partner        read-only history (area admin.orders)
@@ -1159,7 +1159,7 @@ no double processing of an answer
 
 ## 41.9 Picking and packing (added November 2026, Phase 4)
 
-A picker works the accepted orders of their brand through the Partner app
+A picker works the accepted orders of their brand through the Staff app
 (`22-marketplace-v2-plan.md` §E, `20-partner-app.md`):
 
 ```text
@@ -1189,7 +1189,7 @@ PROCESSING                     every line marked PICKED / SHORT / UNAVAILABLE
 
 Tests: `server/tests/integration/picker.integration.test.js` (queue isolation,
 privacy, claim races, line rules, proposal + acceptance + reservation, pack and
-delivery, substitute search), plus the Partner app screen tests.
+delivery, substitute search), plus the Staff app screen tests.
 
 ---
 

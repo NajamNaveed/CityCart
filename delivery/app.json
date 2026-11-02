@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "CityCart Delivery",
+    "slug": "citycart-delivery",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "citycart-delivery",
+    "icon": "./assets/images/icon.png",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#f8f9fa",
+    "ios": {
+      "bundleIdentifier": "com.citycart.delivery",
+      "supportsTablet": false
+    },
+    "android": {
+      "package": "com.citycart.delivery",
+      "adaptiveIcon": {
+        "backgroundColor": "#1e3a2f",
+        "foregroundImage": "./assets/images/icon.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#f8f9fa",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 140
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "CityCart Delivery uses your location, only while you choose to share it and have a delivery out, so the customer and your brand can see where you are."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#1e3a2f",
+          "defaultChannel": "default"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "CityCart Delivery uses the camera only to photograph a payment confirmation or card-machine slip at the door.",
+          "photosPermission": "CityCart Delivery does not open your photo library; payment proof photos are taken with the camera."
+        }
+      ]
+    ]
+  }
+}

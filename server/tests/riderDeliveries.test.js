@@ -39,10 +39,10 @@ function signedIn(role, permissions) {
   }
   return user;
 }
-// The partner app sends a partner-marked Bearer token; web users send the cookie.
+// The delivery app sends a delivery-marked Bearer token; web users send the cookie.
 const asRider = () => {
   const user = signedIn(ROLES.RIDER);
-  const token = signToken({ userId: user._id, role: user.role, brandId: user.brandId, passwordVersion: 0, client: 'partner' }, { expiresIn: '8h' });
+  const token = signToken({ userId: user._id, role: user.role, brandId: user.brandId, passwordVersion: 0, client: 'delivery' }, { expiresIn: '8h' });
   return { header: ['Authorization', `Bearer ${token}`], user };
 };
 const asWeb = (role, permissions) => {

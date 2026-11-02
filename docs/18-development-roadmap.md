@@ -951,9 +951,10 @@ Rules for this programme:
 
 The software house guild requires extra mobile apps next to the marketplace:
 one for delivery riders and one for the person who keeps order and payment
-records. They are built as **one** role-based app, `partner/`, on the existing
-API. The full design, visibility rules and security decisions are in
-`20-partner-app.md`.
+records. They were built as **one** role-based app, `partner/`, on the existing
+API, and split into the **Staff app** (`partner/`) and the **Delivery app**
+(`delivery/`) in marketplace v2 Phase 5. The full design, visibility rules and
+security decisions are in `20-partner-app.md` and `23-delivery-app.md`.
 
 ```text
 Phase A  Rider foundation                                   DONE
@@ -983,6 +984,12 @@ Phase E  Online payments through a hosted gateway checkout with a signed   BUILT
 Phase F  Push notifications to the Partner app and opt-in rider location      BUILT
          (last seen + map link). Tested with mocks; push needs an EAS build to try
          on a phone (docs/20 §5.7).
+
+Phase S  Split the apps (marketplace v2 Phase 5)                             DONE
+         partner/ becomes the Staff app (BRAND_EMPLOYEE, PICKER); the new
+         delivery/ app takes the rider screens, push routing and location.
+         /auth/staff/login and /auth/delivery/login replace /auth/partner/login;
+         each app refuses the other's roles (docs/20 §5.10, docs/23).
 ```
 
 Each phase follows the dependency rule above: no new package without approval.

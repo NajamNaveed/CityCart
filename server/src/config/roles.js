@@ -48,16 +48,20 @@ const STAFF_ROLES = Object.freeze([
 // admin permission implicitly; a partner holds only AdminPartner.permissions.
 const PLATFORM_ADMIN_ROLES = Object.freeze([ROLES.SUPER_ADMIN, ROLES.ADMIN_PARTNER]);
 
-// Roles that may sign in through the CityCart Partner app (docs/20): riders,
-// brand team members (the order-records person) and pickers. Brand owners and
-// the super admin stay on the web dashboards.
-const PARTNER_ROLES = Object.freeze([ROLES.RIDER, ROLES.BRAND_EMPLOYEE, ROLES.PICKER]);
+// Roles that may sign in through the CityCart Staff app (docs/20): the brand
+// team member who keeps the order records and the picker. Brand owners stay on
+// the web dashboard.
+const STAFF_APP_ROLES = Object.freeze([ROLES.BRAND_EMPLOYEE, ROLES.PICKER]);
+
+// Roles that may sign in through the CityCart Delivery app (docs/23): riders.
+const DELIVERY_APP_ROLES = Object.freeze([ROLES.RIDER]);
 
 module.exports = {
   ROLES,
   ALL_ROLES,
   BRAND_SCOPED_ROLES,
   STAFF_ROLES,
-  PARTNER_ROLES,
+  STAFF_APP_ROLES,
+  DELIVERY_APP_ROLES,
   PLATFORM_ADMIN_ROLES,
 };

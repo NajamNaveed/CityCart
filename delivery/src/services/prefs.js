@@ -5,7 +5,7 @@ import * as SecureStore from 'expo-secure-store'
  * the app, so no extra package is needed. (A setting is per phone, not per account: signing out
  * turns location sharing off, see AuthProvider.)
  */
-const SHARE_LOCATION_KEY = 'citycart.partner.shareLocation'
+const SHARE_LOCATION_KEY = 'citycart.delivery.shareLocation'
 
 let shareLocation = false
 const listeners = new Set()

@@ -318,10 +318,18 @@ developing but not in release builds of Android.
   therefore covered by deactivating the account or changing the password.
 * No refresh tokens or push notifications in the first version.
 
-## 15. Related: the partner app
+## 15. Related: the Staff and Delivery apps
 
-Riders and the people who keep order records use a separate app, *CityCart
-Partner* (`partner/`, see `20-partner-app.md`). It shares this app's stack and API
-but has its own sign-in (`/auth/partner/login`, `X-Client: partner`); a shopper
-token never works there and a partner token never works here. This app will show
-the customer's delivery code (`GET /deliveries/:id/code`) on the order page while the order is on the road, and the receipt number (`GET /receipts/order/:orderId`) once it is paid (added with the Partner app's Phase C).
+Riders and the people who keep order records use two separate apps that share
+this app's stack and API:
+
+* *CityCart Staff* (`partner/`, see `20-partner-app.md`) for pickers and brand
+  team members: sign-in `/auth/staff/login`, `X-Client: staff`.
+* *CityCart Delivery* (`delivery/`, see `23-delivery-app.md`) for riders:
+  sign-in `/auth/delivery/login`, `X-Client: delivery`.
+
+A shopper token never works there, and a staff or delivery token never works
+here; the server checks the app mark on every request (docs/06). This app shows
+the customer's delivery code (`GET /deliveries/:id/code`) on the order page while
+the order is on the road, and the receipt number (`GET /receipts/order/:orderId`)
+once it is paid.

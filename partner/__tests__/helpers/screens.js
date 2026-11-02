@@ -12,11 +12,11 @@ export const tick = async (times = 6) => {
   for (let i = 0; i < times; i += 1) await act(async () => { await Promise.resolve() })
 }
 
-export const RIDER = { id: 'u1', name: 'Bilal Ahmed', email: 'bilal@example.com', phone: '+92 322 7741095', role: 'RIDER' }
+export const PICKER = { id: 'p1', name: 'Ali Raza', email: 'ali@example.com', role: 'PICKER' }
 export const EMPLOYEE = { id: 'u2', name: 'Maryam Javed', email: 'maryam@example.com', role: 'BRAND_EMPLOYEE', permissions: ['orders.view'] }
 
 const authValue = (status, user, offline = false) => ({ status, user, isReady: status !== 'loading', offline, login: jest.fn(), logout: jest.fn(), retry: jest.fn() })
-export const signedIn = (user = RIDER) => authValue('signedIn', user)
+export const signedIn = (user = EMPLOYEE) => authValue('signedIn', user)
 export const signedOut = (offline = false) => authValue('signedOut', null, offline)
 
 export const tree = (element, { auth = signedIn() } = {}) => <AuthContext.Provider value={auth}>{element}</AuthContext.Provider>

@@ -671,8 +671,8 @@ A terminated brand's riders may still share (they are finishing deliveries on th
 
 ## 30.3 Screens
 
-* Partner app, rider: Account, "Share my location while I deliver".
-* Partner app, records: the delivery's detail shows "Rider location" (last seen, Open in Maps, Refresh).
+* Delivery app, rider: Account, "Share my location while I deliver".
+* Staff app, records: the delivery's detail shows "Rider location" (last seen, Open in Maps, Refresh).
 * Shopper app and website: the order page shows "Your rider" (last seen, See on map) while it is out for delivery.
   Maps open through a plain link (`https://www.google.com/maps/search/?api=1&query=lat,lng`); no map package is used.
 

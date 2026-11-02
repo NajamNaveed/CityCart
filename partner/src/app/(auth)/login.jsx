@@ -49,10 +49,10 @@ export default function Login() {
         <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxl }} keyboardShouldPersistTaps="handled">
           <View style={{ marginTop: spacing.xxl, marginBottom: spacing.xl }}>
             <AppText variant="title" accessibilityRole="header">
-              CityCart Partner
+              CityCart Staff
             </AppText>
             <AppText variant="small" style={{ marginTop: spacing.xs }}>
-              For delivery riders, pickers and brand team members. Use the email and password your brand gave you.
+              For pickers and brand team members. Use the email and password your brand gave you.
             </AppText>
           </View>
 
