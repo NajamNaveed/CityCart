@@ -46,7 +46,7 @@ function OrdersList({ userId }) {
           <Pressable
             onPress={() => router.push(`/orders/${order._id}`)}
             accessibilityRole="button"
-            accessibilityLabel={`Order ${order.orderNumber}, ${order.orderStatus}, ${formatPrice(order.total)}`}
+            accessibilityLabel={`Order ${order.orderNumber}, ${order.orderStatus}, ${formatPrice(order.netTotal ?? order.total)}`}
             style={({ pressed }) => ({ padding: spacing.lg, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: pressed ? colors.sand : colors.surface, gap: spacing.sm })}
           >
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md }}>
@@ -60,7 +60,7 @@ function OrdersList({ userId }) {
               <AppText variant="small">
                 {count} {count === 1 ? 'item' : 'items'}
               </AppText>
-              <AppText variant="strong">{formatPrice(order.total)}</AppText>
+              <AppText variant="strong">{formatPrice(order.netTotal ?? order.total)}</AppText>
             </View>
           </Pressable>
         )

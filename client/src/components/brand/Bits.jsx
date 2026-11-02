@@ -5,7 +5,7 @@ import { humanize } from '../../ui'
 // attention = amber, problems = red, everything else stays quiet.
 const STATUS_TONE = {
   ACTIVE: 'good', DELIVERED: 'good', CONFIRMED: 'good', PAID: 'good', IN_STOCK: 'good',
-  READY_FOR_SHIPMENT: 'good', PROCESSING: 'info',
+  READY_FOR_SHIPMENT: 'good', PROCESSING: 'info', RECEIVED: 'good',
   PENDING: 'warn', LOW_STOCK: 'warn', OUT_OF_STOCK: 'bad', SHIPPED: 'info',
   OUT_FOR_DELIVERY: 'info', IN_TRANSIT: 'info', PICKED_UP: 'info', READY_FOR_PICKUP: 'info',
   REJECTED: 'bad', CANCELLED: 'bad', FAILED: 'bad', RETURNED: 'bad',

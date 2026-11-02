@@ -230,7 +230,12 @@ describe('POST /api/v1/rider/deliveries/:id/complete with a non-cash collection'
     Order.findOneAndUpdate.mockResolvedValue(order);
     Order.updateOne.mockResolvedValue({});
     // After completion the order reads as PAID (the transaction just set it).
-    Order.findOne.mockReturnValue({ select: () => Promise.resolve({ ...order, paymentStatus: 'PAID' }) });
+    // Phase 6 reads the order inside the completion transaction (.session).
+    const paidOrder = { ...order, paymentStatus: 'PAID' };
+    Order.findOne.mockReturnValue({
+      select: () => Promise.resolve(paidOrder),
+      session: () => Promise.resolve(paidOrder),
+    });
     Payment.findOneAndUpdate.mockResolvedValue({ _id: oid() });
     Payment.findOne.mockImplementation((filter) => paymentQuery(filter && filter.orderId ? viewPayment : duplicate));
     Payment.updateOne.mockResolvedValue({});

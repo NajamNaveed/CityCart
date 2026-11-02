@@ -126,6 +126,7 @@ describe('order requests', () => {
       delivery: null,
       adjustments: [{ _id: 'a1', status: 'PROPOSED' }],
       adjustment: { _id: 'a1', status: 'PROPOSED' },
+      returnDoc: null,
     })
     api.patch.mockResolvedValue({ data: { order: { _id: 'o1', orderStatus: 'CANCELLED' } } })
     expect((await cancelOrder('o1')).orderStatus).toBe('CANCELLED')

@@ -38,6 +38,7 @@ const MODELS = {
   payments: require('../src/models/payment.model'),
   receipts: require('../src/models/receipt.model'),
   deliveries: require('../src/models/delivery.model'),
+  returns: require('../src/models/return.model'),
   reviews: require('../src/models/review.model'),
   notifications: require('../src/models/notification.model'),
   counters: require('../src/models/counter.model'),

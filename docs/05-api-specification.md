@@ -1139,11 +1139,17 @@ Besides `order`, `payment` and `delivery`, the response carries the order's chan
   "payment": { },
   "delivery": { },
   "adjustments": [ ],
-  "adjustment": { }
+  "adjustment": { },
+  "return": { }
 }
 ```
 
 `adjustments` is the full history, newest first. `adjustment` is the one waiting for an answer, or the latest proposal when none is waiting. Both are empty (`[]` / `null`) when the brand never proposed a change.
+
+`return` is the customer-safe door return for this order (docs/22 §F), or `null`.
+It carries the refused lines, reasons, `restocked` flags and the refund, never the
+brand id, rider id or private photo paths. The order itself carries `fulfilment`,
+`returnedAmount`, `feeRefunded` and `netTotal`.
 
 ---
 
@@ -1974,8 +1980,25 @@ GET   /rider/deliveries?scope=active|history
 GET   /rider/deliveries/:id
 PATCH /rider/deliveries/:id/status      { status: PICKED_UP|IN_TRANSIT|OUT_FOR_DELIVERY|FAILED, failureReason? }
 POST  /rider/deliveries/:id/proof-upload   signed upload for a door payment photo (docs/10 §31)
-POST  /rider/deliveries/:id/complete    { code, collection? }  six digits
+POST  /rider/deliveries/:id/return-upload  signed upload for a refused item's photo (docs/22 §F)
+POST  /rider/deliveries/:id/complete    { code, collection?, lines? }  six digits
 ```
+
+`lines` is the per-item answer at the door (docs/22 §F). Send one entry per order
+item; omitting it means everything was accepted:
+
+```json
+{
+  "lines": [
+    { "itemId": "<order item id>", "acceptedQty": 1, "rejectedQty": 1, "reason": "DAMAGED", "photo": { "publicId": "<path>", "fingerprint": "<etag>" } }
+  ]
+}
+```
+
+`reason` is required when `rejectedQty` is greater than zero and is one of
+`DAMAGED`, `WRONG_ITEM`, `NOT_WANTED`, `MISSING`. The server checks that
+`acceptedQty + rejectedQty` equals the ordered quantity. A photo is optional and
+must have been uploaded with `return-upload` into this delivery's folder.
 
 `collection` records how the customer paid at the door:
 
@@ -2044,6 +2067,60 @@ Errors: `409 PICK_TAKEN`, `409 NOT_PICKABLE`, `409 ADJUSTMENT_PENDING`,
 `409 NOTHING_TO_PROPOSE`, `409 DUPLICATE_SUBSTITUTE`,
 `409 SUBSTITUTE_NOT_SHORT`, `400 INVALID_PICKED_QUANTITY`, and the adjustment
 errors for substitutes. See `20-partner-app.md` and `22-marketplace-v2-plan.md` §E.
+
+---
+
+# 22f. Door Return Endpoints
+
+Base:
+
+```text
+/api/v1/returns
+```
+
+The brand's returned-goods inbox (docs/22 §F, docs/08 §41.10). Brand users need
+`delivery.view`; platform admins with `admin.orders` see every brand. Every query
+is pinned to the signed-in user's brand — a return id from another brand is `404`.
+
+```text
+GET  /returns?status=IN_TRANSIT|RECEIVED&page=1&limit=20   -> { returns, pagination }
+GET  /returns/summary                                      -> { summary }
+GET  /returns/:id                                          -> { return }
+GET  /returns/:id/photo?line=0                             -> { url, expiresAt }
+POST /returns/:id/receive                                  -> { message, return }
+```
+
+`summary` counts and totals the brand's returns (or the platform's, for an admin):
+
+```json
+{
+  "IN_TRANSIT": { "count": 1, "returnedSubtotal": 4400 },
+  "RECEIVED": { "count": 1, "returnedSubtotal": 430 },
+  "returnedSubtotal": 4830,
+  "refundAmount": 430
+}
+```
+
+A return view joins the order number and carries `lines` (with `hasPhoto`), the
+`returnedSubtotal`, `feeRefunded`, `refundAmount`, `receivedAt` and status. It never
+contains another brand's data or the private Cloudinary path.
+
+`GET /returns/:id/photo` answers a short-lived signed URL for one line's private
+photo (`line` defaults to 0); `404 RETURN_PHOTO_NOT_FOUND` when the line has none.
+`503 RETURN_PHOTO_NOT_CONFIGURED` when Cloudinary is not set up.
+
+`POST /returns/:id/receive` is brand-only and needs `delivery.manage` (a platform
+admin cannot change a brand's stock from here). The body is optional:
+
+```json
+{ "decisions": [ { "index": 0, "restock": true }, { "index": 1, "restock": false } ] }
+```
+
+Only lines marked `restock: true` go back into stock; a line with no decision keeps
+the safe default (write off). One atomic `IN_TRANSIT → RECEIVED` update wins, and
+restock plus its `RETURN_RESTOCKED` inventory movement commit with it. Errors:
+`409 RETURN_ALREADY_RECEIVED`, `400 INVALID_RETURN_DECISIONS`, `404` unknown return
+or line.
 
 ---
 

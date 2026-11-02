@@ -9,7 +9,8 @@ export function visibleTabs(user) {
   const orders = can(user, 'orders.view')
   const shipments = can(user, 'delivery.view')
   const money = can(user, 'payments.view')
-  return { overview: orders || shipments || money, orders, shipments, money }
+  // The returned-goods inbox needs the same permission as the deliveries list.
+  return { overview: orders || shipments || money, orders, shipments, returns: shipments, money }
 }
 
 export const hasNoAccess = (user) => !Object.values(visibleTabs(user)).some(Boolean)

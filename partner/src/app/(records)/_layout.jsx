@@ -30,6 +30,7 @@ export default function RecordsTabs() {
         <Tabs.Screen name="overview" options={tab('Overview', 'grid', show.overview)} />
         <Tabs.Screen name="orders" options={tab('Orders', 'package', show.orders)} />
         <Tabs.Screen name="shipments" options={tab('Deliveries', 'truck', show.shipments)} />
+        <Tabs.Screen name="returns" options={tab('Returns', 'corner-up-left', show.returns)} />
         <Tabs.Screen name="money" options={tab('Money', 'dollar-sign', show.money)} />
         <Tabs.Screen name="profile" options={tab('Account', 'user')} />
       </Tabs>

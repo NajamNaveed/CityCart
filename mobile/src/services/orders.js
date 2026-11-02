@@ -103,6 +103,7 @@ export async function fetchOrder(id) {
     delivery: res.data.delivery,
     adjustments: res.data.adjustments || [],
     adjustment: res.data.adjustment || null,
+    returnDoc: res.data.return || null,
   }
 }
 

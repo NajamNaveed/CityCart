@@ -14,9 +14,13 @@ import StatusPill from '../../components/StatusPill'
 import TextField from '../../components/ui/TextField'
 import { useRemote } from '../../hooks/useRemote'
 import { getErrorMessage } from '../../services/api'
-import { completeDelivery, fetchDelivery, requestProofUpload, setDeliveryStatus, uploadPaymentProof } from '../../services/deliveries'
+import { completeDelivery, fetchDelivery, requestProofUpload, requestReturnUpload, setDeliveryStatus, uploadPaymentProof, uploadReturnPhoto } from '../../services/deliveries'
 import {
+  RETURN_REASON_OPTIONS,
   WALLETS,
+  acceptanceFrom,
+  acceptanceReady,
+  acceptanceSummary,
   addressLine,
   canComplete,
   cashSummary,
@@ -24,10 +28,13 @@ import {
   collectionPayload,
   collectionReady,
   isClosed,
+  linesPayload,
   mapsUrl,
   nextMoves,
   paymentMethodsFor,
   proofErrorMessage,
+  returnErrorMessage,
+  setAcceptedQty,
   telUrl,
 } from '../../utils/delivery'
 import { formatPrice } from '../../utils/format'
@@ -43,6 +50,13 @@ const PROOF_STATUS = {
 }
 
 const CODE_ERRORS = new Set(['INVALID_CODE', 'CODE_LOCKED', 'NO_DELIVERY_CODE'])
+const RETURN_ERRORS = new Set([
+  'INVALID_RETURN_QUANTITY',
+  'INVALID_RETURN_REASON',
+  'INVALID_RETURN_LINES',
+  'RETURN_PHOTO_NOT_CONFIGURED',
+  'RETURN_PHOTO_NOT_YOURS',
+])
 
 function Notice({ tone = 'error', children }) {
   const look = tone === 'ok' ? { bg: colors.successSoft, fg: colors.success } : { bg: colors.dangerSoft, fg: colors.danger }
@@ -55,17 +69,130 @@ function Notice({ tone = 'error', children }) {
   )
 }
 
+/**
+ * What the customer kept at the door, line by line (docs/22 §F). The rider
+ * counts the units and, for anything coming back, picks a reason and may add a
+ * photo. Every amount here is a preview; the server recomputes the final ones.
+ */
+function ItemReview({ lines, delivery, busy, photoBusy, onAccepted, onReason, onPhoto, onContinue, onBack }) {
+  const summary = acceptanceSummary(lines, delivery)
+  const prepaid = delivery.paymentMethod !== 'COD'
+  const ready = acceptanceReady(lines)
+  const locked = busy || photoBusy !== null
+
+  return (
+    <Card style={{ gap: spacing.md }}>
+      <AppText variant="small">What did the customer keep?</AppText>
+      {lines.map((line, index) => (
+        <View
+          key={line.itemId || index}
+          style={{
+            gap: spacing.xs,
+            borderTopWidth: index ? 1 : 0,
+            borderTopColor: colors.line,
+            paddingTop: index ? spacing.md : 0,
+          }}
+        >
+          <AppText variant="strong">{line.productName}</AppText>
+          <AppText variant="small">
+            {line.quantity} ordered · {formatPrice(line.lineTotal)}
+          </AppText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+            <Button
+              title="−"
+              variant="outline"
+              onPress={() => onAccepted(index, line.acceptedQty - 1)}
+              disabled={locked || line.acceptedQty === 0}
+              style={{ width: 52 }}
+            />
+            <AppText variant="strong" style={{ flex: 1, textAlign: 'center' }}>
+              {line.acceptedQty} kept · {line.rejectedQty} refused
+            </AppText>
+            <Button
+              title="+"
+              variant="outline"
+              onPress={() => onAccepted(index, line.acceptedQty + 1)}
+              disabled={locked || line.acceptedQty === line.quantity}
+              style={{ width: 52 }}
+            />
+          </View>
+
+          {line.rejectedQty > 0 ? (
+            <>
+              <AppText variant="small">Why is it coming back?</AppText>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+                {RETURN_REASON_OPTIONS.map((option) => (
+                  <Button
+                    key={option.reason}
+                    title={option.label}
+                    variant={line.reason === option.reason ? 'pine' : 'outline'}
+                    onPress={() => onReason(index, option.reason)}
+                    disabled={locked}
+                  />
+                ))}
+              </View>
+              {line.photoUri ? (
+                <Image
+                  source={{ uri: line.photoUri }}
+                  resizeMode="cover"
+                  accessibilityLabel={`Photo of the refused ${line.productName}`}
+                  style={{ width: '100%', height: 160, borderRadius: radius.md }}
+                />
+              ) : null}
+              <Button
+                title={line.photo ? 'Retake photo' : line.asset ? 'Upload photo' : 'Add photo (optional)'}
+                variant="outline"
+                onPress={() => onPhoto(index)}
+                loading={photoBusy === index}
+                disabled={locked}
+              />
+            </>
+          ) : null}
+        </View>
+      ))}
+
+      <View style={{ borderTopWidth: 1, borderTopColor: colors.line, paddingTop: spacing.md, gap: spacing.xs }}>
+        <AppText variant="small">{prepaid ? 'Refund for what came back' : 'Collect for what they kept'}</AppText>
+        <AppText variant="big" style={{ color: colors.pine }}>
+          {formatPrice(prepaid ? summary.refundTotal : summary.netTotal)}
+        </AppText>
+        {summary.returnedTotal > 0 ? (
+          <AppText variant="small">
+            {formatPrice(summary.returnedTotal)} of goods coming back
+            {summary.feeRefunded ? ` · the ${formatPrice(summary.fee)} delivery fee is refunded too` : ''}.
+          </AppText>
+        ) : null}
+        {prepaid ? <AppText variant="small">The customer already paid online.</AppText> : null}
+      </View>
+
+      <Button
+        title={delivery.paymentOptions?.length > 1 ? 'Continue' : 'Complete delivery'}
+        onPress={onContinue}
+        loading={busy}
+        disabled={!ready || locked}
+      />
+      <AppText variant="small">
+        {ready ? 'The server checks the counts and prices again before anything is charged.' : 'Choose a reason for every refused item.'}
+      </AppText>
+      <Button title="Back" variant="outline" onPress={onBack} disabled={locked} />
+    </Card>
+  )
+}
+
 function DeliveryDetail({ id }) {
   const remote = useRemote(id, () => fetchDelivery(id))
   // The newest answer from an action (it carries the updated delivery) wins over the loaded one.
   const [latest, setLatest] = useState(null)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState(null) // { tone, text }
-  const [mode, setMode] = useState(null) // null | 'code' | 'method' | 'fail'
+  const [mode, setMode] = useState(null) // null | 'code' | 'items' | 'method' | 'fail'
   const [code, setCode] = useState('')
   const [reason, setReason] = useState('')
   const [pay, setPay] = useState(EMPTY_PAYMENT)
   const [proofBusy, setProofBusy] = useState(false)
+  // What the customer kept, line by line; null until the review opens.
+  const [lines, setLines] = useState(null)
+  const [photoBusy, setPhotoBusy] = useState(null) // line index being uploaded
 
   const delivery = latest || remote.data
 
@@ -80,6 +207,7 @@ function DeliveryDetail({ id }) {
       setCode('')
       setReason('')
       setPay(EMPTY_PAYMENT)
+      setLines(null)
       if (success) setNotice({ tone: 'ok', text: success })
     } catch (err) {
       setNotice({ tone: 'error', text: err.codeMessage || getErrorMessage(err) })
@@ -90,21 +218,93 @@ function DeliveryDetail({ id }) {
 
   const move = (status, label) => run(() => setDeliveryStatus(id, status), `Marked as ${label.toLowerCase()}.`)
 
-  const complete = (collection) =>
+  const complete = (collection, reviewLines = lines) =>
     run(
       async () => {
         try {
-          return await completeDelivery(id, code, collection)
+          return await completeDelivery(id, code, collection, linesPayload(reviewLines))
         } catch (err) {
-          // Say what happened to the code (tries left, locked) or the payment photo.
-          const codeProblem = CODE_ERRORS.has(err?.response?.data?.code)
-          throw Object.assign(err, { codeMessage: codeProblem ? codeErrorMessage(err) : proofErrorMessage(err) })
+          // Say what happened to the code (tries left, locked) or the return/payment.
+          const problem = err?.response?.data?.code
+          const codeProblem = CODE_ERRORS.has(problem)
+          // A refused code leaves the rider on the code step, so it can be corrected.
+          if (codeProblem) {
+            setMode('code')
+            setLines(null)
+          }
+          throw Object.assign(err, {
+            codeMessage: codeProblem ? codeErrorMessage(err) : RETURN_ERRORS.has(problem) ? returnErrorMessage(err) : proofErrorMessage(err),
+          })
         }
       },
       'Delivered. Thank you!',
     )
 
   const fail = () => run(() => setDeliveryStatus(id, 'FAILED', reason.trim()), 'Marked as not delivered.')
+
+  // The code is checked first; then the rider counts what the customer kept.
+  function startReview() {
+    setNotice(null)
+    const next = acceptanceFrom(delivery)
+    if (!next.length) {
+      if (paymentMethodsFor(delivery).length > 1) setMode('method')
+      else complete(undefined, [])
+      return
+    }
+    setLines(next)
+    setMode('items')
+  }
+
+  const changeLine = (index, update) => setLines((current) => current.map((line, i) => (i === index ? update(line) : line)))
+  const acceptLine = (index, acceptedQty) => changeLine(index, (line) => setAcceptedQty(line, acceptedQty))
+  const setLineReason = (index, next) => changeLine(index, (line) => ({ ...line, reason: next }))
+
+  // Past the code, a refused line needs a reason; the photo is optional. It goes
+  // to the delivery's private folder, never to another delivery's.
+  async function captureReturnPhoto(index) {
+    if (photoBusy !== null || busy) return
+    setNotice(null)
+
+    const line = lines?.[index]
+    if (!line) return
+
+    // A photo picked earlier but not stored yet is retried as-is.
+    let asset = line.photo ? null : line.asset
+    if (!asset) {
+      try {
+        const permission = await ImagePicker.requestCameraPermissionsAsync()
+        if (!permission.granted) {
+          setNotice({ tone: 'error', text: 'Allow the camera to photograph the refused item.' })
+          return
+        }
+        const shot = await ImagePicker.launchCameraAsync({
+          mediaTypes: ['images'],
+          cameraType: ImagePicker.CameraType.back,
+          quality: 0.4,
+          exif: false,
+          allowsEditing: false,
+        })
+        if (shot.canceled || !shot.assets?.length) return
+        asset = shot.assets[0]
+      } catch {
+        setNotice({ tone: 'error', text: 'Could not open the camera. Try again.' })
+        return
+      }
+      changeLine(index, (l) => ({ ...l, photo: null, photoUri: asset.uri, asset }))
+    }
+
+    setPhotoBusy(index)
+    try {
+      const upload = await requestReturnUpload(id)
+      const photo = await uploadReturnPhoto(upload, asset)
+      changeLine(index, (l) => ({ ...l, photo }))
+    } catch (err) {
+      if (err?.message === 'PROOF_FILE_MISSING') changeLine(index, (l) => ({ ...l, photo: null, photoUri: null, asset: null }))
+      setNotice({ tone: 'error', text: returnErrorMessage(err) })
+    } finally {
+      setPhotoBusy(null)
+    }
+  }
 
   // A photo of the confirmation or the machine slip — never the card. Taken with
   // the camera only, at reduced quality, with no EXIF (so no location), and it
@@ -187,7 +387,6 @@ function DeliveryDetail({ id }) {
     const map = mapsUrl(delivery.address)
     // The server decides what may be offered; without Cloudinary that is cash only.
     const paymentMethods = paymentMethodsFor(delivery)
-    const choosePayment = paymentMethods.length > 1
     body = (
       <>
         {notice ? <Notice tone={notice.tone}>{notice.text}</Notice> : null}
@@ -222,10 +421,37 @@ function DeliveryDetail({ id }) {
               <AppText variant="small">Paid at the door</AppText>
               <AppText variant="strong">{PROOF_STATUS[cash.status] || PROOF_STATUS.SUBMITTED}</AppText>
             </>
+          ) : cash.kind === 'prepaid' ? (
+            <AppText variant="strong">Already paid online. Collect nothing.</AppText>
+          ) : cash.kind === 'collected' ? (
+            <AppText variant="strong">Cash collected</AppText>
           ) : (
-            <AppText variant="strong">{cash.kind === 'collected' ? 'Cash collected' : 'Already paid online. Collect nothing.'}</AppText>
+            <AppText variant="strong">Nothing was collected.</AppText>
           )}
         </Card>
+
+        {delivery.fulfilment ? (
+          <Card style={{ gap: spacing.xs, marginBottom: spacing.lg }}>
+            <AppText variant="small">What happened at the door</AppText>
+            <AppText variant="strong">
+              {delivery.fulfilment === 'FULL'
+                ? 'Everything was delivered.'
+                : delivery.fulfilment === 'NONE'
+                  ? 'Everything went back to the store.'
+                  : 'Part of the order came back.'}
+            </AppText>
+            {delivery.returnedAmount > 0 ? (
+              <AppText variant="small">
+                {formatPrice(delivery.returnedAmount)} of goods came back{delivery.feeRefunded ? ', and the delivery fee was refunded' : ''}.
+              </AppText>
+            ) : null}
+            {delivery.netTotal !== null && delivery.netTotal !== undefined ? (
+              <AppText variant="small">
+                {delivery.paymentMethod === 'COD' ? 'Collected:' : 'Final total:'} {formatPrice(delivery.netTotal)}
+              </AppText>
+            ) : null}
+          </Card>
+        ) : null}
 
         {delivery.items?.length ? (
           <Card style={{ gap: spacing.sm, marginBottom: spacing.lg }}>
@@ -250,7 +476,7 @@ function DeliveryDetail({ id }) {
               <Button key={m.status} title={m.label} onPress={() => move(m.status, m.label)} loading={busy && mode === null} disabled={busy} />
             ))}
 
-            {canComplete(delivery.status) && mode !== 'fail' && mode !== 'method' ? (
+            {canComplete(delivery.status) && mode !== 'fail' && mode !== 'method' && mode !== 'items' ? (
               mode === 'code' ? (
                 <Card style={{ gap: spacing.md }}>
                   <TextField
@@ -262,19 +488,29 @@ function DeliveryDetail({ id }) {
                     autoComplete="off"
                     placeholder="6 digits"
                     returnKeyType="done"
-                    onSubmitEditing={() => isValidCode(code) && (choosePayment ? setMode('method') : complete())}
+                    onSubmitEditing={() => isValidCode(code) && startReview()}
                   />
                   <AppText variant="small">Ask the customer for the 6-digit code shown in their app.</AppText>
-                  {choosePayment ? (
-                    <Button title="Continue" onPress={() => { setNotice(null); setMode('method') }} disabled={!isValidCode(code)} />
-                  ) : (
-                    <Button title="Complete delivery" onPress={() => complete()} loading={busy} disabled={!isValidCode(code)} />
-                  )}
+                  <Button title="Continue" onPress={startReview} disabled={!isValidCode(code)} />
                   <Button title="Cancel" variant="outline" onPress={() => { setMode(null); setCode('') }} disabled={busy} />
                 </Card>
               ) : (
                 <Button title="Enter code to complete" onPress={() => { setNotice(null); setMode('code') }} disabled={busy} />
               )
+            ) : null}
+
+            {canComplete(delivery.status) && mode === 'items' && lines ? (
+              <ItemReview
+                lines={lines}
+                delivery={delivery}
+                busy={busy}
+                photoBusy={photoBusy}
+                onAccepted={acceptLine}
+                onReason={setLineReason}
+                onPhoto={captureReturnPhoto}
+                onContinue={() => (paymentMethods.length > 1 ? setMode('method') : complete(undefined, lines))}
+                onBack={() => { setNotice(null); setMode('code') }}
+              />
             ) : null}
 
             {canComplete(delivery.status) && mode === 'method' ? (
@@ -343,14 +579,14 @@ function DeliveryDetail({ id }) {
 
                 <Button
                   title="Complete delivery"
-                  onPress={() => complete(collectionPayload(pay))}
+                  onPress={() => complete(collectionPayload(pay), lines)}
                   loading={busy}
                   disabled={!collectionReady(pay)}
                 />
                 <Button
                   title="Back"
                   variant="outline"
-                  onPress={() => { setNotice(null); setMode('code') }}
+                  onPress={() => { setNotice(null); setMode(lines ? 'items' : 'code') }}
                   disabled={busy || proofBusy}
                 />
               </Card>

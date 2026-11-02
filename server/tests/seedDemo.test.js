@@ -20,6 +20,7 @@ const OrderAdjustment = require('../src/models/orderAdjustment.model');
 const InventoryMovement = require('../src/models/inventoryMovement.model');
 const Payment = require('../src/models/payment.model');
 const Delivery = require('../src/models/delivery.model');
+const Return = require('../src/models/return.model');
 const Review = require('../src/models/review.model');
 const Receipt = require('../src/models/receipt.model');
 const Notification = require('../src/models/notification.model');
@@ -29,7 +30,7 @@ const { ALL_PERMISSIONS } = require('../src/config/permissions');
 const MODELS = {
   cities: City, blocks: Block, branches: Branch, conversations: Conversation, messages: Message, users: User, brands: Brand, stores: Store, categories: Category, catalogProducts: CatalogProduct, addresses: Address, products: Product,
   inventories: Inventory, employees: Employee, carts: Cart, orders: Order, orderAdjustments: OrderAdjustment, inventoryMovements: InventoryMovement, payments: Payment, receipts: Receipt,
-  deliveries: Delivery, reviews: Review, notifications: Notification, counters: Counter,
+  deliveries: Delivery, returns: Return, reviews: Review, notifications: Notification, counters: Counter,
 };
 
 const NOW = new Date('2026-10-04T10:00:00Z');
@@ -99,6 +100,7 @@ describe('demo dataset', () => {
     expect(unique(ds.carts.map((c) => id(c.userId)))).toBe(true);
     expect(unique(ds.orders.map((o) => o.orderNumber))).toBe(true);
     expect(unique(ds.deliveries.map((d) => id(d.orderId)))).toBe(true);
+    expect(unique(ds.returns.map((r) => id(r.deliveryId)))).toBe(true);
   });
 
   it('is a Faisalabad-only marketplace with blocks, branches and per-branch catalogues', () => {
@@ -319,6 +321,16 @@ describe('demo dataset', () => {
     });
     ds.payments.forEach((p) => expect(orders.has(id(p.orderId))).toBe(true));
     ds.deliveries.forEach((d) => expect(orders.has(id(d.orderId))).toBe(true));
+    const deliveries = new Set(ds.deliveries.map((d) => id(d._id)));
+    ds.returns.forEach((r) => {
+      expect(orders.has(id(r.orderId))).toBe(true);
+      expect(deliveries.has(id(r.deliveryId))).toBe(true);
+      expect(id(ds.deliveries.find((d) => id(d._id) === id(r.deliveryId)).returnId)).toBe(id(r._id));
+      expect(brands.has(id(r.brandId))).toBe(true);
+      expect(users.has(id(r.customerId))).toBe(true);
+      if (r.riderId) expect(users.has(id(r.riderId))).toBe(true);
+      expect(products.has(id(r.lines[0].productId))).toBe(true);
+    });
     ds.reviews.forEach((r) => {
       expect(products.has(id(r.productId))).toBe(true);
       expect(orders.has(id(r.orderId))).toBe(true);
@@ -363,7 +375,9 @@ describe('demo dataset', () => {
       expect(o.subtotal).toBe(subtotal);
       expect(o.total).toBe(subtotal + o.deliveryFee - o.discount + o.tax);
       const payment = ds.payments.find((p) => id(p.orderId) === id(o._id));
-      expect(payment.amount).toBe(o.total);
+      // Cash is collected for the accepted units only; a prepaid payment keeps its
+      // original amount and the refused part is refunded instead.
+      expect(payment.amount).toBe(o.paymentMethod === 'COD' && o.fulfilment === 'PARTIAL' ? o.netTotal : o.total);
       expect(payment.status).toBe(o.paymentStatus);
       const refunded = payment.refunds.reduce((sum, r) => sum + r.amount, 0);
       expect(payment.refundedAmount).toBe(refunded);
@@ -390,12 +404,69 @@ describe('demo dataset', () => {
   });
 
   it('only creates a delivery once an order is ready to ship, and its status agrees with the order', () => {
-    const after = ['READY_FOR_SHIPMENT', 'SHIPPED', 'OUT_FOR_DELIVERY', 'DELIVERED'];
+    const after = ['READY_FOR_SHIPMENT', 'SHIPPED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'RETURNED'];
     ds.orders.forEach((o) => {
       const delivery = ds.deliveries.find((d) => id(d.orderId) === id(o._id));
       expect(Boolean(delivery)).toBe(after.includes(o.orderStatus));
       if (o.orderStatus === 'DELIVERED') expect(delivery.status).toBe('DELIVERED');
+      if (o.orderStatus === 'RETURNED') expect(delivery.status).toBe('RETURNED');
     });
+  });
+
+  it('shows goods delivered in full, in part and not at all, with returns in each status', () => {
+    const fulfilments = new Set(ds.orders.map((o) => o.fulfilment).filter(Boolean));
+    expect(fulfilments).toEqual(new Set(['FULL', 'PARTIAL', 'NONE']));
+    expect(new Set(ds.returns.map((r) => r.status))).toEqual(new Set(['IN_TRANSIT', 'RECEIVED']));
+
+    ds.returns.forEach((r) => {
+      const order = ds.orders.find((o) => id(o._id) === id(r.orderId));
+      const delivery = ds.deliveries.find((d) => id(d._id) === id(r.deliveryId));
+      expect(order.fulfilment).toBe(order.orderStatus === 'RETURNED' ? 'NONE' : 'PARTIAL');
+      expect(delivery.status).toBe(order.orderStatus === 'RETURNED' ? 'RETURNED' : 'DELIVERED');
+      expect(r.source).toBe('DOOR');
+      expect(r.lines.length).toBeGreaterThan(0);
+
+      const returned = r.lines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
+      expect(r.returnedSubtotal).toBe(returned);
+      expect(order.returnedAmount).toBe(returned);
+      expect(order.feeRefunded).toBe(r.feeRefunded);
+      expect(order.netTotal).toBe(Math.max(0, order.total - returned - (order.feeRefunded ? order.deliveryFee : 0)));
+      expect(order.netTotal).toBeLessThanOrEqual(order.total);
+
+      r.lines.forEach((line) => {
+        const item = order.items.find((i) => id(i._id) === id(line.orderItemId));
+        expect(item).toBeDefined();
+        expect(id(item.productId)).toBe(id(line.productId));
+        // Quantity rules: at least one refused, never more than was ordered.
+        expect(line.quantity).toBeGreaterThanOrEqual(1);
+        expect(line.quantity).toBeLessThanOrEqual(item.quantity);
+      });
+
+      if (r.status === 'RECEIVED') {
+        expect(r.receivedAt).toBeTruthy();
+        expect(r.receivedBy).toBeTruthy();
+        r.lines.filter((line) => line.restock).forEach((line) => {
+          expect(line.restockedAt).toBeTruthy();
+          const movement = ds.inventoryMovements.find((m) => m.reason === 'RETURN_RESTOCKED'
+            && id(m.orderId) === id(order._id) && id(m.productId) === id(line.productId));
+          expect(movement).toBeDefined();
+          expect(movement.quantityChange).toBe(line.quantity);
+          expect(id(movement.by)).toBe(id(r.receivedBy));
+        });
+      } else {
+        expect(r.lines.every((line) => !line.restockedAt)).toBe(true);
+      }
+    });
+
+    // The whole-order refusal costs the customer nothing: no cash, no receipt.
+    const fullyRejected = ds.orders.find((o) => o.fulfilment === 'NONE');
+    expect(fullyRejected.orderStatus).toBe('RETURNED');
+    expect(fullyRejected.netTotal).toBe(0);
+    expect(fullyRejected.feeRefunded).toBe(true);
+    const rejectedPayment = ds.payments.find((p) => id(p.orderId) === id(fullyRejected._id));
+    expect(rejectedPayment.status).toBe('CANCELLED');
+    expect(rejectedPayment.paidAt).toBeUndefined();
+    expect(ds.receipts.some((receipt) => id(receipt.paymentId) === id(rejectedPayment._id))).toBe(false);
   });
 
   it('only has reviews from customers whose order containing that product was delivered', () => {
@@ -463,14 +534,17 @@ describe('demo dataset', () => {
     const online = ds.payments.filter((p) => p.method === 'ONLINE_GATEWAY');
     expect(online.length).toBeGreaterThan(0);
     online.forEach((p) => {
-      expect(p.status).toBe('PAID');
+      // A prepaid order whose goods were partly refused keeps its original amount
+      // and moves to PARTIALLY_REFUNDED (or REFUNDED when everything came back).
+      expect(['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED']).toContain(p.status);
       expect(p.provider).toBe('mock');
       expect(p.transactionReference).toMatch(/^mock_[0-9a-f]{24}$/);
       expect(p.expiresAt).toBeInstanceOf(Date);
       expect(p.paidAt >= p.createdAt).toBe(true);
       const order = ds.orders.find((o) => id(o._id) === id(p.orderId));
       expect(order.paymentMethod).toBe('ONLINE_GATEWAY');
-      expect(order.paymentStatus).toBe('PAID');
+      expect(order.paymentStatus).toBe(p.status);
+      expect(p.refundedAmount).toBe(p.refunds.reduce((sum, r) => sum + r.amount, 0));
     });
   });
 
@@ -484,15 +558,16 @@ describe('demo dataset', () => {
   it('shows every brand status, every order status that matters, and every notification type', () => {
     const present = (list) => new Set(list);
     expect(present(ds.brands.map((b) => b.status))).toEqual(present(['ACTIVE', 'PENDING', 'SUSPENDED', 'TERMINATED', 'REJECTED']));
-    ['PENDING', 'CONFIRMED', 'PROCESSING', 'READY_FOR_SHIPMENT', 'SHIPPED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED', 'REJECTED'].forEach(
+    ['PENDING', 'CONFIRMED', 'PROCESSING', 'READY_FOR_SHIPMENT', 'SHIPPED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'RETURNED', 'CANCELLED', 'REJECTED'].forEach(
       (status) => expect(ds.orders.some((o) => o.orderStatus === status)).toBe(true)
     );
     ['PAID', 'PENDING', 'CANCELLED', 'REFUNDED', 'PARTIALLY_REFUNDED'].forEach((status) =>
       expect(ds.payments.some((p) => p.status === status)).toBe(true)
     );
-    ['PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED', 'FAILED', 'READY_FOR_PICKUP'].forEach((status) =>
+    ['PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED', 'RETURNED', 'FAILED', 'READY_FOR_PICKUP'].forEach((status) =>
       expect(ds.deliveries.some((d) => d.status === status)).toBe(true)
     );
+    ['IN_TRANSIT', 'RECEIVED'].forEach((status) => expect(ds.returns.some((r) => r.status === status)).toBe(true));
     ['DRAFT', 'ACTIVE', 'INACTIVE', 'ARCHIVED'].forEach((status) => expect(ds.products.some((p) => p.status === status)).toBe(true));
     // PAYMENT_FAILED is left out on purpose: every order is cash on delivery, which cannot fail online.
     const types = new Set(ds.notifications.map((n) => n.type));

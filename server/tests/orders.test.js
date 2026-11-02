@@ -17,6 +17,7 @@ jest.mock('../src/models/payment.model');
 jest.mock('../src/models/delivery.model');
 jest.mock('../src/models/counter.model');
 jest.mock('../src/models/orderAdjustment.model');
+jest.mock('../src/models/return.model');
 jest.mock('../src/models/product.model', () => {
   const actual = jest.requireActual('../src/models/product.model');
   return {
@@ -44,6 +45,7 @@ const Order = require('../src/models/order.model');
 const Payment = require('../src/models/payment.model');
 const Counter = require('../src/models/counter.model');
 const OrderAdjustment = require('../src/models/orderAdjustment.model');
+const Return = require('../src/models/return.model');
 const Product = require('../src/models/product.model');
 const Inventory = require('../src/models/inventory.model');
 const Block = require('../src/models/block.model');
@@ -123,6 +125,7 @@ beforeEach(() => {
   City.find.mockResolvedValue([{ _id: zone.cityId }]);
   Branch.find.mockResolvedValue([]);
   OrderAdjustment.find.mockReturnValue({ sort: () => Promise.resolve([]) });
+  Return.findOne.mockResolvedValue(null);
 });
 
 describe('order access control', () => {

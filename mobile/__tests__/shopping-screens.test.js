@@ -65,6 +65,7 @@ const LOOM = { brand: { _id: ID(1), name: 'Loom & Co.' }, items: [LAWN], subtota
 const MEHR = { brand: { _id: ID(4), name: 'Mehr Menswear' }, items: [KURTA], subtotal: 2500 }
 const CART = cartOf(LOOM, MEHR)
 
+const ORDER_ITEM = { _id: ID(7), productId: ID(2), productName: 'Mehrunisa Printed Lawn', image: '', quantity: 2, unitPrice: 3600, totalPrice: 7200 }
 const ORDER = {
   _id: ID(5),
   orderNumber: 'CC-20261004-0007',
@@ -72,9 +73,9 @@ const ORDER = {
   orderStatus: 'PENDING',
   createdAt: '2026-10-04T10:00:00Z',
   statusHistory: [{ status: 'PENDING', at: '2026-10-04T10:00:00Z' }],
-  items: [{ productId: ID(2), name: 'Mehrunisa Printed Lawn', image: '', quantity: 2, unitPrice: 3600, lineTotal: 7200 }],
+  items: [ORDER_ITEM],
   subtotal: 7200,
-  shippingFee: 0,
+  deliveryFee: 0,
   total: 7200,
   shippingAddress: { name: 'Sana Iqbal', address: 'House 41, Street 5', city: 'Faisalabad', state: 'Punjab', postalCode: '38000', phone: '+92 300 1234567', additionalInstructions: 'Blue gate' },
 }
@@ -508,6 +509,52 @@ describe('Order detail', () => {
     for (const expected of ['CC-20261004-0007', 'Pending', 'Payment pending', 'Placed', 'Confirmed', 'Out for delivery', 'Delivered', 'Mehrunisa Printed Lawn', '2 × Rs 3,600', 'Rs 7,200', 'Pay in cash when your order arrives', 'Sana Iqbal', 'House 41, Street 5', 'Faisalabad, Punjab, 38000', 'Notes: Blue gate', 'Cancel order']) {
       expect(text).toContain(expected)
     }
+  })
+
+  describe('what arrived and what came back', () => {
+    const delivered = { ...ORDER, orderStatus: 'DELIVERED', statusHistory: [{ status: 'PENDING' }, { status: 'DELIVERED' }] }
+    const returnOf = (line, extra = {}) => ({ lines: [line], ...extra })
+
+    it('shows a half-and-half order line by line, with the final total', async () => {
+      const order = { ...delivered, fulfilment: 'PARTIAL', returnedAmount: 1800, feeRefunded: false, netTotal: 5400 }
+      serve(order, {
+        payment: { status: 'PAID' },
+        return: returnOf({ orderItemId: ORDER_ITEM._id, productName: ORDER_ITEM.productName, quantity: 1, unitPrice: 3600, reason: 'DAMAGED' }, { returnedSubtotal: 1800, refundAmount: 0 }),
+      })
+      const text = screenText(await show(<OrderScreen />, auth()))
+      expect(text).toContain('What arrived')
+      expect(text).toContain('Part of your order came back.')
+      expect(text).toContain('1 delivered · 1 returned — Damaged')
+      expect(text).toContain('Goods returned')
+      expect(text).toContain('− Rs 1,800')
+      expect(text).toContain('Final total')
+      expect(text).toContain('Rs 5,400')
+    })
+
+    it('shows a fully returned prepaid order, the refund and the refunded delivery fee', async () => {
+      const order = { ...delivered, paymentMethod: 'ONLINE_GATEWAY', orderStatus: 'RETURNED', fulfilment: 'NONE', returnedAmount: 7200, feeRefunded: true, netTotal: 0, deliveryFee: 250, total: 7450 }
+      serve(order, {
+        payment: { status: 'REFUNDED' },
+        return: returnOf({ orderItemId: ORDER_ITEM._id, productName: ORDER_ITEM.productName, quantity: 2, unitPrice: 3600, reason: 'DAMAGED' }, { returnedSubtotal: 7200, refundAmount: 7450 }),
+      })
+      const text = screenText(await show(<OrderScreen />, auth()))
+      expect(text).toContain('Your whole order went back to the store.')
+      expect(text).toContain('All 2 returned — Damaged')
+      expect(text).toContain('Delivery fee refunded')
+      expect(text).toContain('Refunded to you')
+      expect(text).toContain('Rs 7,450')
+      expect(text).toContain('Final total')
+      expect(text).toContain('Rs 0')
+    })
+
+    it('says everything arrived when nothing came back', async () => {
+      serve({ ...delivered, fulfilment: 'FULL', returnedAmount: 0, netTotal: 7200 }, { payment: { status: 'PAID' } })
+      const text = screenText(await show(<OrderScreen />, auth()))
+      expect(text).toContain('Everything arrived.')
+      expect(text).toContain('2 delivered')
+      expect(text).toContain('Final total')
+      expect(text).not.toContain('Goods returned')
+    })
   })
 
   it('shows courier tracking once it exists', async () => {

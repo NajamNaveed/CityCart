@@ -42,6 +42,9 @@ const ADJUSTMENT_STOCK_REASONS = Object.freeze([
   'SUBSTITUTION_RELEASED',
   'SUBSTITUTION_FULFILLED',
   'ADJUSTMENT_RESTOCKED',
+  // Goods the customer refused at the door and the store found sellable
+  // (docs/22 §F). Only the returns service writes it.
+  'RETURN_RESTOCKED',
 ]);
 
 module.exports = {

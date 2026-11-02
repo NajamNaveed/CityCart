@@ -1,6 +1,7 @@
 const Order = require('../models/order.model');
 const Payment = require('../models/payment.model');
 const Delivery = require('../models/delivery.model');
+const Return = require('../models/return.model');
 const Cart = require('../models/cart.model');
 const Product = require('../models/product.model');
 const Brand = require('../models/brand.model');
@@ -400,19 +401,25 @@ async function getOrderForUser(user, orderId) {
   if (!order) {
     throw new OrderError(404, 'Order not found.');
   }
-  const [payment, delivery, adjustments] = await Promise.all([
+  const [payment, delivery, adjustments, returnDoc] = await Promise.all([
     Payment.findOne({ orderId: order._id }),
     Delivery.findOne({ orderId: order._id }),
     listAdjustmentsForOrder(order._id),
+    Return.findOne({ orderId: order._id }),
   ]);
   // The waiting proposal first for the screens; the full list is the history.
   const adjustment = adjustments.find((a) => a.status === 'PROPOSED') || adjustments[0] || null;
+  // A door return (docs/22 §F), in the customer-safe shape: what came back and
+  // why, never the private photo path. Required lazily to avoid a module cycle
+  // through OrderError.
+  const { toReturnView } = require('./return.service');
   return {
     order,
     payment,
     delivery: user.role === 'CUSTOMER' ? deliveryForCustomer(delivery) : delivery,
     adjustments,
     adjustment,
+    return: returnDoc ? toReturnView(returnDoc, order.orderNumber) : null,
   };
 }
 

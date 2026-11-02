@@ -199,6 +199,23 @@ Only the affected amount should be adjusted.
 
 Commission records should preserve an audit trail rather than simply overwriting historical values.
 
+### Returned goods at the door (added November 2026, Phase 6)
+
+A rider can refuse individual lines at the door (docs/22 §F). Refused goods were never sold, so they must not earn commission or count towards payout:
+
+```text
+order.total
+   − returnedSubtotal          (refused lines, at their unit price)
+   − feeRefunded               (delivery fee, only on a full store-fault rejection)
+= order.netTotal
+```
+
+`order.netTotal` is the amount the brand is actually paid for that order, and the amount the customer actually pays on COD. `order.fulfilment` (`FULL` / `PARTIAL` / `NONE`) and `order.returnedAmount` record why it differs from `order.total`. For prepaid orders the refused amount (plus the fee when refunded) is returned through the Payment record (docs/10 §13), so the brand's receipts and refunds stay consistent.
+
+No payout ledger exists yet (section 8 is still a concept), so this is the readiness rule the ledger must follow when it is built: eligible brand earnings use `netTotal`, never `total`, and a fully returned order (`orderStatus RETURNED`) is excluded like a cancelled order. Analytics already computes delivered revenue from `netTotal` and excludes `RETURNED` orders, so brand dashboards reflect returns today.
+
+Tests: `server/tests/returns.test.js` covers accepted/returned totals, `netTotal`, fee refunds and refund amounts; `server/tests/seedDemo.test.js` asserts that seeded payment amounts equal `netTotal` for partially returned COD orders.
+
 ---
 
 ## 8. Payout Concept

@@ -1,6 +1,9 @@
 jest.mock('expo-secure-store', () => ({ getItemAsync: jest.fn(), setItemAsync: jest.fn(), deleteItemAsync: jest.fn(), WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'x' }))
 
 import {
+  acceptanceFrom,
+  acceptanceReady,
+  acceptanceSummary,
   addressLine,
   canComplete,
   cashSummary,
@@ -8,10 +11,13 @@ import {
   collectionPayload,
   collectionReady,
   isClosed,
+  linesPayload,
   mapsUrl,
   nextMoves,
   paymentMethodsFor,
   proofErrorMessage,
+  returnErrorMessage,
+  setAcceptedQty,
   telUrl,
 } from '../src/utils/delivery'
 import { CODE_LENGTH, isValidCode, sentence, validateLogin } from '../src/utils/validation'
@@ -99,6 +105,8 @@ describe('the cash line', () => {
     })
     expect(cashSummary({ amountToCollect: 0, cashCollected: false })).toEqual({ kind: 'prepaid' })
     expect(cashSummary(null)).toEqual({ kind: 'none' })
+    // Everything came back: there is nothing to collect and nothing owed.
+    expect(cashSummary({ amountToCollect: 2450, fulfilment: 'NONE' })).toEqual({ kind: 'none' })
   })
 })
 
@@ -152,6 +160,78 @@ describe('a payment taken at the door (docs/21 §I)', () => {
     expect(proofErrorMessage(fail({ code: 'PROOF_NOT_CONFIGURED' }, 503))).toMatch(/take cash only/i)
     expect(proofErrorMessage(fail({ code: 'PAYMENT_PREPAID' }, 409))).toMatch(/already paid/i)
     expect(proofErrorMessage({ codeMessage: 'The photo could not be uploaded.' })).toBe('The photo could not be uploaded.')
+  })
+})
+
+describe('counting what came back at the door (docs/22 §F)', () => {
+  const lines = () => acceptanceFrom({ items: [{ itemId: 'i1', productName: 'Suit', quantity: 2, lineTotal: 2200 }] })
+  const order = { deliveryFee: 250 }
+
+  it('every line starts fully accepted', () => {
+    expect(acceptanceFrom(null)).toEqual([])
+    expect(lines()).toEqual([
+      {
+        itemId: 'i1',
+        productName: 'Suit',
+        quantity: 2,
+        lineTotal: 2200,
+        acceptedQty: 2,
+        rejectedQty: 0,
+        reason: null,
+        photo: null,
+        photoUri: null,
+        asset: null,
+      },
+    ])
+  })
+
+  it('counts refused units, never outside what was ordered', () => {
+    const line = lines()[0]
+    expect(setAcceptedQty(line, 1)).toMatchObject({ acceptedQty: 1, rejectedQty: 1 })
+    expect(setAcceptedQty(line, -4)).toMatchObject({ acceptedQty: 0, rejectedQty: 2 })
+    expect(setAcceptedQty(line, 9)).toMatchObject({ acceptedQty: 2, rejectedQty: 0 })
+    // A line kept in full carries no reason, even if one was picked earlier.
+    expect(setAcceptedQty({ ...line, acceptedQty: 0, rejectedQty: 2, reason: 'DAMAGED' }, 2).reason).toBeNull()
+  })
+
+  it('prices the kept units and adds the fee, refunding it only for a full store-fault return', () => {
+    const half = [{ ...lines()[0], acceptedQty: 1, rejectedQty: 1, reason: 'DAMAGED' }]
+    expect(acceptanceSummary(half, order)).toMatchObject({ acceptedTotal: 1100, returnedTotal: 1100, netTotal: 1350, refundTotal: 1100, feeRefunded: false })
+
+    const storeFault = [{ ...lines()[0], acceptedQty: 0, rejectedQty: 2, reason: 'WRONG_ITEM' }]
+    expect(acceptanceSummary(storeFault, order)).toMatchObject({ netTotal: 0, refundTotal: 2450, feeRefunded: true, everythingRejected: true })
+
+    // The customer changed their mind: the fee is still earned.
+    const notWanted = [{ ...lines()[0], acceptedQty: 0, rejectedQty: 2, reason: 'NOT_WANTED' }]
+    expect(acceptanceSummary(notWanted, order)).toMatchObject({ netTotal: 250, refundTotal: 2200, feeRefunded: false })
+
+    const all = lines()
+    expect(acceptanceSummary(all, order)).toMatchObject({ acceptedTotal: 2200, returnedTotal: 0, netTotal: 2450, refundTotal: 0 })
+  })
+
+  it('sends one line per item, with reasons and photos only for what came back', () => {
+    const line = { ...lines()[0], acceptedQty: 1, rejectedQty: 1, reason: 'DAMAGED', photo: { publicId: 'p' } }
+    expect(linesPayload([line])).toEqual([
+      { itemId: 'i1', acceptedQty: 1, rejectedQty: 1, reason: 'DAMAGED', photo: { publicId: 'p' } },
+    ])
+    expect(linesPayload(lines())).toEqual([{ itemId: 'i1', acceptedQty: 2, rejectedQty: 0 }])
+    expect(linesPayload(null)).toEqual([])
+  })
+
+  it('is ready only when every refusal has a reason', () => {
+    expect(acceptanceReady([])).toBe(true)
+    expect(acceptanceReady(lines())).toBe(true)
+    expect(acceptanceReady([{ rejectedQty: 1, reason: null }])).toBe(false)
+    expect(acceptanceReady([{ rejectedQty: 1, reason: 'MISSING' }])).toBe(true)
+  })
+
+  it('explains a refused return in the rider’s terms', () => {
+    const fail = (data, status = 422) => ({ response: { status, data } })
+    expect(returnErrorMessage(fail({ code: 'INVALID_RETURN_QUANTITY' }))).toMatch(/More units were refused/)
+    expect(returnErrorMessage(fail({ code: 'INVALID_RETURN_REASON' }))).toMatch(/Choose why each refused item/)
+    expect(returnErrorMessage(fail({ code: 'RETURN_PHOTO_NOT_CONFIGURED' }, 503))).toMatch(/Complete without a photo/)
+    expect(returnErrorMessage(fail({ code: 'RETURN_PHOTO_NOT_YOURS' }))).toMatch(/does not belong to this delivery/)
+    expect(returnErrorMessage({ codeMessage: 'No connection.' })).toBe('No connection.')
   })
 })
 

@@ -17,6 +17,7 @@ const geoPointSchema = require('./geoPoint.schema');
  */
 const { ORDER_STATUSES } = require('../config/orderStatuses');
 const { PICK_STATUSES } = require('../config/pickStatuses');
+const { FULFILMENTS } = require('../config/returns');
 
 // Payment status is tracked independently of order status (§25, §27) —
 // these must never be merged into a single field.
@@ -193,6 +194,18 @@ const orderSchema = new mongoose.Schema(
     },
     pickStartedAt: { type: Date, default: null },
     packedAt: { type: Date, default: null },
+    // Door returns (docs/22 §F). Set once when the delivery completes: how much
+    // of the order actually arrived (FULL/PARTIAL/NONE), the value of the refused
+    // goods, the fee when it was refunded, and the final amount the customer owes
+    // (or, when prepaid, keeps). Older orders have no netTotal; readers fall back
+    // to `total`.
+    fulfilment: {
+      type: String,
+      enum: FULFILMENTS,
+    },
+    returnedAmount: { type: Number, default: 0, min: 0 },
+    feeRefunded: { type: Boolean, default: false },
+    netTotal: { type: Number, min: 0 },
     // Audit trail (docs/08 §36): who moved the order to which status, when.
     statusHistory: {
       type: [

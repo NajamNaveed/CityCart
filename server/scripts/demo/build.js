@@ -10,6 +10,7 @@ const { slugify } = require('../../src/utils/slugify');
 const { innerPoint, toGeoJsonPolygon, ringFromGeoJson, pointInRing } = require('../../src/utils/polygon');
 const { computeBlockIds } = require('../../src/utils/blockMembership');
 const { PAYMENT_METHOD_FOR_COLLECTION } = require('../../src/config/paymentCollection');
+const { STORE_FAULT_REASONS } = require('../../src/config/returns');
 const { CITIES, BLOCKS, BRANCHES, BRANDS, CHATS, LONG_CHAT, CUSTOMERS, ADMIN, CARTS, REMARKS } = require('./catalog');
 
 const { ObjectId } = mongoose.Types;
@@ -74,7 +75,7 @@ function buildDataset({ now = new Date(), hashes }) {
 
   const ds = {
     cities: [], blocks: [], branches: [], conversations: [], messages: [], users: [], brands: [], stores: [], categories: [], catalogProducts: [], addresses: [], products: [], inventories: [],
-    employees: [], carts: [], orders: [], payments: [], receipts: [], deliveries: [], orderAdjustments: [], inventoryMovements: [],
+    employees: [], carts: [], orders: [], payments: [], receipts: [], deliveries: [], returns: [], orderAdjustments: [], inventoryMovements: [],
     reviews: [], notifications: [], counters: [],
   };
 
@@ -595,6 +596,170 @@ function buildDataset({ now = new Date(), hashes }) {
   });
   for (const [year, seq] of Object.entries(perYear)) ds.counters.push({ _id: `order-${year}`, seq });
 
+  // ── door returns (docs/22 §F): what the rider brought back ──
+  // Three stories, so every screen has something to show: a damaged suit refused at
+  // the door and still travelling back with the rider; half a prepaid order refused,
+  // refunded and already taken in (the sellable piece went back on the shelf); and a
+  // whole cash order refused for damage, which ends RETURNED with nothing to collect.
+  const deliveryOf = (order) => ds.deliveries.find((d) => String(d.orderId) === String(order._id));
+  const completedAtOf = ({ events }) => events[events.length - 1].at;
+  // The line a partial refusal can take a unit from: one order line with several
+  // units, or one of several lines (so the rest of the order is still accepted).
+  const partialLine = (order) => order.items.find((i) => i.quantity > 1)
+    || (order.items.length > 1 ? order.items.find((i) => i.quantity === 1) : null);
+
+  const usedReturnOrders = new Set();
+  const usedReturnBrands = new Set();
+  const returnOrder = ({ paymentMethod, rider, netZero, partial }) => {
+    const pool = orders.filter((entry) => {
+      const { order, payment, flags } = entry;
+      const delivery = deliveryOf(order);
+      if (order.orderStatus !== 'DELIVERED' || flags.fullRefund || flags.partRefund) return false;
+      if (usedReturnOrders.has(String(order._id))) return false;
+      if (payment.status !== 'PAID' || payment.refunds.length) return false;
+      if (order.paymentMethod !== paymentMethod) return false;
+      if (!delivery || delivery.status !== 'DELIVERED') return false;
+      if (rider && !delivery.riderId) return false;
+      if (netZero && (order.tax !== 0 || order.discount !== 0 || order.deliveryFee === 0)) return false;
+      if (partial && !partialLine(order)) return false;
+      return true;
+    });
+    return pool.find((entry) => !usedReturnBrands.has(String(entry.order.brandId))) || pool[0] || null;
+  };
+
+  const returnLine = (item, quantity, reason, extra = {}) => ({
+    orderItemId: item._id, productId: item.productId, productName: item.productName,
+    quantity, unitPrice: item.unitPrice, reason, ...extra,
+  });
+
+  const addDoorReturn = ({ entry, status, lines, receivedAt, receivedBy }) => {
+    const { order, payment, events, deliveryHandler } = entry;
+    const delivery = deliveryOf(order);
+    const completedAt = completedAtOf(entry);
+    const returnedSubtotal = lines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
+    const everythingRejected = returnedSubtotal >= order.subtotal;
+    const feeRefunded = everythingRejected && lines.some((line) => STORE_FAULT_REASONS.includes(line.reason));
+    const netTotal = Math.max(0, order.total - returnedSubtotal - (feeRefunded ? order.deliveryFee : 0));
+    order.fulfilment = everythingRejected ? 'NONE' : 'PARTIAL';
+    order.returnedAmount = returnedSubtotal;
+    order.feeRefunded = feeRefunded;
+    order.netTotal = netTotal;
+
+    let refundAmount = 0;
+    if (order.paymentMethod === 'COD') {
+      if (netTotal > 0) {
+        // The rider collected for the accepted units only.
+        payment.amount = netTotal;
+        payment.updatedAt = completedAt;
+      } else {
+        // Nothing was accepted, so nothing was collected and the payment never happened.
+        payment.status = 'CANCELLED';
+        ['paidAt', 'confirmedBy', 'brandId', 'collectedBy', 'collectedAt', 'settledAt', 'settledBy', 'transactionReference', 'provider', 'collection']
+          .forEach((field) => delete payment[field]);
+        payment.updatedAt = completedAt;
+        order.paymentStatus = 'CANCELLED';
+        const job = receiptJobs.findIndex((r) => r.payment === payment);
+        if (job !== -1) receiptJobs.splice(job, 1);
+      }
+    } else {
+      // Prepaid money comes back for the refused goods (and the fee under the store-fault rule).
+      const due = returnedSubtotal + (feeRefunded ? order.deliveryFee : 0);
+      refundAmount = Math.min(due, order.total - payment.refundedAmount);
+      if (refundAmount > 0) {
+        payment.refundedAmount += refundAmount;
+        payment.refunds.push({
+          amount: refundAmount, by: delivery.riderId || deliveryHandler._id, at: completedAt,
+          reason: 'Items refused at the door were refunded.',
+        });
+        payment.status = payment.refundedAmount >= order.total ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
+        order.paymentStatus = payment.status;
+        payment.updatedAt = completedAt;
+      }
+    }
+
+    if (everythingRejected) {
+      // Everything went back: the order and its delivery end as RETURNED.
+      order.orderStatus = 'RETURNED';
+      const last = events[events.length - 1];
+      last.status = 'RETURNED';
+      order.statusHistory[order.statusHistory.length - 1] = {
+        status: 'RETURNED', by: delivery.riderId || deliveryHandler._id, at: last.at,
+      };
+    }
+
+    const ret = {
+      _id: new ObjectId(), orderId: order._id, deliveryId: delivery._id, brandId: order.brandId, customerId: order.customerId,
+      ...(delivery.riderId && { riderId: delivery.riderId }),
+      source: 'DOOR', status, lines, returnedSubtotal, feeRefunded, refundAmount, currency: order.currency || 'PKR',
+      ...(status === 'RECEIVED' && { receivedAt, receivedBy: receivedBy._id }),
+      createdAt: completedAt, updatedAt: receivedAt || completedAt,
+    };
+    ds.returns.push(ret);
+    delivery.returnId = ret._id;
+    delivery.status = everythingRejected ? 'RETURNED' : 'DELIVERED';
+    usedReturnOrders.add(String(order._id));
+    usedReturnBrands.add(String(order.brandId));
+
+    if (status === 'RECEIVED') {
+      for (const line of lines) {
+        if (!line.restock) continue;
+        const inventory = ds.inventories.find((inv) => String(inv.productId) === String(line.productId));
+        if (inventory && inventory.trackInventory) {
+          inventory.quantity += line.quantity;
+          inventory.updatedAt = receivedAt;
+        }
+        ds.inventoryMovements.push({
+          _id: new ObjectId(), productId: line.productId, brandId: order.brandId, orderId: order._id,
+          reason: 'RETURN_RESTOCKED', quantityChange: line.quantity, reservedChange: 0, by: receivedBy._id, createdAt: receivedAt,
+        });
+      }
+    }
+    return ret;
+  };
+
+  const inTransit = returnOrder({ paymentMethod: 'COD', rider: true, partial: true });
+  if (inTransit) {
+    const item = partialLine(inTransit.order);
+    const delivery = deliveryOf(inTransit.order);
+    addDoorReturn({
+      entry: inTransit, status: 'IN_TRANSIT',
+      lines: [returnLine(item, Math.min(1, item.quantity), 'DAMAGED', {
+        photo: {
+          publicId: `citycart/brands/${inTransit.order.brandId}/deliveries/${delivery._id}/returns/refused-${item._id}.jpg`,
+          fingerprint: `etag-refused-${item._id}`,
+        },
+      })],
+    });
+  }
+
+  const received = returnOrder({ paymentMethod: 'ONLINE_GATEWAY', partial: true });
+  if (received) {
+    const item = partialLine(received.order);
+    // The store takes the goods in the next day (never in the future).
+    const receivedAt = new Date(Math.min(now.getTime() - 2 * HOUR, completedAtOf(received).getTime() + 20 * HOUR));
+    addDoorReturn({
+      entry: received, status: 'RECEIVED', receivedAt, receivedBy: received.brand.owner,
+      lines: [returnLine(item, Math.min(1, item.quantity), 'NOT_WANTED', { restock: true, restockedAt: receivedAt })],
+    });
+  }
+
+  const fullyRejected = returnOrder({ paymentMethod: 'COD', netZero: true });
+  if (fullyRejected) {
+    addDoorReturn({
+      entry: fullyRejected, status: 'IN_TRANSIT',
+      lines: fullyRejected.order.items.map((item, index) => returnLine(item, item.quantity, index === 0 ? 'DAMAGED' : 'MISSING')),
+    });
+  }
+
+  // Every other delivered order arrived complete.
+  for (const { order } of orders) {
+    if (order.orderStatus !== 'DELIVERED' || order.fulfilment) continue;
+    order.fulfilment = 'FULL';
+    order.returnedAmount = 0;
+    order.feeRefunded = false;
+    order.netTotal = order.total;
+  }
+
   // ── picking: accepted orders wait in the queue; one picker has started an order (docs/22 §E) ──
   // CONFIRMED orders are already waiting, unclaimed. A PROCESSING order with a
   // picker shows what a half-picked order looks like: only the last line to go.
@@ -846,11 +1011,22 @@ function buildDataset({ now = new Date(), hashes }) {
     2: ['Hoping the next one is better.', 'Delivery was on time at least.'],
     1: ['I would think twice before ordering.', 'I have contacted the seller.'],
   };
+  // A customer reviews what they kept, never a unit the rider took back.
+  const returnedUnits = new Map();
+  for (const ret of ds.returns) {
+    for (const line of ret.lines) {
+      const key = String(line.orderItemId);
+      returnedUnits.set(key, (returnedUnits.get(key) || 0) + line.quantity);
+    }
+  }
+  const keptUnits = (item) => item.quantity - (returnedUnits.get(String(item._id)) || 0);
+
   const seenReviews = new Set();
   for (const { order, brand, events } of orders) {
     if (order.orderStatus !== 'DELIVERED') continue;
     const delivered = events[events.length - 1].at;
     for (const item of order.items) {
+      if (keptUnits(item) <= 0) continue;
       const key = `${order.customerId}-${item.productId}`;
       if (seenReviews.has(key) || random() > 0.82) continue;
       seenReviews.add(key);
@@ -948,11 +1124,16 @@ function buildDataset({ now = new Date(), hashes }) {
           const how = door ? { BANK_TRANSFER: 'bank transfer', WALLET: 'wallet', CARD_MACHINE: 'card machine' }[payment.collection.method] : '';
           note(brand.owner._id, 'PAYMENT_RECEIVED', door ? 'Payment received at the door' : 'Cash payment received',
             door
-              ? `${money(order.total)} was paid by ${how} for order ${order.orderNumber}. Check the photo and the reference before you count it.`
-              : `${money(order.total)} was collected on delivery for order ${order.orderNumber}.`,
+              ? `${money(payment.amount)} was paid by ${how} for order ${order.orderNumber}. Check the photo and the reference before you count it.`
+              : `${money(payment.amount)} was collected on delivery for order ${order.orderNumber}.`,
             { ...ref, paymentId: payment._id }, at);
           break;
         }
+        case 'RETURNED':
+          note(customer.doc._id, 'ORDER_REJECTED', 'Your order went back with the rider',
+            `Every item in order ${order.orderNumber} was refused at the door, so ${brand.def.name} took it back. You have not been charged.`,
+            ref, at);
+          break;
         case 'REJECTED':
           note(customer.doc._id, 'ORDER_REJECTED', 'Your order could not be fulfilled', `${brand.def.name} could not fulfil order ${order.orderNumber}. You have not been charged.`, ref, at);
           break;
@@ -993,6 +1174,27 @@ function buildDataset({ now = new Date(), hashes }) {
         message, ref, new Date(adj.respondedAt.getTime() + 60 * 1000)
       ));
     }
+  }
+
+  // Returned goods (docs/22 §F): the brand staff who handle orders or deliveries hear
+  // while the goods are still with the rider, and again once the store has taken them in.
+  for (const ret of ds.returns) {
+    const entry = orderEntryById.get(String(ret.orderId));
+    if (!entry) continue;
+    const ref = {
+      orderId: ret.orderId, orderNumber: entry.order.orderNumber, brandId: ret.brandId,
+      returnId: ret._id, deliveryId: ret.deliveryId, lines: ret.lines.length, returnedSubtotal: ret.returnedSubtotal,
+    };
+    const received = ret.status === 'RECEIVED';
+    const units = ret.lines.reduce((sum, line) => sum + line.quantity, 0);
+    brandReaders(entry.brand).forEach((u) => note(
+      u._id, 'RETURN_IN_TRANSIT',
+      received ? 'Returned goods taken in' : 'Returned goods on the way',
+      received
+        ? `${units} refused unit${units === 1 ? '' : 's'} from order ${entry.order.orderNumber} were taken in. Decide what goes back on sale.`
+        : `${units} refused unit${units === 1 ? '' : 's'} from order ${entry.order.orderNumber} are coming back with the rider.`,
+      ref, new Date(ret.updatedAt.getTime() + 60 * 1000)
+    ));
   }
 
   const productById = new Map(ds.products.map((p) => [String(p._id), p]));

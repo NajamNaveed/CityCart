@@ -99,6 +99,7 @@ EMPLOYEE_CREATED
 EMPLOYEE_PERMISSION_CHANGED
 
 DELIVERY_ASSIGNED
+RETURN_IN_TRANSIT
 
 SYSTEM_NOTIFICATION
 ```
@@ -676,5 +677,27 @@ push           Staff and Delivery apps, via the existing push bridge; data.order
 Nothing is sent when a proposal is only viewed, withdrawn (the customer simply no longer sees it) or when a late answer is refused. Expiry notifications are produced by the timer in `jobs/adjustmentExpiry.js`; because expiry is one conditional update per proposal, a proposal can never notify twice.
 
 Tests: `server/tests/integration/orderAdjustments.integration.test.js` asserts all three types, their recipients, and that expiry changes nothing about the order.
+
+---
+
+# 33. Door Return Notifications (added November 2026, Phase 6)
+
+When the rider completes a delivery with refused lines (docs/22 §F), the goods start travelling back to the store. The brand's team needs to know a return exists before it arrives, so `notifyBrandOfReturn()` sends one notification:
+
+| Type | Recipient | When | Title / message |
+| ---- | --------- | ---- | --------------- |
+| `RETURN_IN_TRANSIT` | the brand's staff holding `orders.view` or `delivery.view` | a door return is created at completion | “Returned goods on the way” / how many lines are coming back and for which order |
+
+`data` carries `orderId`, `orderNumber`, `brandId`, `returnId`, `deliveryId`, `lines`, `returnedSubtotal` and the return `status`, so the web or Staff app can open the returned-goods inbox (docs/20 §6.1) or the order.
+
+Only one notification is sent per return, at completion: the return already exists when the goods leave the customer, and receiving them later is an action the brand itself takes, so it does not notify the same people again. A fully rejected order also sends the customer the usual `ORDER_REJECTED` notification (the delivery ended with nothing handed over). Delivery uses the existing bridge:
+
+```text
+in-app inbox   always (persisted per user)
+socket         notify() emits to each recipient
+push           Staff app, via the existing push bridge; data.orderId opens the order
+```
+
+A return notification is **best effort**: a failure to notify never fails the delivery completion that created the return. Tests: `server/tests/returns.test.js` covers the return flow, and the seed (`server/scripts/demo/build.js`) creates a `RETURN_IN_TRANSIT` notification for every seeded return so the inbox shows one.
 
 

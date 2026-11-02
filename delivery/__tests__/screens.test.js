@@ -65,7 +65,8 @@ const NOW = new Date().toISOString()
 const ADDRESS = { name: 'Sana Iqbal', phone: '+92 300 1112223', address: 'House 5, Street 2', city: 'Faisalabad', postalCode: '38000', additionalInstructions: 'Blue gate' }
 const delivery = (over = {}) => ({
   _id: 'd1', orderNumber: 'CC-2026-000042', status: 'OUT_FOR_DELIVERY', failureReason: undefined, assignedAt: NOW, updatedAt: NOW,
-  address: ADDRESS, items: [{ productName: 'Printed lawn suit', quantity: 2 }], paymentMethod: 'COD', amountToCollect: 2450, cashCollected: false, currency: 'PKR', ...over,
+  address: ADDRESS, items: [{ itemId: 'i1', productName: 'Printed lawn suit', quantity: 2, lineTotal: 2200 }],
+  deliveryFee: 250, paymentMethod: 'COD', amountToCollect: 2450, cashCollected: false, currency: 'PKR', ...over,
 })
 const httpError = (status, data = {}) => Object.assign(new Error('http'), { response: { status, data } })
 const page = (items) => ({ data: { deliveries: items, pagination: { page: 1, pages: 1, total: items.length } } })
@@ -255,22 +256,27 @@ describe('one delivery', () => {
     it('needs six digits before it can be sent, and keeps only digits', async () => {
       const screen = await open()
       await press(screen, 'Enter code to complete')
-      expect(isDisabled(screen, 'Complete delivery')).toBe(true)
+      expect(isDisabled(screen, 'Continue')).toBe(true)
       await type(screen, "Customer's delivery code", '48a2 91')
-      expect(isDisabled(screen, 'Complete delivery')).toBe(true) // 48291 is only five digits
+      expect(isDisabled(screen, 'Continue')).toBe(true) // 48291 is only five digits
       await type(screen, "Customer's delivery code", '482913')
-      expect(isDisabled(screen, 'Complete delivery')).toBe(false)
+      expect(isDisabled(screen, 'Continue')).toBe(false)
     })
 
     it('completes the delivery with the right code and closes it', async () => {
       const screen = await open()
       await press(screen, 'Enter code to complete')
       await type(screen, "Customer's delivery code", '482913')
+      await press(screen, 'Continue')
+      expect(screenText(screen)).toMatch(/What did the customer keep\?/)
       api.post.mockResolvedValue({ data: { delivery: delivery({ status: 'DELIVERED', address: null, items: [], amountToCollect: 0, cashCollected: true }) } })
 
       await press(screen, 'Complete delivery')
 
-      expect(api.post).toHaveBeenCalledWith('/rider/deliveries/d1/complete', { code: '482913' })
+      expect(api.post).toHaveBeenCalledWith('/rider/deliveries/d1/complete', {
+        code: '482913',
+        lines: [{ itemId: 'i1', acceptedQty: 2, rejectedQty: 0 }],
+      })
       const text = screenText(screen)
       expect(text).toMatch(/Delivered\. Thank you/)
       expect(text).toMatch(/closed, so the customer details are no longer shown/)
@@ -284,21 +290,24 @@ describe('one delivery', () => {
       const screen = await open()
       await press(screen, 'Enter code to complete')
       await type(screen, "Customer's delivery code", '000000')
+      await press(screen, 'Continue')
       api.post.mockRejectedValue(httpError(422, { code: 'INVALID_CODE', message: 'That code is not correct.', attemptsRemaining: 3 }))
 
       await press(screen, 'Complete delivery')
 
       expect(screenText(screen)).toMatch(/That code is not correct\. 3 tries left\./)
-      expect(has(screen, 'Complete delivery')).toBe(true)
+      expect(has(screen, 'Continue')).toBe(true) // back at the code step, to correct it
     })
 
     it('tells the rider to ask the brand when the code is locked', async () => {
       const screen = await open()
       await press(screen, 'Enter code to complete')
       await type(screen, "Customer's delivery code", '000000')
+      await press(screen, 'Continue')
       api.post.mockRejectedValue(httpError(429, { code: 'CODE_LOCKED', message: 'Too many wrong codes.' }))
       await press(screen, 'Complete delivery')
       expect(screenText(screen)).toMatch(/Ask the brand to complete this delivery/)
+      expect(has(screen, 'Continue')).toBe(true)
     })
 
     it('can be cancelled without sending anything', async () => {
@@ -329,7 +338,8 @@ describe('one delivery', () => {
     const openPaymentStep = async (screen) => {
       await press(screen, 'Enter code to complete')
       await type(screen, "Customer's delivery code", '482913')
-      await press(screen, 'Continue')
+      await press(screen, 'Continue') // the code
+      await press(screen, 'Continue') // the kept items
     }
 
     it('asks how they paid after the code, and cash completes with only { method: CASH }', async () => {
@@ -343,7 +353,11 @@ describe('one delivery', () => {
       await press(screen, 'Cash')
       await press(screen, 'Complete delivery')
 
-      expect(api.post).toHaveBeenCalledWith('/rider/deliveries/d1/complete', { code: '482913', collection: { method: 'CASH' } })
+      expect(api.post).toHaveBeenCalledWith('/rider/deliveries/d1/complete', {
+        code: '482913',
+        collection: { method: 'CASH' },
+        lines: [{ itemId: 'i1', acceptedQty: 2, rejectedQty: 0 }],
+      })
       expect(screenText(screen)).toMatch(/Delivered\. Thank you/)
     })
 
@@ -387,6 +401,7 @@ describe('one delivery', () => {
           reference: 'JC-778812',
           proof: { publicId: 'citycart/proof-1', fingerprint: 'etag-1' },
         },
+        lines: [{ itemId: 'i1', acceptedQty: 2, rejectedQty: 0 }],
       })
     })
 
@@ -492,10 +507,12 @@ describe('one delivery', () => {
       const screen = await open(withOptions({ paymentOptions: ['CASH'] }))
       await press(screen, 'Enter code to complete')
       await type(screen, "Customer's delivery code", '482913')
+      await press(screen, 'Continue')
 
-      expect(has(screen, 'Continue')).toBe(false)
+      // No payment step: the review itself completes, so no Wallet can be chosen.
       expect(has(screen, 'Complete delivery')).toBe(true)
       expect(has(screen, 'Wallet')).toBe(false)
+      expect(screenText(screen)).toMatch(/Collect for what they kept/)
     })
 
     it('shows a non-cash payment’s review state, never the photo', async () => {
@@ -506,6 +523,176 @@ describe('one delivery', () => {
       expect(screenText(screen)).toMatch(/Paid at the door/)
       expect(screenText(screen)).toMatch(/Waiting for the brand to check the payment/)
       expect(screenText(screen)).not.toMatch(/Sana Iqbal/)
+    })
+  })
+
+  describe('what came back at the door', () => {
+    const RETURN_UPLOAD = {
+      uploadUrl: 'https://api.cloudinary.com/v1_1/demo/image/upload',
+      apiKey: 'key',
+      timestamp: 1700000000,
+      signature: 'sig',
+      folder: 'returns',
+      allowedFormats: 'jpg,png,webp',
+      type: 'authenticated',
+    }
+    const completed = (over = {}) =>
+      delivery({ status: 'DELIVERED', address: null, items: [], amountToCollect: 0, paymentOptions: [], ...over })
+
+    const openReview = async (d = delivery()) => {
+      const screen = await open(d)
+      await press(screen, 'Enter code to complete')
+      await type(screen, "Customer's delivery code", '482913')
+      await press(screen, 'Continue')
+      return screen
+    }
+
+    const rejectOne = async (screen) => {
+      await press(screen, '−') // 1 kept, 1 refused
+      await press(screen, 'Damaged')
+    }
+
+    it('needs a reason for each refused line, and previews the amount for what was kept', async () => {
+      const screen = await openReview()
+      await press(screen, '−')
+
+      expect(screenText(screen)).toMatch(/1 kept · 1 refused/)
+      expect(isDisabled(screen, 'Complete delivery')).toBe(true) // no reason yet
+      await press(screen, 'Damaged')
+
+      expect(isDisabled(screen, 'Complete delivery')).toBe(false)
+      const text = screenText(screen)
+      expect(text).toMatch(/Rs 1,100 of goods coming back/)
+      expect(text).toMatch(/Collect for what they kept/)
+      expect(text).toMatch(/Rs 1,350/) // 1,100 kept + the 250 fee
+
+      api.post.mockResolvedValue({ data: { delivery: completed({ fulfilment: 'PARTIAL', returnedAmount: 1100, netTotal: 1350 }) } })
+      await press(screen, 'Complete delivery')
+
+      expect(api.post).toHaveBeenCalledWith('/rider/deliveries/d1/complete', {
+        code: '482913',
+        lines: [{ itemId: 'i1', acceptedQty: 1, rejectedQty: 1, reason: 'DAMAGED' }],
+      })
+    })
+
+    it('refunds the delivery fee only when everything comes back for a store fault', async () => {
+      const screen = await openReview()
+      await press(screen, '−')
+      await press(screen, '−')
+      await press(screen, 'Damaged')
+
+      expect(screenText(screen)).toMatch(/0 kept · 2 refused/)
+      expect(screenText(screen)).toMatch(/the Rs 250 delivery fee is refunded too/)
+    })
+
+    it('keeps the fee when the customer simply did not want it', async () => {
+      const screen = await openReview()
+      await press(screen, '−')
+      await press(screen, '−')
+      await press(screen, 'Not wanted')
+
+      expect(screenText(screen)).toMatch(/Rs 2,200 of goods coming back/)
+      expect(screenText(screen)).not.toMatch(/delivery fee is refunded/)
+      expect(screenText(screen)).toMatch(/Rs 250/) // the fee is still due
+    })
+
+    it('a refused line can carry a camera-only photo, uploaded to its own private folder', async () => {
+      const screen = await openReview()
+      await rejectOne(screen)
+
+      ImagePicker.requestCameraPermissionsAsync.mockResolvedValue({ granted: true })
+      ImagePicker.launchCameraAsync.mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file://damaged.jpg', fileName: 'damaged.jpg', mimeType: 'image/jpeg' }],
+      })
+      global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ public_id: 'citycart/return-1', etag: 'etag-r1' }) })
+      api.post.mockImplementation((url) => {
+        if (url.endsWith('/return-upload')) return Promise.resolve({ data: { upload: RETURN_UPLOAD } })
+        return Promise.resolve({ data: { delivery: completed({ fulfilment: 'PARTIAL', returnedAmount: 1100, netTotal: 1350 }) } })
+      })
+
+      await press(screen, 'Add photo (optional)')
+
+      expect(ImagePicker.launchCameraAsync).toHaveBeenCalledWith(expect.objectContaining({ exif: false, quality: 0.4 }))
+      expect(api.post).toHaveBeenCalledWith('/rider/deliveries/d1/return-upload')
+      expect(File).toHaveBeenCalledWith('file://damaged.jpg')
+      expect(global.fetch.mock.calls[0][0]).toBe(RETURN_UPLOAD.uploadUrl)
+
+      await press(screen, 'Complete delivery')
+      expect(api.post).toHaveBeenLastCalledWith('/rider/deliveries/d1/complete', {
+        code: '482913',
+        lines: [
+          {
+            itemId: 'i1',
+            acceptedQty: 1,
+            rejectedQty: 1,
+            reason: 'DAMAGED',
+            photo: { publicId: 'citycart/return-1', fingerprint: 'etag-r1' },
+          },
+        ],
+      })
+    })
+
+    it('keeps the picked photo and retries it when the upload failed', async () => {
+      const screen = await openReview()
+      await rejectOne(screen)
+
+      ImagePicker.requestCameraPermissionsAsync.mockResolvedValue({ granted: true })
+      ImagePicker.launchCameraAsync.mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file://damaged.jpg', fileName: 'damaged.jpg', mimeType: 'image/jpeg' }],
+      })
+      api.post.mockResolvedValue({ data: { upload: RETURN_UPLOAD } })
+      global.fetch = jest.fn().mockRejectedValue(new TypeError('Network request failed'))
+
+      await press(screen, 'Add photo (optional)')
+
+      expect(screenText(screen)).toMatch(/photo could not be uploaded/)
+      expect(has(screen, 'Upload photo')).toBe(true)
+
+      global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ public_id: 'citycart/return-1', etag: 'etag-r1' }) })
+      await press(screen, 'Upload photo')
+
+      expect(ImagePicker.launchCameraAsync).toHaveBeenCalledTimes(1) // the same photo, no new walk to the door
+      expect(File).toHaveBeenLastCalledWith('file://damaged.jpg')
+    })
+
+    it('explains a photo the server does not accept, and stays on the review', async () => {
+      const screen = await openReview()
+      await rejectOne(screen)
+      api.post.mockRejectedValue(httpError(422, { code: 'RETURN_PHOTO_NOT_YOURS', message: 'That return photo does not belong to this delivery.' }))
+
+      await press(screen, 'Complete delivery')
+
+      expect(screenText(screen)).toMatch(/That photo does not belong to this delivery\. Take it again\./)
+      expect(has(screen, 'Complete delivery')).toBe(true)
+    })
+
+    it('a part-delivered order shows what came back and the final total', async () => {
+      const screen = await open(
+        delivery({ status: 'DELIVERED', address: null, items: [], amountToCollect: 0, cashCollected: true, fulfilment: 'PARTIAL', returnedAmount: 1100, netTotal: 1350 }),
+      )
+
+      const text = screenText(screen)
+      expect(text).toMatch(/Part of the order came back/)
+      expect(text).toMatch(/Rs 1,100 of goods came back/)
+      expect(text).toMatch(/Collected: Rs 1,350/)
+    })
+
+    it('a fully returned order says nothing was collected', async () => {
+      const screen = await open(
+        delivery({
+          status: 'RETURNED', address: null, items: [], amountToCollect: 0, cashCollected: false, paymentOptions: [],
+          fulfilment: 'NONE', returnedAmount: 2200, netTotal: 0, feeRefunded: true,
+        }),
+      )
+
+      const text = screenText(screen)
+      expect(text).toMatch(/Everything went back to the store/)
+      expect(text).toMatch(/Nothing was collected/)
+      expect(text).toMatch(/delivery fee was refunded/)
+      expect(text).toMatch(/Collected: Rs 0/)
+      expect(has(screen, 'Enter code to complete')).toBe(false)
     })
   })
 

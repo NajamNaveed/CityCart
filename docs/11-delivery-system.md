@@ -419,28 +419,32 @@ Any proof-of-delivery data must be protected appropriately.
 
 # 20. Returns
 
-If a customer needs to return an eligible order:
+Marketplace v2 only supports refusing goods **at the door**, while the rider is
+there (docs/22 §F). A return request after delivery is out of scope.
+
+On completion the rider sends the accepted and rejected quantity for every line,
+with a reason (`DAMAGED`, `WRONG_ITEM`, `NOT_WANTED`, `MISSING`) and an optional
+private photo:
 
 ```text id="dly018"
-DELIVERED
-   ↓
-RETURN_REQUESTED
-   ↓
-RETURNED
+OUT_FOR_DELIVERY
+   ↓  completion, some refused
+DELIVERED (order fulfilment PARTIAL)  + Return DOOR IN_TRANSIT
+   ↓  brand marks received
+Return RECEIVED (per line: restock or write off)
+
+OUT_FOR_DELIVERY
+   ↓  completion, everything refused
+RETURNED (order fulfilment NONE)      + Return DOOR IN_TRANSIT
 ```
 
-Return rules must define:
+The refused goods travel back with the rider (`Return.riderId`) and the delivery
+keeps `returnId`. The delivery becomes `DELIVERED` or `RETURNED` (never both
+`DELIVERED` and a pending return at the door). The order and payment side is in
+docs/08 §41.10 and docs/10 §13; the stock side is in docs/09 §15.
 
-* Eligibility
-* Return window
-* Return reason
-* Approval
-* Pickup
-* Inspection
-* Refund
-* Inventory restoration
-
-Complex return workflows may be introduced after the MVP.
+The old `RETURN_REQUESTED` order status stays in the schema for a future
+customer-requested return flow, but nothing writes it in v2.
 
 ---
 

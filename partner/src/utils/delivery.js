@@ -13,3 +13,30 @@ export const locationMapUrl = (point) => `https://www.google.com/maps/search/?ap
 
 // "House 5, Street 2, Faisalabad"
 export const addressLine = (address) => (address ? [address.address, address.city].filter(Boolean).join(', ') : '')
+
+// The reasons a rider can give for goods coming back (docs/22 §F).
+export const RETURN_REASONS = {
+  DAMAGED: 'Damaged',
+  WRONG_ITEM: 'Wrong item',
+  MISSING: 'Missing',
+  NOT_WANTED: 'Not wanted',
+}
+export const reasonLabel = (reason) => RETURN_REASONS[reason] || 'Other'
+
+// The goods are on their way back until the store takes them in.
+export const isReturnOpen = (status) => status === 'IN_TRANSIT'
+
+export const returnUnits = (ret) => (ret?.lines || []).reduce((sum, line) => sum + line.quantity, 0)
+
+// "2 items coming back" / "2 items back at the store"
+export function returnSummaryLine(ret) {
+  const units = returnUnits(ret)
+  const items = `${units} ${units === 1 ? 'item' : 'items'}`
+  return isReturnOpen(ret?.status) ? `${items} coming back` : `${items} back at the store`
+}
+
+// What the receive call sends: every line, restocked only when ticked.
+export const receiveDecisions = (lines, restock = {}) =>
+  (lines || []).map((_, index) => ({ index, restock: Boolean(restock[index]) }))
+
+export const hasReturnPhoto = (line) => Boolean(line?.hasPhoto)

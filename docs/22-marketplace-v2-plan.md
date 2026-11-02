@@ -11,7 +11,8 @@ Status: **in progress.** Written after the project review with the head.
 | 3 Customer area flow, catalogue views, address book | **done**: 3a server; 3b website (area picker with overlaps, borders and map pin; range pills inside the chosen blocks; products grouped with offers; checkout with saved addresses and a delivery pin; cart delivery warning; saved-addresses page); 3c mobile customer app (same area flow, catalogue products with offers, address book, delivery pin at checkout, cart area warning) plus an area-only "also sold by" list on the website and mobile product pages |
 | 4 Picker and substitution | **done** (server, tests, partner picker screens, brand Team picker accounts, customer picker label, seed, docs) |
 | 5 Split the apps | **done** (three app-type sign-ins, new `delivery/` app, `partner/` reduced to the Staff app, rider tests moved, docs 20/23) |
-| 6 to 7 | not started |
+| 6 Partial delivery and door returns | **done** (server, tests, delivery app line review, Staff app and web returned-goods inbox, customer display, admin returns, seed, docs) |
+| 7 Polish, docs, release | not started |
 
 This plan covers eight changes: real zones, customer area choice, global categories, a shared
 product catalogue, three separate apps, a picker role, returns, and saved addresses. It ends
@@ -309,7 +310,8 @@ sharing lives only in Delivery. Root scripts became `dev:staff`,
 
 **Done when:** the three apps start and sign in only with their own roles.
 
-### Phase 6: Partial delivery at the door (M)
+### Phase 6: Partial delivery at the door (M) — done
+
 - **Server:** `Return` model and service (door source), completion with accepted and rejected quantities, order `fulfilment` and net totals, restock or write-off at the store, refunds for prepaid orders, commission and payout adjustment.
 - **Delivery app:** per-line accept or reject on completion, reasons and photo, payment collected for accepted lines only.
 - **Staff app and web (brand):** a returned-goods inbox (mark received, restock or write off).
@@ -319,6 +321,8 @@ sharing lives only in Delivery. Root scripts became `dev:staff`,
 - **Tests:** quantity rules (cannot reject more than ordered), money (accepted total, refund amounts), stock restore, payouts reduced, role access.
 
 **Done when:** a half-and-half order shows the correct totals, the rejected goods return to the store, stock is corrected, and the payout reflects it.
+
+**How it was built.** The rider's completion call now accepts `lines` and the server recomputes everything from the order: each line's `acceptedQty`/`rejectedQty` must sum to what was ordered, and refused lines need a reason (`DAMAGED`, `WRONG_ITEM`, `MISSING`, `NOT_WANTED`) with an optional private photo. The order gains `fulfilment` (`FULL`/`PARTIAL`/`NONE`), `returnedAmount`, `feeRefunded` (only a full rejection for a store-fault reason refunds the delivery fee) and `netTotal`; a half-and-half order charges COD only `netTotal`, and a prepaid order is refunded the refused value (plus the fee when it applies). A `Return` document stores the refused lines and their photos; `RETURNED` is now reachable on the order and delivery. The store takes the goods in through `POST /returns/:id/receive`, choosing per line **restock** or **write-off** (write-off is the default); restock is the only path that moves stock, with a `RETURN_RESTOCKED` movement. Brand analytics uses `netTotal` and excludes `RETURNED` orders, so the payout basis reflects returns even though the payout ledger itself is still a concept (docs/15 §7). Clients: the Delivery app's line review (kept/refused counters, reasons, camera photo, collect/refund preview), the Staff app's Returns tab and overview tile, the brand website's Returns pages, the admin website's returns list and totals, and a returned-order summary with the final total in the shopper app and both websites. Brand staff with `orders.view`/`delivery.view` receive `RETURN_IN_TRANSIT`. The seed now has orders in all three fulfilments and returns in both statuses (one restocked prepaid return, one in-transit COD return with a photo, one fully rejected COD order whose payment is cancelled). Tests: `server/tests/returns.test.js` (rules, money, stock, roles), `server/tests/integration/returns.integration.test.js` (real MongoDB), `server/tests/seedDemo.test.js`, the app suites and lint. Docs updated: 04, 05, 08, 09, 10, 11, 12, 15, 18, 19, 20, 23 and this file.
 
 ### Phase 7: Polish, docs, release (M)
 - Full demo walkthrough (§7) on a freshly seeded cluster.

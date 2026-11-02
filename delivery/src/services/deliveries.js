@@ -24,15 +24,26 @@ export async function setDeliveryStatus(id, status, failureReason) {
 }
 
 // The only way a rider marks a delivery as delivered: with the customer's six-digit code.
+// `lines` says what the customer kept and refused at the door (omitted = all accepted).
 // A non-cash payment at the door carries how it was paid, the reference and the photo.
-export async function completeDelivery(id, code, collection) {
-  const res = await api.post(`/rider/deliveries/${id}/complete`, { code, ...(collection && { collection }) })
+export async function completeDelivery(id, code, collection, lines) {
+  const res = await api.post(`/rider/deliveries/${id}/complete`, {
+    code,
+    ...(collection && { collection }),
+    ...(lines?.length && { lines }),
+  })
   return res.data.delivery
 }
 
 // Step one of a non-cash payment: a signature for THIS delivery's private folder.
 export async function requestProofUpload(deliveryId) {
   const res = await api.post(`/rider/deliveries/${deliveryId}/proof-upload`)
+  return res.data.upload
+}
+
+// Step one of a refused-item photo: a signature for THIS delivery's return folder.
+export async function requestReturnUpload(deliveryId) {
+  const res = await api.post(`/rider/deliveries/${deliveryId}/return-upload`)
   return res.data.upload
 }
 
@@ -47,6 +58,15 @@ export async function requestProofUpload(deliveryId) {
  * and MIME type), which both expo/fetch and React Native's fetch understand.
  */
 export async function uploadPaymentProof(upload, asset) {
+  return uploadPrivatePhoto(upload, asset)
+}
+
+// A refused item's photo goes through exactly the same private folder pattern.
+export async function uploadReturnPhoto(upload, asset) {
+  return uploadPrivatePhoto(upload, asset)
+}
+
+async function uploadPrivatePhoto(upload, asset) {
   if (!asset?.uri) {
     throw Object.assign(new Error('PROOF_FILE_MISSING'), {
       codeMessage: 'The photo is no longer on the phone. Take it again.',

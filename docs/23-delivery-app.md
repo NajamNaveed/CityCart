@@ -18,8 +18,8 @@ the server sections it points to.
 | Alerts | **Done** — the rider's notifications |
 | Location sharing | **Done, opt-in, foreground only** — last seen while an order is out for delivery |
 | Push notifications | **Built**; needs a real EAS build to try on a phone (Expo Go on Android cannot receive them) |
-| Returns at the door | Not built; marketplace v2 Phase 6 |
-| Tests | 140 tests in 9 suites, all mocked; lint clean |
+| Returns at the door | **Done** — per-line accept/refuse, reason, optional photo, payment for accepted goods only |
+| Tests | 154 tests in 9 suites, all mocked; lint clean |
 
 The app has **not** been run on a physical device in this environment: the
 camera upload and push need a real phone, and a real Cloudinary account.
@@ -143,6 +143,16 @@ enforce them.
 * Root scripts are `dev:delivery`, `test:delivery` (and `test:apps` for both
   staff and delivery).
 
+### 6.1 Door returns (marketplace v2 Phase 6)
+
+The customer can refuse part or all of an order at the door. The rider records it on the same completion screen (docs/22 §F, server rules in docs/08 §41.10, API in docs/05 §22f):
+
+* **Which goods were kept** — after the six-digit code is accepted, every line has `−` / `+` buttons counting `kept` and `refused`. The counts are clamped to what was ordered, so the rider cannot refuse more than the customer bought; all kept is the default and needs nothing else.
+* **Why it came back** — a refused line must have one of four reasons: **Damaged**, **Wrong item**, **Missing** (store fault) or **Not wanted**. The first three make a full refusal refund the delivery fee; `NOT_WANTED` does not. Completion stays disabled until every refused line has a reason, and the payment preview says **Collect for what they kept** (COD) or **Refund for what came back** (prepaid).
+* **Photo (optional)** — a refused line can carry one camera photo, uploaded first through `POST /rider/deliveries/:id/return-upload`, which returns a signature for that delivery's own private `returns/` folder. The path is built by the server and the photo is camera-only, like the door-payment proof; the rider can retake it or retry a failed upload, and the delivery cannot complete while an upload is in flight.
+* **Completion** — sends `{ code, collection?, lines: [{ itemId, acceptedQty, rejectedQty, reason?, photo? }] }`. The server checks counts against the order and recomputes every amount; a refused payload answers `INVALID_RETURN_QUANTITY` / `INVALID_RETURN_REASON` and the screen explains it in the rider's words. If every line is refused the order and delivery become `RETURNED` and no cash is collected; a prepaid order is refunded. Fully accepted deliveries send no `lines` and behave exactly as before.
+* **Afterwards** — refused goods appear in the Staff app's returned-goods inbox (`20-partner-app.md` §5.11), and the rider's cash view only ever counts the accepted total (`netTotal`), never the original order total.
+
 ## 7. Tests
 
 Run in `delivery/`:
@@ -152,19 +162,19 @@ npx expo lint
 npm test
 ```
 
-`npm test` runs **140 tests in 9 suites**:
+`npm test` runs **154 tests in 9 suites**:
 
 | Suite | Covers |
 |---|---|
 | `api.test.js` | base URL, `X-Client: delivery`, auth header, error messages |
 | `session.test.js` | rider-only sign-in, token storage, restore and sign-out for wrong roles |
 | `storage.test.js` | secure-storage key `citycart.delivery.session` |
-| `delivery.test.js` | status helpers, call/Maps links, address line, six-digit code validation |
+| `delivery.test.js` | status helpers, call/Maps links, address line, six-digit code validation, return line counts and payloads |
 | `push-location.test.js` | push registration/skip/unregister, tap routing, location sharing rules |
 | `paging.test.js` | the shared paged list |
 | `format.test.js` | money and time formatting |
 | `config.test.js` | API URL and environment handling |
-| `screens.test.js` | sign-in, start routing, deliveries, one delivery, cash, alerts, account, role guard |
+| `screens.test.js` | sign-in, start routing, deliveries, one delivery (line review, reasons, return photo, completion), cash, alerts, account, role guard |
 
 Server-side tests for the rider flow stay in `server/tests/`:
 `appAuth.test.js` (three-app sign-in), `riderDeliveries.test.js`,
@@ -178,7 +188,8 @@ Server-side tests for the rider flow stay in `server/tests/`:
 * No live socket updates; the list refreshes on open, every minute, and on pull.
 * No offline queue: a status change needs the server.
 * Location sharing is foreground only and stores a single point.
-* Door returns (accept/reject per line) are marketplace v2 Phase 6.
+* The refused-item photo is camera-only (no library pick), same as the door-payment proof, and was not tried against a real Cloudinary account.
+* Door returns only cover what the customer decides at the door. A return requested after delivery, or a rider pickup of accepted goods, is not built.
 * The rider's cash view shows what is unsettled; settlement is done by the brand
   on the website.
 

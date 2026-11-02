@@ -315,6 +315,19 @@ refundedAt
 
 Refunds must be authorized by the appropriate role.
 
+## Door returns (docs/22 §F)
+
+Refused goods are settled by the delivery completion, inside its transaction:
+
+* **Cash on delivery** collects the accepted total only: `Payment.amount` becomes
+  the order's `netTotal`. When nothing was accepted, the payment was never
+  collected, so it becomes `CANCELLED` (no `paidAt`, no receipt, no collector).
+* **Prepaid** keeps its original `Payment.amount` and pushes a refund of the
+  refused goods into `refunds[]`; the payment becomes `PARTIALLY_REFUNDED`, or
+  `REFUNDED` when everything came back. The delivery fee joins that refund only
+  when the whole order was refused for a store-fault reason.
+* A refund never changes who collected the cash or edits an issued receipt.
+
 ---
 
 # 14. Payment Security
@@ -603,6 +616,11 @@ never created, edited or deleted through the API.
   the cash, the payment id, the reference). The brand: its own, with `payments.view`,
   including who collected the cash and the payment reference. Super admin: all.
   Riders: none. See `20-partner-app.md` §4.
+* **Door returns (docs/22 §F).** A partially refused cash order is paid at the
+  door for the accepted units only, so its receipt shows `Payment.amount` (the net
+  total). A fully refused cash order has no payment and therefore no receipt; the
+  line snapshot on a partial receipt is still the ordered one, like the order
+  itself, and the `netTotal` is what was collected.
 * **Paid at the door.** When a COD order was paid by bank transfer, wallet or card
   machine, the receipt snapshots `collectionMethod`, `collectionWallet` and
   `collectionReference` instead of a cash collector (§31). The customer sees how it

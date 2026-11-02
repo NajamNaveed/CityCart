@@ -1,4 +1,4 @@
-import { addressLine, isClosed, locationMapUrl, telUrl } from '../src/utils/delivery'
+import { addressLine, isClosed, isReturnOpen, locationMapUrl, reasonLabel, receiveDecisions, returnSummaryLine, returnUnits, telUrl } from '../src/utils/delivery'
 import { sentence, validateLogin } from '../src/utils/validation'
 
 describe('delivery status and links', () => {
@@ -21,6 +21,40 @@ describe('delivery status and links', () => {
   it('shows a one-line address', () => {
     expect(addressLine({ address: 'House 5, Street 2', city: 'Faisalabad' })).toBe('House 5, Street 2, Faisalabad')
     expect(addressLine(null)).toBe('')
+  })
+})
+
+describe('returned goods', () => {
+  const ret = (over = {}) => ({
+    status: 'IN_TRANSIT',
+    lines: [{ quantity: 1 }, { quantity: 2 }],
+    ...over,
+  })
+
+  it('counts the units coming back, and says whether they are still on the way', () => {
+    expect(returnUnits(ret())).toBe(3)
+    expect(returnUnits(null)).toBe(0)
+    expect(returnSummaryLine(ret())).toBe('3 items coming back')
+    expect(returnSummaryLine(ret({ status: 'RECEIVED', lines: [{ quantity: 1 }] }))).toBe('1 item back at the store')
+    expect(isReturnOpen('IN_TRANSIT')).toBe(true)
+    expect(isReturnOpen('RECEIVED')).toBe(false)
+  })
+
+  it('names every reason the rider can give', () => {
+    expect(['DAMAGED', 'WRONG_ITEM', 'MISSING', 'NOT_WANTED'].map(reasonLabel)).toEqual(['Damaged', 'Wrong item', 'Missing', 'Not wanted'])
+    expect(reasonLabel('SOMETHING_ELSE')).toBe('Other')
+  })
+
+  it('receives every line, restocking only the ticked ones (write off by default)', () => {
+    expect(receiveDecisions([{}, {}])).toEqual([
+      { index: 0, restock: false },
+      { index: 1, restock: false },
+    ])
+    expect(receiveDecisions([{}, {}], { 1: true })).toEqual([
+      { index: 0, restock: false },
+      { index: 1, restock: true },
+    ])
+    expect(receiveDecisions(null)).toEqual([])
   })
 })
 

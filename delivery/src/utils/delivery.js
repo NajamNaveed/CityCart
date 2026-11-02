@@ -57,6 +57,8 @@ export function codeErrorMessage(err) {
 // non-cash payment waiting on the brand, or nothing for prepaid (docs/21 §I).
 export function cashSummary(delivery) {
   if (!delivery) return { kind: 'none' }
+  // Everything came back: nothing was collected and nothing is owed.
+  if (delivery.fulfilment === 'NONE') return { kind: 'none' }
   if (delivery.amountToCollect > 0) return { kind: 'collect', amount: delivery.amountToCollect }
   if (delivery.cashCollected) return { kind: 'collected' }
   // A non-cash payment at the door: no cash, and the rider only sees whether the
@@ -113,5 +115,100 @@ export function proofErrorMessage(err) {
   if (data?.code === 'PROOF_NOT_YOURS') return 'That photo does not belong to this delivery. Take it again.'
   if (data?.code === 'PAYMENT_PREPAID') return 'This order was already paid. There is nothing to collect.'
   if (data?.code === 'PAYMENT_ALREADY_COLLECTED') return 'This payment was already collected.'
+  return getErrorMessage(err)
+}
+
+/**
+ * What the customer kept and refused at the door (docs/22 §F). The rider marks
+ * each line; the server recomputes every money rule, so this is only the
+ * preview the rider sees and the payload that is sent.
+ */
+export const RETURN_REASON_OPTIONS = [
+  { reason: 'DAMAGED', label: 'Damaged', storeFault: true },
+  { reason: 'WRONG_ITEM', label: 'Wrong item', storeFault: true },
+  { reason: 'MISSING', label: 'Missing', storeFault: true },
+  { reason: 'NOT_WANTED', label: 'Not wanted', storeFault: false },
+]
+const STORE_FAULT_REASONS = new Set(RETURN_REASON_OPTIONS.filter((r) => r.storeFault).map((r) => r.reason))
+
+export const reasonLabel = (reason) => RETURN_REASON_OPTIONS.find((r) => r.reason === reason)?.label || reason
+
+// Every line starts fully accepted; the rider only changes what came back.
+export function acceptanceFrom(delivery) {
+  return (delivery?.items || []).map((item) => ({
+    itemId: item.itemId,
+    productName: item.productName,
+    quantity: item.quantity,
+    lineTotal: Number(item.lineTotal || 0),
+    acceptedQty: item.quantity,
+    rejectedQty: 0,
+    reason: null,
+    photo: null,
+    photoUri: null,
+    asset: null,
+  }))
+}
+
+export function setAcceptedQty(line, acceptedQty) {
+  const accepted = Math.max(0, Math.min(line.quantity, acceptedQty))
+  return {
+    ...line,
+    acceptedQty: accepted,
+    rejectedQty: line.quantity - accepted,
+    // A fully kept line has no reason or photo to send; a newly refused one
+    // starts with no reason so the rider must choose one.
+    ...(accepted === line.quantity && { reason: null }),
+  }
+}
+
+const lineShare = (line, quantity) =>
+  line.quantity > 0 ? Math.round((line.lineTotal * quantity * 100) / line.quantity) / 100 : 0
+
+/**
+ * The amount for the accepted units only, plus the delivery fee unless every
+ * line was refused for a store-fault reason (the agreed fee rule). A prepaid
+ * order's `netTotal` is what the customer keeps; the difference is refunded.
+ */
+export function acceptanceSummary(lines, delivery) {
+  const list = lines || []
+  const acceptedTotal = Math.round(list.reduce((sum, line) => sum + lineShare(line, line.acceptedQty), 0) * 100) / 100
+  const returnedTotal = Math.round(list.reduce((sum, line) => sum + lineShare(line, line.rejectedQty), 0) * 100) / 100
+  const fee = Number(delivery?.deliveryFee || 0)
+  const everythingRejected = list.length > 0 && acceptedTotal === 0 && returnedTotal > 0
+  const hasStoreFault = list.some((line) => line.rejectedQty > 0 && STORE_FAULT_REASONS.has(line.reason))
+  const feeRefunded = everythingRejected && hasStoreFault
+  return {
+    acceptedTotal,
+    returnedTotal,
+    fee,
+    feeRefunded,
+    everythingRejected,
+    hasStoreFault,
+    netTotal: Math.round((acceptedTotal + (feeRefunded ? 0 : fee)) * 100) / 100,
+    refundTotal: Math.round((returnedTotal + (feeRefunded ? fee : 0)) * 100) / 100,
+  }
+}
+
+// One entry per order line, exactly what the server's completion expects.
+export function linesPayload(lines) {
+  return (lines || []).map((line) => ({
+    itemId: line.itemId,
+    acceptedQty: line.acceptedQty,
+    rejectedQty: line.rejectedQty,
+    ...(line.rejectedQty > 0 && line.reason && { reason: line.reason }),
+    ...(line.rejectedQty > 0 && line.photo && { photo: line.photo }),
+  }))
+}
+
+export const acceptanceReady = (lines) => (lines || []).every((line) => line.rejectedQty === 0 || Boolean(line.reason))
+
+export function returnErrorMessage(err) {
+  const data = err?.response?.data
+  if (err?.codeMessage) return err.codeMessage
+  if (data?.code === 'INVALID_RETURN_QUANTITY') return 'More units were refused than were ordered. Check the counts.'
+  if (data?.code === 'INVALID_RETURN_REASON') return 'Choose why each refused item came back.'
+  if (data?.code === 'INVALID_RETURN_LINES') return 'Every item must be counted exactly once. Reload and try again.'
+  if (data?.code === 'RETURN_PHOTO_NOT_CONFIGURED') return 'Return photos are not set up yet. Complete without a photo.'
+  if (data?.code === 'RETURN_PHOTO_NOT_YOURS') return 'That photo does not belong to this delivery. Take it again.'
   return getErrorMessage(err)
 }

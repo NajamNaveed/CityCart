@@ -98,6 +98,7 @@ describe('overview', () => {
     serve({
       'GET /deliveries': (config) => ({ data: { pagination: { total: counts[config.params.status] } } }),
       'GET /payments/cash/outstanding': { data: { collectors: [{ collectorId: 'c1', total: 1000 }, { collectorId: 'c2', total: 250 }] } },
+      'GET /returns/summary': { data: { summary: { IN_TRANSIT: { count: 2, returnedSubtotal: 3000 }, RECEIVED: { count: 1, returnedSubtotal: 500 } } } },
     })
 
   it('greets the person and shows what is happening, with cash still held by riders', async () => {
@@ -111,6 +112,8 @@ describe('overview', () => {
     expect(text).toMatch(/Delivered \| 40/)
     expect(text).toMatch(/Rs 1,250/)
     expect(text).toMatch(/2 people to hand it over/)
+    expect(text).toMatch(/Returns to receive \| 2/)
+    expect(text).toMatch(/Rs 3,000 coming back/)
   })
 
   it('opens the delivery list already filtered when a tile is tapped', async () => {
@@ -118,6 +121,8 @@ describe('overview', () => {
     const screen = await show(<Overview />, { auth: member(...ALL) })
     await pressByLabel(screen, 'Failed')
     expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/shipments', params: { status: 'FAILED' } })
+    await pressByLabel(screen, 'Returns to receive')
+    expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/returns', params: { status: 'IN_TRANSIT' } })
     await pressByLabel(screen, 'Cash with riders')
     expect(mockRouter.push).toHaveBeenLastCalledWith('/money')
   })

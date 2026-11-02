@@ -102,6 +102,36 @@ export async function decideProof(paymentId, verification, note) {
   return res.data.proof
 }
 
+// --- Returned goods (delivery.view to see, delivery.manage to receive) ---
+// The brand's door returns (docs/22 §F). Receiving is the only place stock comes
+// back: the default is to write the goods off, and only ticked lines are restocked.
+export async function fetchReturns(status, page = 1) {
+  const res = await api.get('/returns', { params: { ...(status && { status }), page, limit: PAGE_SIZE } })
+  return pageOf(res, 'returns')
+}
+
+export async function fetchReturnsSummary() {
+  const res = await api.get('/returns/summary')
+  return res.data.summary
+}
+
+export async function fetchReturn(id) {
+  const res = await api.get(`/returns/${id}`)
+  return res.data.return
+}
+
+// A short-lived signed link to one refused line's private photo.
+export async function fetchReturnPhotoLink(id, line) {
+  const res = await api.get(`/returns/${id}/photo`, { params: { line } })
+  return res.data
+}
+
+// decisions: [{ index, restock }] — a line without one keeps its safe default.
+export async function receiveReturn(id, decisions) {
+  const res = await api.post(`/returns/${id}/receive`, { decisions })
+  return res.data.return
+}
+
 // --- Overview: a few small counts, only for what this person may see ---
 const COUNTED_DELIVERIES = ['READY_FOR_PICKUP', 'PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'FAILED', 'DELIVERED']
 
@@ -111,12 +141,12 @@ async function countDeliveries(status) {
 }
 
 /**
- * { counts: { READY_FOR_PICKUP: n, ... } | null, cash: { total, holders } | null, failed: [...] }
+ * { counts: { READY_FOR_PICKUP: n, ... } | null, cash: { total, holders } | null, returns: { incoming, total } | null }
  * A part the person may not see (or that fails) comes back null, so the screen shows
  * what it can and never an error for something they were never meant to see.
  */
-export async function fetchOverview({ deliveries, money }) {
-  const [counts, cash] = await Promise.all([
+export async function fetchOverview({ deliveries, money, returns }) {
+  const [counts, cash, returned] = await Promise.all([
     deliveries
       ? Promise.all(COUNTED_DELIVERIES.map(async (s) => [s, await countDeliveries(s)])).then(Object.fromEntries).catch(() => null)
       : null,
@@ -125,8 +155,16 @@ export async function fetchOverview({ deliveries, money }) {
           .then((collectors) => ({ total: collectors.reduce((sum, c) => sum + c.total, 0), holders: collectors.length }))
           .catch(() => null)
       : null,
+    returns
+      ? fetchReturnsSummary()
+          .then((summary) => ({
+            incoming: summary.IN_TRANSIT?.count || 0,
+            incomingTotal: summary.IN_TRANSIT?.returnedSubtotal || 0,
+          }))
+          .catch(() => null)
+      : null,
   ])
-  return { counts, cash }
+  return { counts, cash, returns: returned }
 }
 
 // "On the road" is three delivery statuses to the person reading the screen.
@@ -156,4 +194,10 @@ export const SHIPMENT_FILTERS = [
   ['DELIVERED', 'Delivered'],
   ['FAILED', 'Failed'],
   ['RETURNED', 'Returned'],
+]
+
+export const RETURN_FILTERS = [
+  [undefined, 'All'],
+  ['IN_TRANSIT', 'On the way'],
+  ['RECEIVED', 'Received'],
 ]

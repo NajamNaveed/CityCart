@@ -76,7 +76,7 @@ export default function MyOrders() {
                       {o.items.map((i) => `${i.productName} × ${i.quantity}`).join(', ')}
                     </span>
                   </span>
-                  <span className="text-right font-semibold text-ink">{formatPrice(o.total)}</span>
+                  <span className="text-right font-semibold text-ink">{formatPrice(o.netTotal ?? o.total)}</span>
                 </Link>
               </li>
             ))}

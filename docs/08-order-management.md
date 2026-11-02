@@ -1191,6 +1191,57 @@ Tests: `server/tests/integration/picker.integration.test.js` (queue isolation,
 privacy, claim races, line rules, proposal + acceptance + reservation, pack and
 delivery, substitute search), plus the Staff app screen tests.
 
+## 41.10 Door returns (added November 2026, Phase 6)
+
+A customer can only refuse goods at the door, while the rider is there
+(`22-marketplace-v2-plan.md` §F). A return request after delivery is out of scope
+for v2.
+
+```text
+order OUT_FOR_DELIVERY
+  rider completes with per-line accepted/rejected quantities
+    nothing rejected     → DELIVERED, fulfilment FULL, netTotal = total
+    some rejected        → DELIVERED, fulfilment PARTIAL, netTotal = total − refused goods
+    everything rejected  → RETURNED, fulfilment NONE, netTotal = total − goods − fee (only under the fee rule)
+  refused goods          → Return (DOOR, IN_TRANSIT) and the delivery keeps returnId
+  store marks received   → Return RECEIVED, per line restock or write off
+```
+
+**Quantity rules.** The rider sends one line per order item. `acceptedQty` and
+`rejectedQty` are whole numbers, must add up to the ordered quantity, and a
+rejection needs a reason (`DAMAGED`, `WRONG_ITEM`, `NOT_WANTED`, `MISSING`).
+The client can never reject more than was ordered; the server recomputes every
+number and ignores any client total.
+
+**Money rules.** The customer pays for accepted units only (decision D7).
+Cash on delivery collects `netTotal`; a fully rejected cash order has nothing to
+collect, so its payment becomes `CANCELLED` and no receipt is issued. A prepaid
+order keeps its original payment amount and refunds the refused goods into the
+existing `Payment.refunds[]`; the payment becomes `PARTIALLY_REFUNDED` (or
+`REFUNDED` when everything came back). The delivery fee is refunded only when
+every line was refused and at least one reason is the store's fault (D6).
+
+**Stock.** Refused goods are not sellable until the store says so. Receiving a
+return records a per-line decision; only `restock: true` adds the units back
+(`RETURN_RESTOCKED` inventory movement). Write-off is the default, so damaged or
+missing goods never re-enter stock by accident.
+
+**Commission and payouts.** There is no payout ledger yet (docs/15 is still a
+design). Revenue in analytics already uses `netTotal` for delivered orders and
+excludes `RETURNED` orders, so a later payout calculation subtracts refused goods
+without a second adjustment.
+
+**Notifications.** The brand's order/delivery staff get `RETURN_IN_TRANSIT` when
+the goods are on their way; receiving them is the brand's own action and sends
+nothing further. The customer gets the normal delivery notification, a
+`REFUND_ISSUED` notification for prepaid money, and the order screen shows what
+arrived, what came back and the final total.
+
+Tests: `server/tests/returns.test.js` (pure quantity and money rules),
+`server/tests/integration/returns.integration.test.js` (role access, tenant
+isolation, receive races, restock, refunds, net totals, delivery/order status),
+plus seed checks for full, partial and fully rejected orders.
+
 ---
 
 ## Next Document
