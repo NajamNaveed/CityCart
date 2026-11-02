@@ -58,7 +58,7 @@ describe('POST /api/v1/auth/partner/login', () => {
     expect(res.body.code).toBe('PARTNER_APP_ONLY');
   });
 
-  it.each(['RIDER', 'BRAND_EMPLOYEE'])('%s: token in the body, no cookie, marked as a partner token with a staff-length life', async (role) => {
+  it.each(['RIDER', 'BRAND_EMPLOYEE', 'PICKER'])('%s: token in the body, no cookie, marked as a partner token with a staff-length life', async (role) => {
     const user = await accountExists(role);
 
     const res = await login();
@@ -131,7 +131,16 @@ describe('Bearer tokens on the API', () => {
     expect(res.body.user.permissions).toEqual(['orders.view']);
   });
 
-  it.each(['RIDER', 'BRAND_EMPLOYEE', 'BRAND_ADMIN'])('%s: a bearer token WITHOUT the partner mark is refused (WEB_ONLY)', async (role) => {
+  it('a partner token works for a picker, with no brand-team permissions', async () => {
+    const user = fakeUser('PICKER');
+    User.findById.mockResolvedValue(user);
+    const res = await me(...bearer(tokenFor(user, { client: 'partner' })));
+    expect(res.status).toBe(200);
+    expect(res.body.user).toMatchObject({ role: 'PICKER', brandId: String(brandId) });
+    expect(res.body.user.permissions).toBeUndefined();
+  });
+
+  it.each(['RIDER', 'BRAND_EMPLOYEE', 'PICKER', 'BRAND_ADMIN'])('%s: a bearer token WITHOUT the partner mark is refused (WEB_ONLY)', async (role) => {
     const user = fakeUser(role);
     User.findById.mockResolvedValue(user);
     const res = await me(...bearer(tokenFor(user)));

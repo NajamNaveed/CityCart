@@ -55,6 +55,12 @@ export default function OrderChangePrompt({ order, adjustment, onChanged, onMess
         <StatusPill value={adjustment.status} />
       </div>
 
+      {adjustment.proposedByRole === 'PICKER' && (
+        <p className="mt-3 inline-flex rounded-full bg-white px-3 py-1 text-[12px] font-medium text-ink">
+          Suggested by the store’s picker.
+        </p>
+      )}
+
       <p className="mt-4 text-sm leading-relaxed text-ink/90">{adjustment.note}</p>
 
       <ul className="mt-3 space-y-1.5 text-sm text-ink/90">

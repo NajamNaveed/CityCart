@@ -2,10 +2,12 @@ import { Redirect } from 'expo-router'
 import { useAuth } from '../hooks/useAuth'
 
 // The start screen only decides where each person belongs: the sign-in, the
-// rider's deliveries, or the records screens of a brand team member.
+// rider's deliveries, the picker's queue, or a brand team member's records.
 export default function Start() {
   const { status, user } = useAuth()
   if (status === 'loading') return null
   if (status !== 'signedIn') return <Redirect href="/login" />
-  return <Redirect href={user?.role === 'RIDER' ? '/deliveries' : '/overview'} />
+  if (user?.role === 'RIDER') return <Redirect href="/deliveries" />
+  if (user?.role === 'PICKER') return <Redirect href="/queue" />
+  return <Redirect href="/overview" />
 }

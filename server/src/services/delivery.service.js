@@ -336,6 +336,33 @@ async function getDeliveryCodeForCustomer(customerId, deliveryId) {
   return delivery.deliveryCode;
 }
 
+/**
+ * The delivery record that appears when a packed order is ready for a rider
+ * (docs/11 §11). Its unique orderId means a duplicate pack can never create a
+ * second one; callers run this inside the status-change transaction.
+ */
+async function createReadyForPickupDelivery(order, { session } = {}) {
+  const address =
+    typeof order.shippingAddress.toObject === 'function'
+      ? order.shippingAddress.toObject()
+      : order.shippingAddress;
+  const [delivery] = await Delivery.create(
+    [
+      {
+        orderId: order._id,
+        brandId: order.brandId,
+        customerId: order.customerId,
+        status: 'READY_FOR_PICKUP',
+        address,
+        deliveryFee: order.deliveryFee,
+        deliveryCode: generateDeliveryCode(),
+      },
+    ],
+    { session }
+  );
+  return delivery;
+}
+
 module.exports = {
   listDeliveries,
   getDeliveryForUser,
@@ -343,4 +370,5 @@ module.exports = {
   updateDelivery,
   assignRider,
   getDeliveryCodeForCustomer,
+  createReadyForPickupDelivery,
 };

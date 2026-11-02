@@ -91,7 +91,7 @@ const userSchema = new mongoose.Schema(
           }
           return true;
         },
-        message: 'brandId is only allowed for BRAND_ADMIN, BRAND_EMPLOYEE and RIDER roles.',
+        message: 'brandId is only allowed for BRAND_ADMIN, BRAND_EMPLOYEE, PICKER and RIDER roles.',
       },
     },
     phone: {

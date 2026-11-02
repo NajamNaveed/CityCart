@@ -1991,6 +1991,48 @@ Deactivating a rider (`PATCH /riders/:id` with `isActive: false`) answers `409 R
 
 ---
 
+# 22c. Picker Endpoints
+
+Base `/api/v1/picker` (role `PICKER` only; the brand always comes from the
+account and every query is pinned to it, anything else is `404`):
+
+```text
+GET   /picker                       pick queue (?page, ?limit) -> { orders, pagination }
+GET   /picker/:id                   one order (the picker's own, or unclaimed and waiting)
+POST  /picker/:id/claim             take the order: CONFIRMED -> PROCESSING
+PATCH /picker/:id/items/:itemId     { pickStatus: PICKED|SHORT|UNAVAILABLE, pickedQty? }
+POST  /picker/:id/propose           { note, restockRemoved?, substitutes? } -> 201 adjustment
+POST  /picker/:id/pack              PROCESSING -> READY_FOR_SHIPMENT (creates the delivery)
+GET   /picker/products?q=           same-brand active listings to offer as a substitute -> { products, pagination }
+```
+
+The queue holds accepted orders (`CONFIRMED`) and orders in picking
+(`PROCESSING`) that are unclaimed or claimed by the signed-in picker. A picker's
+view contains the order number, status, `createdAt`, pick times, the customer's
+**first name**, item names/SKUs/images/quantities, `pickStatus`, `pickedQty`,
+`claimedByMe`, and the waiting proposal's note/expiry. It never contains the
+customer's phone, delivery address, prices, totals or payment details, and
+`GET /picker/products` returns only `_id`, `name`, `sku` and `image` (no price).
+
+`PATCH .../items/:itemId`: `PICKED` (whole quantity), `SHORT` (integer
+`pickedQty` from 1 to quantity − 1) or `UNAVAILABLE` (`pickedQty` 0). The picker
+must hold the claim and the order must be `PROCESSING` with no waiting proposal.
+
+`POST .../propose` takes only the short/unavailable lines. Each substitute is
+`{ orderItemId, productId, quantity }`, must be a different listing of the same
+brand, and is reserved in stock in the same transaction. The proposal is the
+existing `OrderAdjustment` flow, records `proposedBy` (the picker) and
+`proposedByRole: "PICKER"`, and expires after 24 hours.
+
+Errors: `409 PICK_TAKEN`, `409 NOT_PICKABLE`, `409 ADJUSTMENT_PENDING`,
+`409 CLAIM_REQUIRED`, `409 NOT_YOUR_ORDER`, `409 NOT_PICKING`,
+`409 ORDER_CHANGED`, `409 PICKING_INCOMPLETE` (not every line marked),
+`409 NOTHING_TO_PROPOSE`, `409 DUPLICATE_SUBSTITUTE`,
+`409 SUBSTITUTE_NOT_SHORT`, `400 INVALID_PICKED_QUANTITY`, and the adjustment
+errors for substitutes. See `20-partner-app.md` and `22-marketplace-v2-plan.md` §E.
+
+---
+
 # 23. Analytics Endpoints
 
 Base:

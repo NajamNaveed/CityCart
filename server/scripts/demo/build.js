@@ -53,6 +53,17 @@ function businessHours({ open, close, closed }) {
   return Object.fromEntries(DAYS.map((day) => [day, closed.includes(day) ? 'Closed' : `${open} to ${close}`]));
 }
 
+// One picker for each active demo brand (docs/22 §E): a brand account that
+// signs in on the partner app and only sees the pick queue.
+const PICKERS = {
+  loom: { name: 'Areeba Saleem', email: 'areeba.saleem@citycart.demo', phone: '+92 321 4487001' },
+  rangrez: { name: 'Fahad Iqbal', email: 'fahad.iqbal@citycart.demo', phone: '+92 302 7738190' },
+  mehr: { name: 'Nimra Aslam', email: 'nimra.aslam@citycart.demo', phone: '+92 345 6102287' },
+  sukoon: { name: 'Tahir Mehmood', email: 'tahir.mehmood@citycart.demo', phone: '+92 311 9054326' },
+  zaitoon: { name: 'Rabia Sattar', email: 'rabia.sattar@citycart.demo', phone: '+92 312 6680142' },
+  naqsh: { name: 'Waleed Akhtar', email: 'waleed.akhtar@citycart.demo', phone: '+92 301 3397650' },
+};
+
 // ── the builder ──────────────────────────────────────────────────────────────
 function buildDataset({ now = new Date(), hashes }) {
   const random = makeRandom(20260501);
@@ -296,7 +307,24 @@ function buildDataset({ now = new Date(), hashes }) {
       return user;
     });
 
-    brands.push({ def: b, doc: brandDoc, owner, store: storeDoc, categoryByKey, products, staff, riders, terminatedAt });
+    // Pickers: a brand account with no team permissions, listed with the staff
+    // in the brand's Team page so the owner can see and switch it off.
+    const pickers = (PICKERS[b.key] ? [PICKERS[b.key]] : []).map((p, i) => {
+      const joined = new Date(createdAt.getTime() + (5 + i) * DAY);
+      const user = userDoc({
+        name: p.name, email: p.email, phone: p.phone, role: 'PICKER', passwordHash: hashes.demo,
+        brandId, createdAt: joined, restrictedUntil,
+      });
+      ds.users.push(user);
+      ds.employees.push({
+        _id: new ObjectId(), userId: user._id, brandId, permissions: [],
+        permissionHistory: [{ by: owner._id, at: joined, added: [], removed: [] }],
+        jobTitle: 'Picker', isActive: true, createdAt: joined, updatedAt: joined,
+      });
+      return user;
+    });
+
+    brands.push({ def: b, doc: brandDoc, owner, store: storeDoc, categoryByKey, products, staff, riders, pickers, terminatedAt });
   }
   const brandByKey = Object.fromEntries(brands.map((b) => [b.def.key, b]));
 
@@ -447,6 +475,7 @@ function buildDataset({ now = new Date(), hashes }) {
           cursor = new Date(cursor.getTime() - between(1, i >= path.length - 2 ? 40 : 18) * HOUR);
         }
       }
+      const packedEvent = events.find((e) => e.status === 'READY_FOR_SHIPMENT');
       const byFor = (s) => {
         if (s === 'PENDING' || (s === 'CANCELLED')) return customer.doc._id;
         if (brandKey === 'quick' && s === 'REJECTED') return admin._id;
@@ -484,7 +513,8 @@ function buildDataset({ now = new Date(), hashes }) {
         },
         subtotal, deliveryFee, discount, tax, total, paymentMethod: paidOnline ? 'ONLINE_GATEWAY' : 'COD',
         paymentStatus: status === 'CANCELLED' || status === 'REJECTED' ? 'CANCELLED' : status === 'DELIVERED' ? 'PAID' : 'PENDING',
-        currency: 'PKR', orderStatus: status, statusHistory, ...(notes && { notes }), createdAt, updatedAt: finishedAt,
+        currency: 'PKR', orderStatus: status, statusHistory, ...(notes && { notes }),
+        ...(packedEvent && { packedAt: packedEvent.at }), createdAt, updatedAt: finishedAt,
       };
       if (flags.fullRefund) order.paymentStatus = 'REFUNDED';
       if (flags.partRefund) order.paymentStatus = 'PARTIALLY_REFUNDED';
@@ -564,6 +594,23 @@ function buildDataset({ now = new Date(), hashes }) {
     order.orderNumber = `CC-${year}-${pad(perYear[year], 6)}`;
   });
   for (const [year, seq] of Object.entries(perYear)) ds.counters.push({ _id: `order-${year}`, seq });
+
+  // ── picking: accepted orders wait in the queue; one picker has started an order (docs/22 §E) ──
+  // CONFIRMED orders are already waiting, unclaimed. A PROCESSING order with a
+  // picker shows what a half-picked order looks like: only the last line to go.
+  const loomPicking = orders.find(({ order, brand }) => brand.def.key === 'loom' && order.orderStatus === 'PROCESSING');
+  if (loomPicking && loomPicking.brand.pickers.length) {
+    const picker = loomPicking.brand.pickers[0];
+    const startEvent = loomPicking.events.find((e) => e.status === 'PROCESSING');
+    loomPicking.order.pickerId = picker._id;
+    loomPicking.order.pickStartedAt = new Date(Math.min(now.getTime(), startEvent.at.getTime() + 5 * 60 * 1000));
+    loomPicking.order.items.forEach((item, i) => {
+      if (i < loomPicking.order.items.length - 1) {
+        item.pickStatus = 'PICKED';
+        item.pickedQty = item.quantity;
+      }
+    });
+  }
 
   // ── a few COD orders were paid at the door by transfer, wallet or card (docs/21 §I) ──
   // The money was received (the orders are paid), but nobody holds cash: each carries a
@@ -658,7 +705,7 @@ function buildDataset({ now = new Date(), hashes }) {
     total: subtotal + order.deliveryFee - order.discount + order.tax,
   });
 
-  const addAdjustment = ({ order, status, at, supplyAllBut, wantSubstitute, respondedAt, action, responseNote, restockRemoved, noteText }) => {
+  const addAdjustment = ({ order, status, at, supplyAllBut, wantSubstitute, respondedAt, action, responseNote, restockRemoved, noteText, proposer, proposerRole }) => {
     const { brand } = orderEntryById.get(String(order._id));
     const item = order.items[0];
     const supplyQuantity = Math.max(0, item.quantity - supplyAllBut);
@@ -680,7 +727,7 @@ function buildDataset({ now = new Date(), hashes }) {
     const totalsBefore = totalsSnapshot(order, order.subtotal);
     const totalsAfter = totalsSnapshot(order, order.subtotal - item.totalPrice + suppliedValue + (substitute ? substitute.unitPrice * substitute.quantity : 0));
     const totalsAfterRemoval = totalsSnapshot(order, order.subtotal - item.totalPrice + suppliedValue);
-    const proposedBy = handler(brand, 'orders.adjust');
+    const proposedBy = proposer || handler(brand, 'orders.adjust');
 
     const adjustment = {
       _id: new ObjectId(), orderId: order._id, brandId: order.brandId, customerId: order.customerId, status,
@@ -691,6 +738,7 @@ function buildDataset({ now = new Date(), hashes }) {
       }],
       stockReservations: substitute ? [{ productId: substitute.productId, quantity: substitute.quantity }] : [],
       restockRemoved: !!restockRemoved, totalsBefore, totalsAfter, totalsAfterRemoval, proposedBy: proposedBy._id,
+      ...(proposerRole && { proposedByRole: proposerRole }),
       expiresAt: new Date(at.getTime() + 24 * HOUR), respondedAt: respondedAt || null,
       response: status === 'PROPOSED' ? null : { action, by: status === 'EXPIRED' ? undefined : order.customerId, at: respondedAt, note: responseNote },
       createdAt: at, updatedAt: respondedAt || at,
@@ -747,6 +795,32 @@ function buildDataset({ now = new Date(), hashes }) {
       order: pendingEntry.order, status: 'EXPIRED', at, supplyAllBut: 1, wantSubstitute: true,
       respondedAt: new Date(at.getTime() + 24 * HOUR), action: 'EXPIRED',
       noteText: 'One unit was damaged in the workshop. We can replace it with the same product in another shade.',
+    });
+  }
+
+  // A picker found one unit missing and asked the customer. The order stays with
+  // that picker, the line is short, and the proposal says a picker suggested it.
+  const pickerEntry = orders.find(({ order, brand }) => brand.pickers.length
+    && order.orderStatus === 'PROCESSING'
+    && !order.activeAdjustmentId
+    && !order.pickerId);
+  if (pickerEntry) {
+    const picker = pickerEntry.brand.pickers[0];
+    const item = pickerEntry.order.items[0];
+    const at = new Date(now.getTime() - 4 * HOUR);
+    const supplied = Math.max(0, item.quantity - 1);
+    pickerEntry.order.pickerId = picker._id;
+    pickerEntry.order.pickStartedAt = new Date(at.getTime() - HOUR);
+    pickerEntry.order.items.forEach((line, i) => {
+      const units = i === 0 ? supplied : line.quantity;
+      line.pickStatus = units === 0 ? 'UNAVAILABLE' : units < line.quantity ? 'SHORT' : 'PICKED';
+      line.pickedQty = units;
+    });
+    usedOrders.add(pickerEntry.order._id);
+    addAdjustment({
+      order: pickerEntry.order, status: 'PROPOSED', at, supplyAllBut: 1, wantSubstitute: true,
+      proposer: picker, proposerRole: 'PICKER',
+      noteText: 'While picking your order I found one unit with a small mark. I can send the rest and offer a similar piece instead.',
     });
   }
 

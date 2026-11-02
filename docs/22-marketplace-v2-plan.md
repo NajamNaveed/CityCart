@@ -9,7 +9,8 @@ Status: **in progress.** Written after the project review with the head.
 | 1b Shared catalogue and listings | **done** (server, tests, admin Catalogue page, brand product form, CSV import, seed, docs) |
 | 2 Zones: polygon blocks | **done** (server, tests, admin map editor, seed, docs) |
 | 3 Customer area flow, catalogue views, address book | **done**: 3a server; 3b website (area picker with overlaps, borders and map pin; range pills inside the chosen blocks; products grouped with offers; checkout with saved addresses and a delivery pin; cart delivery warning; saved-addresses page); 3c mobile customer app (same area flow, catalogue products with offers, address book, delivery pin at checkout, cart area warning) plus an area-only "also sold by" list on the website and mobile product pages |
-| 4 to 7 | not started |
+| 4 Picker and substitution | **done** (server, tests, partner picker screens, brand Team picker accounts, customer picker label, seed, docs) |
+| 5 to 7 | not started |
 
 This plan covers eight changes: real zones, customer area choice, global categories, a shared
 product catalogue, three separate apps, a picker role, returns, and saved addresses. It ends
@@ -146,7 +147,9 @@ Flow:
 4. The customer accepts, removes, or cancels (existing flow, including expiry and the push notification).
 5. **Packed:** the picker confirms. The order moves on to ready-for-pickup and the existing rider flow.
 
-Data: order gets `pickerId`, `pickStartedAt`, `packedAt`, and per line `pickStatus`, `pickedQty`. New order statuses are needed (for example `PICKING`, `PACKED`). Before adding them, read the current status list in `order.model.js`. If a status like `PREPARING` already exists, reuse it instead of adding a duplicate. Stock changes use the existing inventory movements.
+Data: order gets `pickerId`, `pickStartedAt`, `packedAt`, and per line `pickStatus`, `pickedQty`. No new order statuses were added: claiming moves `CONFIRMED → PROCESSING` and packing moves `PROCESSING → READY_FOR_SHIPMENT`, so the existing dashboard, rider flow and stock movements are unchanged. Stock changes use the existing inventory movements.
+
+**Branch note:** the plan says "queue of his branch", but an order carries no fulfilment branch and inventory is held per brand, so the queue is brand-wide. A branch-scoped queue would first need a branch on the order (and a decision on which branch fulfils an online order) — not invented here.
 
 ### F. Partial delivery at the door (returns, v2 scope)
 
@@ -263,7 +266,10 @@ Split into **1a (global categories, done)** and **1b (catalogue and listings, do
 
 **Done when:** all four scenarios work end to end on both website and mobile: single block, overlap with both selected, border user choosing manually, and Samanabad customer pinning D Ground.
 
-### Phase 4: Picker and substitution (M)
+### Phase 4: Picker and substitution (M) — done
+
+**How it was built:** the server reuses `CONFIRMED`, `PROCESSING` and `READY_FOR_SHIPMENT` and adds `pickerId`, `pickStartedAt`, `packedAt` and per-line `pickStatus`/`pickedQty`. A `/picker/*` API (role `PICKER`, brand from the account) lists the brand queue, claims an order atomically, marks lines, proposes a change on short lines through the existing adjustment service (`proposedByRole: PICKER`, substitutes reserved in the same transaction) and packs, which creates the usual delivery. Serializers are allow-lists: first name and items only, never phone, address, price, total or payment. The Partner app sends pickers to a two-tab queue/settings flow and a pick screen with claim, per-line marking, substitute search, note, send, and pack confirmation. Brand admins create pickers from the web Team page (no permissions, refused for employees or with permissions). The customer proposal card adds "Suggested by the store's picker." Seed gives each active brand a picker, a mid-pick order and one pending picker proposal. Tests: `picker.integration.test.js` (isolation, privacy, claim races, line rules, proposal → acceptance → pack → delivery), employee creation, partner screen tests, and the web/mobile label. Known gap: the queue is brand-wide (see §E).
+
 - **Server:** role `PICKER`, pick queue endpoints, line pick statuses, `proposedBy` on adjustments (picker allowed to propose), new or reused order statuses, packed step.
 - **Staff app (`partner/`):** picker home with queue, pick screen (per-line picked, short, unavailable), propose substitute (same-store listings), pack confirmation. Brand admin can create pickers.
 - **Customer apps:** unchanged flow, but the proposal now notes "suggested by the store's picker".

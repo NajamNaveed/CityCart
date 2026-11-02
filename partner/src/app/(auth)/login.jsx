@@ -52,7 +52,7 @@ export default function Login() {
               CityCart Partner
             </AppText>
             <AppText variant="small" style={{ marginTop: spacing.xs }}>
-              For delivery riders and brand team members. Use the email and password your brand gave you.
+              For delivery riders, pickers and brand team members. Use the email and password your brand gave you.
             </AppText>
           </View>
 

@@ -16,7 +16,7 @@ describe('the RIDER role', () => {
     expect(ALL_ROLES).toContain(ROLES.RIDER);
     expect(BRAND_SCOPED_ROLES).toContain(ROLES.RIDER);
     expect(STAFF_ROLES).toContain(ROLES.RIDER);
-    expect(PARTNER_ROLES.slice().sort()).toEqual(['BRAND_EMPLOYEE', 'RIDER']);
+    expect(PARTNER_ROLES.slice().sort()).toEqual(['BRAND_EMPLOYEE', 'PICKER', 'RIDER']);
     expect(PARTNER_ROLES).not.toContain(ROLES.BRAND_ADMIN);
     expect(PARTNER_ROLES).not.toContain(ROLES.SUPER_ADMIN);
   });

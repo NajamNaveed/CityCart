@@ -186,7 +186,7 @@ async function buildLines(order, inputLines, { session }) {
  * Brand proposes a change (docs/21 §H.2). Substitutes are reserved in the
  * same transaction, so an oversold substitute aborts the whole proposal.
  */
-async function proposeAdjustment({ brandId, orderId, userId, note, restockRemoved = false, lines }) {
+async function proposeAdjustment({ brandId, orderId, userId, userRole, note, restockRemoved = false, lines }) {
   let order;
   let adjustment;
   try {
@@ -231,6 +231,7 @@ async function proposeAdjustment({ brandId, orderId, userId, note, restockRemove
             totalsAfter: after,
             totalsAfterRemoval: afterRemoval,
             proposedBy: userId,
+            ...(userRole && { proposedByRole: userRole }),
             expiresAt: new Date(now.getTime() + WINDOW_MS),
           },
         ],
@@ -329,6 +330,9 @@ function rewriteItems(order, adjustment, { accept }) {
         unitPrice: line.unitPrice,
         totalPrice: fromCents(toCents(line.unitPrice) * line.supplyQuantity),
         image: item.image,
+        // The units the picker could supply are, by definition, picked.
+        pickStatus: 'PICKED',
+        pickedQty: line.supplyQuantity,
       });
     }
 
@@ -342,6 +346,8 @@ function rewriteItems(order, adjustment, { accept }) {
         unitPrice: substitute.unitPrice,
         totalPrice: fromCents(toCents(substitute.unitPrice) * substitute.quantity),
         image: substitute.image,
+        pickStatus: 'PICKED',
+        pickedQty: substitute.quantity,
       });
     }
   }

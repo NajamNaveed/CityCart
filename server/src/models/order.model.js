@@ -16,6 +16,7 @@ const geoPointSchema = require('./geoPoint.schema');
  * profile change never alters an existing order.
  */
 const { ORDER_STATUSES } = require('../config/orderStatuses');
+const { PICK_STATUSES } = require('../config/pickStatuses');
 
 // Payment status is tracked independently of order status (§25, §27) —
 // these must never be merged into a single field.
@@ -57,6 +58,16 @@ const orderItemSchema = new mongoose.Schema({
   },
   image: {
     type: String,
+  },
+  // Filled in while the order is picked (docs/22 §E). A line without a status
+  // has not been looked at yet; `pickedQty` is meaningful for SHORT.
+  pickStatus: {
+    type: String,
+    enum: PICK_STATUSES,
+  },
+  pickedQty: {
+    type: Number,
+    min: 0,
   },
 });
 
@@ -172,6 +183,16 @@ const orderSchema = new mongoose.Schema(
       ref: 'OrderAdjustment',
       default: null,
     },
+    // The picker who took the order and when; `packedAt` is set when the
+    // packed order becomes READY_FOR_SHIPMENT (docs/22 §E).
+    pickerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true,
+    },
+    pickStartedAt: { type: Date, default: null },
+    packedAt: { type: Date, default: null },
     // Audit trail (docs/08 §36): who moved the order to which status, when.
     statusHistory: {
       type: [
@@ -199,6 +220,7 @@ const orderSchema = new mongoose.Schema(
 // Compound index example from §34, for the common
 // "a brand's orders by status" query pattern.
 orderSchema.index({ brandId: 1, orderStatus: 1 });
+orderSchema.index({ brandId: 1, orderStatus: 1, pickerId: 1 });
 orderSchema.index({ brandId: 1, createdAt: 1 });
 orderSchema.index({ createdAt: 1 });
 // Compound index example from §34, for "a customer's orders, newest

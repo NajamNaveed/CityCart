@@ -849,9 +849,17 @@ paymentMethod
 paymentStatus
 orderStatus
 notes
+activeAdjustmentId
+pickerId
+pickStartedAt
+packedAt
 createdAt
 updatedAt
 ```
+
+`activeAdjustmentId` points at the one waiting `OrderAdjustment` (null when none).
+`pickerId`, `pickStartedAt` and `packedAt` record who is picking the order and
+when picking started and packing finished (docs/08 §41.9).
 
 ---
 
@@ -869,7 +877,9 @@ items[]
  ├── quantity
  ├── unitPrice
  ├── totalPrice
- └── image
+ ├── image
+ ├── pickStatus      PICKED | SHORT | UNAVAILABLE (unset = not checked yet)
+ └── pickedQty       units actually found (meaningful for SHORT)
 ```
 
 The order must not depend on the current Product document to reconstruct historical pricing.

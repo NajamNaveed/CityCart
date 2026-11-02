@@ -324,7 +324,7 @@ intact and keep the native door as narrow as possible:
   short-lived, renewed and bound to the tab.
 * **Partner app exception (October 2026).** The CityCart Partner app (docs/20)
   signs in through `POST /auth/partner/login` with `X-Client: partner`. Only
-  `RIDER` and `BRAND_EMPLOYEE` accounts can; the token carries `client: "partner"`,
+  `RIDER`, `PICKER` and `BRAND_EMPLOYEE` accounts can; the token carries `client: "partner"`,
   lasts one staff session, and is renewed by signing in again (no sliding
   renewal). A bearer token without that mark is still refused for every
   non-shopper account, a partner-marked token is refused for shoppers, brand

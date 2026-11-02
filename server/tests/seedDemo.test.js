@@ -332,10 +332,28 @@ describe('demo dataset', () => {
     });
     ds.employees.forEach((e) => {
       const user = ds.users.find((u) => id(u._id) === id(e.userId));
-      expect(user.role).toBe('BRAND_EMPLOYEE');
+      expect(['BRAND_EMPLOYEE', 'PICKER']).toContain(user.role);
       expect(id(user.brandId)).toBe(id(e.brandId));
       expect(user.isActive).toBe(e.isActive);
+      // A picker's access is the pick queue alone, never brand-team permissions.
+      if (user.role === 'PICKER') expect(e.permissions).toEqual([]);
     });
+  });
+
+  it('gives every active brand a picker, with work in the queue and one picker proposal', () => {
+    const active = ds.brands.filter((b) => b.status === 'ACTIVE');
+    active.forEach((b) => {
+      const pickers = ds.users.filter((u) => u.role === 'PICKER' && id(u.brandId) === id(b._id));
+      expect(pickers).toHaveLength(1);
+    });
+    expect(ds.orders.filter((o) => ['CONFIRMED', 'PROCESSING'].includes(o.orderStatus) && !o.activeAdjustmentId).length).toBeGreaterThan(0);
+    expect(ds.orders.some((o) => o.orderStatus === 'PROCESSING' && o.pickerId && o.pickStartedAt)).toBe(true);
+
+    const proposal = ds.orderAdjustments.find((a) => a.status === 'PROPOSED' && a.proposedByRole === 'PICKER');
+    expect(proposal).toBeTruthy();
+    const order = ds.orders.find((o) => id(o._id) === id(proposal.orderId));
+    expect(id(order.pickerId)).toBe(id(proposal.proposedBy));
+    expect(order.items.some((i) => ['SHORT', 'UNAVAILABLE'].includes(i.pickStatus))).toBe(true);
   });
 
   it('adds up: item totals, order totals, payments and refunds', () => {

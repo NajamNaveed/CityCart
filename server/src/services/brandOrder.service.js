@@ -7,7 +7,7 @@ const { closeActiveAdjustment, listAdjustmentsForOrder } = require('./orderAdjus
 const { OrderError } = require('./order.service');
 const { notifyCustomerOfOrderStatus } = require('./notification.service');
 const { legalSourcesFor, brandNextStatuses } = require('../config/orderTransitions');
-const { generateDeliveryCode } = require('../utils/deliveryCode');
+const { createReadyForPickupDelivery } = require('./delivery.service');
 
 const DEFAULT_LIMIT = 20;
 
@@ -126,24 +126,7 @@ async function updateBrandOrderStatus({ brandId, orderId, status, userId }) {
     // (docs/11 §11). Only the request that won the atomic status change gets
     // here, and Delivery.orderId is unique, so there is never a duplicate.
     if (status === 'READY_FOR_SHIPMENT') {
-      const address =
-        typeof order.shippingAddress.toObject === 'function'
-          ? order.shippingAddress.toObject()
-          : order.shippingAddress;
-      await Delivery.create(
-        [
-          {
-            orderId: order._id,
-            brandId: order.brandId,
-            customerId: order.customerId,
-            status: 'READY_FOR_PICKUP',
-            address,
-            deliveryFee: order.deliveryFee,
-            deliveryCode: generateDeliveryCode(),
-          },
-        ],
-        { session }
-      );
+      await createReadyForPickupDelivery(order, { session });
     }
     return order;
   });

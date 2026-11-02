@@ -17,13 +17,14 @@ the work up cold. Read it first, then the documents it points to.
 | E | Online payments: hosted gateway, signed webhook, stock hold and release, Pay now in the shopper app and website | **Built and tested with a built-in TEST gateway.** A real gateway adapter is still to do (needs the owner's sandbox account), see §5.6 |
 | F | Push notifications to the Partner app, and the rider sharing their location while delivering | **Built and tested with mocks**; push needs a real EAS build to try on a phone (see §5.7) |
 | I | Payment proof photo at the door: cash/bank/wallet/card, camera photo + reference, brand verification queue, private storage, receipts | **Built and tested with mocks**; the camera needs a real phone (see §5.8) |
+| P | Picker screens (marketplace v2 Phase 4): `PICKER` role, pick queue, claim, line marking, change proposal with substitutes, pack confirmation | **Done**; needs a phone run (see §5.9) |
 
 Server test suite: 940 tests before the programme, 1,047 after Phase A, 1,090
-after Phase B, 1,097 after Phase C (unchanged by Phase D), 1,158 after Phase E, 1,200 after Phase F, 1,286 after Phases G–I. The Partner app has its own 204 tests and the
-shopper app (`mobile/`) 272. All pass; lint is clean everywhere. The real-MongoDB integration suite
-(`npm run test:integration`) could not be run by the author (no MongoDB binary
-download in the build sandbox) and should be run by the owner after applying
-each phase.
+after Phase B, 1,097 after Phase C (unchanged by Phase D), 1,158 after Phase E,
+1,200 after Phase F, 1,286 after Phases G–I, 1,442 after the picker phase —
+plus 154 real-MongoDB integration tests. The Partner app has its own 218 tests
+and the shopper app (`mobile/`) 332. All pass; lint is clean everywhere, and the
+integration suite runs in this environment (`npm run test:integration`).
 
 ## 1. Why this exists
 
@@ -82,7 +83,8 @@ together).
 | `SUPER_ADMIN` | Platform | Web |
 | `BRAND_ADMIN` | One brand | Web |
 | `BRAND_EMPLOYEE` (with permissions) | One brand | Web, and the Partner app (records screens) |
-| `RIDER` (new) | One brand | Partner app only; cannot use the web brand login |
+| `RIDER` | One brand | Partner app only; cannot use the web brand login |
+| `PICKER` | One brand | Partner app only; no brand-team permissions |
 | `CUSTOMER` | Own data | Shopper app and web |
 
 ### 3.3 Who sees what
@@ -91,6 +93,7 @@ together).
 |---|---|---|
 | Customer | Own orders, own receipts, own delivery code | Anyone else's data |
 | Rider | Only deliveries assigned to them: customer name, phone, address and instructions (only while the delivery is open), item names and quantities, cash to collect, their own cash total | Other riders' deliveries, prices, other payments, brand revenue, the customer account, the delivery code, receipts |
+| Picker | Their brand's orders waiting to be picked, and the ones they claimed: customer **first name**, item names, SKUs, images and quantities, pick state, the waiting proposal's note | Customer phone and address, prices, totals, payment details, another brand's or another picker's order |
 | Records person (employee with permissions) | Their brand's orders, deliveries, payments, receipts, who holds cash | Other brands. Refunds and settling cash need `payments.manage` |
 | Brand admin | Everything in their brand; assigns riders; refunds | Other brands |
 | Super admin | Everything on the platform | Card numbers (nobody does; they are never stored) |
@@ -387,6 +390,53 @@ Partner app: `services/deliveries.js`, `services/records.js`,
 `app/delivery/[id].jsx`, `app/(records)/money.jsx`, `app/proof/[paymentId].jsx`,
 `app/receipt/[id].jsx`, `utils/delivery.js`, `utils/format.js`.
 
+### 5.9 Picker screens (marketplace v2 Phase 4)
+
+Rules, data and API are in `08-order-management.md` §41.9 and
+`22-marketplace-v2-plan.md` §E; this is the summary for whoever continues.
+
+* **Built, server:** role `PICKER` (brand-scoped, partner app only, no
+  permissions). `GET /picker` (queue), `GET /picker/:id`,
+  `POST /picker/:id/claim`, `PATCH /picker/:id/items/:itemId`,
+  `POST /picker/:id/propose`, `POST /picker/:id/pack`,
+  `GET /picker/products?q=` (substitute search). The picker's serializers are
+  allow-lists: customer first name only, no phone, address, price, total or
+  payment. Claiming is an atomic `CONFIRMED → PROCESSING`; packing is an atomic
+  `PROCESSING → READY_FOR_SHIPMENT` that creates the same delivery as the
+  dashboard. Order statuses are reused — no new statuses.
+* **Built, screen flow:** the partner app sends a `PICKER` to `/queue`. The
+  queue lists waiting orders (order number, first name, item and unit counts,
+  "Yours" / waiting-for-customer) and opens `/pick/:id`. There the picker claims
+  the order, marks each line **Picked**, **Short** (enter the units found) or
+  **Unavailable**, and either packs ("Pack order" → confirm "Yes, packed") or,
+  if anything is short, sends a change proposal: a message to the customer plus
+  an optional same-brand substitute per short line (search, "Use …", quantity).
+  While the proposal waits the lines lock and the screen says so; when the
+  customer answers, "Check again" reloads. A packed order shows "Packed and
+  ready for a rider" and returns to the queue.
+* **Brand admin:** the web Team page has a **Picker** account type; pickers are
+  created with no permission checklist and are listed as "Picker · Partner app
+  only". The server refuses an employee creating one (`PICKER_CREATE_FORBIDDEN`)
+  or any permission on one (`PICKER_NO_PERMISSIONS`).
+* **Customer side:** the existing proposal card adds "Suggested by the store's
+  picker." when `proposedByRole` is `PICKER` (website and shopper app).
+* **Demo:** each active brand has a picker (`areeba.saleem@citycart.demo` for
+  Loom & Co.), one order is mid-pick, and one order is waiting on the customer
+  with a picker-suggested substitution. Password `Demo@12345`.
+* **Limitation:** the plan says "queue of his branch", but orders have no
+  fulfilment branch and stock is held per brand, so the queue is brand-wide. A
+  branch queue needs a branch on the order first (report before inventing one).
+* **Not verified:** the screens on a real phone (no device here). Server,
+  screen, seed and web/mobile label behaviour are covered by tests.
+
+Main files (server): `services/picker.service.js`,
+`controllers/picker.controller.js`, `routes/picker.routes.js`,
+`validators/picker.validator.js`, `config/pickStatuses.js`,
+`models/order.model.js`, `models/orderAdjustment.model.js`.
+Partner app: `services/picker.js`, `app/(picker)/queue.jsx`,
+`app/(picker)/settings.jsx`, `app/pick/[id].jsx`, `app/index.jsx`,
+`components/StatusPill.jsx`.
+
 ## 6. What is left
 
 ### 6.1 Phase D0: returns backend (found missing, must precede the returns screen)
@@ -475,7 +525,7 @@ Run from `server/`: `npx eslint .` and `npx jest` (unit, mocked models, fast).
 Integration tests (`npm run test:integration`) need a real MongoDB binary.
 Client: `npm run lint` (oxlint) and `npx vite build` in `client/`.
 
-Partner app (`partner/`): `npm test` runs 204 tests: `api`, `storage`, `session`, `delivery` (rules and messages, including the door-payment choices), `permissions`, `records-services` (request shapes, including proofs), `paging`, `config`, `format`, `screens` (sign-in, who goes where, the rider's screens; the door-payment photo upload, its failure messages and retry) and `records-screens` (overview, orders, deliveries and rider assignment, receipts, cash hand-over, the proof queue/detail and verify/reject, account). Shopper app: `mobile/` runs 272 tests; the order-screen tests cover the delivery code, the receipt and how a door payment was made.
+Partner app (`partner/`): `npm test` runs 218 tests: `api`, `storage`, `session`, `delivery` (rules and messages, including the door-payment choices), `permissions`, `records-services` (request shapes, including proofs), `paging`, `config`, `format`, `screens` (sign-in, who goes where, the rider's screens; the door-payment photo upload, its failure messages and retry), `records-screens` (overview, orders, deliveries and rider assignment, receipts, cash hand-over, the proof queue/detail and verify/reject, account) and `picker-screens` (queue, claim, line marking, substitute proposal, pack confirmation, locked waiting proposal, take-over race, picker account). Shopper app: `mobile/` runs 332 tests; the order-screen tests cover the delivery code, the receipt, how a door payment was made, and the "suggested by the store's picker" label.
 
 Partner-programme test files (`server/tests/`): `partnerAuth.test.js` (sign-in,
 token rules), `riders.test.js` (rider management and tenant isolation),
@@ -522,6 +572,15 @@ tests; add the same for new rules, in the same style.
 | `PAYMENT_PREPAID` | 409 | A collection was sent for an order paid up front |
 | `PAYMENT_ALREADY_COLLECTED` | 409 | A non-cash collection arrived after the payment was collected |
 | `PROOF_ALREADY_DECIDED` | 409 | Someone already verified/rejected this proof (`verification` in the body) |
+| `PICK_TAKEN` | 409 | Another picker claimed the order first |
+| `NOT_PICKABLE` / `NOT_PICKING` | 409 | The order is not in the queue / not being picked by this picker |
+| `CLAIM_REQUIRED` | 409 | A line was marked without claiming the order |
+| `NOT_YOUR_ORDER` | 409 | The order belongs to another picker |
+| `PICKING_INCOMPLETE` | 409 | Packing before every line is marked |
+| `INVALID_PICKED_QUANTITY` | 400 | SHORT count outside 1 … quantity − 1 |
+| `NOTHING_TO_PROPOSE` / `SUBSTITUTE_NOT_SHORT` / `DUPLICATE_SUBSTITUTE` | 409 | The proposal covers nothing short, a line that is not short, or the same substitute twice |
+| `PICKER_NO_PERMISSIONS` | 400 | A picker was given brand-team permissions |
+| `PICKER_CREATE_FORBIDDEN` | 403 | An employee tried to create a picker |
 
 ## 11. Change log
 
@@ -537,3 +596,4 @@ tests; add the same for new rules, in the same style.
 * **2026-10 Phase H** delivered: order change proposals (substitution / removal) on the brand website and both customer clients; the Partner app shows each order's proposal history read-only. Server rules, stock, payments, notifications and docs updated.
 * **2026-10 Phase I** delivered: payment at the door — the rider records cash, bank transfer, wallet or card machine (camera photo + reference for non-cash), the brand verifies or rejects the proof in a "To verify" queue, photos stay private and are deleted after 90 days, receipts say how it was paid. Demo data, docs and tests updated. Camera and a real Cloudinary upload not tried on a phone.
 * **2026-10 Phase I fix (phone):** the proof upload used React Native's `{ uri, name, type }` FormData part, which Expo SDK 57's global `expo/fetch` rejects; the report was "Cannot reach the server" and Complete never enabled. The photo is now an `expo-file-system` `File`, upload failures say what failed and keep the photo for **Upload photo** to retry.
+* **2026-11 Picker (marketplace v2 Phase 4):** `PICKER` role and `/picker/*` API, the Partner app picker queue and pick screen (claim, line marking, substitute proposal, pack), picker accounts on the web Team page, "Suggested by the store's picker" on both customer clients, demo pickers and picking orders, tests and docs.
