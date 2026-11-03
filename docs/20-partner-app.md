@@ -423,9 +423,12 @@ Rules, data and API are in `08-order-management.md` §41.9 and
   **Unavailable**, and either packs ("Pack order" → confirm "Yes, packed") or,
   if anything is short, sends a change proposal: a message to the customer plus
   an optional same-brand substitute per short line (search, "Use …", quantity).
-  While the proposal waits the lines lock and the screen says so; when the
-  customer answers, "Check again" reloads. A packed order shows "Packed and
-  ready for a rider" and returns to the queue.
+  Each line is numbered and shows its pick state in colour, the three answers
+  are full-width rows with plain-words descriptions ("Found all 2", "None on
+  the shelf"), and the header card carries a progress bar ("2 of 3 lines
+  checked · 1 short"). While the proposal waits the lines lock and the screen
+  says so; when the customer answers, "Check again" reloads. A packed order
+  shows "Packed and ready for a rider" and returns to the queue.
 * **Brand admin:** the web Team page has a **Picker** account type; pickers are
   created with no permission checklist and are listed as "Picker · Staff app
   only". The server refuses an employee creating one (`PICKER_CREATE_FORBIDDEN`)

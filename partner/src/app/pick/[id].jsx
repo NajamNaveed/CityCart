@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import Feather from '@expo/vector-icons/Feather'
 import RequireRole from '../../components/RequireRole'
 import AppText from '../../components/ui/AppText'
 import BackButton from '../../components/BackButton'
@@ -22,7 +23,7 @@ import {
   setPickLine,
 } from '../../services/picker'
 import { formatDateTime } from '../../utils/format'
-import { colors, radius, spacing } from '../../theme'
+import { colors, radius, spacing, weights } from '../../theme'
 
 const PICK_LOOK = {
   PICKED: 'Picked in full',
@@ -46,11 +47,57 @@ function Notice({ tone = 'error', children }) {
   )
 }
 
-function LineCard({ item, editable, busy, onMark, shortFor, shortQty, setShortQty, openShort, closeShort }) {
-  const chosen = (status) => item.pickStatus === status
+// One answer to "how much of this line did you find?" A full-width row with an
+// icon and a plain-words description, so the choices never squeeze on a phone.
+function ChoiceRow({ icon, title, description, selected, onPress, disabled }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="radio"
+      accessibilityState={{ selected, disabled }}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.md,
+        minHeight: 52,
+        paddingHorizontal: spacing.md,
+        borderRadius: radius.md,
+        borderWidth: 1,
+        borderColor: selected ? colors.pine : colors.line,
+        backgroundColor: selected ? colors.pineSoft : pressed ? colors.sand : colors.surface,
+      })}
+    >
+      <Feather name={selected ? 'check-circle' : icon} size={20} color={selected ? colors.pine : colors.ink} />
+      <View style={{ flex: 1 }}>
+        <AppText variant="label">{title}</AppText>
+        {description ? <AppText variant="small">{description}</AppText> : null}
+      </View>
+    </Pressable>
+  )
+}
+
+function LineCard({ item, index, editable, busy, onMark, shortFor, shortQty, setShortQty, openShort, closeShort }) {
+  const checked = Boolean(item.pickStatus)
   return (
     <Card style={{ gap: spacing.sm }}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md }}>
+        <View
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 14,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderWidth: 1,
+            borderColor: checked ? colors.pine : colors.line,
+            backgroundColor: checked ? colors.pineSoft : colors.surface,
+          }}
+        >
+          <AppText variant="small" style={{ color: checked ? colors.pine : colors.muted, fontWeight: weights.semibold }}>
+            {index}
+          </AppText>
+        </View>
         <View style={{ flex: 1, gap: 2 }}>
           <AppText variant="strong">{item.productName}</AppText>
           <AppText variant="small">
@@ -62,14 +109,23 @@ function LineCard({ item, editable, busy, onMark, shortFor, shortQty, setShortQt
       </View>
 
       {item.pickStatus === 'SHORT' ? (
-        <AppText variant="small">Found {item.pickedQty} of {item.quantity}.</AppText>
+        <AppText variant="small" style={{ color: colors.warning }}>
+          Found {item.pickedQty} of {item.quantity} — {shortfall(item)} short.
+        </AppText>
       ) : item.pickStatus === 'UNAVAILABLE' ? (
-        <AppText variant="small">None found.</AppText>
+        <AppText variant="small" style={{ color: colors.danger }}>
+          None found on the shelf.
+        </AppText>
+      ) : item.pickStatus === 'PICKED' ? (
+        <AppText variant="small" style={{ color: colors.success }}>
+          All {item.quantity} found.
+        </AppText>
       ) : null}
 
       {editable ? (
         shortFor === item._id ? (
           <View style={{ gap: spacing.sm }}>
+            <AppText variant="label">How many did you find?</AppText>
             <TextField
               label="Units found"
               value={shortQty}
@@ -83,12 +139,12 @@ function LineCard({ item, editable, busy, onMark, shortFor, shortQty, setShortQt
             </View>
           </View>
         ) : (
-          <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-            <Button title="Picked" variant={chosen('PICKED') ? 'pine' : 'outline'} onPress={() => onMark(item, 'PICKED')} disabled={busy} style={{ flex: 1, paddingHorizontal: spacing.xs }} />
+          <View style={{ gap: spacing.sm }}>
+            <ChoiceRow icon="check" title="Picked" description={`Found all ${item.quantity}`} selected={item.pickStatus === 'PICKED'} onPress={() => onMark(item, 'PICKED')} disabled={busy} />
             {item.quantity > 1 ? (
-              <Button title="Short" variant={chosen('SHORT') ? 'pine' : 'outline'} onPress={() => openShort(item)} disabled={busy} style={{ flex: 1, paddingHorizontal: spacing.xs }} />
+              <ChoiceRow icon="minus-circle" title="Short" description="Found fewer than ordered" selected={item.pickStatus === 'SHORT'} onPress={() => openShort(item)} disabled={busy} />
             ) : null}
-            <Button title="Unavailable" variant={chosen('UNAVAILABLE') ? 'pine' : 'outline'} onPress={() => onMark(item, 'UNAVAILABLE')} disabled={busy} style={{ flex: 1, paddingHorizontal: spacing.xs }} />
+            <ChoiceRow icon="x-circle" title="Unavailable" description="None on the shelf" selected={item.pickStatus === 'UNAVAILABLE'} onPress={() => onMark(item, 'UNAVAILABLE')} disabled={busy} />
           </View>
         )
       ) : null}
@@ -237,26 +293,37 @@ function PickDetail({ id }) {
     const allMarked = order.items.every((item) => Boolean(item.pickStatus))
     const allPicked = order.items.every((item) => item.pickStatus === 'PICKED')
     const canSend = shortLines.length > 0 && allMarked && note.trim().length >= 3
+    const checkedCount = order.items.filter((item) => Boolean(item.pickStatus)).length
 
     body = (
       <>
         {notice ? <Notice tone={notice.tone}>{notice.text}</Notice> : null}
 
-        <Card style={{ gap: spacing.xs, marginBottom: spacing.lg }}>
+        <Card style={{ gap: spacing.sm, marginBottom: spacing.lg }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md }}>
             <AppText variant="small">Placed {formatDateTime(order.createdAt)}</AppText>
-            <AppText variant="small">{order.customerFirstName}</AppText>
+            <AppText variant="small">For {order.customerFirstName}</AppText>
           </View>
           <AppText variant="strong">
-            {order.items.length} {order.items.length === 1 ? 'line' : 'lines'} to pick
+            Pick {order.items.length} {order.items.length === 1 ? 'line' : 'lines'}
           </AppText>
-          <AppText variant="small">No prices or customer contact details are shown to pickers.</AppText>
+          <View style={{ flexDirection: 'row', height: 8, borderRadius: 4, backgroundColor: colors.sand, overflow: 'hidden' }}>
+            {checkedCount > 0 ? <View style={{ flex: checkedCount, backgroundColor: colors.pine }} /> : null}
+            {checkedCount < order.items.length ? <View style={{ flex: order.items.length - checkedCount }} /> : null}
+          </View>
+          <AppText variant="small">
+            {checkedCount} of {order.items.length} {order.items.length === 1 ? 'line' : 'lines'} checked
+            {shortLines.length > 0 ? ` · ${shortLines.length} short` : ''}
+          </AppText>
+          <AppText variant="small" style={{ marginTop: spacing.xs }}>
+            You see items and quantities only — never prices or the customer&apos;s contact details.
+          </AppText>
         </Card>
 
         {!claimed ? (
           <Card style={{ gap: spacing.sm, marginBottom: spacing.lg }}>
             <AppText variant="strong">Waiting to be picked</AppText>
-            <AppText variant="small">Take this order to mark what you find. Only you will be able to change its lines.</AppText>
+            <AppText variant="small">Take this order to mark what you find. While it is yours, no other picker can change it.</AppText>
             <Button title="Claim this order" onPress={() => run(() => claimPickOrder(id), 'This order is yours. Pick every line.')} loading={busy} />
           </Card>
         ) : null}
@@ -286,10 +353,11 @@ function PickDetail({ id }) {
         ) : null}
 
         <View style={{ gap: spacing.md, marginBottom: spacing.lg }}>
-          {order.items.map((item) => (
+          {order.items.map((item, index) => (
             <LineCard
               key={item._id}
               item={item}
+              index={index + 1}
               editable={editable}
               busy={busy}
               onMark={mark}
@@ -307,8 +375,8 @@ function PickDetail({ id }) {
             <Card style={{ gap: spacing.md, marginBottom: spacing.lg }}>
               <AppText variant="strong">Ask the customer about the short lines</AppText>
               <AppText variant="small">
-                They can accept what you found, keep only that much, or cancel. Offer a substitute from your own store if
-                you have one.
+                For each line below, say what you found and offer a substitute from this store if you have one. The
+                customer decides — the lines stay locked until they answer.
               </AppText>
 
               {shortLines.map((item) => (
@@ -394,20 +462,17 @@ function PickDetail({ id }) {
             </Card>
           ) : (
             <View style={{ gap: spacing.md, marginBottom: spacing.lg }}>
-              <AppText variant="small">
-                {shortLines.length > 0
-                  ? 'Some lines are short. Ask the customer what to do before packing.'
-                  : 'If something is short, mark it, then ask the customer.'}
-              </AppText>
-              <Button
-                title="Send change proposal"
-                variant="outline"
-                onPress={() => {
-                  setNotice(null)
-                  setProposeOpen(true)
-                }}
-                disabled={busy || shortLines.length === 0 || !allMarked}
-              />
+              {shortLines.length > 0 ? (
+                <Card style={{ gap: spacing.xs, borderColor: colors.warning, backgroundColor: colors.warningSoft }}>
+                  <AppText variant="strong" style={{ color: colors.warning }}>
+                    {shortLines.length} {shortLines.length === 1 ? 'line is short' : 'lines are short'}
+                  </AppText>
+                  <AppText variant="small" style={{ color: colors.warning }}>
+                    Ask the customer before packing: they can accept what you found, take a substitute from this store, or cancel.
+                  </AppText>
+                </Card>
+              ) : null}
+
               {confirmPack ? (
                 <Card style={{ gap: spacing.md }}>
                   <AppText variant="strong">Ready for a rider?</AppText>
@@ -418,7 +483,26 @@ function PickDetail({ id }) {
               ) : (
                 <Button title="Pack order" onPress={() => setConfirmPack(true)} disabled={busy || !allPicked} />
               )}
-              {!allPicked ? <AppText variant="small">Every line must be picked in full before packing.</AppText> : null}
+              {!allPicked ? (
+                <AppText variant="small" style={{ textAlign: 'center' }}>
+                  Every line must be picked in full before packing.
+                </AppText>
+              ) : null}
+
+              <Button
+                title="Send change proposal"
+                variant="outline"
+                onPress={() => {
+                  setNotice(null)
+                  setProposeOpen(true)
+                }}
+                disabled={busy || shortLines.length === 0 || !allMarked}
+              />
+              {shortLines.length === 0 ? (
+                <AppText variant="small" style={{ textAlign: 'center' }}>
+                  If something is missing, mark that line short or unavailable first.
+                </AppText>
+              ) : null}
             </View>
           )
         ) : null}
