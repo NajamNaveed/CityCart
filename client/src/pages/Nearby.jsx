@@ -146,9 +146,14 @@ export default function Nearby() {
   const [result, setResult] = useState({ key: '', data: null, error: '' })
 
   // Distance and block searches need somewhere to measure from; without it we
-  // search the whole city and say so.
+  // search the whole city and say so. A radius also needs one origin point:
+  // the shopper's position, or the centre when exactly one block is chosen.
   const hasArea = blockIds.length > 0
   const needsArea = (range === 'block' && !hasArea) || (isRadius(range) && !hasArea && !coords)
+  const radiusApplied = isRadius(range) && Boolean(origin)
+  const needsOrigin = isRadius(range) && hasArea && !origin
+  // Distances without a position are measured from the centre of the chosen block.
+  const fromBlockCentre = Boolean(!coords && selectedBlocks.length === 1)
 
   const query = useMemo(() => {
     if (!cityId || !blocksReady) return null
@@ -239,6 +244,15 @@ export default function Nearby() {
         </p>
       )}
 
+      {needsOrigin && (
+        <p className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md bg-warning-soft px-3.5 py-2.5 text-[13px] text-warning">
+          <span>With several blocks there is no single point to measure {range} km from, so showing all their shops. Set your exact spot to apply the range.</span>
+          <button type="button" onClick={openPicker} className="font-semibold underline">
+            Set my spot
+          </button>
+        </p>
+      )}
+
       <section className="mt-7" aria-live="polite">
         {!cityId ? (
           <EmptyState
@@ -287,8 +301,10 @@ export default function Nearby() {
               {data.pagination.total} {data.pagination.total === 1 ? 'brand' : 'brands'} with {data.meta.totalBranches}{' '}
               {data.meta.totalBranches === 1 ? 'branch' : 'branches'}
               {q && <> for “{q}”</>}
-              {range !== 'city' && !needsArea && <> within {rangeLabel(range)}</>}
+              {range === 'block' && !needsArea && <> within {rangeLabel(range)}</>}
+              {isRadius(range) && radiusApplied && <> within {rangeLabel(range)}</>}
               {areaName && range !== 'block' && <> of {areaName}</>}
+              {fromBlockCentre && range !== 'block' && <> · from the centre of {areaName}</>}
             </p>
               <div role="group" aria-label="Results view" className="inline-flex overflow-hidden rounded-md border border-line bg-white text-[13px] font-medium">
                 {[
@@ -322,7 +338,14 @@ export default function Nearby() {
               )
             ) : view === 'map' ? (
               <Suspense fallback={<Skeleton className="h-[460px] w-full rounded-lg" />}>
-                <NearbyMap items={items} zones={selectedBlocks} origin={data.meta.origin} radiusKm={data.meta.radiusKm} onOpenBrand={openBrand} />
+                <NearbyMap
+                  items={items}
+                  zones={selectedBlocks}
+                  origin={data.meta.origin}
+                  radiusKm={data.meta.radiusKm}
+                  originLabel={coords ? 'You are here' : selectedBlocks.length === 1 ? `Centre of ${areaName}` : 'Search centre'}
+                  onOpenBrand={openBrand}
+                />
                 {data.pagination.pages > 1 && <p className="mt-2 text-xs text-muted">The map shows the shops on this page of results.</p>}
               </Suspense>
             ) : (

@@ -42,8 +42,8 @@ function popupFor(brand, branch, onOpenBrand) {
   return root
 }
 
-// Shop locations as pins, the shopper's own position, and the search radius.
-export default function NearbyMap({ items, zones = [], origin, radiusKm, onOpenBrand }) {
+// Shop locations as pins, the point distances are measured from, and the search radius.
+export default function NearbyMap({ items, zones = [], origin, radiusKm, originLabel = 'You are here', onOpenBrand }) {
   const container = useRef(null)
   const mapRef = useRef(null)
   const layerRef = useRef(null)
@@ -88,7 +88,7 @@ export default function NearbyMap({ items, zones = [], origin, radiusKm, onOpenB
 
     if (origin) {
       const here = [origin.lat, origin.lng]
-      L.circleMarker(here, { radius: 8, color: '#fff', weight: 2, fillColor: '#3b5b7c', fillOpacity: 1 }).bindTooltip('You are here').addTo(layer)
+      L.circleMarker(here, { radius: 8, color: '#fff', weight: 2, fillColor: '#3b5b7c', fillOpacity: 1 }).bindTooltip(originLabel).addTo(layer)
       if (radiusKm) {
         const circle = L.circle(here, { radius: radiusKm * 1000, color: '#1e3a2f', weight: 1, fillColor: '#1e3a2f', fillOpacity: 0.06 }).addTo(layer)
         const bounds = circle.getBounds()
@@ -101,7 +101,7 @@ export default function NearbyMap({ items, zones = [], origin, radiusKm, onOpenB
     if (points.length === 0) map.setView(FALLBACK_CENTER, 12)
     else if (points.length === 1) map.setView(points[0], 15)
     else map.fitBounds(L.latLngBounds(points), { padding: [40, 40], maxZoom: 16 })
-  }, [items, zones, origin, radiusKm, onOpenBrand])
+  }, [items, zones, origin, radiusKm, originLabel, onOpenBrand])
 
   return <div ref={container} role="region" aria-label="Map of nearby shops" className="isolate z-0 h-[460px] w-full overflow-hidden rounded-lg border border-line" />
 }

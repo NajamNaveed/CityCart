@@ -11,7 +11,7 @@ import TestRenderer, { act } from 'react-test-renderer'
 jest.setTimeout(30000)
 
 const mockRouter = { push: jest.fn(), navigate: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true), setParams: jest.fn() }
-const mockMapProps = { markers: [], circles: [], polygons: [], fit: jest.fn() }
+const mockMaps = { views: [] }
 
 jest.mock('expo-router', () => ({ useRouter: () => mockRouter, useLocalSearchParams: () => ({}), Redirect: () => null, Link: ({ children }) => children }))
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default)
@@ -26,27 +26,13 @@ jest.mock('../src/services/api', () => ({
   setUnauthorizedHandler: jest.fn(),
 }))
 jest.mock('../src/services/location', () => ({ getShopperPosition: jest.fn() }))
-jest.mock('react-native-maps', () => {
+jest.mock('../src/components/NearbyMap', () => {
   const React = require('react')
   const { View } = require('react-native')
-  const MapView = React.forwardRef(({ children, onMapReady, onPress }, ref) => {
-    React.useImperativeHandle(ref, () => ({ fitToCoordinates: mockMapProps.fit }))
-    React.useEffect(() => onMapReady && onMapReady(), [onMapReady])
-    return <View testID="map" onPress={onPress}>{children}</View>
-  })
-  const Marker = (props) => {
-    mockMapProps.markers.push(props)
-    return null
+  return function MockNearbyMap(props) {
+    mockMaps.views.push(props)
+    return <View testID="map" />
   }
-  const Circle = (props) => {
-    mockMapProps.circles.push(props)
-    return null
-  }
-  const Polygon = (props) => {
-    mockMapProps.polygons.push(props)
-    return null
-  }
-  return { __esModule: true, default: MapView, Marker, Circle, Polygon }
 })
 
 import api from '../src/services/api'
@@ -177,9 +163,7 @@ async function remember({ city = true, nearby } = {}) {
 
 beforeEach(async () => {
   jest.clearAllMocks()
-  mockMapProps.markers.length = 0
-  mockMapProps.circles.length = 0
-  mockMapProps.polygons.length = 0
+  mockMaps.views.length = 0
   await AsyncStorage.clear()
   serve()
 })
@@ -271,26 +255,23 @@ describe('a remembered area', () => {
     expect(mockRouter.navigate).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/shop', params: expect.objectContaining({ brandId: BRAND._id }) }))
   })
 
-  it('shows the shops on a map, with a circle for a radius search', async () => {
+  it('shows the shops on a map, with a radius for a radius search', async () => {
     await AsyncStorage.setItem('citycart.nearbyAsked', 'true')
     const renderer = await open()
     await press(renderer, 'Map')
     expect(renderer.root.findAllByProps({ testID: 'map' }).length).toBeGreaterThan(0)
-    const pins = mockMapProps.markers.filter((m) => m.title === BRAND.name)
-    expect(pins).toHaveLength(2) // one per branch
-    expect(pins[0].coordinate).toEqual({ latitude: 31.401, longitude: 73.101 })
-    expect(mockMapProps.fit).toHaveBeenCalled()
-    expect(mockMapProps.circles).toHaveLength(0)
-    // the chosen block is shaded
-    expect(mockMapProps.polygons).toHaveLength(1)
-    expect(mockMapProps.polygons[0].coordinates).toHaveLength(4)
+    let map = mockMaps.views.at(-1)
+    expect(map.items).toEqual([BRAND])
+    expect(map.zones).toEqual([GULBERG]) // the chosen block is shaded
+    expect(map.radiusKm).toBeNull()
+    expect(map.origin).toEqual(POSITION)
 
-    mockMapProps.circles.length = 0
     await press(renderer, '10 km')
-    expect(mockMapProps.circles.at(-1)).toMatchObject({ radius: 10000, center: { latitude: 31.4, longitude: 73.1 } })
+    map = mockMaps.views.at(-1)
+    expect(map.radiusKm).toBe('10')
 
-    // tapping a pin's label goes to that brand's products
-    pins[0].onCalloutPress()
+    // tapping a shop pin's "See products" goes to that brand
+    map.onOpenBrand(BRAND)
     expect(mockRouter.navigate).toHaveBeenCalled()
   })
 })
@@ -329,8 +310,8 @@ describe('choosing blocks by hand', () => {
 
     await pressByLabel(renderer, 'Location: Gulberg, Faisalabad. Change')
     await press(renderer, 'Pick a spot on the map')
-    const map = renderer.root.findAll((n) => n.props.testID === 'map' && typeof n.props.onPress === 'function')[0]
-    await act(async () => map.props.onPress({ nativeEvent: { coordinate: { latitude: 31.43, longitude: 73.08 } } }))
+    const map = mockMaps.views.at(-1)
+    await act(async () => map.onPick(31.43, 73.08))
     await tick()
 
     expect(api.get).toHaveBeenCalledWith('/blocks/at', { params: { lat: 31.43, lng: 73.08 } })

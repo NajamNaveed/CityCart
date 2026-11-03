@@ -10,6 +10,7 @@ import { act } from 'react-test-renderer'
 jest.setTimeout(30000)
 
 const mockRouter = { push: jest.fn(), navigate: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true), setParams: jest.fn() }
+const mockAddressMaps = { views: [] }
 let mockParams = {}
 
 jest.mock('expo-router', () => {
@@ -24,15 +25,13 @@ jest.mock('expo-router', () => {
 })
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default)
 jest.mock('@expo/vector-icons/Feather', () => () => null)
-jest.mock('react-native-maps', () => {
+jest.mock('../src/components/NearbyMap', () => {
   const React = require('react')
   const { View } = require('react-native')
-  const MapView = React.forwardRef(({ children, onMapReady, onPress }, ref) => {
-    React.useImperativeHandle(ref, () => ({ fitToCoordinates: jest.fn() }))
-    React.useEffect(() => onMapReady && onMapReady(), [onMapReady])
-    return <View testID="map" onPress={onPress}>{children}</View>
-  })
-  return { __esModule: true, default: MapView, Marker: () => null, Circle: () => null, Polygon: () => null }
+  return function MockNearbyMap(props) {
+    mockAddressMaps.views.push(props)
+    return <View testID="map" />
+  }
 })
 jest.mock('expo-secure-store', () => ({ getItemAsync: jest.fn().mockResolvedValue(null), setItemAsync: jest.fn(), deleteItemAsync: jest.fn(), WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'x' }))
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'))
@@ -79,6 +78,7 @@ afterEach(cleanup)
 
 beforeEach(() => {
   jest.clearAllMocks()
+  mockAddressMaps.views.length = 0
   mockParams = {}
   api.get.mockImplementation(async (url) => {
     if (url === '/addresses') return { data: { addresses: [] } }
@@ -202,8 +202,8 @@ describe('New address form', () => {
   it('checks the spot again when the shopper taps the map', async () => {
     api.post.mockResolvedValue({ data: { address: ADDRESS } })
     const renderer = await show(<AddressScreen />, { auth: signedIn(), nearby: inArea() })
-    const map = renderer.root.findAll((n) => n.props.testID === 'map' && typeof n.props.onPress === 'function')[0]
-    await act(async () => map.props.onPress({ nativeEvent: { coordinate: { latitude: 31.4012, longitude: 73.1012 } } }))
+    const map = mockAddressMaps.views.at(-1)
+    await act(async () => map.onPick(31.4012, 73.1012))
     await tick()
 
     expect(api.get).toHaveBeenCalledWith('/blocks/at', { params: { lat: 31.4012, lng: 73.1012 } })

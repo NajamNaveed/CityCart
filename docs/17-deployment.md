@@ -767,7 +767,6 @@ Phase 7 ships the three-app marketplace: the website, the shopper app, the Staff
 | Vercel | (file) `client/vercel.json` | destination must be the live Render host |
 | Vercel | Deployment Protection | **off**, otherwise API calls redirect to a Vercel login |
 | EAS | `EXPO_PUBLIC_API_URL` | the Render URL, same value for all three apps |
-| EAS | `GOOGLE_MAPS_API_KEY` | shopper app Android builds only; restrict to `com.citycart.app` |
 | EAS | `eas projectId` | created per app by `npx eas-cli init` (writes `extra.eas.projectId`) |
 
 `EXPO_PUBLIC_*` values are baked into the app at build time: change them in EAS and rebuild, not in the phone.

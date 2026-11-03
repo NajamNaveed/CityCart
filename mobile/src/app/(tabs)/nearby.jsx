@@ -34,17 +34,17 @@ const VIEWS = [
 
 function ViewToggle({ view, onChange }) {
   return (
-    <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, overflow: 'hidden', backgroundColor: colors.surface }}>
+    <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', width: '100%', borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, overflow: 'hidden', backgroundColor: colors.surface }}>
       {VIEWS.map(([value, label, icon]) => (
         <Pressable
           key={value}
           onPress={() => onChange(value)}
           accessibilityRole="radio"
           accessibilityState={{ selected: view === value }}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40, paddingHorizontal: spacing.md, backgroundColor: view === value ? colors.ink : colors.surface }}
+          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 40, paddingHorizontal: spacing.sm, backgroundColor: view === value ? colors.ink : colors.surface }}
         >
           <Feather name={icon} size={15} color={view === value ? colors.white : colors.ink} />
-          <AppText variant="label" style={{ color: view === value ? colors.white : colors.ink }}>
+          <AppText variant="label" numberOfLines={1} style={{ color: view === value ? colors.white : colors.ink }}>
             {label}
           </AppText>
         </Pressable>
@@ -105,15 +105,15 @@ export default function Nearby() {
       ) : null}
 
       {cityId && blocksReady ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }}>
+        <View style={{ gap: spacing.sm }}>
           {view === 'products' ? (
-            <AppText variant="small" style={{ flex: 1 }} accessibilityLiveRegion="polite">
+            <AppText variant="small" accessibilityLiveRegion="polite">
               {canBrowse && !products.loading && !products.error
                 ? `${products.total} ${products.total === 1 ? 'product' : 'products'} in your area${q ? ` for “${q}”` : ''}${range !== 'city' ? ` within ${scopeLabel}` : ''}`
                 : 'Products from the stores near you'}
             </AppText>
           ) : (
-            <AppText variant="small" style={{ flex: 1 }} accessibilityLiveRegion="polite">
+            <AppText variant="small" accessibilityLiveRegion="polite">
               {!shops.loading && !shops.error && shops.items.length > 0
                 ? `${shops.total} ${shops.total === 1 ? 'brand' : 'brands'} with ${shops.meta?.totalBranches ?? 0} ${shops.meta?.totalBranches === 1 ? 'branch' : 'branches'}${q ? ` for “${q}”` : ''}${range !== 'city' && !areaMissing ? ` within ${scopeLabel}` : ''}${areaName && range !== 'block' ? ` of ${areaName}` : ''}`
                 : 'Shops near you'}

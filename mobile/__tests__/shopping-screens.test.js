@@ -27,15 +27,12 @@ jest.mock('expo-router', () => {
 })
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default)
 jest.mock('@expo/vector-icons/Feather', () => () => null)
-jest.mock('react-native-maps', () => {
+jest.mock('../src/components/NearbyMap', () => {
   const React = require('react')
   const { View } = require('react-native')
-  const MapView = React.forwardRef(({ children, onMapReady }, ref) => {
-    React.useImperativeHandle(ref, () => ({ fitToCoordinates: jest.fn() }))
-    React.useEffect(() => onMapReady && onMapReady(), [onMapReady])
-    return <View testID="map">{children}</View>
-  })
-  return { __esModule: true, default: MapView, Marker: () => null, Circle: () => null, Polygon: () => null }
+  return function MockNearbyMap() {
+    return <View testID="map" />
+  }
 })
 jest.mock('expo-secure-store', () => ({ getItemAsync: jest.fn().mockResolvedValue(null), setItemAsync: jest.fn(), deleteItemAsync: jest.fn(), WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'x' }))
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'))

@@ -22,6 +22,7 @@ export default function CityChip() {
           flexDirection: 'row',
           alignItems: 'center',
           gap: spacing.xs,
+          flexShrink: 1,
           minHeight: 40,
           paddingHorizontal: spacing.md,
           borderRadius: radius.pill,
@@ -31,7 +32,7 @@ export default function CityChip() {
         }}
       >
         <Feather name="map-pin" size={15} color={colors.clay} />
-        <AppText variant="label" numberOfLines={1} style={{ maxWidth: 130 }}>
+        <AppText variant="label" numberOfLines={1} style={{ flexShrink: 1, maxWidth: 130 }}>
           {city ? city.name : 'All cities'}
         </AppText>
         <Feather name="chevron-down" size={15} color={colors.muted} />

@@ -16,7 +16,7 @@ CityCart/
 ├─ server/     the API (unchanged apart from the native-session support below)
 ├─ client/     the web app (unchanged)
 └─ mobile/     the Expo app (plain JavaScript, like the web app)
-   ├─ app.json  app.config.js  eas.json  package.json  .env (the API address; see .env.example)
+   ├─ app.json  eas.json  package.json  .env (the API address; see .env.example)
    ├─ src/
    │  ├─ app/          screens; each file is a route (Expo Router, SDK 57 puts routes in src/app)
    │  │  ├─ _layout.jsx        fonts, providers, splash screen
@@ -73,7 +73,7 @@ Installed once, inside `mobile/`, each with a stated reason:
 | expo-location | the shopper's position for Nearby |
 | expo-font, @expo-google-fonts/poppins, @expo-google-fonts/fraunces | the brand fonts, importing only the five weights used |
 | @expo/vector-icons | tab and button icons (Feather, the family Lucide came from) |
-| react-native-maps | the Nearby map (Android release builds need a Google Maps key) |
+| react-native-webview | the Nearby map, which draws OpenStreetMap tiles inside the app (no Google Maps key, no native map SDK) |
 
 ## 6. Phases
 
@@ -153,14 +153,16 @@ The same area model as the web app, on the same public endpoints
   They load ten brands at a time. The **Products** view groups the catalogue: one card per
   real product with the lowest price, the number of stores, and a list of those stores in
   the area; a tap opens that store's listing.
-* **Map.** `react-native-maps`: pins per branch, the delivery/shopping pin, a circle for a
-  radius search, and a `<Polygon>` for every selected or nearby block. It uses the
-  phone's own map: Apple Maps on iPhone (no setup), Google Maps on Android. It works in
-  Expo Go. **Android release builds need a Google Maps API key**: set the
-  `GOOGLE_MAPS_API_KEY` environment variable when building (`app.config.js` passes it to
-  the build), and restrict the key to the app's package name in Google Cloud. Without a
-  key the Android map is blank but everything else, including Directions (which opens the
-  maps app), works.
+* **Map.** A `react-native-webview` showing a self-contained OpenStreetMap viewer
+  (`src/components/map/`): pins per branch, the delivery/shopping pin, a circle for a
+  radius search, and a highlighted outline for every selected block. Tiles come from
+  `tile.openstreetmap.org` with visible attribution, so there is no Google Maps key,
+  no native map SDK and no platform-specific setup; it behaves the same in Expo Go
+  and in release builds. Panning, two-finger pinch and wheel zoom are handled in the
+  page; a tap places a pin (used by the location sheet, checkout and saved addresses)
+  and a pin's popup opens that brand. Directions still opens the phone's own maps app
+  with `mapsUrl`. The map only needs a data connection for its tiles; when they cannot
+  load the viewer shows a short "could not load" message.
 * **"Also sold by"** on the product page is **area-only**: it lists the other stores in
   the shopper's area that sell the same catalogue product. Without an area it asks for
   one; when nobody in the area sells it, it says so (a 404 from the server is that
@@ -252,12 +254,11 @@ screens against a fake server).
   Building needs an Expo account and the EAS CLI as a global tool:
   ```bash
   npm i -g eas-cli && eas login
-  eas secret:create --name GOOGLE_MAPS_API_KEY --value <key>   # release builds only
   npm run build:android            # production (AAB, for Play)
   npm run build:android:preview    # APK to install directly on a phone
   ```
-  `app.config.js` reads `GOOGLE_MAPS_API_KEY` from the environment, so the key
-  reaches release builds through the EAS secret and is never committed.
+  No maps key is needed for any profile: the map is OpenStreetMap inside a
+  WebView, so release builds show it with no extra configuration.
 
 ### Device-test checklist
 
@@ -270,8 +271,8 @@ phone (Expo Go while developing, a preview APK for release behaviour):
    endless scroll, product photos and reviews, "Chat with seller" asks a
    visitor to sign in and returns to the same product.
 3. **Nearby and the area** — the location-permission wording appears, blocks load
-   with their outlines, the map shows pins and pans to results (tiles render in the
-   release build — that is what the Google Maps key is for), Directions opens the
+   with their outlines, the map shows pins and pans to results (OpenStreetMap tiles
+   render in the release build), a pin's popup opens its brand, Directions opens the
    maps app. Then: an overlap starts with both blocks ticked, a border point offers the
    nearest blocks, a dropped pin switches the area, the Products view groups a catalogue
    item across stores, and a product page's "Also sold by" lists the area's other stores.
