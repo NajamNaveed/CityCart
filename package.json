@@ -21,6 +21,8 @@
     "test:delivery": "npm test --prefix delivery",
     "test:apps": "npm run test:staff && npm run test:delivery",
     "test:integration": "npm run test:integration --prefix server",
+    "test:all": "npm test --prefix server && npm run test:integration --prefix server && npm test --prefix mobile && npm run test:apps",
+    "verify": "npm run lint && npm run test:all && npm run build",
     "sync-indexes": "npm run sync-indexes --prefix server",
     "seed": "npm run seed --prefix server",
     "seed:demo": "npm run seed:demo --prefix server",

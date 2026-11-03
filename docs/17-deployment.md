@@ -655,11 +655,12 @@ Any infrastructure change must preserve:
 
 The repository now carries the deployment plumbing described above:
 
-* `client/vercel.json` — proxies `/api/*` and `/socket.io/*` to Render and
+* `client/vercel.json` — proxies `/api/*` and `/socket.io/*` to the Render
+  host written in the file (today `https://citycart-n51q.onrender.com`) and
   serves `index.html` for deep links (`/product/:id`, `/brand/orders/:id`,
-  a page refresh). It uses the `routes` form because Vercel expands
-  `${RENDER_API_URL}` only in route `dest` values listed in the route's
-  `env` whitelist — `rewrites` destinations do not expand variables.
+  a page refresh). Vercel's `rewrites` do **not** expand environment
+  variables, so a different Render host means editing this file and
+  redeploying the client; `RENDER_API_URL` in Vercel is not read by it.
 * `render.yaml` (repository root) — Render Blueprint for the API: Node
   runtime, `server/` as root, `npm ci` build, `npm start` launch,
   `/health` as the health check. Secrets are marked `sync: false` — Render
@@ -673,17 +674,15 @@ The repository now carries the deployment plumbing described above:
 Remaining manual steps when deploying (nothing here needs code changes):
 
 1. Push the repository to GitHub; in Vercel create a project rooted at
-   `client/` (framework: Vite, build `npm run build`, output `dist`), leave
-   `VITE_API_URL` EMPTY, and add `RENDER_API_URL` (see the proxy section
-   below).
+   `client/` (framework: Vite, build `npm run build`, output `dist`) and
+   leave `VITE_API_URL` EMPTY. Check that `client/vercel.json` points at the
+   Render host you actually use (see the proxy section below).
 2. In Render, apply the Blueprint and fill in `MONGODB_URI` (Atlas),
    `JWT_SECRET`, and `CLIENT_URL` (the Vercel URL).
-3. Optionally enable Render's auto-deploy-on-push (already `true` in the
-   Blueprint). `client/vercel.json` currently sets
-   `"git": { "deploymentEnabled": false }`, so Git pushes alone do NOT
-   deploy the frontend — deploy with `vercel --prod` or the CI deploy
-   hook below, or remove that setting to re-enable Vercel's Git
-   integration.
+3. Render's auto-deploy is `true` in the Blueprint. Vercel may deploy on
+   push or only through `vercel --prod` / the CI deploy hook, depending on
+   the project's Git settings; either way, deploy the client after the API
+   is healthy.
 
 ### Cross-domain cookies (October 2026 update)
 
@@ -699,10 +698,11 @@ Two fixes ship together; use BOTH:
    `/api/*` and `/socket.io/*` to the API, so the browser only ever talks to
    the Vercel domain and the auth cookie is first-party (works in Safari
    too). Setup:
-   - Vercel → project → Settings → Environment Variables → add
-     `RENDER_API_URL` = the Render API URL (e.g. `https://citycart-api.onrender.com`),
-     and set `VITE_API_URL` to EMPTY (the client then calls `/api/v1`
-     same-origin).
+   - Check that the destination in `client/vercel.json` is the Render API
+     host you use (e.g. `https://citycart-n51q.onrender.com`), and set
+     `VITE_API_URL` to EMPTY in Vercel (the client then calls `/api/v1`
+     same-origin). Vercel cannot substitute environment variables into
+     `rewrites`, so the host lives in that file.
    - **Turn OFF Vercel Deployment Protection** (Settings → Deployment
      Protection) — with it on, every request 302s to a Vercel login page,
      including API calls.
@@ -718,12 +718,12 @@ The same-origin proxy removes the problem instead of fighting it.
 
 Symptom: the deployed site paints for less than a second, then goes white.
 
-Cause: `/api/*` was not reaching Render. An unset or misspelled
-`RENDER_API_URL` makes the rewrite fall through to the SPA catch-all, so
-`/api/v1/products` answered **200 with `index.html`**. The client treated
-that as JSON, read `res.data.products` (`undefined`), then called
-`products.map(...)` during render; React unmounted the tree on the thrown
-error and left a blank page.
+Cause: `/api/*` was not reaching Render. A wrong host in
+`client/vercel.json` (or a request that the proxy does not match) makes the
+rewrite fall through to the SPA catch-all, so `/api/v1/products` answered
+**200 with `index.html`**. The client treated that as JSON, read
+`res.data.products` (`undefined`), then called `products.map(...)` during
+render; React unmounted the tree on the thrown error and left a blank page.
 
 Three guards now ship with the client:
 
@@ -734,14 +734,82 @@ Three guards now ship with the client:
 * `src/components/ErrorBoundary.jsx` wraps the app, so any future render
   error shows a reload card instead of a blank page.
 
-If the blank page ever reappears, check in this order: `RENDER_API_URL`
-is set and correct in Vercel (no trailing `/api/v1`), `VITE_API_URL` is
-empty, Deployment Protection is off, and the API answers
-`https://<render-host>/health` directly. A Browser devtools
-Network tab showing `text/html` for `/api/v1/*` confirms a routing
-problem, not a React problem.
+If the blank page ever reappears, check in this order: the host inside
+`client/vercel.json` is the live Render host (no `/api/v1` suffix),
+`VITE_API_URL` is empty, Deployment Protection is off, and the API answers
+`https://<render-host>/health` directly. A browser devtools Network tab
+showing `text/html` for `/api/v1/*` confirms a routing problem, not a
+React problem.
 
 The CI workflow's gated deploy job (`.github/workflows/ci.yml`) triggers
 Render and Vercel deploy hooks after all tests pass — add
 `RENDER_DEPLOY_HOOK` and `VERCEL_DEPLOY_HOOK` as GitHub repo secrets, then
 disable both platforms' Git auto-deploy so CI is the only deploy trigger.
+
+---
+
+## 30. Marketplace v2 release runbook (November 2026)
+
+Phase 7 ships the three-app marketplace: the website, the shopper app, the Staff app and the Delivery app, all against one API. Release in this order; do not skip the database step.
+
+### 30.1 Environment matrix
+
+| Where | Variable | Value / note |
+|---|---|---|
+| Render | `NODE_ENV` | `production` |
+| Render | `MONGODB_URI` | the **new** Atlas cluster (fresh v2 database) |
+| Render | `JWT_SECRET` | long random string; never reused from development |
+| Render | `CLIENT_URL` | the Vercel production URL |
+| Render | `PAYMENT_PROVIDER` | `none` (the test gateway is refused in production) |
+| Render | `CLOUDINARY_*` | optional; private proof/return photos need all three |
+| Render | `PUSH_ENABLED`, `EXPO_ACCESS_TOKEN` | optional; push is off without them |
+| Vercel | `VITE_API_URL` | **empty** — the client calls `/api/v1` same-origin |
+| Vercel | (file) `client/vercel.json` | destination must be the live Render host |
+| Vercel | Deployment Protection | **off**, otherwise API calls redirect to a Vercel login |
+| EAS | `EXPO_PUBLIC_API_URL` | the Render URL, same value for all three apps |
+| EAS | `GOOGLE_MAPS_API_KEY` | shopper app Android builds only; restrict to `com.citycart.app` |
+| EAS | `eas projectId` | created per app by `npx eas-cli init` (writes `extra.eas.projectId`) |
+
+`EXPO_PUBLIC_*` values are baked into the app at build time: change them in EAS and rebuild, not in the phone.
+
+### 30.2 Bring up the data
+
+1. Create a **new, empty** Atlas cluster/database (v2 is a fresh database; no migration of old data).
+2. Run the demo seed against it from the repository, with the fresh connection string:
+   ```bash
+   cd server
+   MONGODB_URI="mongodb+srv://..." npm run seed:demo
+   ```
+   The script refuses a non-empty database and refuses `NODE_ENV=production`. Do **not** use `--reset` against a database that matters.
+3. Point Render's `MONGODB_URI` at the same database and deploy the API.
+
+### 30.3 API first, then website
+
+1. Deploy the API; wait for `GET /health` to answer `{ "success": true }`.
+2. Check `POST /auth/login` (admin) through the Render URL; confirm the cookie is `HttpOnly` and `Secure`.
+3. Deploy the client with `VITE_API_URL` empty. In the browser devtools, `/api/v1/...` must be same-origin, return JSON (never `text/html`), and login must survive a page refresh.
+4. If the API host changed, edit `client/vercel.json` and redeploy; Vercel does not read `RENDER_API_URL`.
+
+### 30.4 The three APKs
+
+```bash
+cd mobile     && npx eas-cli init && npm run build:android:preview   # com.citycart.app
+cd ../partner && npx eas-cli init && npm run build:android:preview   # com.citycart.staff
+cd ../delivery && npx eas-cli init && npm run build:android:preview  # com.citycart.delivery
+```
+
+Each app has its own package name, icon and sign-in door (`/auth/mobile`, `/auth/staff/login`, `/auth/delivery/login`). A token from one app is refused by the other two (`403 WRONG_APP`).
+
+Release is complete when:
+
+* the website loads and a customer can sign in, browse, order and pay cash;
+* the shopper app signs in as `CUSTOMER` and sees the same area and orders;
+* the Staff app signs in as `BRAND_EMPLOYEE`/`PICKER`, and the Returns tab receives a door return;
+* the Delivery app signs in as `RIDER`, completes a delivery with refused lines, and the customer, brand and admin screens show the same final total;
+* the walkthrough in `22-marketplace-v2-plan.md` §7 passes on the freshly seeded data.
+
+Rollback: redeploy the previous Render and Vercel deployments. The database is additive for this release (new `Return` collection and order fields); keeping the old deployment against the new data is safe, but the old code will not show returns.
+
+### 30.5 What an AI agent may and may not do here
+
+The repository side (tests, build, config, docs, seed scripts) is automated. **Deploying to Render/Vercel and building with EAS are owner actions**: they need credentials, cost build minutes, and touch shared/production systems. An agent must not run them without explicit approval.
