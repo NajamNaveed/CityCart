@@ -316,8 +316,10 @@ export default function Checkout() {
                     </label>
                     {saveIt && (
                       <label className="flex items-center gap-2 text-sm text-muted">
-                        Name it
-                        <input value={label} onChange={(e) => setLabel(e.target.value)} maxLength={40} className={`h-9 w-36 ${inputClass}`} aria-label="Address name" />
+                        <span className="whitespace-nowrap">Name it</span>
+                        <span className="block w-44 shrink-0">
+                          <input value={label} onChange={(e) => setLabel(e.target.value)} maxLength={40} className={`h-9 ${inputClass}`} aria-label="Address name" placeholder="e.g. Home" />
+                        </span>
                       </label>
                     )}
                   </div>

@@ -36,7 +36,13 @@ export function buildMapData({ items = [], zones = [], selectedIds = [], origin 
 
   const shown = pin || origin
   const picked = isCoord(shown?.lat, shown?.lng)
-    ? { lat: shown.lat, lng: shown.lng, label: originLabel || (pin ? 'Delivery spot' : 'Search centre') }
+    ? {
+        lat: shown.lat,
+        lng: shown.lng,
+        label: originLabel || (pin ? 'Delivery spot' : 'Search centre'),
+        // A search centre is a dot on the website; a dropped pin is a marker.
+        kind: pin ? 'pin' : 'origin',
+      }
     : null
 
   return {

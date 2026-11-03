@@ -73,6 +73,10 @@ export default function NearbyMap({ items, zones = [], selectedIds = [], origin,
         javaScriptEnabled
         domStorageEnabled={false}
         setSupportMultipleWindows={false}
+        // The map pans by transforming one layer, so it needs the GPU path and
+        // must win touch negotiation inside the scrolling Nearby screen.
+        androidLayerType="hardware"
+        nestedScrollEnabled
         scrollEnabled={false}
         bounces={false}
         overScrollMode="never"

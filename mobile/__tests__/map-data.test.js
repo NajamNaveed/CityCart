@@ -27,7 +27,7 @@ describe('buildMapData', () => {
         lng: 73.101,
       },
     ])
-    expect(data.pin).toEqual({ lat: 31.4, lng: 73.1, label: 'Search centre' })
+    expect(data.pin).toEqual({ lat: 31.4, lng: 73.1, label: 'Search centre', kind: 'origin' })
     expect(data.radiusKm).toBe(2)
     expect(data.pickable).toBe(true)
   })
@@ -40,7 +40,7 @@ describe('buildMapData', () => {
       originLabel: 'Delivery spot',
     })
 
-    expect(data.pin).toEqual({ lat: 31.43, lng: 73.08, label: 'Delivery spot' })
+    expect(data.pin).toEqual({ lat: 31.43, lng: 73.08, label: 'Delivery spot', kind: 'pin' })
     expect(data.zones).toHaveLength(1)
     expect(data.radiusKm).toBe(0)
     expect(data.pickable).toBe(false)
@@ -54,5 +54,20 @@ describe('the WebView map', () => {
     expect(MAP_HTML).toContain('window.CityCartMap')
     expect(MAP_HTML).toContain('ReactNativeWebView')
     expect(MAP_HTML.toLowerCase()).not.toContain('google')
+  });
+
+  it('pans by moving one layer, flings, and zooms without a blank frame', () => {
+    // Dragging translates the tile/zone/mark layer instead of redrawing it.
+    expect(MAP_HTML).toContain('translate3d(')
+    expect(MAP_HTML).toContain('will-change: transform')
+    expect(MAP_HTML).toContain('requestAnimationFrame')
+    // A pinch scales the layer continuously instead of re-rendering per step.
+    expect(MAP_HTML).toContain('scale(')
+    // The previous level shows, stretched, until the new zoom's tiles arrive.
+    expect(MAP_HTML).toContain('id="under"')
+    expect(MAP_HTML).toContain('id="zoom-in"')
+    expect(MAP_HTML).toContain('id="zoom-out"')
+    // The search centre is a dot, like the Leaflet map on the website.
+    expect(MAP_HTML).toContain("data.pin.kind === 'origin'")
   })
 })

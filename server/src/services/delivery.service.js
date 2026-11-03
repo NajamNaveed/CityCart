@@ -531,12 +531,83 @@ async function createReadyForPickupDelivery(order, { session } = {}) {
   return delivery;
 }
 
+/**
+ * Automatic dispatch for a freshly packed order: the brand's active rider with
+ * the fewest deliveries still in progress takes it; ties go to whoever has gone
+ * longest without one, so the load keeps evening out. Called after the packing
+ * transaction commits, so a dispatch problem can never undo the pack. A brand
+ * admin can still change the rider afterwards (assignRider).
+ */
+async function dispatchRiderForOrder({ brandId, orderId }) {
+  const delivery = await Delivery.findOne({ orderId, brandId }).select('_id status riderId');
+  if (!delivery || delivery.riderId || DELIVERY_FINAL_STATUSES.includes(delivery.status)) {
+    return null;
+  }
+
+  const riders = await User.find({ brandId, role: ROLES.RIDER, isActive: true })
+    .select('_id name')
+    .sort({ name: 1, _id: 1 });
+  if (riders.length === 0) {
+    return null;
+  }
+
+  // Open work per rider, counted with Mongoose's casting (an aggregate would
+  // compare brandId as a raw string and silently match nothing).
+  const open = await Delivery.find({
+    brandId,
+    riderId: { $in: riders.map((rider) => rider._id) },
+    status: { $nin: DELIVERY_FINAL_STATUSES },
+  }).select('riderId assignedAt');
+
+  const load = new Map();
+  for (const item of open) {
+    const key = String(item.riderId);
+    const entry = load.get(key) || { open: 0, lastAssignedAt: null };
+    entry.open += 1;
+    if (item.assignedAt && (!entry.lastAssignedAt || item.assignedAt > entry.lastAssignedAt)) {
+      entry.lastAssignedAt = item.assignedAt;
+    }
+    load.set(key, entry);
+  }
+
+  const chosen = [...riders].sort((a, b) => {
+    const left = load.get(String(a._id));
+    const right = load.get(String(b._id));
+    const byOpen = (left ? left.open : 0) - (right ? right.open : 0);
+    if (byOpen !== 0) return byOpen;
+    const byLast = (left?.lastAssignedAt ? left.lastAssignedAt.getTime() : 0) - (right?.lastAssignedAt ? right.lastAssignedAt.getTime() : 0);
+    if (byLast !== 0) return byLast;
+    return String(a._id).localeCompare(String(b._id));
+  })[0];
+
+  // Conditional on the rider still being free, so a manual assignment made in
+  // the meantime always wins over this automatic one.
+  const assigned = await Delivery.findOneAndUpdate(
+    { _id: delivery._id, brandId, riderId: { $exists: false }, status: { $nin: DELIVERY_FINAL_STATUSES } },
+    { $set: { riderId: chosen._id, assignedAgent: chosen.name, assignedAt: new Date() } },
+    { new: true }
+  );
+  if (!assigned) {
+    return null;
+  }
+
+  const order = await Order.findById(orderId).select('orderNumber');
+  await notifyRiderAssigned({
+    userId: chosen._id,
+    brandId,
+    orderNumber: order ? order.orderNumber : '',
+    deliveryId: assigned._id,
+  });
+  return assigned;
+}
+
 module.exports = {
   listDeliveries,
   getDeliveryForUser,
   updateDeliveryStatus,
   updateDelivery,
   assignRider,
+  dispatchRiderForOrder,
   getDeliveryCodeForCustomer,
   createReadyForPickupDelivery,
 };

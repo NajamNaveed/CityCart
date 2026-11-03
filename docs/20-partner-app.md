@@ -158,7 +158,10 @@ Behaviour:
   the brand does (`PATCH /riders/:id/password`), which bumps `passwordVersion`
   and signs them out everywhere. A deactivated rider cannot sign in; their open
   deliveries stay assigned until the brand moves them.
-* **Assignment.** `PATCH /deliveries/:id/rider` (`delivery.manage`) assigns an
+* **Assignment.** A new delivery is assigned automatically to the brand's active
+  rider with the fewest open deliveries (ties: longest without a job), and the
+  rider is notified — see `11-delivery-system.md` §11a. `PATCH /deliveries/:id/rider`
+  (`delivery.manage`) is the manual override: it assigns an
   active rider of the same brand, sets `assignedAgent` to the rider's name,
   notifies the rider (`DELIVERY_ASSIGNED`) and makes sure a delivery code exists.
   `riderId: null` removes the rider. Final deliveries cannot be reassigned. A

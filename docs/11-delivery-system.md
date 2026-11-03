@@ -221,6 +221,8 @@ Order
 READY_FOR_SHIPMENT
  ↓
 Delivery created
+ ↓
+Rider assigned automatically (§11a)
 ```
 
 The delivery record can contain:
@@ -241,15 +243,44 @@ updatedAt
 
 ---
 
+# 11a. Automatic Rider Dispatch
+
+Creating the delivery record and choosing its rider are one step for the brand:
+right after the delivery is created (a picker packs the order, or the brand moves
+it to `READY_FOR_SHIPMENT`), the backend assigns it to the brand's active rider
+with the fewest deliveries still in progress.
+
+Rules:
+
+- Only `RIDER` accounts that are active and belong to the order's brand are
+  considered; another brand's rider can never be chosen.
+- "In progress" means any delivery not in a final status
+  (`DELIVERED`, `CANCELLED`, `RETURNED`), so completed work does not count
+  against a rider.
+- Ties go to the rider who has gone longest without an assignment, then to the
+  oldest rider account, so the load stays predictable.
+- A brand with no active rider creates the delivery unassigned; a brand admin
+  can assign one later.
+- Dispatch never replaces a rider who is already on the delivery. A brand admin
+  can still change or remove the rider from the order page (§12).
+- The chosen rider receives the normal `DELIVERY_ASSIGNED` notification.
+
+Dispatch runs after the order's status change commits, so a failure in dispatch
+never undoes the packing. The delivery is then ready for the rider to pick up.
+
+---
+
 # 12. Delivery Assignment
 
-For the MVP, delivery assignment may remain simple.
+For the MVP, delivery assignment is automatic (see §11a) and can be corrected
+by hand.
 
 A brand may handle delivery itself or manually assign a delivery person.
 
 **Riders (added October 2026).** A brand may create rider accounts
 (`RIDER`, one brand each, see `20-partner-app.md`) and assign a delivery to one
-of them (`PATCH /deliveries/:id/rider`). Assignment is only possible on a
+of them (`PATCH /deliveries/:id/rider`). This endpoint is the manual override of
+automatic dispatch. Assignment is only possible on a
 delivery that is not final, only to an active rider of the same brand, and
 does not change delivery, order or payment status. A rider who still has open deliveries cannot be deactivated (`409 RIDER_HAS_OPEN_DELIVERIES`). A rider sees and moves only
 their own deliveries (`/rider/deliveries`); a hand-typed `assignedAgent` remains

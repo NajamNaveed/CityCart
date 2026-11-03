@@ -12,7 +12,7 @@ the server sections it points to.
 |---|---|
 | App package, icon, name | **Done** — `citycart-delivery`, *CityCart Delivery*, `com.citycart.delivery` |
 | Sign-in (`RIDER` only) | **Done** — `/auth/delivery/login` with `X-Client: delivery`; wrong roles refused |
-| Deliveries list and one delivery | **Done** — assigned deliveries, picked up / out for delivery, six-digit code, failed attempt |
+| Deliveries list and one delivery | **Done** — delivered already assigned (the least-busy rider gets it, docs/11 §11a; the brand admin can reassign on the web), picked up / out for delivery, six-digit code, failed attempt |
 | Door payment | **Done** — cash, bank transfer, wallet, card machine; camera photo + reference for non-cash |
 | Cash held | **Done** — collected and not yet handed to the brand |
 | Alerts | **Done** — the rider's notifications |

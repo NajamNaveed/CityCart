@@ -103,7 +103,7 @@ function ItemReview({ lines, delivery, busy, photoBusy, onAccepted, onReason, on
               variant="outline"
               onPress={() => onAccepted(index, line.acceptedQty - 1)}
               disabled={locked || line.acceptedQty === 0}
-              style={{ width: 52 }}
+              style={{ width: 52, paddingHorizontal: 0 }}
             />
             <AppText variant="strong" style={{ flex: 1, textAlign: 'center' }}>
               {line.acceptedQty} kept · {line.rejectedQty} refused
@@ -113,7 +113,7 @@ function ItemReview({ lines, delivery, busy, photoBusy, onAccepted, onReason, on
               variant="outline"
               onPress={() => onAccepted(index, line.acceptedQty + 1)}
               disabled={locked || line.acceptedQty === line.quantity}
-              style={{ width: 52 }}
+              style={{ width: 52, paddingHorizontal: 0 }}
             />
           </View>
 

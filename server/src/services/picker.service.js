@@ -4,7 +4,7 @@ const OrderAdjustment = require('../models/orderAdjustment.model');
 const { runInTransaction } = require('../utils/transaction');
 const { OrderError } = require('./order.service');
 const { proposeAdjustment } = require('./orderAdjustment.service');
-const { createReadyForPickupDelivery } = require('./delivery.service');
+const { createReadyForPickupDelivery, dispatchRiderForOrder } = require('./delivery.service');
 
 /**
  * Picking an order inside one brand (docs/22 §E).
@@ -359,6 +359,8 @@ async function packOrder({ brandId, pickerId, orderId }) {
     return updated;
   });
 
+  // The delivery now exists; hand it to the least-busy rider (docs/11 §11a).
+  await dispatchRiderForOrder({ brandId, orderId: packed._id });
   return orderView(packed, null);
 }
 

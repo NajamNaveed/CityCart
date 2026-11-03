@@ -158,10 +158,16 @@ The same area model as the web app, on the same public endpoints
   radius search, and a highlighted outline for every selected block. Tiles come from
   `tile.openstreetmap.org` with visible attribution, so there is no Google Maps key,
   no native map SDK and no platform-specific setup; it behaves the same in Expo Go
-  and in release builds. Panning, two-finger pinch and wheel zoom are handled in the
-  page; a tap places a pin (used by the location sheet, checkout and saved addresses)
-  and a pin's popup opens that brand. Directions still opens the phone's own maps app
-  with `mapsUrl`. The map only needs a data connection for its tiles; when they cannot
+  and in release builds. Tiles, blocks and pins are laid out once in world pixels, so
+  a drag only moves that one GPU layer (a quick flick glides on and settles) and
+  never rebuilds the page mid-gesture; a pinch scales the layer continuously and snaps
+  to a whole zoom when the fingers lift; and a zoom step stretches the tiles already
+  on screen underneath the new level until it loads, so the map never flashes blank.
+  That keeps it as smooth as the Leaflet map on the website on low-end phones. The
+  +/− buttons zoom, and the pins/dot use the same shapes as the website map. A tap
+  places a pin (used by the location sheet, checkout and saved addresses) and a pin's
+  popup opens that brand. Directions still opens the phone's own maps app with
+  `mapsUrl`. The map only needs a data connection for its tiles; when they cannot
   load the viewer shows a short "could not load" message.
 * **"Also sold by"** on the product page is **area-only**: it lists the other stores in
   the shopper's area that sell the same catalogue product. Without an area it asks for

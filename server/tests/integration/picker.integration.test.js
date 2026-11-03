@@ -13,6 +13,7 @@ const Inventory = require('../../src/models/inventory.model');
 const OrderAdjustment = require('../../src/models/orderAdjustment.model');
 const Payment = require('../../src/models/payment.model');
 const Delivery = require('../../src/models/delivery.model');
+const User = require('../../src/models/user.model');
 const {
   listQueue,
   getPickerOrder,
@@ -376,6 +377,34 @@ describe('packing', () => {
     const { brandId, order } = await claimedOrder();
     await expect(packOrder({ brandId, pickerId: oid(), orderId: order._id })).rejects.toMatchObject({ status: 409 });
     await expect(packOrder({ brandId: oid(), pickerId: oid(), orderId: order._id })).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('hands the packed order to the rider with the fewest open deliveries', async () => {
+    const { brandId, pickerId, order } = await claimedOrder();
+    for (const item of order.items) {
+      await setLinePick({ brandId, pickerId, orderId: order._id, itemId: String(item._id), pickStatus: 'PICKED' });
+    }
+    n += 1;
+    const busy = await User.create({ name: 'Busy rider', email: `busy${n}@x.com`, passwordHash: 'x', role: 'RIDER', brandId });
+    n += 1;
+    const free = await User.create({ name: 'Free rider', email: `free${n}@x.com`, passwordHash: 'x', role: 'RIDER', brandId });
+    const earlier = await makeOrder({ brandId, status: 'READY_FOR_SHIPMENT' });
+    await Delivery.create({
+      orderId: earlier._id,
+      brandId,
+      customerId: earlier.customerId,
+      status: 'OUT_FOR_DELIVERY',
+      address: { name: 'Sana Iqbal', phone: '+923001112223', address: 'House 5, Street 2' },
+      riderId: busy._id,
+      assignedAgent: busy.name,
+      assignedAt: new Date(),
+    });
+
+    await packOrder({ brandId, pickerId, orderId: order._id });
+
+    const delivery = await Delivery.findOne({ orderId: order._id });
+    expect(String(delivery.riderId)).toBe(String(free._id));
+    expect(delivery.assignedAgent).toBe(free.name);
   });
 });
 

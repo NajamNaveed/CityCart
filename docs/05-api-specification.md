@@ -1944,6 +1944,8 @@ PATCH /api/v1/deliveries/:deliveryId/rider
 Body `{ "riderId": "<id>" }` assigns an active rider of the same brand (also
 sets `assignedAgent` to the rider's name and notifies the rider with
 `DELIVERY_ASSIGNED`); `{ "riderId": null }` removes the rider. Required: `delivery.manage`.
+This is the manual override: a new delivery is already assigned automatically to
+the brand's least-busy active rider (`11-delivery-system.md` §11a).
 Errors: `404` rider not in this brand or inactive; `409 DELIVERY_FINAL`;
 `409 NO_RIDER_ASSIGNED` (removing when none). `PATCH /deliveries/:id` with a typed
 `assignedAgent` answers `409 USE_RIDER_ASSIGNMENT` while a rider is assigned.

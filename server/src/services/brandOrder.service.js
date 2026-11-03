@@ -7,7 +7,7 @@ const { closeActiveAdjustment, listAdjustmentsForOrder } = require('./orderAdjus
 const { OrderError } = require('./order.service');
 const { notifyCustomerOfOrderStatus } = require('./notification.service');
 const { legalSourcesFor, brandNextStatuses } = require('../config/orderTransitions');
-const { createReadyForPickupDelivery } = require('./delivery.service');
+const { createReadyForPickupDelivery, dispatchRiderForOrder } = require('./delivery.service');
 
 const DEFAULT_LIMIT = 20;
 
@@ -135,6 +135,9 @@ async function updateBrandOrderStatus({ brandId, orderId, status, userId }) {
   // READY_FOR_SHIPMENT is internal brand workflow and announces nothing.
   if (status !== 'READY_FOR_SHIPMENT') {
     await notifyCustomerOfOrderStatus(order, status);
+  } else {
+    // The delivery now exists; hand it to the least-busy rider (docs/11 §11a).
+    await dispatchRiderForOrder({ brandId, orderId: order._id });
   }
   return order;
 }

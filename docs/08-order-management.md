@@ -401,7 +401,9 @@ the aisles (`pickerId`, `pickStartedAt`); each line carries `pickStatus`
 
 ### READY_FOR_SHIPMENT
 
-Order is prepared for delivery handoff.
+Order is prepared for delivery handoff. Reaching this status (a picker packs
+the order, or a brand admin moves it here) also creates the delivery record and
+assigns the brand's least-busy active rider (`11-delivery-system.md` §11a).
 
 ### SHIPPED
 
