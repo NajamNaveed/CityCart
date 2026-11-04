@@ -2020,8 +2020,10 @@ for `WALLET`, a `reference` and a `proof`. A prepaid order refuses any collectio
 already collected aborts the completion (`409 PAYMENT_ALREADY_COLLECTED`).
 
 A rider's delivery view contains: order number, status, address (only while the
-delivery is open), item names and quantities, `paymentMethod`, `amountToCollect`,
-`cashCollected`, and (for a non-cash door payment) `proofStatus`
+delivery is open), the customer's checkout pin as `deliveryLocation`
+(`{ latitude, longitude }`, or `null` once closed), item names and quantities,
+`paymentMethod`, `amountToCollect`, `cashCollected`, and (for a non-cash door
+payment) `proofStatus`
 (`SUBMITTED`/`VERIFIED`/`REJECTED`) — never the reference or the photo. Never the
 customer account, brand, prices or the code. `complete`
 errors: `422 INVALID_CODE` (with `attemptsRemaining`), `429 CODE_LOCKED`,

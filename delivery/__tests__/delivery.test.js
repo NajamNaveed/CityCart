@@ -10,6 +10,7 @@ import {
   codeErrorMessage,
   collectionPayload,
   collectionReady,
+  destinationMapUrl,
   isClosed,
   linesPayload,
   mapsUrl,
@@ -72,6 +73,15 @@ describe('links and addresses', () => {
   it('shows a one-line address', () => {
     expect(addressLine({ address: 'House 5, Street 2', city: 'Faisalabad' })).toBe('House 5, Street 2, Faisalabad')
     expect(addressLine(null)).toBe('')
+  })
+
+  it('builds an OpenStreetMap view framed around the checkout pin, and none without a valid point', () => {
+    expect(destinationMapUrl({ latitude: 31.4187, longitude: 73.0791 })).toBe(
+      'https://www.openstreetmap.org/export/embed.html?bbox=73.07310%2C31.41470%2C73.08510%2C31.42270&layer=mapnik&marker=31.41870%2C73.07910'
+    )
+    expect(destinationMapUrl(null)).toBeNull()
+    expect(destinationMapUrl({ latitude: 'north', longitude: 73 })).toBeNull()
+    expect(destinationMapUrl({ latitude: 95, longitude: 73 })).toBeNull()
   })
 })
 

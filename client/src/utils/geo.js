@@ -53,6 +53,15 @@ export function latLngOfBlock(block) {
   return { lat: block.latitude, lng: block.longitude }
 }
 
+// A GeoJSON point from the API ([longitude, latitude]) -> { lat, lng }.
+export function latLngOfGeoPoint(point) {
+  const coordinates = point?.coordinates
+  if (!Array.isArray(coordinates) || coordinates.length < 2) return null
+  const [lng, lat] = coordinates.map(Number)
+  if (!(lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180)) return null
+  return { lat, lng }
+}
+
 // Ray casting: is { lat, lng } inside an open [lat, lng] ring from the API?
 export function insidePolygon({ lat, lng }, ring = []) {
   if (!Array.isArray(ring) || ring.length < 3) return false

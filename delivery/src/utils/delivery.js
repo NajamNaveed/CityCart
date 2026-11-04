@@ -37,6 +37,18 @@ export function mapsUrl(address) {
 // A map link for a position the rider shared.
 export const locationMapUrl = (point) => `https://www.google.com/maps/search/?api=1&query=${point.latitude},${point.longitude}`
 
+/**
+ * The customer's checkout pin on OpenStreetMap, rendered inside the app. The
+ * bbox frames the pin with a little room around it; the marker is the pin.
+ */
+export function destinationMapUrl(point) {
+  const lat = Number(point?.latitude)
+  const lng = Number(point?.longitude)
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null
+  const bbox = [lng - 0.006, lat - 0.004, lng + 0.006, lat + 0.004].map((n) => n.toFixed(5)).join('%2C')
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat.toFixed(5)}%2C${lng.toFixed(5)}`
+}
+
 // "House 5, Street 2, Faisalabad"
 export const addressLine = (address) => (address ? [address.address, address.city].filter(Boolean).join(', ') : '')
 

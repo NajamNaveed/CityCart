@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Alert, Linking, Pressable, RefreshControl, ScrollView, View } from 'react-native'
+import { Alert, Pressable, RefreshControl, ScrollView, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import Feather from '@expo/vector-icons/Feather'
@@ -9,6 +9,7 @@ import Card from '../../components/ui/Card'
 import EmptyState from '../../components/ui/EmptyState'
 import Skeleton from '../../components/ui/Skeleton'
 import BackButton from '../../components/BackButton'
+import NearbyMap from '../../components/NearbyMap'
 import OrderProgress from '../../components/OrderProgress'
 import ProductImage from '../../components/ProductImage'
 import RequireCustomer from '../../components/RequireCustomer'
@@ -16,11 +17,13 @@ import StatusPill from '../../components/StatusPill'
 import { useAuth } from '../../hooks/useAuth'
 import { useRefreshOnForeground } from '../../hooks/useRefreshOnForeground'
 import { useRemote } from '../../hooks/useRemote'
+import { useRiderLocation } from '../../hooks/useRiderLocation'
 import PayNowButton from '../../components/PayNowButton'
 import OrderChangeCard from '../../components/OrderChangeCard'
 import { getErrorMessage } from '../../services/api'
-import { awaitingPayment, canCancel, cancelOrder, CODE_VISIBLE_STATUSES, fetchDeliveryCode, fetchOrder, fetchReceipt, fetchRiderLocation, isOnline, locationMapUrl, TERMINAL_PROBLEMS } from '../../services/orders'
+import { awaitingPayment, canCancel, cancelOrder, CODE_VISIBLE_STATUSES, fetchDeliveryCode, fetchOrder, fetchReceipt, isOnline, TERMINAL_PROBLEMS } from '../../services/orders'
 import { formatDateTime, formatPrice, humanize, timeAgo } from '../../utils/format'
+import { latLngOfGeoPoint } from '../../utils/geo'
 import { isObjectId } from '../../utils/ids'
 import { reasonLabel, returnedByItem } from '../../utils/returns'
 import { colors, radius, spacing } from '../../theme'
@@ -65,17 +68,38 @@ function DeliveryCode({ deliveryId }) {
   )
 }
 
-// Where the rider is, if they chose to share it while delivering. Nothing is shown (and nothing is
-// claimed) when they are not sharing.
-function RiderLocationCard({ deliveryId }) {
-  const remote = useRemote(`rider-location:${deliveryId}`, () => fetchRiderLocation(deliveryId))
-  if (remote.status !== 'ready' || !remote.data) return null
+// Where the rider is, if they chose to share it while delivering. The customer's own
+// checkout pin stays on the map too, so the dot has a destination to make sense of.
+// Nothing is shown (and nothing is claimed) before the first shared position.
+function RiderLocationCard({ deliveryId, destination }) {
+  const { location, error, everShown } = useRiderLocation(deliveryId)
+  // Once a position has been shown, keep the section while it is briefly unavailable.
+  if (!location && !everShown) return null
+  const age = location ? timeAgo(location.recordedAt) : ''
   return (
     <Section title="Your rider">
       <Card style={{ gap: spacing.sm }}>
-        <AppText>Last seen {timeAgo(remote.data.recordedAt)} ago.</AppText>
-        <Button title="See on map" variant="outline" onPress={() => Linking.openURL(locationMapUrl(remote.data)).catch(() => {})} />
-        <Button title="Refresh" variant="outline" onPress={remote.reload} />
+        {location ? (
+          <>
+            <NearbyMap
+              pin={destination}
+              rider={{ lat: location.latitude, lng: location.longitude }}
+              originLabel="Your delivery address"
+              height={240}
+            />
+            <AppText>Last seen {age === 'just now' ? 'just now' : `${age} ago`}.</AppText>
+            <AppText variant="small">
+              The dot moves while your rider shares their location. They may have other orders to deliver before yours.
+            </AppText>
+          </>
+        ) : (
+          <AppText variant="small">Your rider is not sharing their location right now. The map returns when they share it again.</AppText>
+        )}
+        {error ? (
+          <AppText variant="small" style={{ color: colors.muted }}>
+            Could not refresh just now. Trying again…
+          </AppText>
+        ) : null}
       </Card>
     </Section>
   )
@@ -233,7 +257,9 @@ function OrderView({ data, refreshing, onRefresh, onChanged }) {
         </Section>
       ) : null}
 
-      {delivery?.status === 'OUT_FOR_DELIVERY' ? <RiderLocationCard deliveryId={delivery._id} /> : null}
+      {delivery?.status === 'OUT_FOR_DELIVERY' ? (
+        <RiderLocationCard deliveryId={delivery._id} destination={latLngOfGeoPoint(order.deliveryLocation)} />
+      ) : null}
 
       {showCode ? <DeliveryCode deliveryId={delivery._id} /> : null}
 

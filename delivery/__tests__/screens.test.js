@@ -43,6 +43,12 @@ jest.mock('expo-file-system', () => ({
     this.exists = true
   }),
 }))
+// WebView needs a native view; a plain View is enough to see the map card on the page.
+jest.mock('react-native-webview', () => {
+  const React = require('react')
+  const { View } = require('react-native')
+  return { WebView: (props) => React.createElement(View, { testID: 'webview', ...props }) }
+})
 jest.mock('../src/services/api', () => ({
   __esModule: true,
   default: { get: jest.fn(), post: jest.fn(), patch: jest.fn() },
@@ -65,7 +71,8 @@ const NOW = new Date().toISOString()
 const ADDRESS = { name: 'Sana Iqbal', phone: '+92 300 1112223', address: 'House 5, Street 2', city: 'Faisalabad', postalCode: '38000', additionalInstructions: 'Blue gate' }
 const delivery = (over = {}) => ({
   _id: 'd1', orderNumber: 'CC-2026-000042', status: 'OUT_FOR_DELIVERY', failureReason: undefined, assignedAt: NOW, updatedAt: NOW,
-  address: ADDRESS, items: [{ itemId: 'i1', productName: 'Printed lawn suit', quantity: 2, lineTotal: 2200 }],
+  address: ADDRESS, deliveryLocation: { latitude: 31.4187, longitude: 73.0791 },
+  items: [{ itemId: 'i1', productName: 'Printed lawn suit', quantity: 2, lineTotal: 2200 }],
   deliveryFee: 250, paymentMethod: 'COD', amountToCollect: 2450, cashCollected: false, currency: 'PKR', ...over,
 })
 const httpError = (status, data = {}) => Object.assign(new Error('http'), { response: { status, data } })
@@ -213,13 +220,31 @@ describe('one delivery', () => {
     expect(text).toMatch(/Rs 2,450/)
   })
 
-  it('calls the customer and opens the map with plain links', async () => {
+  it('calls the customer, and opens the destination map inside the app', async () => {
     const open_ = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined)
     const screen = await open()
     await press(screen, 'Call')
     expect(open_).toHaveBeenLastCalledWith('tel:+923001112223')
+
+    // The map is the customer's checkout pin, drawn in the app; only directions leave it.
+    expect(has(screen, 'Navigate')).toBe(false)
+    await press(screen, 'Open in map')
+    expect(screen.root.findAll((n) => n.props.testID === 'destination-map').length).toBeGreaterThan(0)
+    expect(open_).toHaveBeenCalledTimes(1)
+    await press(screen, 'Hide map')
+    expect(has(screen, 'Navigate')).toBe(false)
+
+    await press(screen, 'Open in map')
+    await press(screen, 'Navigate')
+    expect(open_).toHaveBeenLastCalledWith('https://www.google.com/maps/search/?api=1&query=31.4187,73.0791')
+    open_.mockRestore()
+  })
+
+  it('falls back to a plain address search when the order has no checkout pin', async () => {
+    const open_ = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined)
+    const screen = await open(delivery({ deliveryLocation: null }))
     await press(screen, 'Open in Maps')
-    expect(open_.mock.calls[1][0]).toMatch(/^https:\/\/www\.google\.com\/maps\/search\/\?api=1&query=House/)
+    expect(open_.mock.calls[0][0]).toMatch(/^https:\/\/www\.google\.com\/maps\/search\/\?api=1&query=House/)
     open_.mockRestore()
   })
 

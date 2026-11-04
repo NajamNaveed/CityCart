@@ -69,5 +69,9 @@ describe('the WebView map', () => {
     expect(MAP_HTML).toContain('id="zoom-out"')
     // The search centre is a dot, like the Leaflet map on the website.
     expect(MAP_HTML).toContain("data.pin.kind === 'origin'")
+    // A shared rider is a moving dot, updated without refitting the camera.
+    expect(MAP_HTML).toContain("dotMarker(data.rider.lat, data.rider.lng, 'Your rider'")
+    expect(MAP_HTML).toContain('setRider: function (lat, lng)')
+    expect(MAP_HTML).toContain('if (state.data.rider && !shown) fit();')
   })
 })

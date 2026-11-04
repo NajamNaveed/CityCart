@@ -19,7 +19,7 @@ the server sections it points to.
 | Location sharing | **Done, opt-in, foreground only** — last seen while an order is out for delivery |
 | Push notifications | **Built**; needs a real EAS build to try on a phone (Expo Go on Android cannot receive them) |
 | Returns at the door | **Done** — per-line accept/refuse, reason, optional photo, payment for accepted goods only |
-| Tests | 154 tests in 9 suites, all mocked; lint clean |
+| Tests | 156 tests in 9 suites, all mocked; lint clean |
 
 The app has **not** been run on a physical device in this environment: the
 camera upload and push need a real phone, and a real Cloudinary account.
@@ -82,7 +82,7 @@ Expo Router route groups under `delivery/src/app/`:
 | `(rider)/cash.jsx` | Cash collected and not yet settled |
 | `(rider)/alerts.jsx` | The rider's notifications |
 | `(rider)/account.jsx` | Share-location switch, sign out |
-| `delivery/[id].jsx` | One delivery: call, Maps, status steps, code entry, door payment, failed attempt |
+| `delivery/[id].jsx` | One delivery: call, the customer's pin on an internal map, status steps, code entry, door payment, failed attempt |
 
 `RequireRole` wraps the rider group, so a non-rider session never reaches a
 rider screen even if the server were to misbehave. As always, the server is the
@@ -128,6 +128,12 @@ enforce them.
   brand's records screen and that order's customer see "last seen" and an
   "Open in Maps" link. `409 NO_ACTIVE_DELIVERY` means there is nothing to share
   with. The server keeps one point per rider, not a track.
+* **Destination map.** The delivery detail's **Open in map** opens the customer's
+  checkout pin on an OpenStreetMap preview inside the screen (`components/DestinationMap.jsx`,
+  a `react-native-webview` with `pointerEvents: "none"` so the page still scrolls).
+  **Navigate** hands the same coordinates to the phone's maps app. The pin comes
+  from `delivery.deliveryLocation` (`{ latitude, longitude }`), which the server
+  returns only while the delivery is open.
 
 ## 6. How the split was done (Phase 5)
 
@@ -162,7 +168,7 @@ npx expo lint
 npm test
 ```
 
-`npm test` runs **154 tests in 9 suites**:
+`npm test` runs **156 tests in 9 suites**:
 
 | Suite | Covers |
 |---|---|

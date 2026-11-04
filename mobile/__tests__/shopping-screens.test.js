@@ -30,8 +30,9 @@ jest.mock('@expo/vector-icons/Feather', () => () => null)
 jest.mock('../src/components/NearbyMap', () => {
   const React = require('react')
   const { View } = require('react-native')
-  return function MockNearbyMap() {
-    return <View testID="map" />
+  // Keep the props so a test can read the pin and the rider the map was given.
+  return function MockNearbyMap(props) {
+    return <View testID="map" {...props} />
   }
 })
 jest.mock('expo-secure-store', () => ({ getItemAsync: jest.fn().mockResolvedValue(null), setItemAsync: jest.fn(), deleteItemAsync: jest.fn(), WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'x' }))
@@ -913,7 +914,8 @@ describe('paying online', () => {
 
 describe('where my rider is', () => {
   const OUT = { _id: ID(9), status: 'OUT_FOR_DELIVERY', assignedAgent: 'Bilal Ahmed' }
-  const ON_THE_ROAD = { ...ORDER, orderStatus: 'OUT_FOR_DELIVERY' }
+  // The customer's checkout pin, as the order keeps it: GeoJSON [longitude, latitude].
+  const ON_THE_ROAD = { ...ORDER, orderStatus: 'OUT_FOR_DELIVERY', deliveryLocation: { type: 'Point', coordinates: [73.06, 31.42] } }
   const serve = (location, delivery = OUT) => {
     mockParams = { id: ON_THE_ROAD._id }
     api.get.mockImplementation(async (url) => {
@@ -926,16 +928,45 @@ describe('where my rider is', () => {
       throw new Error(`unexpected GET ${url}`)
     })
   }
+  const mapProps = (renderer) => renderer.root.findAll((n) => n.props.testID === 'map' && n.props.rider !== undefined)[0]?.props
 
-  it('shows when the rider was last seen and opens the map, while the order is out for delivery', async () => {
-    const spy = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined)
+  it('shows the rider on a map inside the order, with the delivery pin, while out for delivery', async () => {
     serve({ latitude: 31.4181, longitude: 73.0776, accuracy: 12, recordedAt: new Date(Date.now() - 4 * 60 * 1000).toISOString() })
     const renderer = await show(<OrderScreen />, auth())
     expect(screenText(renderer)).toContain('Your rider')
     expect(screenText(renderer)).toContain('Last seen 4m ago')
-    await press(renderer, 'See on map')
-    expect(spy).toHaveBeenCalledWith('https://www.google.com/maps/search/?api=1&query=31.4181,73.0776')
-    spy.mockRestore()
+    expect(screenText(renderer)).toContain('may have other orders')
+    expect(mapProps(renderer)).toMatchObject({
+      rider: { lat: 31.4181, lng: 73.0776 },
+      pin: { lat: 31.42, lng: 73.06 },
+      originLabel: 'Your delivery address',
+    })
+  })
+
+  it('moves the dot as new positions arrive, staying inside the app', async () => {
+    jest.useFakeTimers()
+    try {
+      let position = { latitude: 31.4181, longitude: 73.0776, recordedAt: new Date().toISOString() }
+      mockParams = { id: ON_THE_ROAD._id }
+      api.get.mockImplementation(async (url) => {
+        if (url === `/orders/${ON_THE_ROAD._id}`) return { data: { order: ON_THE_ROAD, payment: { status: 'PENDING' }, delivery: OUT } }
+        if (url === `/deliveries/${OUT._id}/code`) return { data: { code: '482913' } }
+        if (url === `/deliveries/${OUT._id}/rider-location`) return { data: { location: position } }
+        throw new Error(`unexpected GET ${url}`)
+      })
+      const renderer = await show(<OrderScreen />, auth())
+      expect(mapProps(renderer).rider).toEqual({ lat: 31.4181, lng: 73.0776 })
+
+      position = { latitude: 31.4199, longitude: 73.0761, recordedAt: new Date().toISOString() }
+      await act(async () => {
+        jest.advanceTimersByTime(15000)
+      })
+      await tick()
+
+      expect(mapProps(renderer).rider).toEqual({ lat: 31.4199, lng: 73.0761 })
+    } finally {
+      jest.useRealTimers()
+    }
   })
 
   it('shows nothing, and claims nothing, when the rider is not sharing or the server has none', async () => {

@@ -23,3 +23,11 @@ export const isValidLatLng = (lat, lng) => Number.isFinite(lat) && Number.isFini
 // A block's centre, where a range is measured from when the shopper chose the block by hand.
 export const latLngOfBlock = (block) =>
   isValidLatLng(block?.latitude, block?.longitude) ? { lat: block.latitude, lng: block.longitude } : null
+
+// An order keeps its checkout pin as GeoJSON [longitude, latitude]; the map takes { lat, lng }.
+export const latLngOfGeoPoint = (point) => {
+  const coordinates = point?.coordinates
+  return Array.isArray(coordinates) && isValidLatLng(coordinates[1], coordinates[0])
+    ? { lat: coordinates[1], lng: coordinates[0] }
+    : null
+}

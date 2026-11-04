@@ -191,6 +191,47 @@ describe('GET /api/v1/rider/deliveries', () => {
     expect([c.amountToCollect, c.cashCollected]).toEqual([0, false]);
   });
 
+  it('the checkout pin reaches the assigned rider, as plain latitude/longitude', async () => {
+    const { header } = asRider();
+    const order = codOrder({ deliveryLocation: { type: 'Point', coordinates: [73.0791, 31.4187] } });
+    const d = delivery({ orderId: order._id, status: 'OUT_FOR_DELIVERY' });
+    Delivery.find.mockReturnValue(listOf([d]));
+    Delivery.countDocuments.mockResolvedValue(1);
+    Order.find.mockReturnValue({ select: () => Promise.resolve([order]) });
+
+    const res = await request(app).get('/api/v1/rider/deliveries').set(...header);
+
+    const [item] = res.body.deliveries;
+    expect(item.deliveryLocation).toEqual({ latitude: 31.4187, longitude: 73.0791 });
+    expect(JSON.stringify(res.body)).not.toContain('"coordinates"');
+  });
+
+  it('the pin disappears once the delivery is closed', async () => {
+    const { header } = asRider();
+    const order = codOrder({ paymentStatus: 'PAID', deliveryLocation: { type: 'Point', coordinates: [73.0791, 31.4187] } });
+    Delivery.find.mockReturnValue(listOf([delivery({ orderId: order._id, status: 'DELIVERED' })]));
+    Delivery.countDocuments.mockResolvedValue(1);
+    Order.find.mockReturnValue({ select: () => Promise.resolve([order]) });
+
+    const res = await request(app).get('/api/v1/rider/deliveries?scope=history').set(...header);
+
+    const [item] = res.body.deliveries;
+    expect(item.deliveryLocation).toBeNull();
+    expect(JSON.stringify(res.body)).not.toContain('31.4187');
+  });
+
+  it('an order without a checkout pin gives no location', async () => {
+    const { header } = asRider();
+    const order = codOrder();
+    Delivery.find.mockReturnValue(listOf([delivery({ orderId: order._id })]));
+    Delivery.countDocuments.mockResolvedValue(1);
+    Order.find.mockReturnValue({ select: () => Promise.resolve([order]) });
+
+    const res = await request(app).get('/api/v1/rider/deliveries').set(...header);
+
+    expect(res.body.deliveries[0].deliveryLocation).toBeNull();
+  });
+
   it('personal details disappear once the delivery is closed', async () => {
     const { header } = asRider();
     const order = codOrder({ paymentStatus: 'PAID' });
@@ -221,6 +262,20 @@ describe('GET /api/v1/rider/deliveries/:id', () => {
     expect(res.status).toBe(200);
     expect(Delivery.findOne).toHaveBeenCalledWith({ _id: d._id.toString(), brandId: brandId.toString(), riderId: user._id });
     expect(res.body.delivery.orderNumber).toBe('CC-2026-000042');
+  });
+
+  it('single delivery carries the same checkout pin', async () => {
+    const { header } = asRider();
+    const order = codOrder({ deliveryLocation: { type: 'Point', coordinates: [73.0791, 31.4187] } });
+    const d = delivery({ orderId: order._id });
+    Delivery.findOne.mockResolvedValue(d);
+    Order.findOne.mockReturnValue({ select: () => Promise.resolve(order) });
+
+    const res = await request(app).get(`/api/v1/rider/deliveries/${d._id}`).set(...header);
+
+    expect(res.status).toBe(200);
+    expect(res.body.delivery.deliveryLocation).toEqual({ latitude: 31.4187, longitude: 73.0791 });
+    expect(JSON.stringify(res.body)).not.toContain('"coordinates"');
   });
 
   it("404 for another rider's or another brand's delivery, 400 for a bad id", async () => {

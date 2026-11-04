@@ -1,4 +1,4 @@
-import { formatDistance, isValidLatLng, mapsUrl, roundCoord } from '../src/utils/geo'
+import { formatDistance, isValidLatLng, latLngOfGeoPoint, mapsUrl, roundCoord } from '../src/utils/geo'
 
 describe('formatDistance', () => {
   it('reads as metres under a kilometre and kilometres above', () => {
@@ -40,5 +40,18 @@ describe('isValidLatLng', () => {
     expect(isValidLatLng(0, 181)).toBe(false)
     expect(isValidLatLng(NaN, 1)).toBe(false)
     expect(isValidLatLng('31', '73')).toBe(false)
+  })
+})
+
+describe('latLngOfGeoPoint', () => {
+  it('turns an order pin from [longitude, latitude] into the map’s { lat, lng }', () => {
+    expect(latLngOfGeoPoint({ type: 'Point', coordinates: [73.06, 31.42] })).toEqual({ lat: 31.42, lng: 73.06 })
+  })
+
+  it('gives nothing for a missing or malformed pin', () => {
+    expect(latLngOfGeoPoint(null)).toBeNull()
+    expect(latLngOfGeoPoint({})).toBeNull()
+    expect(latLngOfGeoPoint({ coordinates: [73.06] })).toBeNull()
+    expect(latLngOfGeoPoint({ coordinates: [200, 31.42] })).toBeNull()
   })
 })

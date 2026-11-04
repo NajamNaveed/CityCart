@@ -13,8 +13,11 @@ const ALLOWED = /^(about:|data:|blob:)/
  * OpenStreetMap, so there is no Google Maps key and no native map SDK; the
  * drawing and gestures run in a WebView. Taps on the map call `onPick(lat, lng)`;
  * tapping a shop pin, then "See products", calls `onOpenBrand(brand)`.
+ *
+ * `rider` ({ lat, lng }) is a live position: it moves its dot without moving the
+ * camera, so an order page can follow the rider without snapping away.
  */
-export default function NearbyMap({ items, zones = [], selectedIds = [], origin, pin, radiusKm, originLabel, onOpenBrand, onPick, height = 420 }) {
+export default function NearbyMap({ items, zones = [], selectedIds = [], origin, pin, rider, radiusKm, originLabel, onOpenBrand, onPick, height = 420 }) {
   const web = useRef(null)
   const brands = useRef(new Map())
   const handlers = useRef({})
@@ -39,6 +42,16 @@ export default function NearbyMap({ items, zones = [], selectedIds = [], origin,
     web.current?.injectJavaScript(`window.CityCartMap && window.CityCartMap.setData(${data}); true;`)
   }, [ready, data])
 
+  // A shared rider position changes every few seconds; `setRider` moves the dot
+  // only, so the customer's pan and zoom stay put. `null, null` takes it away.
+  const riderLat = rider ? Number(rider.lat) : NaN
+  const riderLng = rider ? Number(rider.lng) : NaN
+  const riderKey = Number.isFinite(riderLat) && Number.isFinite(riderLng) ? `${riderLat},${riderLng}` : ''
+  useEffect(() => {
+    if (!ready) return
+    web.current?.injectJavaScript(`window.CityCartMap && window.CityCartMap.setRider(${riderKey || 'null, null'}); true;`)
+  }, [ready, riderKey])
+
   function onMessage(event) {
     let message
     try {
@@ -58,7 +71,7 @@ export default function NearbyMap({ items, zones = [], selectedIds = [], origin,
   }
 
   return (
-    <View testID="map" accessibilityLabel={pickable ? 'Map for choosing a spot' : 'Map of nearby shops'} style={[styles.frame, { height }]}>
+    <View testID="map" accessibilityLabel={pickable ? 'Map for choosing a spot' : rider ? 'Map of your delivery and rider' : 'Map of nearby shops'} style={[styles.frame, { height }]}>
       <WebView
         ref={web}
         source={{ html: MAP_HTML }}

@@ -9,6 +9,7 @@ const { buildCompletion, returnPhotoBelongsToDelivery } = require('./return.serv
 const { isConfigured } = require('./upload.service');
 const { DELIVERY_FINAL_STATUSES } = require('../config/deliveryTransitions');
 const { MAX_CODE_ATTEMPTS, codesMatch } = require('../utils/deliveryCode');
+const { latLngFromPoint } = require('../utils/geo');
 
 /**
  * What a rider may see and do (docs/20 §4, docs/20 §5.1). Every query is pinned
@@ -22,7 +23,7 @@ const { MAX_CODE_ATTEMPTS, codesMatch } = require('../utils/deliveryCode');
  * payments, the brand's revenue, or the delivery code.
  */
 const ORDER_FIELDS =
-  'orderNumber total deliveryFee fulfilment returnedAmount netTotal feeRefunded currency paymentMethod paymentStatus items._id items.productName items.quantity items.totalPrice';
+  'orderNumber total deliveryFee fulfilment returnedAmount netTotal feeRefunded currency paymentMethod paymentStatus items._id items.productName items.quantity items.totalPrice deliveryLocation';
 
 const pickAddress = (a) => ({
   name: a.name,
@@ -56,6 +57,8 @@ function toRiderView(delivery, order, payment) {
   const collection = payment && payment.collection;
   const nonCash = Boolean(collection && collection.method && collection.method !== 'CASH');
   const unpaid = cod && order.paymentStatus === 'PENDING';
+  // The pin the customer chose at checkout, shown on the rider's map.
+  const pin = !closed && order && order.deliveryLocation ? latLngFromPoint(order.deliveryLocation) : null;
 
   return {
     _id: d._id,
@@ -67,6 +70,8 @@ function toRiderView(delivery, order, payment) {
     updatedAt: d.updatedAt,
     // Personal details leave the rider's screen once the delivery is closed.
     address: closed || !d.address ? null : pickAddress(d.address),
+    // Where to deliver, as the customer pinned it at checkout; null once closed.
+    deliveryLocation: pin ? { latitude: pin.lat, longitude: pin.lng } : null,
     // `lineTotal` lets the app show the amount for the accepted units without
     // exposing the unit price; the server still computes the final figures.
     items:

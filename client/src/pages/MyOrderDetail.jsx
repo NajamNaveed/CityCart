@@ -17,8 +17,10 @@ import OrderItemReview from '../components/OrderItemReview'
 import PayNow from '../components/PayNow'
 import OrderChangePrompt from '../components/OrderChangePrompt'
 import ProductImage from '../components/ProductImage'
+import DeliveryMap from '../components/DeliveryMap'
 import { Skeleton } from '../components/ui'
 import { formatDateTime, formatPrice, wrap } from '../ui'
+import { latLngOfGeoPoint } from '../utils/geo'
 import { reasonLabel } from '../utils/returns'
 
 // While the order is on its way, the customer reads this code to the rider; the
@@ -87,41 +89,69 @@ function ReceiptNote({ orderId }) {
 }
 
 // Where the rider is, if they chose to share it while delivering. Nothing is shown (and nothing is
-// claimed) when they are not sharing.
-function RiderLocation({ deliveryId }) {
-  const [state, setState] = useState({ point: null, tick: 0 })
+// claimed) when they are not sharing. The position is polled while the tab is visible; a missed
+// refresh keeps the last dot on screen instead of blanking the map (docs/11 §30).
+const RIDER_POLL_MS = 15000
+
+function RiderLocation({ deliveryId, destination }) {
+  const [state, setState] = useState({ location: null, minutes: 0, error: '', everShown: false })
   useEffect(() => {
     let active = true
-    api
-      .get(`/deliveries/${deliveryId}/rider-location`)
-      .then((res) => active && setState((s) => ({ ...s, point: res.data.location && { ...res.data.location, fetchedAt: new Date().toISOString() } })))
-      .catch(() => active && setState((s) => ({ ...s, point: null })))
+    let timer
+
+    const ask = async () => {
+      clearTimeout(timer)
+      try {
+        const res = await api.get(`/deliveries/${deliveryId}/rider-location`)
+        if (!active) return
+        const location = res.data.location || null
+        // The server already hides a position older than ten minutes, so the age is a calm "x min ago".
+        const minutes = location
+          ? Math.max(0, Math.round((Date.now() - new Date(location.recordedAt).getTime()) / 60000))
+          : 0
+        setState((now) => ({ location, minutes, error: '', everShown: now.everShown || Boolean(location) }))
+      } catch {
+        if (active) setState((now) => ({ ...now, error: 'Could not refresh just now. Trying again…' }))
+      }
+      // A hidden tab does not poll; it catches up as soon as it is looked at again.
+      if (active && document.visibilityState !== 'hidden') timer = setTimeout(ask, RIDER_POLL_MS)
+    }
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') ask()
+    }
+    if (document.visibilityState !== 'hidden') ask()
+    document.addEventListener('visibilitychange', onVisible)
     return () => {
       active = false
+      clearTimeout(timer)
+      document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [deliveryId, state.tick])
+  }, [deliveryId])
 
-  const { point } = state
-  if (!point) return null
-  // The server already hides a position older than ten minutes, so the age is a short, calm "x min ago".
-  const minutes = Math.max(0, Math.round((new Date(point.fetchedAt).getTime() - new Date(point.recordedAt).getTime()) / 60000))
+  const { location, minutes, error, everShown } = state
+  if (!location && !everShown) return null
+
+  const rider = location ? { lat: location.latitude, lng: location.longitude } : null
   return (
     <div className="mt-3.5 rounded-md border border-line bg-white p-4">
       <p className="text-[12px] text-muted">Your rider</p>
-      <p className="mt-1 text-sm text-ink">Last seen {minutes < 1 ? 'just now' : `${minutes} min ago`}.</p>
-      <div className="mt-3 flex gap-2">
-        <a
-          href={`https://www.google.com/maps/search/?api=1&query=${point.latitude},${point.longitude}`}
-          target="_blank"
-          rel="noreferrer"
-          className="text-[13px] font-medium text-ink underline"
-        >
-          See on map
-        </a>
-        <button type="button" onClick={() => setState((s) => ({ ...s, tick: s.tick + 1 }))} className="text-[13px] font-medium text-muted underline">
-          Refresh
-        </button>
-      </div>
+      {rider ? (
+        <>
+          <p className="mt-1 text-sm text-ink">Last seen {minutes < 1 ? 'just now' : `${minutes} min ago`}.</p>
+          <div className="mt-3">
+            <DeliveryMap destination={latLngOfGeoPoint(destination)} rider={rider} />
+          </div>
+          <p className="mt-2 text-[12.5px] text-muted">
+            The dot moves while your rider shares their location. They may have other orders to deliver before yours.
+          </p>
+        </>
+      ) : (
+        <p className="mt-1 text-sm text-ink">
+          Your rider is not sharing their location right now. The map returns when they share it again.
+        </p>
+      )}
+      {error ? <p className="mt-2 text-[12.5px] text-muted">{error}</p> : null}
     </div>
   )
 }
@@ -623,7 +653,9 @@ export default function MyOrderDetail() {
             </section>
           )}
 
-          {delivery?.status === 'OUT_FOR_DELIVERY' && <RiderLocation deliveryId={delivery._id} />}
+          {delivery?.status === 'OUT_FOR_DELIVERY' && (
+            <RiderLocation deliveryId={delivery._id} destination={order.deliveryLocation} />
+          )}
 
           {delivery && ON_THE_ROAD.includes(delivery.status) && <DeliveryCode deliveryId={delivery._id} />}
         </aside>

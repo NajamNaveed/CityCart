@@ -707,10 +707,22 @@ A terminated brand's riders may still share (they are finishing deliveries on th
 ## 30.3 Screens
 
 * Delivery app, rider: Account, "Share my location while I deliver".
+* Delivery app, delivery detail: **Open in map** shows the customer's checkout pin on an OpenStreetMap
+  preview inside the screen (no key, no Google Maps SDK); **Navigate** hands the coordinates to the
+  phone's own maps app.
 * Staff app, records: the delivery's detail shows "Rider location" (last seen, Open in Maps, Refresh).
-* Shopper app and website: the order page shows "Your rider" (last seen, See on map) while it is out for delivery.
-  Maps open through a plain link (`https://www.google.com/maps/search/?api=1&query=lat,lng`); no map package is used.
+* Shopper app and customer website: while the order is out for delivery, "Your rider" shows an
+  **internal map** (OpenStreetMap) with the checkout pin and a rider dot that moves as positions
+  arrive (polled about every 15 seconds while the screen/tab is visible). The wording notes that the
+  rider may have other orders to deliver before this one. Nothing is drawn when the rider is not
+  sharing.
+
+The rider's delivery view includes the customer's checkout pin as `deliveryLocation`
+(`{ latitude, longitude }`, only while the delivery is open); it never leaks the raw GeoJSON
+coordinates or any customer account data.
 
 Related code: `models/riderLocation.model.js`, `services/riderLocation.service.js`,
-`controllers/riderDelivery.controller.js`, `controllers/delivery.controller.js`, `partner/src/services/location.js`.
+`controllers/riderDelivery.controller.js`, `controllers/delivery.controller.js`, `partner/src/services/location.js`,
+`delivery/src/components/DestinationMap.jsx`, `mobile/src/components/NearbyMap.jsx`,
+`mobile/src/hooks/useRiderLocation.js`, `client/src/components/DeliveryMap.jsx`.
 

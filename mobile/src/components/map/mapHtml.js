@@ -35,6 +35,7 @@ export const MAP_HTML = `<!doctype html>
   .pin.chosen { background: #3b5b7c; }
   .marker.dot { width: 18px; height: 18px; transform: translate(-9px, -9px); }
   .dot { display: block; width: 18px; height: 18px; border-radius: 50%; border: 2px solid #fff; background: #3b5b7c; box-shadow: 0 1px 4px rgba(0,0,0,.35); box-sizing: border-box; }
+  .dot.rider { background: #b6472a; }
   #zoom { position: absolute; top: 10px; left: 10px; z-index: 7; display: flex; flex-direction: column; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 5px rgba(0,0,0,.35); }
   #zoom button { width: 36px; height: 36px; margin: 0; padding: 0; border: 0; background: #fff; color: #333; font: 22px/1 system-ui, sans-serif; cursor: pointer; -webkit-tap-highlight-color: transparent; }
   #zoom button + button { border-top: 1px solid #ccc; }
@@ -345,10 +346,10 @@ export const MAP_HTML = `<!doctype html>
     return button;
   }
 
-  function dotMarker(lat, lng, label, tap) {
-    var button = makeMarker(lat, lng, label, 'dot', tap);
+  function dotMarker(lat, lng, label, tap, kind) {
+    var button = makeMarker(lat, lng, label, kind ? 'dot ' + kind : 'dot', tap);
     var dot = document.createElement('span');
-    dot.className = 'dot';
+    dot.className = kind ? 'dot ' + kind : 'dot';
     button.appendChild(dot);
     return button;
   }
@@ -432,6 +433,12 @@ export const MAP_HTML = `<!doctype html>
           showPopup({ title: data.pin.label, lines: [], brandId: null }, x, y);
         });
       }
+    }
+    // The rider's last shared position, drawn as a clay dot on top of the stops.
+    if (data.rider) {
+      dotMarker(data.rider.lat, data.rider.lng, 'Your rider', function (x, y) {
+        showPopup({ title: 'Your rider', lines: ['Last shared position'], brandId: null }, x, y);
+      }, 'rider');
     }
     cullMarks();
   }
@@ -528,6 +535,8 @@ export const MAP_HTML = `<!doctype html>
           points.push({ lat: data.pin.lat, lng: data.pin.lng - dLng });
         }
       }
+      // The customer's rider: the first sight of it also frames the way to the door.
+      if (data.rider) points.push({ lat: data.rider.lat, lng: data.rider.lng });
     }
     if (points.length === 0) {
       state.center = { lat: FALLBACK.lat, lng: FALLBACK.lng };
@@ -755,10 +764,25 @@ export const MAP_HTML = `<!doctype html>
   window.CityCartMap = {
     setData: function (data) {
       stopInertia();
+      // A new payload (a wider search, a moved pin) keeps the rider already on the map.
+      var rider = state.data && state.data.rider;
       state.data = data || null;
+      if (state.data && rider) state.data.rider = rider;
       closePopup();
       map.className = data && data.pickable ? 'pickable' : '';
       fit();
+    },
+    // Move only the rider dot. The first shared position (or a fresh one after a
+    // pause) frames the rider and the delivery pin together; later moves do not
+    // move the camera, so the page stays where the customer put it.
+    setRider: function (lat, lng) {
+      if (!state.data) return;
+      var shown = Boolean(state.data.rider);
+      var valid = isFinite(lat) && isFinite(lng);
+      if (!valid && !shown) return;
+      state.data.rider = valid ? { lat: Number(lat), lng: Number(lng), label: 'Your rider' } : null;
+      if (state.data.rider && !shown) fit();
+      else drawMarks();
     },
   };
 

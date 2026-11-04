@@ -8,6 +8,7 @@ import AppText from '../../components/ui/AppText'
 import BackButton from '../../components/BackButton'
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
+import DestinationMap from '../../components/DestinationMap'
 import EmptyState from '../../components/ui/EmptyState'
 import Skeleton from '../../components/ui/Skeleton'
 import StatusPill from '../../components/StatusPill'
@@ -29,6 +30,7 @@ import {
   collectionReady,
   isClosed,
   linesPayload,
+  locationMapUrl,
   mapsUrl,
   nextMoves,
   paymentMethodsFor,
@@ -186,6 +188,7 @@ function DeliveryDetail({ id }) {
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState(null) // { tone, text }
   const [mode, setMode] = useState(null) // null | 'code' | 'items' | 'method' | 'fail'
+  const [showMap, setShowMap] = useState(false)
   const [code, setCode] = useState('')
   const [reason, setReason] = useState('')
   const [pay, setPay] = useState(EMPTY_PAYMENT)
@@ -385,6 +388,8 @@ function DeliveryDetail({ id }) {
     const moves = nextMoves(delivery.status)
     const closed = isClosed(delivery.status)
     const map = mapsUrl(delivery.address)
+    // The customer's checkout pin; the server stops sending it once the job is closed.
+    const pin = delivery.deliveryLocation
     // The server decides what may be offered; without Cloudinary that is cash only.
     const paymentMethods = paymentMethodsFor(delivery)
     body = (
@@ -399,8 +404,21 @@ function DeliveryDetail({ id }) {
             {delivery.address.additionalInstructions ? <AppText variant="small">Note: {delivery.address.additionalInstructions}</AppText> : null}
             <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm }}>
               {delivery.address.phone ? <Button title="Call" variant="outline" onPress={() => open(telUrl(delivery.address.phone))} style={{ flex: 1 }} /> : null}
-              {map ? <Button title="Open in Maps" variant="outline" onPress={() => open(map)} style={{ flex: 1 }} /> : null}
+              {pin || map ? (
+                <Button
+                  title={pin ? (showMap ? 'Hide map' : 'Open in map') : 'Open in Maps'}
+                  variant="outline"
+                  onPress={() => (pin ? setShowMap((shown) => !shown) : open(map))}
+                  style={{ flex: 1 }}
+                />
+              ) : null}
             </View>
+            {pin && showMap ? (
+              <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
+                <DestinationMap point={pin} label={`delivery to ${delivery.address.city || 'the customer'}`} />
+                <Button title="Navigate" variant="outline" onPress={() => open(locationMapUrl(pin))} />
+              </View>
+            ) : null}
           </Card>
         ) : (
           <Card style={{ marginBottom: spacing.lg }}>
