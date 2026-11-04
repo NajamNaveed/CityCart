@@ -6,19 +6,22 @@ const { legalSourcesFor } = require('./orderTransitions');
  * the single source of truth for the delivery lifecycle.
  *
  * FAILED -> OUT_FOR_DELIVERY is a re-attempt. A failed delivery never
- * automatically refunds or cancels anything (docs/11 §16). RETURNED and
- * CANCELLED exist in the schema but are not reachable yet (returns are not
- * part of this step).
+ * automatically refunds or cancels anything (docs/11 §16). RETURNED is reached
+ * only when the customer rejects every line at the door (docs/22 §F); it is
+ * written by the completion flow together with the Return record, never by a
+ * plain status change.
  */
 const DELIVERY_TRANSITIONS = {
   READY_FOR_PICKUP: ['PICKED_UP'],
   PICKED_UP: ['IN_TRANSIT', 'OUT_FOR_DELIVERY'],
   IN_TRANSIT: ['OUT_FOR_DELIVERY'],
-  OUT_FOR_DELIVERY: ['DELIVERED', 'FAILED'],
+  OUT_FOR_DELIVERY: ['DELIVERED', 'FAILED', 'RETURNED'],
   FAILED: ['OUT_FOR_DELIVERY'],
 };
 
-// Statuses a brand user may set via PATCH /deliveries/:id/status.
+// Statuses a brand user may set via PATCH /deliveries/:id/status. RETURNED is
+// deliberately absent: it is written only by the completion flow, with the
+// per-line answers and the Return record (docs/22 §F).
 const DELIVERY_SETTABLE_STATUSES = ['PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED', 'FAILED'];
 
 // Statuses a RIDER may set via PATCH /rider/deliveries/:id/status. DELIVERED is
@@ -39,6 +42,7 @@ const ORDER_STATUS_FOR_DELIVERY = {
   PICKED_UP: 'SHIPPED',
   OUT_FOR_DELIVERY: 'OUT_FOR_DELIVERY',
   DELIVERED: 'DELIVERED',
+  RETURNED: 'RETURNED',
 };
 
 function legalDeliverySourcesFor(target) {

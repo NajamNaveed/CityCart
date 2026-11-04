@@ -99,6 +99,7 @@ EMPLOYEE_CREATED
 EMPLOYEE_PERMISSION_CHANGED
 
 DELIVERY_ASSIGNED
+RETURN_IN_TRANSIT
 
 SYSTEM_NOTIFICATION
 ```
@@ -628,7 +629,7 @@ It mirrors the inbox: the same title and text, plus the ids needed to open the r
 
 ## 31.1 How it works
 
-* **Partner app only.** `PUT /devices/push-token` (riders and brand team members; the user always comes from
+* **Staff and Delivery apps only.** `PUT /devices/push-token` (riders and brand team members; the user always comes from
   the session) saves the phone's Expo push token in `DeviceToken`; `DELETE /devices/push-token` removes it on
   sign-out. The token is unique: a phone signed in as someone else **moves** to that person, so the previous
   user's notifications never reach it. At most five phones per user are kept.
@@ -642,10 +643,10 @@ It mirrors the inbox: the same title and text, plus the ids needed to open the r
 
 ## 31.2 What it needs (and honest limits)
 
-* **A real build of the Partner app.** Expo Go on Android cannot receive push notifications (since SDK 53). The
+* **A real build of the Staff or Delivery app.** Expo Go on Android cannot receive push notifications (since SDK 53). The
   app detects Expo Go and skips push without an error; the rest of the app works. A development or production
   build (EAS) is needed, with Firebase (FCM) credentials for Android and an Apple developer account for iOS.
-* **An Expo project id.** Run `npx eas-cli init` in `partner/`; it writes `extra.eas.projectId` into `app.json`.
+* **An Expo project id.** Run `npx eas-cli init` in `partner/` and in `delivery/`; it writes `extra.eas.projectId` into `app.json`.
   Without it the app skips push (`not_configured`).
 * **Not verified end to end.** The server and app logic are tested with mocks; sending to a real phone needs the
   build above and was not possible in the development sandbox.
@@ -663,18 +664,40 @@ Feature H of `21-next-features-plan.md`: a brand cannot supply part of an order 
 | `ADJUSTMENT_ANSWERED` | the brand's staff holding `orders.view` | the customer accepts, keeps the rest, or cancels | “Customer answered the proposed change” / what they chose |
 | `ADJUSTMENT_EXPIRED` | the brand's staff holding `orders.view` | 24 hours pass with no answer | “Proposed change expired” / the order is unchanged |
 
-Every one carries `orderId`, `orderNumber`, `brandId`, `adjustmentId` and `adjustmentStatus` in `data`, so the web inbox, the shopper app and the Partner app open the right order. A refund caused by the adjustment uses the existing `REFUND_ISSUED` notification (docs/10 §30), and a whole-order cancellation uses the normal `ORDER_CANCELLED` flow.
+Every one carries `orderId`, `orderNumber`, `brandId`, `adjustmentId` and `adjustmentStatus` in `data`, so the web inbox, the shopper app and the Staff app open the right order. A refund caused by the adjustment uses the existing `REFUND_ISSUED` notification (docs/10 §30), and a whole-order cancellation uses the normal `ORDER_CANCELLED` flow.
 
 Delivery:
 
 ```text
 in-app inbox   always (persisted per user)
 socket         notify() emits to each recipient
-push           Partner app only, via the existing push bridge; data.orderId opens the order
+push           Staff and Delivery apps, via the existing push bridge; data.orderId opens the order
 ```
 
 Nothing is sent when a proposal is only viewed, withdrawn (the customer simply no longer sees it) or when a late answer is refused. Expiry notifications are produced by the timer in `jobs/adjustmentExpiry.js`; because expiry is one conditional update per proposal, a proposal can never notify twice.
 
 Tests: `server/tests/integration/orderAdjustments.integration.test.js` asserts all three types, their recipients, and that expiry changes nothing about the order.
+
+---
+
+# 33. Door Return Notifications (added November 2026, Phase 6)
+
+When the rider completes a delivery with refused lines (docs/22 §F), the goods start travelling back to the store. The brand's team needs to know a return exists before it arrives, so `notifyBrandOfReturn()` sends one notification:
+
+| Type | Recipient | When | Title / message |
+| ---- | --------- | ---- | --------------- |
+| `RETURN_IN_TRANSIT` | the brand's staff holding `orders.view` or `delivery.view` | a door return is created at completion | “Returned goods on the way” / how many lines are coming back and for which order |
+
+`data` carries `orderId`, `orderNumber`, `brandId`, `returnId`, `deliveryId`, `lines`, `returnedSubtotal` and the return `status`, so the web or Staff app can open the returned-goods inbox (docs/20 §6.1) or the order.
+
+Only one notification is sent per return, at completion: the return already exists when the goods leave the customer, and receiving them later is an action the brand itself takes, so it does not notify the same people again. A fully rejected order also sends the customer the usual `ORDER_REJECTED` notification (the delivery ended with nothing handed over). Delivery uses the existing bridge:
+
+```text
+in-app inbox   always (persisted per user)
+socket         notify() emits to each recipient
+push           Staff app, via the existing push bridge; data.orderId opens the order
+```
+
+A return notification is **best effort**: a failure to notify never fails the delivery completion that created the return. Tests: `server/tests/returns.test.js` covers the return flow, and the seed (`server/scripts/demo/build.js`) creates a `RETURN_IN_TRANSIT` notification for every seeded return so the inbox shows one.
 
 

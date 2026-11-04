@@ -8,11 +8,12 @@ jest.mock('../src/services/api', () => ({ __esModule: true, default: { get: jest
 
 import * as SecureStore from 'expo-secure-store'
 import api from '../src/services/api'
-import { isPartnerRole, PARTNER_ROLES, restoreSession, signIn, signOut } from '../src/services/session'
+import { isStaffRole, restoreSession, signIn, signOut, STAFF_ROLES } from '../src/services/session'
 import { tokenStore } from '../src/services/storage'
 
 const httpError = (status) => Object.assign(new Error('http'), { response: { status, data: {} } })
-const RIDER = { name: 'Bilal', role: 'RIDER' }
+const EMPLOYEE = { name: 'Maryam', role: 'BRAND_EMPLOYEE', permissions: ['orders.view'] }
+const PICKER = { name: 'Ali', role: 'PICKER' }
 
 beforeEach(async () => {
   jest.clearAllMocks()
@@ -24,11 +25,11 @@ beforeEach(async () => {
 })
 
 describe('who this app is for', () => {
-  it('riders and brand team members only, like the server', () => {
-    expect(PARTNER_ROLES).toEqual(['RIDER', 'BRAND_EMPLOYEE'])
-    expect(isPartnerRole('RIDER')).toBe(true)
-    expect(isPartnerRole('BRAND_EMPLOYEE')).toBe(true)
-    ;['BRAND_ADMIN', 'SUPER_ADMIN', 'CUSTOMER', undefined].forEach((role) => expect(isPartnerRole(role)).toBe(false))
+  it('brand team members and pickers only, like the server', () => {
+    expect(STAFF_ROLES).toEqual(['BRAND_EMPLOYEE', 'PICKER'])
+    expect(isStaffRole('BRAND_EMPLOYEE')).toBe(true)
+    expect(isStaffRole('PICKER')).toBe(true)
+    ;['RIDER', 'BRAND_ADMIN', 'SUPER_ADMIN', 'CUSTOMER', undefined].forEach((role) => expect(isStaffRole(role)).toBe(false))
   })
 })
 
@@ -40,9 +41,15 @@ describe('restoreSession (app start)', () => {
 
   it('signs in with the saved token when the server accepts it', async () => {
     SecureStore.getItemAsync.mockResolvedValue('saved.token')
-    api.get.mockResolvedValue({ data: { user: RIDER } })
-    expect(await restoreSession()).toEqual({ status: 'signedIn', user: RIDER })
+    api.get.mockResolvedValue({ data: { user: EMPLOYEE } })
+    expect(await restoreSession()).toEqual({ status: 'signedIn', user: EMPLOYEE })
     expect(api.get).toHaveBeenCalledWith('/auth/me')
+  })
+
+  it('also restores a picker', async () => {
+    SecureStore.getItemAsync.mockResolvedValue('saved.token')
+    api.get.mockResolvedValue({ data: { user: PICKER } })
+    expect(await restoreSession()).toEqual({ status: 'signedIn', user: PICKER })
   })
 
   it.each([401, 403])('forgets a token the server refuses (%i)', async (status) => {
@@ -54,7 +61,7 @@ describe('restoreSession (app start)', () => {
 
   it('forgets the token of an account this app is not for', async () => {
     SecureStore.getItemAsync.mockResolvedValue('odd.token')
-    api.get.mockResolvedValue({ data: { user: { role: 'CUSTOMER' } } })
+    api.get.mockResolvedValue({ data: { user: { role: 'RIDER' } } })
     expect(await restoreSession()).toEqual({ status: 'signedOut' })
     expect(tokenStore.get()).toBeNull()
   })
@@ -72,19 +79,18 @@ describe('restoreSession (app start)', () => {
 })
 
 describe('signIn', () => {
-  it('uses the PARTNER login, stores the token and returns the user', async () => {
-    api.post.mockResolvedValue({ data: { user: RIDER, token: 'fresh.token' } })
-    const user = await signIn({ email: 'bilal@example.com', password: 'pw123456' })
-    expect(api.post).toHaveBeenCalledWith('/auth/partner/login', { email: 'bilal@example.com', password: 'pw123456' })
-    expect(user).toEqual(RIDER)
+  it('uses the STAFF login, stores the token and returns the user', async () => {
+    api.post.mockResolvedValue({ data: { user: PICKER, token: 'fresh.token' } })
+    const user = await signIn({ email: 'ali@example.com', password: 'pw123456' })
+    expect(api.post).toHaveBeenCalledWith('/auth/staff/login', { email: 'ali@example.com', password: 'pw123456' })
+    expect(user).toEqual(PICKER)
     expect(tokenStore.get()).toBe('fresh.token')
   })
 
   it("loads a team member's permissions from /auth/me, because the sign-in answer does not carry them", async () => {
-    const withPermissions = { name: 'Maryam', role: 'BRAND_EMPLOYEE', permissions: ['orders.view'] }
     api.post.mockResolvedValue({ data: { user: { name: 'Maryam', role: 'BRAND_EMPLOYEE' }, token: 'emp.token' } })
-    api.get.mockResolvedValue({ data: { user: withPermissions } })
-    expect(await signIn({ email: 'm@example.com', password: 'x' })).toEqual(withPermissions)
+    api.get.mockResolvedValue({ data: { user: EMPLOYEE } })
+    expect(await signIn({ email: 'm@example.com', password: 'x' })).toEqual(EMPLOYEE)
     expect(api.get).toHaveBeenCalledWith('/auth/me')
     expect(tokenStore.get()).toBe('emp.token')
   })
@@ -96,16 +102,16 @@ describe('signIn', () => {
     expect(tokenStore.get()).toBeNull()
   })
 
-  it('a rider needs no extra request', async () => {
-    api.post.mockResolvedValue({ data: { user: RIDER, token: 'r.token' } })
-    await signIn({ email: 'b@example.com', password: 'x' })
+  it('a picker needs no extra request', async () => {
+    api.post.mockResolvedValue({ data: { user: PICKER, token: 'p.token' } })
+    await signIn({ email: 'a@example.com', password: 'x' })
     expect(api.get).not.toHaveBeenCalled()
   })
 
   it('refuses a reply without a token, and a reply for the wrong kind of account, and stores nothing', async () => {
-    api.post.mockResolvedValue({ data: { user: RIDER } })
+    api.post.mockResolvedValue({ data: { user: EMPLOYEE } })
     await expect(signIn({ email: 'a@b.co', password: 'x' })).rejects.toThrow(/did not return a session/)
-    api.post.mockResolvedValue({ data: { user: { role: 'BRAND_ADMIN' }, token: 't' } })
+    api.post.mockResolvedValue({ data: { user: { role: 'RIDER' }, token: 't' } })
     await expect(signIn({ email: 'a@b.co', password: 'x' })).rejects.toThrow(/did not return a session/)
     expect(tokenStore.get()).toBeNull()
     expect(SecureStore.setItemAsync).not.toHaveBeenCalled()

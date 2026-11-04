@@ -1,6 +1,7 @@
 /**
  * The Nearby screen against a fake server, a fake position and a fake map:
- * the first-visit flow, a remembered area, the range pills, empty results and the map view.
+ * the first-visit flow, remembered areas (single, overlap and a dropped pin),
+ * the range pills, the products view, and the location sheet.
  */
 import React from 'react'
 import { Linking, Text } from 'react-native'
@@ -10,11 +11,7 @@ import TestRenderer, { act } from 'react-test-renderer'
 jest.setTimeout(30000)
 
 const mockRouter = { push: jest.fn(), navigate: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true), setParams: jest.fn() }
-const mockMapProps = { scripts: [], onMessage: null }
-const lastMapData = () => {
-  const script = mockMapProps.scripts.at(-1)
-  return JSON.parse(script.slice(script.indexOf('renderMap(', script.indexOf('&&') + 2) + 'renderMap('.length, script.lastIndexOf('); true;')))
-}
+const mockMaps = { views: [] }
 
 jest.mock('expo-router', () => ({ useRouter: () => mockRouter, useLocalSearchParams: () => ({}), Redirect: () => null, Link: ({ children }) => children }))
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default)
@@ -29,43 +26,27 @@ jest.mock('../src/services/api', () => ({
   setUnauthorizedHandler: jest.fn(),
 }))
 jest.mock('../src/services/location', () => ({ getShopperPosition: jest.fn() }))
-jest.mock('react-native-webview', () => {
+jest.mock('../src/components/NearbyMap', () => {
   const React = require('react')
   const { View } = require('react-native')
-  const WebView = React.forwardRef(({ onLoadEnd, onMessage }, ref) => {
-    mockMapProps.onMessage = onMessage
-    React.useImperativeHandle(ref, () => ({ injectJavaScript: (script) => mockMapProps.scripts.push(script) }))
-    React.useEffect(() => onLoadEnd && onLoadEnd(), [onLoadEnd])
+  return function MockNearbyMap(props) {
+    mockMaps.views.push(props)
     return <View testID="map" />
-  })
-  return { __esModule: true, WebView }
+  }
 })
 
 import api from '../src/services/api'
 import { getShopperPosition } from '../src/services/location'
 import { CityProvider } from '../src/context/CityProvider'
 import { NearbyProvider } from '../src/context/NearbyProvider'
+import LocationSheet from '../src/components/LocationSheet'
 import Nearby from '../src/app/(tabs)/nearby'
 
 const ID = (n) => `64b7f0c2a1b2c3d4e5f6070${n}`
 const CITY = { _id: ID(9), name: 'Faisalabad' }
-const GULBERG = { _id: ID(4), name: 'Gulberg', cityId: CITY._id, latitude: 31.4, longitude: 73.1, polygon: [[31.39, 73.09], [31.39, 73.11], [31.41, 73.11], [31.41, 73.09]] }
-const DGROUND = { _id: ID(7), name: 'D Ground', cityId: CITY._id, latitude: 31.405, longitude: 73.105, polygon: [[31.395, 73.1], [31.395, 73.12], [31.415, 73.12], [31.415, 73.1]] }
-const GHEE = {
-  catalogProductId: ID(8),
-  name: 'Dalda Ghee 1 kg',
-  manufacturer: 'Dalda',
-  size: { value: 1, unit: 'kg' },
-  images: [],
-  minPrice: 1180,
-  maxPrice: 1250,
-  offerCount: 2,
-  inStock: true,
-  offers: [
-    { productId: ID(2), brandId: ID(1), brandName: 'Cheap Mart', price: 1180, availability: 'IN_STOCK', branchCount: 1, nearestKm: 0.8 },
-    { productId: ID(3), brandId: ID(1), brandName: 'Near Mart', price: 1250, availability: 'IN_STOCK', branchCount: 2, nearestKm: 0.2 },
-  ],
-}
+const GULBERG = { _id: ID(4), name: 'Gulberg', cityId: CITY._id, polygon: [[31.39, 73.09], [31.41, 73.09], [31.41, 73.11], [31.39, 73.11]] }
+const DGROUND = { _id: ID(7), name: 'D Ground', cityId: CITY._id, polygon: [[31.42, 73.07], [31.44, 73.07], [31.44, 73.09], [31.42, 73.09]] }
+const POSITION = { lat: 31.4, lng: 73.1 }
 const BRAND = {
   _id: ID(1),
   name: 'Loom & Co.',
@@ -78,26 +59,51 @@ const BRAND = {
   ],
   products: [{ _id: ID(2), name: 'Mehrunisa Printed Lawn', price: 3600, image: '', availability: 'IN_STOCK', availableAt: ['Gulberg'] }],
 }
+const CATALOG = {
+  catalogProductId: ID(3),
+  name: 'Mehrunisa Printed Lawn',
+  manufacturer: 'Mehrunisa',
+  size: { value: '3', unit: 'm' },
+  images: [],
+  minPrice: 3200,
+  offerCount: 2,
+  inStock: true,
+  offers: [
+    { productId: ID(2), brandName: 'Loom & Co.', price: 3200, nearestKm: 1.2, branchCount: 2, availability: 'IN_STOCK' },
+    { productId: ID(8), brandName: 'Mehr Textiles', price: 3400, nearestKm: 2.1, branchCount: 1, availability: 'IN_STOCK' },
+  ],
+}
 
 let discoverItems
-let blocksAt // the answer to "which blocks am I in?"
+let catalogItems
+let atResult
 function serve() {
   discoverItems = [BRAND]
-  blocksAt = { containing: [GULBERG], nearest: [DGROUND] }
+  catalogItems = [CATALOG]
+  atResult = { containing: [GULBERG], nearest: [] }
   api.get.mockImplementation(async (url, config) => {
     if (url === '/cities') return { data: { cities: [CITY] } }
     if (url === '/blocks') return { data: { blocks: [GULBERG, DGROUND] } }
-    if (url === '/blocks/at') return { data: blocksAt }
-    if (url === '/catalog/browse') return { data: { items: [GHEE], pagination: { page: 1, pages: 1, total: 1 }, meta: {} } }
+    if (url === '/blocks/at') {
+      if (atResult instanceof Error) throw atResult
+      return { data: atResult }
+    }
     if (url === '/discover') {
+      const params = config.params
       return {
         data: {
           items: discoverItems,
           pagination: { page: 1, pages: 1, total: discoverItems.length },
-          meta: { scope: config.params.scope, radiusKm: config.params.radiusKm ? Number(config.params.radiusKm) : null, origin: { lat: 31.4, lng: 73.1 }, block: GULBERG, totalBranches: discoverItems.length ? 2 : 0 },
+          meta: {
+            scope: params.scope,
+            radiusKm: params.radiusKm || null,
+            origin: params.lat ? { lat: Number(params.lat), lng: Number(params.lng) } : null,
+            totalBranches: discoverItems.length ? 2 : 0,
+          },
         },
       }
     }
+    if (url === '/catalog/browse') return { data: { items: catalogItems, pagination: { page: 1, pages: 1, total: catalogItems.length }, meta: {} } }
     throw new Error(`unexpected request ${url}`)
   })
 }
@@ -121,6 +127,7 @@ async function open() {
       <CityProvider>
         <NearbyProvider>
           <Nearby />
+          <LocationSheet />
         </NearbyProvider>
       </CityProvider>,
     )
@@ -133,11 +140,18 @@ async function open() {
 const textOf = (node) => [].concat(node.props.children).flat(Infinity).filter((c) => typeof c === 'string' || typeof c === 'number').join('')
 const screenText = (renderer) => renderer.root.findAllByType(Text).map(textOf).join(' | ')
 const discoverCalls = () => api.get.mock.calls.filter(([url]) => url === '/discover').map(([, config]) => config.params)
+const catalogCalls = () => api.get.mock.calls.filter(([url]) => url === '/catalog/browse').map(([, config]) => config.params)
 
-// Press the control whose label is `label` (chips, buttons and tabs are Pressables around a Text).
 async function press(renderer, label) {
   const target = renderer.root.findAll((n) => typeof n.props.onPress === 'function' && n.findAllByType(Text).some((t) => textOf(t) === label))[0]
   if (!target) throw new Error(`nothing to press labelled "${label}" in: ${screenText(renderer)}`)
+  await act(async () => target.props.onPress())
+  await tick()
+}
+
+async function pressByLabel(renderer, label) {
+  const target = renderer.root.findAll((n) => n.props.accessibilityLabel === label && typeof n.props.onPress === 'function')[0]
+  if (!target) throw new Error(`no control with accessibility label "${label}" in: ${screenText(renderer)}`)
   await act(async () => target.props.onPress())
   await tick()
 }
@@ -149,7 +163,7 @@ async function remember({ city = true, nearby } = {}) {
 
 beforeEach(async () => {
   jest.clearAllMocks()
-  mockMapProps.scripts.length = 0
+  mockMaps.views.length = 0
   await AsyncStorage.clear()
   serve()
 })
@@ -158,19 +172,19 @@ describe('first visit', () => {
   it('asks for the position once, finds the block, and shows the shops around it', async () => {
     jest.useFakeTimers()
     await remember({ city: false })
-    getShopperPosition.mockResolvedValue({ lat: 31.401, lng: 73.101 })
+    getShopperPosition.mockResolvedValue(POSITION)
     const renderer = await open()
     await act(async () => { jest.advanceTimersByTime(800) })
     await tick(10)
     jest.useRealTimers()
 
     expect(getShopperPosition).toHaveBeenCalledTimes(1)
-    expect(api.get).toHaveBeenCalledWith('/blocks/at', { params: { lat: 31.401, lng: 73.101 } })
+    expect(api.get).toHaveBeenCalledWith('/blocks/at', { params: POSITION })
     const text = screenText(renderer)
-    expect(text).toContain('Gulberg') // the chip shows the block
+    expect(text).toContain('Gulberg') // the chip shows the area
     expect(text).toContain('Loom & Co.')
     expect(text).toContain('1.2 km away · 2 branches')
-    expect(discoverCalls().at(-1)).toMatchObject({ scope: 'area', blockIds: GULBERG._id, lat: 31.401, lng: 73.101 })
+    expect(discoverCalls().at(-1)).toMatchObject({ scope: 'area', blockIds: GULBERG._id, cityId: CITY._id, lat: 31.4, lng: 73.1 })
     expect(JSON.parse(await AsyncStorage.getItem('citycart.nearbyAsked'))).toBe(true)
   })
 
@@ -196,7 +210,7 @@ describe('first visit', () => {
 })
 
 describe('a remembered area', () => {
-  beforeEach(() => remember({ nearby: { blockIds: [GULBERG._id], coords: null, pinned: false, range: 'block' } }))
+  beforeEach(() => remember({ nearby: { blockIds: [GULBERG._id], coords: POSITION, pinned: false, range: 'block' } }))
 
   it('lists the brand with its branches, distances and products', async () => {
     await AsyncStorage.setItem('citycart.nearbyAsked', 'true')
@@ -218,11 +232,11 @@ describe('a remembered area', () => {
     await AsyncStorage.setItem('citycart.nearbyAsked', 'true')
     const renderer = await open()
     await press(renderer, '5 km')
-    // no position was shared, so the range is measured from the block's centre
-    expect(discoverCalls().at(-1)).toMatchObject({ scope: 'area', radiusKm: '5', blockIds: GULBERG._id, lat: 31.4, lng: 73.1 })
+    expect(discoverCalls().at(-1)).toMatchObject({ scope: 'area', radiusKm: '5', blockIds: GULBERG._id })
     expect(JSON.parse(await AsyncStorage.getItem('citycart.nearby')).range).toBe('5')
     await press(renderer, 'Whole city')
     expect(discoverCalls().at(-1)).toMatchObject({ scope: 'city' })
+    expect(discoverCalls().at(-1)).not.toHaveProperty('blockIds')
   })
 
   it('suggests a wider range when nothing is found, and uses it', async () => {
@@ -241,23 +255,68 @@ describe('a remembered area', () => {
     expect(mockRouter.navigate).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/shop', params: expect.objectContaining({ brandId: BRAND._id }) }))
   })
 
-  it('shows the shops on a map, with a circle for a radius search', async () => {
+  it('shows the shops on a map, with a radius for a radius search', async () => {
     await AsyncStorage.setItem('citycart.nearbyAsked', 'true')
     const renderer = await open()
     await press(renderer, 'Map')
     expect(renderer.root.findAllByProps({ testID: 'map' }).length).toBeGreaterThan(0)
-    const first = lastMapData()
-    expect(first.pins.filter((p) => p.title === BRAND.name)).toHaveLength(2) // one per branch
-    expect(first.pins[0]).toMatchObject({ lat: 31.401, lng: 73.101, brandId: BRAND._id })
-    expect(first.radiusKm).toBeNull()
-    expect(first.zones).toEqual([expect.objectContaining({ name: 'Gulberg', selected: true, polygon: GULBERG.polygon })]) // the block being searched is outlined
+    let map = mockMaps.views.at(-1)
+    expect(map.items).toEqual([BRAND])
+    expect(map.zones).toEqual([GULBERG]) // the chosen block is shaded
+    expect(map.radiusKm).toBeNull()
+    expect(map.origin).toEqual(POSITION)
 
     await press(renderer, '10 km')
-    expect(lastMapData()).toMatchObject({ radiusKm: 10, origin: { lat: 31.4, lng: 73.1 } })
+    map = mockMaps.views.at(-1)
+    expect(map.radiusKm).toBe('10')
 
-    // tapping a pin's button goes to that brand's products
-    mockMapProps.onMessage({ nativeEvent: { data: JSON.stringify({ type: 'brand', id: BRAND._id }) } })
+    // tapping a shop pin's "See products" goes to that brand
+    map.onOpenBrand(BRAND)
     expect(mockRouter.navigate).toHaveBeenCalled()
+  })
+})
+
+describe('choosing blocks by hand', () => {
+  it('takes every block in an overlap', async () => {
+    await remember({ nearby: { blockIds: [GULBERG._id, DGROUND._id], coords: null, pinned: false, range: 'block' } })
+    await AsyncStorage.setItem('citycart.nearbyAsked', 'true')
+    const renderer = await open()
+    expect(screenText(renderer)).toContain('within your blocks')
+    expect(screenText(renderer)).toContain('These blocks')
+    expect(discoverCalls().at(-1)).toMatchObject({ scope: 'area', blockIds: `${GULBERG._id},${DGROUND._id}` })
+    expect(discoverCalls().at(-1)).not.toHaveProperty('lat')
+  })
+
+  it('lets the shopper pick an area by hand, and remembers it without a position', async () => {
+    await remember({})
+    await AsyncStorage.setItem('citycart.nearbyAsked', 'true')
+    const renderer = await open()
+
+    await pressByLabel(renderer, 'Location: Faisalabad. Change')
+    await press(renderer, 'Faisalabad') // the city chip in the sheet
+    await press(renderer, 'Gulberg') // a row in the list of areas
+
+    expect(discoverCalls().at(-1)).toMatchObject({ scope: 'area', blockIds: GULBERG._id })
+    expect(discoverCalls().at(-1)).not.toHaveProperty('lat')
+    expect(JSON.parse(await AsyncStorage.getItem('citycart.nearby'))).toMatchObject({ blockIds: [GULBERG._id], coords: null })
+    expect(getShopperPosition).not.toHaveBeenCalled() // choosing by hand never asks for the position
+  })
+
+  it('uses a pin dropped on the sheet\'s map', async () => {
+    await remember({ nearby: { blockIds: [GULBERG._id], coords: POSITION, pinned: false, range: 'block' } })
+    await AsyncStorage.setItem('citycart.nearbyAsked', 'true')
+    atResult = { containing: [DGROUND], nearest: [] }
+    const renderer = await open()
+
+    await pressByLabel(renderer, 'Location: Gulberg, Faisalabad. Change')
+    await press(renderer, 'Pick a spot on the map')
+    const map = mockMaps.views.at(-1)
+    await act(async () => map.onPick(31.43, 73.08))
+    await tick()
+
+    expect(api.get).toHaveBeenCalledWith('/blocks/at', { params: { lat: 31.43, lng: 73.08 } })
+    expect(discoverCalls().at(-1)).toMatchObject({ scope: 'area', blockIds: DGROUND._id, lat: 31.43, lng: 73.08 })
+    expect(JSON.parse(await AsyncStorage.getItem('citycart.nearby'))).toMatchObject({ blockIds: [DGROUND._id], coords: { lat: 31.43, lng: 73.08 }, pinned: true })
   })
 })
 
@@ -269,7 +328,7 @@ describe('the location sheet', () => {
     const openSettings = jest.spyOn(Linking, 'openSettings').mockResolvedValue()
     const renderer = await open()
 
-    await press(renderer, 'Faisalabad') // the location chip opens the sheet
+    await pressByLabel(renderer, 'Location: Faisalabad. Change')
     await press(renderer, 'Use my current location')
     const text = screenText(renderer)
     expect(text).toContain('Location is blocked for CityCart')
@@ -278,165 +337,38 @@ describe('the location sheet', () => {
     await press(renderer, 'Open Settings')
     expect(openSettings).toHaveBeenCalledTimes(1)
   })
-
-  it('lets the shopper pick an area by hand, and remembers it without a position', async () => {
-    await remember({})
-    await AsyncStorage.setItem('citycart.nearbyAsked', 'true')
-    const renderer = await open()
-
-    await press(renderer, 'Faisalabad')
-    await press(renderer, 'Gulberg') // a row in the list of areas
-
-    expect(discoverCalls().at(-1)).toMatchObject({ scope: 'area', blockIds: GULBERG._id, lat: 31.4, lng: 73.1 }) // measured from the block's centre
-    expect(JSON.parse(await AsyncStorage.getItem('citycart.nearby'))).toMatchObject({ blockIds: [GULBERG._id], coords: null, pinned: false })
-    expect(getShopperPosition).not.toHaveBeenCalled() // choosing by hand never asks for the position
-  })
 })
 
-describe('no area chosen yet', () => {
-  it('searches the whole city and says why', async () => {
-    await remember({})
+describe('the products view', () => {
+  it('compares one catalogue product across the stores in the area', async () => {
+    await remember({ nearby: { blockIds: [GULBERG._id], coords: POSITION, pinned: false, range: 'block' } })
     await AsyncStorage.setItem('citycart.nearbyAsked', 'true')
-    const text = screenText(await open())
-    expect(text).toContain('Choose your area to search your block')
-    expect(discoverCalls().at(-1)).toMatchObject({ scope: 'city' })
-  })
-})
-
-describe('one position, several blocks', () => {
-  async function openSheetAfterDetect() {
-    await remember({})
-    await AsyncStorage.setItem('citycart.nearbyAsked', 'true')
-    const renderer = await open()
-    await press(renderer, 'Faisalabad')
-    await press(renderer, 'Use my current location')
-    return renderer
-  }
-
-  it('ticks every block of an overlap, lets the shopper untick one, and keeps at least one', async () => {
-    getShopperPosition.mockResolvedValue({ lat: 31.403, lng: 73.102 })
-    blocksAt = { containing: [GULBERG, DGROUND], nearest: [] }
-    const renderer = await openSheetAfterDetect()
-
-    expect(screenText(renderer)).toContain('This spot is in 2 blocks')
-    expect(discoverCalls().at(-1)).toMatchObject({ scope: 'area', blockIds: `${GULBERG._id},${DGROUND._id}`, lat: 31.403, lng: 73.102 })
-
-    await press(renderer, 'D Ground') // untick one: the position is kept
-    expect(discoverCalls().at(-1)).toMatchObject({ blockIds: GULBERG._id, lat: 31.403 })
-    await press(renderer, 'Gulberg') // the last block stays ticked
-    expect(discoverCalls().at(-1)).toMatchObject({ blockIds: GULBERG._id })
-    expect(JSON.parse(await AsyncStorage.getItem('citycart.nearby')).blockIds).toEqual([GULBERG._id])
-  })
-
-  it('offers the nearest blocks between zones, and searches the ones the shopper picks', async () => {
-    getShopperPosition.mockResolvedValue({ lat: 31.42, lng: 73.09 })
-    blocksAt = { containing: [], nearest: [{ ...GULBERG, distanceKm: 0.6 }, { ...DGROUND, distanceKm: 1.1 }] }
-    const renderer = await openSheetAfterDetect()
-
-    expect(screenText(renderer)).toContain('This spot is between blocks')
-    expect(screenText(renderer)).toContain('Gulberg · 600 m') // how far each one is
-    expect(discoverCalls().at(-1)).toMatchObject({ scope: 'city' }) // nothing chosen yet
-
-    await press(renderer, 'Gulberg · 600 m')
-    await press(renderer, 'D Ground · 1.1 km')
-    expect(discoverCalls().at(-1)).toMatchObject({ scope: 'area', blockIds: `${GULBERG._id},${DGROUND._id}`, lat: 31.42, lng: 73.09 })
-  })
-
-  it('lets the shopper shop somewhere else by dropping a pin on the map', async () => {
-    await remember({ nearby: { blockIds: [GULBERG._id], coords: { lat: 31.4, lng: 73.1 }, pinned: false, range: 'block' } })
-    await AsyncStorage.setItem('citycart.nearbyAsked', 'true')
-    blocksAt = { containing: [DGROUND], nearest: [] }
-    const renderer = await open()
-    await press(renderer, 'Gulberg')
-    await press(renderer, 'Pick a spot on the map')
-
-    const map = lastMapData()
-    expect(map).toMatchObject({ pickable: true, fitOnce: true, pin: null })
-    expect(map.zones.map((z) => z.name)).toEqual(['Gulberg', 'D Ground']) // every block, outlined
-    expect(map.zones.find((z) => z.name === 'Gulberg').selected).toBe(true)
-
-    await act(async () => mockMapProps.onMessage({ nativeEvent: { data: JSON.stringify({ type: 'pick', lat: 31.40512345, lng: 73.10512345 }) } }))
-    await tick()
-
-    expect(api.get).toHaveBeenCalledWith('/blocks/at', { params: { lat: 31.40512, lng: 73.10512 } })
-    expect(getShopperPosition).not.toHaveBeenCalled()
-    expect(JSON.parse(await AsyncStorage.getItem('citycart.nearby'))).toMatchObject({ blockIds: [DGROUND._id], pinned: true, coords: { lat: 31.40512, lng: 73.10512 } })
-    expect(discoverCalls().at(-1)).toMatchObject({ scope: 'area', blockIds: DGROUND._id })
-    expect(lastMapData().pin).toEqual({ lat: 31.40512, lng: 73.10512 })
-  })
-
-  it('says so when the dropped pin is nowhere we deliver', async () => {
-    await remember({ nearby: { blockIds: [GULBERG._id], coords: null, pinned: false, range: 'block' } })
-    await AsyncStorage.setItem('citycart.nearbyAsked', 'true')
-    blocksAt = { containing: [], nearest: [] }
-    const renderer = await open()
-    await press(renderer, 'Gulberg')
-    await press(renderer, 'Pick a spot on the map')
-    await act(async () => mockMapProps.onMessage({ nativeEvent: { data: JSON.stringify({ type: 'pick', lat: 10, lng: 10 }) } }))
-    await tick()
-    expect(screenText(renderer)).toContain("We don't serve this spot yet")
-    // the earlier area is untouched
-    expect(JSON.parse(await AsyncStorage.getItem('citycart.nearby')).blockIds).toEqual([GULBERG._id])
-  })
-
-  it('lets the shopper choose more than one area by hand', async () => {
-    await remember({})
-    await AsyncStorage.setItem('citycart.nearbyAsked', 'true')
-    const renderer = await open()
-    await press(renderer, 'Faisalabad')
-    await press(renderer, 'Gulberg')
-    await press(renderer, 'D Ground')
-    expect(discoverCalls().at(-1)).toMatchObject({ scope: 'area', blockIds: `${GULBERG._id},${DGROUND._id}` })
-    expect(discoverCalls().at(-1)).not.toHaveProperty('lat') // two blocks have no single centre to measure from
-    await press(renderer, 'Gulberg') // tapping again unchooses it
-    expect(discoverCalls().at(-1)).toMatchObject({ blockIds: DGROUND._id })
-  })
-})
-
-describe('products in the area', () => {
-  beforeEach(async () => {
-    await remember({ nearby: { blockIds: [GULBERG._id], coords: { lat: 31.4, lng: 73.1 }, pinned: false, range: '5' } })
-    await AsyncStorage.setItem('citycart.nearbyAsked', 'true')
-  })
-
-  it('shows each product once with its stores, and compares them', async () => {
     const renderer = await open()
     await press(renderer, 'Products')
 
-    const call = api.get.mock.calls.filter(([url]) => url === '/catalog/browse').at(-1)[1].params
-    expect(call).toMatchObject({ blockIds: GULBERG._id, sort: 'name', lat: 31.4, lng: 73.1, radiusKm: '5', page: 1 })
-    let text = screenText(renderer)
-    expect(text).toContain('Dalda Ghee 1 kg')
-    expect(text).toContain('Dalda · 1 kg')
-    expect(text).toContain('from Rs 1,180')
+    expect(catalogCalls().at(-1)).toMatchObject({ blockIds: GULBERG._id, sort: 'name', page: 1, limit: 12, lat: 31.4, lng: 73.1 })
+    const text = screenText(renderer)
+    expect(text).toContain('Mehrunisa Printed Lawn')
+    expect(text).toContain('from Rs 3,200')
     expect(text).toContain('2 stores')
-    expect(text).not.toContain('Cheap Mart') // the offers stay folded away until asked
+    expect(text).toContain('Compare 2 stores')
 
     await press(renderer, 'Compare 2 stores')
-    text = screenText(renderer)
-    expect(text).toContain('Cheap Mart')
-    expect(text).toContain('Rs 1,250')
-    expect(text).toContain('800 m away')
+    expect(screenText(renderer)).toContain('Mehr Textiles')
+    await pressByLabel(renderer, 'Mehr Textiles, Rs 3,400, open this store\'s product')
+    expect(mockRouter.push).toHaveBeenCalledWith(`/product/${ID(8)}`)
 
-    const offer = renderer.root.findAll((n) => n.props.accessibilityRole === 'link' && String(n.props.accessibilityLabel).startsWith('Cheap Mart'))[0]
-    await act(async () => offer.props.onPress())
-    expect(mockRouter.push).toHaveBeenCalledWith(`/product/${GHEE.offers[0].productId}`)
-  })
-
-  it('can sort by lowest price, or by the nearest store when the shopper has a position', async () => {
-    const renderer = await open()
-    await press(renderer, 'Products')
     await press(renderer, 'Lowest price')
-    expect(api.get.mock.calls.filter(([url]) => url === '/catalog/browse').at(-1)[1].params.sort).toBe('price')
-    await press(renderer, 'Nearest store')
-    expect(api.get.mock.calls.filter(([url]) => url === '/catalog/browse').at(-1)[1].params.sort).toBe('nearest')
+    expect(catalogCalls().at(-1)).toMatchObject({ sort: 'price' })
   })
 
-  it('asks the shopper to choose an area when there is none', async () => {
-    await AsyncStorage.setItem('citycart.nearby', JSON.stringify({ blockIds: [], coords: null, pinned: false, range: 'block' }))
+  it('asks for an area before comparing products', async () => {
+    await remember({ nearby: { blockIds: [], coords: null, pinned: false, range: 'block' } })
+    await AsyncStorage.setItem('citycart.nearbyAsked', 'true')
     const renderer = await open()
     await press(renderer, 'Products')
-    expect(screenText(renderer)).toContain('Choose your area to compare products across the stores near you')
-    expect(api.get.mock.calls.some(([url]) => url === '/catalog/browse')).toBe(false)
+    expect(screenText(renderer)).toContain('Choose your area to compare products')
+    await press(renderer, 'Choose area')
+    expect(screenText(renderer)).toContain('Where are you shopping?')
   })
 })

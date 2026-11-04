@@ -6,6 +6,7 @@ jest.mock('../src/models/employee.model');
 jest.mock('../src/models/order.model');
 jest.mock('../src/models/payment.model');
 jest.mock('../src/models/delivery.model');
+jest.mock('../src/models/return.model');
 jest.mock('../src/utils/transaction', () => ({
   runInTransaction: (work) => work('SESSION'),
 }));
@@ -145,9 +146,11 @@ describe('PATCH /api/v1/deliveries/:id/status', () => {
   const patch = (cookie, id, body) =>
     request(app).patch(`/api/v1/deliveries/${id}/status`).set(...cookie).send(body);
 
-  function world({ previous, order = { _id: oid(), paymentMethod: 'COD' } }) {
+  function world({ previous, order = { _id: oid(), deliveryFee: 0, paymentMethod: 'COD', total: 2450, items: [] } }) {
     Delivery.findOneAndUpdate.mockResolvedValue(previous);
     Delivery.findById.mockReturnValue({ session: () => Promise.resolve({ _id: previous && previous._id, status: 'x' }) });
+    // Completion reads the order before updating it, to compute the final totals.
+    Order.findOne.mockReturnValue({ session: () => Promise.resolve(order) });
     Order.findOneAndUpdate.mockResolvedValue(order);
     Order.updateOne.mockResolvedValue({});
     // Conditional COD flip (findOneAndUpdate, so a double DELIVERED can't
@@ -211,7 +214,7 @@ describe('PATCH /api/v1/deliveries/:id/status', () => {
     const { cookie, user } = asRole(ROLES.BRAND_ADMIN);
     const orderId = oid();
     const previous = { _id: oid(), orderId, status: 'OUT_FOR_DELIVERY' };
-    world({ previous, order: { _id: orderId, brandId, paymentMethod: 'COD' } });
+    world({ previous, order: { _id: orderId, brandId, deliveryFee: 0, paymentMethod: 'COD', total: 2450, items: [] } });
     const paymentId = oid();
     Payment.findOneAndUpdate.mockResolvedValue({ _id: paymentId });
 
@@ -222,7 +225,7 @@ describe('PATCH /api/v1/deliveries/:id/status', () => {
     expect(Payment.findOneAndUpdate).toHaveBeenCalledWith(
       { orderId, status: 'PENDING' },
       // The collector holds the cash until the brand settles it.
-      { $set: { status: 'PAID', paidAt: expect.any(Date), confirmedBy: user._id, brandId, collectedBy: user._id, collectedAt: expect.any(Date), 'collection.method': 'CASH' } },
+      { $set: { status: 'PAID', amount: 2450, paidAt: expect.any(Date), confirmedBy: user._id, brandId, collectedBy: user._id, collectedAt: expect.any(Date), 'collection.method': 'CASH' } },
       { session: 'SESSION' }
     );
     // Delivered + cash collected, announced after the commit (docs/12 §5).

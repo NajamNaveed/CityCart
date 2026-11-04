@@ -59,11 +59,11 @@ async function getById(req, res, next) {
   const params = objectIdParamSchema.safeParse(req.params);
   if (!params.success) return invalid(res, params.error);
   try {
-    const { order, payment, delivery, adjustments, adjustment } = await getOrderForUser(
+    const { order, payment, delivery, adjustments, adjustment, return: returnDoc } = await getOrderForUser(
       req.user,
       params.data.id
     );
-    return res.status(200).json({ success: true, order, payment: toPaymentView(req.user, payment), delivery, adjustments, adjustment });
+    return res.status(200).json({ success: true, order, payment: toPaymentView(req.user, payment), delivery, adjustments, adjustment, return: returnDoc });
   } catch (err) {
     return handleError(err, res, next);
   }

@@ -5,6 +5,7 @@ const env = require('../config/env');
 const { OrderError } = require('./order.service');
 const { updateDeliveryStatus } = require('./delivery.service');
 const { proofBelongsToDelivery } = require('./paymentProof.service');
+const { buildCompletion, returnPhotoBelongsToDelivery } = require('./return.service');
 const { isConfigured } = require('./upload.service');
 const { DELIVERY_FINAL_STATUSES } = require('../config/deliveryTransitions');
 const { MAX_CODE_ATTEMPTS, codesMatch } = require('../utils/deliveryCode');
@@ -16,10 +17,12 @@ const { MAX_CODE_ATTEMPTS, codesMatch } = require('../utils/deliveryCode');
  *
  * The rider sees what is needed to do the job and nothing more: the address and
  * phone of the customer (only while the delivery is open), the items to hand
- * over (names and quantities, no prices), and how much cash to collect. Never the
- * customer's account, other payments, the brand's revenue, or the delivery code.
+ * over (names, quantities and the line total needed to settle a partial
+ * delivery), and how much cash to collect. Never the customer's account, other
+ * payments, the brand's revenue, or the delivery code.
  */
-const ORDER_FIELDS = 'orderNumber total currency paymentMethod paymentStatus items.productName items.quantity';
+const ORDER_FIELDS =
+  'orderNumber total deliveryFee fulfilment returnedAmount netTotal feeRefunded currency paymentMethod paymentStatus items._id items.productName items.quantity items.totalPrice';
 
 const pickAddress = (a) => ({
   name: a.name,
@@ -64,9 +67,25 @@ function toRiderView(delivery, order, payment) {
     updatedAt: d.updatedAt,
     // Personal details leave the rider's screen once the delivery is closed.
     address: closed || !d.address ? null : pickAddress(d.address),
-    items: closed || !order ? [] : (order.items || []).map((i) => ({ productName: i.productName, quantity: i.quantity })),
+    // `lineTotal` lets the app show the amount for the accepted units without
+    // exposing the unit price; the server still computes the final figures.
+    items:
+      closed || !order
+        ? []
+        : (order.items || []).map((i) => ({
+            itemId: i._id,
+            productName: i.productName,
+            quantity: i.quantity,
+            lineTotal: i.totalPrice !== undefined ? i.totalPrice : 0,
+          })),
     paymentMethod: order ? order.paymentMethod : null,
     amountToCollect: unpaid ? order.total : 0,
+    deliveryFee: order ? order.deliveryFee || 0 : 0,
+    // What actually happened at the door (docs/22 §F); null before completion.
+    fulfilment: order ? order.fulfilment || null : null,
+    returnedAmount: order ? order.returnedAmount || 0 : 0,
+    netTotal: order && order.netTotal !== undefined ? order.netTotal : null,
+    feeRefunded: Boolean(order && order.feeRefunded),
     // A non-cash payment is never cash in the rider's pocket.
     cashCollected: cod && order.paymentStatus === 'PAID' && !nonCash,
     // What the app may offer at the door; without Cloudinary only cash is possible.
@@ -150,7 +169,28 @@ async function riderUpdateStatus({ brandId, riderId, id, status, failureReason }
  * MAX_CODE_ATTEMPTS the code locks; the brand can still complete the delivery
  * from the dashboard after speaking to the customer.
  */
-async function completeWithCode({ brandId, riderId, id, code, collection }) {
+async function completeWithCode({ brandId, riderId, id, code, collection, lines }) {
+  // Validate the per-line answer BEFORE counting this as a code attempt: a
+  // correct code with a bad line must not use up the rider's tries.
+  if (lines) {
+    const scoped = await Delivery.findOne({ _id: id, brandId, riderId }).select('orderId status');
+    if (!scoped) {
+      throw new OrderError(404, 'Delivery not found.');
+    }
+    if (scoped.status !== 'OUT_FOR_DELIVERY') {
+      throw new OrderError(409, `Only a delivery that is out for delivery can be completed (this one is ${scoped.status}).`, {
+        code: 'INVALID_TRANSITION',
+        from: scoped.status,
+        to: 'DELIVERED',
+      });
+    }
+    const order = await Order.findOne({ _id: scoped.orderId, brandId });
+    if (!order) {
+      throw new OrderError(409, 'The order is not in a state that allows this delivery step.', { code: 'ORDER_OUT_OF_SYNC' });
+    }
+    buildCompletion(order, lines);
+  }
+
   const attempt = await Delivery.findOneAndUpdate(
     { _id: id, brandId, riderId, status: 'OUT_FOR_DELIVERY', codeAttempts: { $lt: MAX_CODE_ATTEMPTS } },
     { $inc: { codeAttempts: 1 } },
@@ -193,6 +233,18 @@ async function completeWithCode({ brandId, riderId, id, code, collection }) {
     }
   }
 
+  const photoLines = (lines || []).filter((line) => line.rejectedQty > 0 && line.photo);
+  if (photoLines.length) {
+    if (!isConfigured(env.cloudinary)) {
+      throw new OrderError(503, 'Return photos are not set up on this server yet.', { code: 'RETURN_PHOTO_NOT_CONFIGURED' });
+    }
+    for (const line of photoLines) {
+      if (!returnPhotoBelongsToDelivery({ brandId, deliveryId: id, publicId: line.photo.publicId })) {
+        throw new OrderError(422, 'That return photo does not belong to this delivery.', { code: 'RETURN_PHOTO_NOT_YOURS' });
+      }
+    }
+  }
+
   const delivery = await updateDeliveryStatus({
     brandId,
     deliveryId: id,
@@ -200,6 +252,7 @@ async function completeWithCode({ brandId, riderId, id, code, collection }) {
     userId: riderId,
     riderId,
     collection,
+    lines,
   });
   return viewFor(delivery, brandId);
 }

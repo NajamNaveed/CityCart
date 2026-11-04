@@ -16,9 +16,10 @@ const PRESETS = [
   ['city', 'Whole city'],
 ]
 
-// How far to search: own block, a preset radius, a custom number of km, or the whole city.
+// How far to search: own block(s), a preset radius, a custom number of km, or the whole city.
 export default function RangeBar() {
-  const { range, setRange } = useNearby()
+  const { range, setRange, blockIds } = useNearby()
+  const presets = PRESETS.map(([value, label]) => (value === 'block' && blockIds.length > 1 ? [value, 'These blocks'] : [value, label]))
   const [asking, setAsking] = useState(false)
   const [draft, setDraft] = useState('')
   const [error, setError] = useState('')
@@ -44,7 +45,7 @@ export default function RangeBar() {
   return (
     <>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, paddingVertical: 2 }} accessibilityRole="radiogroup" accessibilityLabel="Search range">
-        {PRESETS.map(([value, label]) => (
+        {presets.map(([value, label]) => (
           <Chip key={value} label={label} selected={range === value} onPress={() => setRange(value)} />
         ))}
         <Chip label={custom ? `${range} km` : 'Custom'} icon="edit-2" selected={custom} onPress={openCustom} accessibilityHint="Type a distance in kilometres" />

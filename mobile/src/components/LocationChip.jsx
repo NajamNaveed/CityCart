@@ -5,7 +5,7 @@ import { useCity } from '../hooks/useCity'
 import { useNearby } from '../hooks/useNearby'
 import { colors, radius, spacing } from '../theme'
 
-// "Gulberg ▾": the block being searched from; tapping it opens the location sheet.
+// "Gulberg ▾": the area being searched; tapping it opens the location sheet.
 export default function LocationChip({ onPress }) {
   const { city } = useCity()
   const { areaName } = useNearby()
@@ -21,6 +21,7 @@ export default function LocationChip({ onPress }) {
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.xs,
+        flexShrink: 1,
         minHeight: 40,
         paddingHorizontal: spacing.md,
         borderRadius: radius.pill,
@@ -30,7 +31,7 @@ export default function LocationChip({ onPress }) {
       }}
     >
       <Feather name="map-pin" size={15} color={colors.clay} />
-      <AppText variant="label" numberOfLines={1} style={{ maxWidth: 150 }}>
+      <AppText variant="label" numberOfLines={1} style={{ flexShrink: 1, maxWidth: 140 }}>
         {label}
       </AppText>
       <Feather name="chevron-down" size={15} color={colors.muted} />

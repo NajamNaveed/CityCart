@@ -66,6 +66,14 @@ export default function OrderChangeCard({ order, adjustment, onDone }) {
         <StatusPill value={adjustment.status} />
       </View>
 
+      {adjustment.proposedByRole === 'PICKER' ? (
+        <View style={{ alignSelf: 'flex-start', backgroundColor: colors.surface, borderRadius: 999, paddingHorizontal: spacing.md, paddingVertical: spacing.xs }}>
+          <AppText variant="small" style={{ color: colors.ink, fontFamily: 'Poppins_500Medium' }}>
+            Suggested by the store’s picker.
+          </AppText>
+        </View>
+      ) : null}
+
       <AppText>{adjustment.note}</AppText>
 
       <View style={{ gap: spacing.xs }}>

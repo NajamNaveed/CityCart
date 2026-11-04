@@ -20,8 +20,6 @@ export const signedOut = () => ({ status: 'signedOut', user: null, isReady: true
 // Renders an element with a chosen sign-in state and fake cart/city/chat values.
 export const notificationsValue = (over = {}) => ({ unreadCount: 0, refresh: jest.fn(), markRead: jest.fn().mockResolvedValue({}), markAllRead: jest.fn().mockResolvedValue(undefined), remove: jest.fn().mockResolvedValue(undefined), subscribeChat: jest.fn(() => jest.fn()), ...over })
 export const chatValue = (over = {}) => ({ unread: 0, refreshUnread: jest.fn().mockResolvedValue(undefined), subscribe: jest.fn(() => jest.fn()), ...over })
-
-// A shopping area with nothing chosen, as the screens read it. Pass `nearby` to tree()/show() to change it.
 export const nearbyValue = (over = {}) => ({
   ready: true,
   asked: true,
@@ -39,17 +37,20 @@ export const nearbyValue = (over = {}) => ({
   choices: { containing: [], nearest: [] },
   status: 'idle',
   canAskAgain: true,
+  pickerOpen: false,
   setRange: jest.fn(),
   chooseBlock: jest.fn(),
   toggleBlock: jest.fn(),
   toggleManualBlock: jest.fn(),
   clearLocation: jest.fn(),
-  detect: jest.fn(),
+  detect: jest.fn().mockResolvedValue('found'),
   setPin: jest.fn(),
+  openPicker: jest.fn(),
+  closePicker: jest.fn(),
   ...over,
 })
 
-export function tree(element, { auth = signedOut(), cart, city, notifications, chat, nearby } = {}) {
+export function tree(element, { auth = signedOut(), cart, city, nearby, notifications, chat } = {}) {
   const cartValue = cart || { itemCount: 0, addItem: jest.fn().mockResolvedValue({ itemCount: 1 }), setCount: jest.fn() }
   const cityValue = city || { cities: [], city: { _id: 'c1', name: 'Faisalabad' }, cityId: 'c1', setCityId: jest.fn(), ready: true }
   return (

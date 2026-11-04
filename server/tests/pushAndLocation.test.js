@@ -36,9 +36,10 @@ function signedIn(role, permissions) {
   if (role === ROLES.BRAND_EMPLOYEE) Employee.findOne.mockResolvedValue({ isActive: true, permissions: permissions || [] });
   return user;
 }
-const partner = (role, permissions) => {
+const phone = (role, permissions) => {
   const user = signedIn(role, permissions);
-  const token = signToken({ userId: user._id, role, brandId: user.brandId, passwordVersion: 0, client: 'partner' }, { expiresIn: '8h' });
+  const client = role === ROLES.RIDER ? 'delivery' : 'staff';
+  const token = signToken({ userId: user._id, role, brandId: user.brandId, passwordVersion: 0, client }, { expiresIn: '8h' });
   return { header: ['Authorization', `Bearer ${token}`], user };
 };
 const web = (role, permissions) => {
@@ -59,7 +60,7 @@ afterAll(() => {
 describe('registering a phone for push notifications', () => {
   const put = (header, body) => request(app).put('/api/v1/devices/push-token').set(...header).send(body);
 
-  it('401 when signed out; only the Partner app roles may register', async () => {
+  it('401 when signed out; only the Staff and Delivery app roles may register', async () => {
     expect((await request(app).put('/api/v1/devices/push-token').send({ token: TOKEN })).status).toBe(401);
     for (const role of [ROLES.CUSTOMER, ROLES.BRAND_ADMIN, ROLES.SUPER_ADMIN]) {
       expect((await put(web(role).header, { token: TOKEN })).status).toBe(403);
@@ -67,8 +68,8 @@ describe('registering a phone for push notifications', () => {
     expect(DeviceToken.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
-  it.each([[ROLES.RIDER], [ROLES.BRAND_EMPLOYEE]])('a %s can register their phone, and the user comes from the session, never the body', async (role) => {
-    const { header, user } = partner(role, []);
+  it.each([[ROLES.RIDER], [ROLES.BRAND_EMPLOYEE], [ROLES.PICKER]])('a %s can register their phone, and the user comes from the session, never the body', async (role) => {
+    const { header, user } = phone(role, []);
     DeviceToken.findOneAndUpdate.mockResolvedValue({});
     DeviceToken.find.mockReturnValue({ sort: () => ({ select: () => Promise.resolve([{ _id: oid() }]) }) });
 
@@ -83,7 +84,7 @@ describe('registering a phone for push notifications', () => {
   });
 
   it('a token that was another person\'s moves to the new user (one filter by token, userId overwritten)', async () => {
-    const { header, user } = partner(ROLES.RIDER);
+    const { header, user } = phone(ROLES.RIDER);
     DeviceToken.findOneAndUpdate.mockResolvedValue({});
     DeviceToken.find.mockReturnValue({ sort: () => ({ select: () => Promise.resolve([]) }) });
     await put(header, { token: TOKEN });
@@ -93,7 +94,7 @@ describe('registering a phone for push notifications', () => {
   });
 
   it('keeps only the newest few phones of a user', async () => {
-    const { header, user } = partner(ROLES.RIDER);
+    const { header, user } = phone(ROLES.RIDER);
     const docs = Array.from({ length: MAX_TOKENS_PER_USER + 2 }, () => ({ _id: oid() }));
     DeviceToken.findOneAndUpdate.mockResolvedValue({});
     DeviceToken.find.mockReturnValue({ sort: () => ({ select: () => Promise.resolve(docs) }) });
@@ -106,13 +107,13 @@ describe('registering a phone for push notifications', () => {
   });
 
   it.each([[{}], [{ token: 'nope' }], [{ token: 'ExponentPushToken[]' }], [{ token: TOKEN, platform: 'windows' }], [{ token: 123 }]])('400 for %j', async (body) => {
-    const { header } = partner(ROLES.RIDER);
+    const { header } = phone(ROLES.RIDER);
     expect((await put(header, body)).status).toBe(400);
     expect(DeviceToken.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
   it('signing out removes only the caller\'s own token', async () => {
-    const { header, user } = partner(ROLES.RIDER);
+    const { header, user } = phone(ROLES.RIDER);
     DeviceToken.deleteOne.mockResolvedValue({});
     const res = await request(app).delete('/api/v1/devices/push-token').set(...header).send({ token: TOKEN });
     expect(res.status).toBe(200);
@@ -246,7 +247,7 @@ describe('a rider sharing their position', () => {
   });
 
   it('stores the last point of this rider in this brand, once they have a delivery out', async () => {
-    const { header, user } = partner(ROLES.RIDER);
+    const { header, user } = phone(ROLES.RIDER);
     Delivery.exists.mockResolvedValue({ _id: oid() });
     RiderLocation.findOneAndUpdate.mockResolvedValue({});
 
@@ -262,7 +263,7 @@ describe('a rider sharing their position', () => {
   });
 
   it('409 NO_ACTIVE_DELIVERY, and nothing is stored, when no delivery is out', async () => {
-    const { header } = partner(ROLES.RIDER);
+    const { header } = phone(ROLES.RIDER);
     Delivery.exists.mockResolvedValue(null);
     const res = await put(header, POINT);
     expect(res.status).toBe(409);
@@ -271,13 +272,13 @@ describe('a rider sharing their position', () => {
   });
 
   it.each([[{}], [{ latitude: 91, longitude: 0 }], [{ latitude: 0, longitude: 181 }], [{ latitude: '31', longitude: 73 }], [{ latitude: 31, longitude: 73, accuracy: -1 }]])('400 for %j', async (body) => {
-    const { header } = partner(ROLES.RIDER);
+    const { header } = phone(ROLES.RIDER);
     expect((await put(header, body)).status).toBe(400);
     expect(Delivery.exists).not.toHaveBeenCalled();
   });
 
   it('stopping forgets the rider\'s position at once, and only theirs', async () => {
-    const { header, user } = partner(ROLES.RIDER);
+    const { header, user } = phone(ROLES.RIDER);
     RiderLocation.deleteOne.mockResolvedValue({});
     const res = await request(app).delete('/api/v1/rider/deliveries/location').set(...header);
     expect(res.status).toBe(200);
@@ -300,7 +301,7 @@ describe('who can see where a rider is', () => {
 
   it('401 signed out; riders and the super admin cannot follow riders here', async () => {
     expect((await request(app).get(`/api/v1/deliveries/${oid()}/rider-location`)).status).toBe(401);
-    expect((await get(partner(ROLES.RIDER).header, oid())).status).toBe(403);
+    expect((await get(phone(ROLES.RIDER).header, oid())).status).toBe(403);
     expect((await get(web(ROLES.SUPER_ADMIN).header, oid())).status).toBe(403);
     expect(RiderLocation.findOne).not.toHaveBeenCalled();
   });

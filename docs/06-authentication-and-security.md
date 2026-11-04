@@ -322,14 +322,26 @@ intact and keep the native door as narrow as possible:
   token belonging to a brand admin, brand employee or platform admin is
   refused with `403 WEB_ONLY`. Staff sessions stay on the web, where they are
   short-lived, renewed and bound to the tab.
-* **Partner app exception (October 2026).** The CityCart Partner app (docs/20)
-  signs in through `POST /auth/partner/login` with `X-Client: partner`. Only
-  `RIDER` and `BRAND_EMPLOYEE` accounts can; the token carries `client: "partner"`,
-  lasts one staff session, and is renewed by signing in again (no sliding
-  renewal). A bearer token without that mark is still refused for every
-  non-shopper account, a partner-marked token is refused for shoppers, brand
-  owners and the super admin, and all the checks above still apply on every
-  request. Brand owners and the super admin remain web-only.
+* **Staff and Delivery app exception (October 2026, split November 2026).**
+  The three native apps have three doors:
+  * the shopper app signs in at `POST /auth/login` with `X-Client: mobile`, and
+    its token has no `client` mark;
+  * the Staff app (docs/20) signs in at `POST /auth/staff/login` with
+    `X-Client: staff`; only `BRAND_EMPLOYEE` and `PICKER` accounts can, and the
+    token carries `client: "staff"`;
+  * the Delivery app (docs/23) signs in at `POST /auth/delivery/login` with
+    `X-Client: delivery`; only `RIDER` accounts can, and the token carries
+    `client: "delivery"`.
+
+  Every app token lasts one staff session and is renewed by signing in again
+  (no sliding renewal). On every Bearer request the mark is checked against the
+  account's role: a staff token is refused for riders, a delivery token is
+  refused for staff, a markless token is refused for every non-shopper account,
+  and every app token is refused for brand owners, the super admin and shoppers
+  (`403 WRONG_APP`). Calling an app's sign-in endpoint without its own
+  `X-Client` header is refused before any credential lookup (`STAFF_APP_ONLY`,
+  `DELIVERY_APP_ONLY`). Brand owners and the super admin remain web-only. All
+  the checks above still apply on every request.
 * A `Bearer` header with no usable token is a `401`, never silently ignored.
   Other schemes (for example `Basic`, which some hosting adds) are not ours
   and are ignored so the cookie session keeps working.

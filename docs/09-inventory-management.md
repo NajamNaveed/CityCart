@@ -145,9 +145,12 @@ SUBSTITUTION_RESERVED
 SUBSTITUTION_RELEASED
 SUBSTITUTION_FULFILLED
 ADJUSTMENT_RESTOCKED
+RETURN_RESTOCKED
 ```
 
-The last four are written only by the order-adjustment flow (§25); a client may never label a manual adjustment with them.
+The order-adjustment flow (§25) writes only the `SUBSTITUTION_*` and
+`ADJUSTMENT_RESTOCKED` reasons; the door-return inbox (§15) writes
+`RETURN_RESTOCKED`. A client may never label a manual adjustment with any of them.
 
 Additional reasons may be introduced later.
 
@@ -308,7 +311,16 @@ Resalable → Add stock
 Damaged   → Do not add stock
 ```
 
-Detailed return workflows are handled by future order/delivery functionality.
+Door returns (docs/22 §F) follow this rule when the store receives the goods:
+
+* The return arrives as `IN_TRANSIT`; nothing changes in stock while it travels.
+* `POST /returns/:id/receive` records one decision per line. `restock: true`
+  adds the refused units back (`quantity += n`) and writes one
+  `RETURN_RESTOCKED` movement; a line without a decision is written off.
+* The status change, the stock increase and the movement are one transaction, and
+  the atomic `IN_TRANSIT → RECEIVED` update means a retry can never restock twice.
+* Missing or damaged goods are written off by default, so they cannot re-enter
+  stock by accident.
 
 ---
 

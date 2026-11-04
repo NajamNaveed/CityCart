@@ -6,9 +6,9 @@ import { tokenStore } from './storage'
  * AuthProvider just holds the result in state.
  */
 
-// Who this app is for. The server enforces the same list (PARTNER_ROLES).
-export const PARTNER_ROLES = ['RIDER', 'BRAND_EMPLOYEE']
-export const isPartnerRole = (role) => PARTNER_ROLES.includes(role)
+// Who this app is for. The server enforces the same list (STAFF_APP_ROLES).
+export const STAFF_ROLES = ['BRAND_EMPLOYEE', 'PICKER']
+export const isStaffRole = (role) => STAFF_ROLES.includes(role)
 
 // At app start: is the stored token still good?
 //   { status: 'signedOut' }                       no token, or the server says it is no longer valid
@@ -21,7 +21,7 @@ export async function restoreSession() {
   try {
     const res = await api.get('/auth/me')
     const user = res.data.user
-    if (!isPartnerRole(user?.role)) {
+    if (!isStaffRole(user?.role)) {
       // Not an account this app is for: do not keep its token.
       await tokenStore.clear()
       return { status: 'signedOut' }
@@ -37,9 +37,9 @@ export async function restoreSession() {
 }
 
 export async function signIn({ email, password }) {
-  const res = await api.post('/auth/partner/login', { email, password })
+  const res = await api.post('/auth/staff/login', { email, password })
   const { user, token } = res.data
-  if (!token || !isPartnerRole(user?.role)) throw new Error('The server did not return a session. Please try again.')
+  if (!token || !isStaffRole(user?.role)) throw new Error('The server did not return a session. Please try again.')
   await tokenStore.set(token)
   // The sign-in answer does not list a team member's permissions; `/auth/me` does.
   // Without them the app would not know which screens to offer.

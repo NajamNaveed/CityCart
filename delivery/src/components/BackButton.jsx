@@ -1,0 +1,29 @@
+import { Pressable } from 'react-native'
+import { useRouter } from 'expo-router'
+import Feather from '@expo/vector-icons/Feather'
+import { colors, minTouch } from '../theme'
+
+// Goes back; if there is nothing to go back to (opened from a notification), goes home.
+export default function BackButton() {
+  const router = useRouter()
+  return (
+    <Pressable
+      onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+      accessibilityRole="button"
+      accessibilityLabel="Go back"
+      hitSlop={8}
+      style={{
+        width: minTouch - 6,
+        height: minTouch - 6,
+        borderRadius: (minTouch - 6) / 2,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: colors.line,
+      }}
+    >
+      <Feather name="arrow-left" size={20} color={colors.ink} />
+    </Pressable>
+  )
+}

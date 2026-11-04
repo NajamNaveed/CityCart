@@ -131,7 +131,17 @@ const ORDER_STATUS_NOTIFICATIONS = {
   DELIVERED: {
     type: 'ORDER_DELIVERED',
     title: 'Order delivered',
-    message: (o) => `Your order ${o.orderNumber} has been delivered.`,
+    // A partial delivery (docs/22 §F) says what was kept and what came back.
+    message: (o) =>
+      o.fulfilment === 'PARTIAL'
+        ? `Order ${o.orderNumber} was delivered in part. You paid for the items you kept; the rest is going back to the store.`
+        : `Your order ${o.orderNumber} has been delivered.`,
+  },
+  RETURNED: {
+    type: 'ORDER_RETURNED',
+    title: 'Order returned',
+    message: (o) =>
+      `Order ${o.orderNumber} was refused at the door and is going back to the store. Any amount you paid for those items will be refunded.`,
   },
 };
 
@@ -291,6 +301,31 @@ async function notifyPaymentExpired(order) {
     title: 'Order cancelled: payment not received',
     message: `Order ${order.orderNumber} was cancelled because the online payment was not completed in time. You can place it again.`,
     data: orderData(order),
+  });
+}
+
+/**
+ * Goods are coming back to the store (docs/22 §F): the brand staff who handle
+ * orders or the delivery need to know a return exists before it arrives.
+ */
+async function notifyBrandOfReturn({ ret, order }) {
+  if (!ret || !order) return;
+  const staff = await brandStaffIds(order.brandId, {
+    anyOf: [PERMISSIONS.ORDERS_VIEW, PERMISSIONS.DELIVERY_VIEW],
+  });
+  await notify({
+    userIds: staff,
+    type: 'RETURN_IN_TRANSIT',
+    title: 'Returned goods on the way',
+    message: `${ret.lines.length} refused line(s) from order ${order.orderNumber} are coming back to the store.`,
+    data: {
+      ...orderData(order),
+      returnId: String(ret._id),
+      deliveryId: String(ret.deliveryId),
+      lines: ret.lines.length,
+      returnedSubtotal: ret.returnedSubtotal,
+      status: ret.status,
+    },
   });
 }
 
@@ -529,6 +564,7 @@ module.exports = {
   notifyEmployeeCreated: bestEffort(notifyEmployeeCreated),
   notifyEmployeePermissionsChanged: bestEffort(notifyEmployeePermissionsChanged),
   notifyRiderAssigned: bestEffort(notifyRiderAssigned),
+  notifyBrandOfReturn: bestEffort(notifyBrandOfReturn),
   notifyPaymentExpired: bestEffort(notifyPaymentExpired),
   notifyBrandOfNewReview: bestEffort(notifyBrandOfNewReview),
   notifySuperAdminsOfNewBrand: bestEffort(notifySuperAdminsOfNewBrand),

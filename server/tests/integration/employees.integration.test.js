@@ -52,6 +52,45 @@ describe('createEmployee (real MongoDB)', () => {
     expect(JSON.stringify(created)).not.toMatch(/passwordHash/);
   });
 
+  it('creates a picker with a PICKER login and no brand-team permissions', async () => {
+    const brand = await makeBrand();
+    const created = await createEmployee({
+      brandId: brand._id,
+      actorRole: 'BRAND_ADMIN',
+      actorPermissions: ALL_PERMISSIONS,
+      data: data({ role: 'PICKER', jobTitle: 'Stock picker' }),
+    });
+
+    expect(created).toMatchObject({ jobTitle: 'Stock picker', permissions: [], isActive: true });
+    expect(created.user.role).toBe('PICKER');
+    const user = await User.findById(created.user._id);
+    expect(user.role).toBe('PICKER');
+    expect(String(user.brandId)).toBe(String(brand._id));
+    expect((await Employee.findById(created._id)).permissions).toEqual([]);
+  });
+
+  it('refuses a picker from an employee, or one carrying permissions, without writing anything', async () => {
+    const brand = await makeBrand();
+    await expect(
+      createEmployee({
+        brandId: brand._id,
+        actorRole: 'BRAND_EMPLOYEE',
+        actorPermissions: ALL_PERMISSIONS,
+        data: data({ role: 'PICKER' }),
+      })
+    ).rejects.toMatchObject({ status: 403, extra: { code: 'PICKER_CREATE_FORBIDDEN' } });
+    await expect(
+      createEmployee({
+        brandId: brand._id,
+        actorRole: 'BRAND_ADMIN',
+        actorPermissions: ALL_PERMISSIONS,
+        data: data({ role: 'PICKER', permissions: [PERMISSIONS.PRODUCTS_VIEW] }),
+      })
+    ).rejects.toMatchObject({ status: 400, extra: { code: 'PICKER_NO_PERMISSIONS' } });
+    expect(await User.countDocuments()).toBe(0);
+    expect(await Employee.countDocuments()).toBe(0);
+  });
+
   it('ROLLS BACK the new login if the employee record cannot be created', async () => {
     const brand = await makeBrand();
     const spy = jest.spyOn(Employee, 'create').mockRejectedValueOnce(new Error('employee write failed'));

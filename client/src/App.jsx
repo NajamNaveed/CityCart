@@ -47,12 +47,15 @@ const BrandSettings = lazy(() => import('./pages/brand/Settings'))
 const BrandAnalytics = lazy(() => import('./pages/brand/Analytics'))
 const InventoryHub = lazy(() => import('./pages/brand/InventoryHub'))
 const BrandReviews = lazy(() => import('./pages/brand/Reviews'))
+const BrandReturns = lazy(() => import('./pages/brand/Returns'))
+const BrandReturnDetail = lazy(() => import('./pages/brand/ReturnDetail'))
 const AdminLayout = lazy(() => import('./components/admin/AdminLayout'))
 const AdminLanding = lazy(() => import('./pages/admin/Landing'))
 const AdminBrands = lazy(() => import('./pages/admin/Brands'))
 const AdminBrandDetail = lazy(() => import('./pages/admin/BrandDetail'))
 const AdminOrders = lazy(() => import('./pages/admin/Orders'))
 const AdminOrderDetail = lazy(() => import('./pages/admin/OrderDetail'))
+const AdminReturns = lazy(() => import('./pages/admin/Returns'))
 const AdminCities = lazy(() => import('./pages/admin/Cities'))
 const AdminBlocks = lazy(() => import('./pages/admin/Blocks'))
 const AdminCategories = lazy(() => import('./pages/admin/Categories'))
@@ -145,6 +148,8 @@ function App() {
                     <Route path="messages" element={<BrandMessages />} />
                     <Route path="orders/:id" element={<BrandOrderDetail />} />
                     <Route path="deliveries" element={<Deliveries />} />
+                    <Route path="returns" element={<BrandReturns />} />
+                    <Route path="returns/:id" element={<BrandReturnDetail />} />
                     <Route path="reviews" element={<BrandReviews />} />
                     <Route path="team" element={<Team />} />
                     <Route path="riders" element={<Riders />} />
@@ -169,6 +174,7 @@ function App() {
                     <Route path="brands/:id" element={<AdminBrandDetail />} />
                     <Route path="orders" element={<AdminOrders />} />
                     <Route path="orders/:id" element={<AdminOrderDetail />} />
+                    <Route path="returns" element={<AdminReturns />} />
                     <Route path="reviews" element={<AdminReviews />} />
                     <Route path="cities" element={<AdminCities />} />
                     <Route path="blocks" element={<AdminBlocks />} />

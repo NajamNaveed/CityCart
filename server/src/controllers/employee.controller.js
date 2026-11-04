@@ -76,6 +76,7 @@ async function create(req, res, next) {
     const employee = await createEmployee({
       brandId,
       actorPermissions: actorPermissionsFor(req.user, req.employee),
+      actorRole: req.user.role,
       data: parsed.data,
     });
     return res.status(201).json({ success: true, message: 'Employee created', employee });

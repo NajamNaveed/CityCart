@@ -110,6 +110,9 @@ const orderAdjustmentSchema = new mongoose.Schema(
     totalsAfter: { type: totalsSchema, required: true },
     totalsAfterRemoval: { type: totalsSchema, required: true },
     proposedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    // Snapshot of the proposer's role, so the customer screens can say a picker
+    // suggested the change without a user lookup (docs/22 §E).
+    proposedByRole: { type: String, enum: ['BRAND_ADMIN', 'BRAND_EMPLOYEE', 'PICKER'] },
     expiresAt: { type: Date, required: true },
     respondedAt: { type: Date, default: null },
     response: { type: responseSchema, default: null },

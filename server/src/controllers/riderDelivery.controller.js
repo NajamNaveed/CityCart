@@ -1,6 +1,7 @@
 const { riderListQuerySchema, riderStatusSchema, completeDeliverySchema, riderLocationSchema } = require('../validators/delivery.validator');
 const { recordLocation, clearLocation } = require('../services/riderLocation.service');
 const { createProofUpload } = require('../services/paymentProof.service');
+const { createReturnPhotoUpload } = require('../services/return.service');
 const { objectIdParamSchema } = require('../validators/common.validator');
 const {
   listRiderDeliveries,
@@ -67,7 +68,13 @@ async function complete(req, res, next) {
   const body = completeDeliverySchema.safeParse(req.body);
   if (!body.success) return invalid(res, body.error);
   try {
-    const delivery = await completeWithCode({ ...who(req), id: params.data.id, code: body.data.code, collection: body.data.collection });
+    const delivery = await completeWithCode({
+      ...who(req),
+      id: params.data.id,
+      code: body.data.code,
+      collection: body.data.collection,
+      lines: body.data.lines,
+    });
     return res.status(200).json({ success: true, message: 'Delivery completed', delivery });
   } catch (err) {
     return handleError(err, res, next);
@@ -81,6 +88,19 @@ async function proofUpload(req, res, next) {
   if (!params.success) return invalid(res, params.error);
   try {
     const upload = await createProofUpload({ ...who(req), deliveryId: params.data.id });
+    return res.status(200).json({ success: true, upload });
+  } catch (err) {
+    return handleError(err, res, next);
+  }
+}
+
+// Step one of a door return with a photo: the same private-upload pattern as a
+// payment proof, into the delivery's own returns folder.
+async function returnUpload(req, res, next) {
+  const params = objectIdParamSchema.safeParse(req.params);
+  if (!params.success) return invalid(res, params.error);
+  try {
+    const upload = await createReturnPhotoUpload({ ...who(req), deliveryId: params.data.id });
     return res.status(200).json({ success: true, upload });
   } catch (err) {
     return handleError(err, res, next);
@@ -117,4 +137,4 @@ async function stopSharing(req, res, next) {
   }
 }
 
-module.exports = { list, getById, updateStatus, complete, proofUpload, cash, shareLocation, stopSharing };
+module.exports = { list, getById, updateStatus, complete, proofUpload, returnUpload, cash, shareLocation, stopSharing };

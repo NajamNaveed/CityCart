@@ -8,7 +8,7 @@ import { Notice, PageHeader, Pager, StatusBadge } from '../../components/brand/B
 import { EmptyState, Skeleton } from '../../components/ui'
 import { btnPine } from '../../ui'
 
-const EMPTY = { name: '', email: '', password: '', phone: '', jobTitle: '' }
+const EMPTY = { name: '', email: '', password: '', phone: '', jobTitle: '', role: 'BRAND_EMPLOYEE' }
 
 export default function Team() {
   const can = useCan()
@@ -73,11 +73,14 @@ export default function Team() {
           name: form.name,
           email: form.email,
           password: form.password,
-          permissions,
+          role: form.role,
+          ...(form.role === 'BRAND_EMPLOYEE' && { permissions }),
           ...(form.phone.trim() && { phone: form.phone }),
           ...(form.jobTitle.trim() && { jobTitle: form.jobTitle }),
         }),
-      'Team member added. Give them their email and password; they sign in on the brand log in page.',
+      form.role === 'PICKER'
+        ? 'Picker added. Give them their email and password; they sign in on the CityCart Partner app.'
+        : 'Team member added. Give them their email and password; they sign in on the brand log in page.',
     )
     if (ok) {
       setForm(EMPTY)
@@ -127,13 +130,43 @@ export default function Team() {
             <Field label="Password" id="m-password" name="password" type="password" autoComplete="new-password" placeholder="At least 8 characters" value={form.password} onChange={onChange} error={fieldErrors.password} required />
           </div>
           <div>
-            <h2 className="mb-1 text-[15px] font-semibold text-ink">What can they do?</h2>
-            <p className="mb-5 text-[13px] text-muted">They only get what you tick. You can change this later.</p>
-            <PermissionPicker value={permissions} onChange={setPermissions} canGrant={can} />
-            {fieldErrors.permissions && <p className="mt-3 text-xs text-clay">{fieldErrors.permissions}</p>}
+            <h2 className="mb-1 text-[15px] font-semibold text-ink">What kind of account?</h2>
+            <p className="mb-3 text-[13px] text-muted">
+              A team member uses the website and gets only the permissions you tick. A picker uses the Partner app and sees only the orders waiting to be picked.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                ['BRAND_EMPLOYEE', 'Team member'],
+                ['PICKER', 'Picker'],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, role: value }))}
+                  aria-pressed={form.role === value}
+                  className={`rounded-md border px-4 py-2 text-[13px] font-medium transition ${
+                    form.role === value ? 'border-pine bg-pine text-white' : 'border-line bg-white text-ink hover:border-ink'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
+          {form.role === 'BRAND_EMPLOYEE' ? (
+            <div>
+              <h2 className="mb-1 text-[15px] font-semibold text-ink">What can they do?</h2>
+              <p className="mb-5 text-[13px] text-muted">They only get what you tick. You can change this later.</p>
+              <PermissionPicker value={permissions} onChange={setPermissions} canGrant={can} />
+              {fieldErrors.permissions && <p className="mt-3 text-xs text-clay">{fieldErrors.permissions}</p>}
+            </div>
+          ) : (
+            <p className="rounded-md border border-line bg-paper px-4 py-3 text-[13px] text-muted">
+              A picker signs in on the CityCart Partner app. They see the customer’s first name and the items only — never the phone number, prices or payment.
+            </p>
+          )}
           <button type="submit" disabled={busy} className={btnPine}>
-            {busy ? 'Adding…' : 'Add team member'}
+            {busy ? 'Adding…' : form.role === 'PICKER' ? 'Add picker' : 'Add team member'}
           </button>
         </form>
       )}
@@ -166,12 +199,16 @@ export default function Team() {
                   </p>
                   <p className="text-[13px] text-muted">{m.user?.email}</p>
                   <p className="mt-1 text-xs text-muted">
-                    {m.permissions.length === 0 ? 'Cannot do anything yet' : `${m.permissions.length} permission${m.permissions.length === 1 ? '' : 's'}`}
+                    {m.user?.role === 'PICKER'
+                      ? 'Picker · Partner app only'
+                      : m.permissions.length === 0
+                        ? 'Cannot do anything yet'
+                        : `${m.permissions.length} permission${m.permissions.length === 1 ? '' : 's'}`}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2.5 text-[12.5px] font-medium">
                   <StatusBadge value={m.isActive ? 'ACTIVE' : 'INACTIVE'} />
-                  {can('employees.manage_permissions') && (
+                  {can('employees.manage_permissions') && m.user?.role !== 'PICKER' && (
                     <button
                       type="button"
                       onClick={() => setEditing(editing?.id === m._id ? null : { id: m._id, permissions: m.permissions })}

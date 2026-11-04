@@ -27,7 +27,7 @@ The backend must enforce all security rules defined in this document. Frontend r
 
 # 2. User Roles
 
-CityCart has six roles (`RIDER` was added in October 2026, see `20-partner-app.md`; `ADMIN_PARTNER` is the delegated platform admin described in `21-next-features-plan.md` §G):
+CityCart has seven roles (`RIDER` and `PICKER` were added in October 2026, see `20-partner-app.md`; `ADMIN_PARTNER` is the delegated platform admin described in `21-next-features-plan.md` §G):
 
 | Role             | Scope            | Description                                |
 | ---------------- | ---------------- | ------------------------------------------ |
@@ -35,7 +35,8 @@ CityCart has six roles (`RIDER` was added in October 2026, see `20-partner-app.m
 | `ADMIN_PARTNER`  | Platform-wide    | A delegated admin holding only ticked areas; web dashboard only |
 | `BRAND_ADMIN`    | One brand        | Owns and manages one brand/store           |
 | `BRAND_EMPLOYEE` | One brand        | Performs assigned tasks within a brand     |
-| `RIDER`          | One brand        | Delivers that brand's orders; partner app only |
+| `RIDER`          | One brand        | Delivers that brand's orders; Delivery app only |
+| `PICKER`         | One brand        | Picks and packs that brand's orders; Staff app only |
 | `CUSTOMER`       | Personal account | Shops and manages their own account/orders |
 
 ---
@@ -75,8 +76,13 @@ For example:
 `BRAND_ADMIN`, `BRAND_EMPLOYEE`, `SUPER_ADMIN` and `ADMIN_PARTNER` — have
 short-lived, per-tab sessions: closing the dashboard tab ends the session and
 signing in again is required. See `06-authentication-and-security.md` §9 (Staff
-Session Security). An `ADMIN_PARTNER` signs in on `/admin/login` only; the
-Partner app and the other portals refuse the account.
+Session Security). An `ADMIN_PARTNER` signs in on `/admin/login` only; the apps
+and the other portals refuse the account. App accounts receive a bearer token
+instead of a cookie, lasting one staff session length: a `RIDER` signs in only
+on the Delivery app (`POST /auth/delivery/login`, `X-Client: delivery`), and a
+`BRAND_EMPLOYEE` or `PICKER` only on the Staff app (`POST /auth/staff/login`,
+`X-Client: staff`). Each token is marked for its app and refused by the other
+(`403 WRONG_APP`); owners and the super admin remain web-only.
 
 ---
 
@@ -746,6 +752,15 @@ A `RIDER` account is created only by a Brand Admin, or an employee holding
 `riders.create`, inside that brand. The role and brand are never client-supplied,
 and a rider can never be created, edited or promoted by another rider.
 
+### Picker
+
+A `PICKER` account is created only by the Brand Admin (or the Super Admin) through
+`POST /employees` with `role: "PICKER"`. The role and brand are never
+client-supplied. A picker never holds brand-team permissions
+(`PICKER_NO_PERMISSIONS`) and their permission set cannot be changed; an employee
+cannot create a picker (`PICKER_CREATE_FORBIDDEN`). A picker signs in only on the
+Staff app and only reaches the `/picker/*` endpoints for their own brand.
+
 ### Admin Partner
 
 An `ADMIN_PARTNER` account is created only through the Super Admin's partner
@@ -823,6 +838,16 @@ Proposing a change to an order (a substitute or a removal) additionally requires
 ```text
 orders.adjust
 ```
+
+### Picker
+
+A picker sees only their brand's orders waiting to be picked or already claimed
+by them (`CONFIRMED` / `PROCESSING`). The picker views deliberately omit the
+customer's phone number, delivery address, prices, totals and payment details;
+the customer is identified by first name only. A picker can claim an order, mark
+its lines, propose a change on a short line, and pack the order. They cannot see
+or act on another brand's order, another picker's claimed order, or an order with
+a waiting change proposal.
 
 ### Super Admin
 

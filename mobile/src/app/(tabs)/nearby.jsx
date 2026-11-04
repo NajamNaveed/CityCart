@@ -5,12 +5,12 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import Feather from '@expo/vector-icons/Feather'
 import AppText from '../../components/ui/AppText'
 import Button from '../../components/ui/Button'
+import Chip from '../../components/ui/Chip'
 import EmptyState from '../../components/ui/EmptyState'
 import SearchBar from '../../components/ui/SearchBar'
 import Skeleton from '../../components/ui/Skeleton'
-import CatalogResults from '../../components/CatalogResults'
+import CatalogProductCard from '../../components/CatalogProductCard'
 import LocationChip from '../../components/LocationChip'
-import LocationSheet from '../../components/LocationSheet'
 import NearbyBrandCard from '../../components/NearbyBrandCard'
 import NearbyMap from '../../components/NearbyMap'
 import RangeBar from '../../components/RangeBar'
@@ -18,6 +18,7 @@ import { useCity } from '../../hooks/useCity'
 import { useDebounced } from '../../hooks/useDebounced'
 import { useNearby } from '../../hooks/useNearby'
 import { usePagedList } from '../../hooks/usePagedList'
+import { CATALOG_SORTS, catalogQuery, fetchCatalogBrowse } from '../../services/catalog'
 import { discoverQuery, fetchDiscover, needsArea } from '../../services/nearby'
 import { shopHref } from '../../utils/nav'
 import { nextRange, rangeLabel } from '../../utils/range'
@@ -25,23 +26,25 @@ import { colors, radius, spacing } from '../../theme'
 
 const NOTHING = { items: [], pagination: { page: 1, pages: 0, total: 0 } }
 
+const VIEWS = [
+  ['shops', 'Shops', 'list'],
+  ['map', 'Map', 'map'],
+  ['products', 'Products', 'package'],
+]
+
 function ViewToggle({ view, onChange }) {
   return (
-    <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, overflow: 'hidden', backgroundColor: colors.surface }}>
-      {[
-        ['list', 'Shops', 'list'],
-        ['map', 'Map', 'map'],
-        ['products', 'Products', 'package'],
-      ].map(([value, label, icon]) => (
+    <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', width: '100%', borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, overflow: 'hidden', backgroundColor: colors.surface }}>
+      {VIEWS.map(([value, label, icon]) => (
         <Pressable
           key={value}
           onPress={() => onChange(value)}
           accessibilityRole="radio"
           accessibilityState={{ selected: view === value }}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40, paddingHorizontal: spacing.md, backgroundColor: view === value ? colors.ink : colors.surface }}
+          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 40, paddingHorizontal: spacing.sm, backgroundColor: view === value ? colors.ink : colors.surface }}
         >
           <Feather name={icon} size={15} color={view === value ? colors.white : colors.ink} />
-          <AppText variant="label" style={{ color: view === value ? colors.white : colors.ink }}>
+          <AppText variant="label" numberOfLines={1} style={{ color: view === value ? colors.white : colors.ink }}>
             {label}
           </AppText>
         </Pressable>
@@ -54,11 +57,11 @@ export default function Nearby() {
   const router = useRouter()
   const { city, cityId } = useCity()
   const nearby = useNearby()
-  const { ready, asked, selectedBlocks, blockIds, areaName, coords, origin, range, detect, setRange } = nearby
+  const { ready, asked, blocksReady, blockIds, selectedBlocks, areaName, coords, origin, range, detect, openPicker, setRange } = nearby
 
   const [draft, setDraft] = useState('')
-  const [view, setView] = useState('list')
-  const [sheetOpen, setSheetOpen] = useState(false)
+  const [view, setView] = useState('shops')
+  const [sort, setSort] = useState('name')
   const q = useDebounced(draft.trim(), 400)
 
   // First time here: ask for the position once, after the screen has had a moment to appear.
@@ -68,44 +71,82 @@ export default function Nearby() {
     return () => clearTimeout(timer)
   }, [ready, asked, blockIds.length, detect])
 
-  const query = discoverQuery({ cityId, blockIds, coords, origin, range, q })
-  const key = JSON.stringify(query)
-  const list = usePagedList(key, (page) => (query ? fetchDiscover({ ...query, page }) : Promise.resolve(NOTHING)))
-  const areaMissing = Boolean(cityId) && needsArea({ range, blockIds, coords })
-  const hasArea = blockIds.length > 0 && range !== 'city'
+  const query = discoverQuery({ cityId, blockIds, coords: origin, range, q })
+  const shops = usePagedList(JSON.stringify(query), (page) => (query ? fetchDiscover({ ...query, page }) : Promise.resolve(NOTHING)))
+
+  // The shared catalogue needs an area and a range narrower than the whole city.
+  const canBrowse = Boolean(cityId) && blockIds.length > 0 && range !== 'city'
+  const catalogParams = canBrowse ? catalogQuery({ blockIds, origin, range, sort, q }) : null
+  const products = usePagedList(catalogParams ? JSON.stringify(catalogParams) : 'catalog:off', (page) =>
+    catalogParams ? fetchCatalogBrowse({ ...catalogParams, page }) : Promise.resolve(NOTHING),
+  )
+
+  const areaMissing = Boolean(cityId) && needsArea({ range, blockIds, coords: origin })
   const wider = nextRange(range)
+  const scopeLabel = range === 'block' && blockIds.length > 1 ? 'your blocks' : rangeLabel(range)
 
   const openBrand = (brand) => router.navigate(shopHref({ brandId: brand._id }))
-  const meta = list.meta
+  const list = view === 'products' ? products : shops
 
   const header = (
     <View style={{ gap: spacing.md, paddingBottom: spacing.md }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <AppText variant="title">Nearby</AppText>
-        <LocationChip onPress={() => setSheetOpen(true)} />
+        <LocationChip onPress={openPicker} />
       </View>
       <SearchBar value={draft} onChangeText={setDraft} placeholder="Search a brand or a product…" label="Search a brand or a product" />
       <RangeBar />
       {areaMissing ? (
-        <Pressable
-          onPress={() => setSheetOpen(true)}
-          accessibilityRole="button"
-          style={{ backgroundColor: colors.warningSoft, borderRadius: radius.md, padding: spacing.md }}
-        >
+        <Pressable onPress={openPicker} accessibilityRole="button" style={{ backgroundColor: colors.warningSoft, borderRadius: radius.md, padding: spacing.md }}>
           <AppText variant="small" style={{ color: colors.warning }}>
             Choose your area to search {range === 'block' ? 'your block' : `within ${range} km`}. Showing the whole city for now. <AppText variant="label" style={{ color: colors.warning }}>Choose area</AppText>
           </AppText>
         </Pressable>
       ) : null}
-      {cityId && !list.loading && !list.error && (list.items.length > 0 || view === 'products') ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }}>
-          <AppText variant="small" style={{ flex: 1 }} accessibilityLiveRegion="polite">
-            {list.total} {list.total === 1 ? 'brand' : 'brands'} with {meta?.totalBranches ?? 0} {meta?.totalBranches === 1 ? 'branch' : 'branches'}
-            {q ? ` for “${q}”` : ''}
-            {range !== 'city' && !areaMissing ? ` within ${rangeLabel(range)}` : ''}
-            {areaName && range !== 'block' ? ` of ${areaName}` : ''}
-          </AppText>
+
+      {cityId && blocksReady ? (
+        <View style={{ gap: spacing.sm }}>
+          {view === 'products' ? (
+            <AppText variant="small" accessibilityLiveRegion="polite">
+              {canBrowse && !products.loading && !products.error
+                ? `${products.total} ${products.total === 1 ? 'product' : 'products'} in your area${q ? ` for “${q}”` : ''}${range !== 'city' ? ` within ${scopeLabel}` : ''}`
+                : 'Products from the stores near you'}
+            </AppText>
+          ) : (
+            <AppText variant="small" accessibilityLiveRegion="polite">
+              {!shops.loading && !shops.error && shops.items.length > 0
+                ? `${shops.total} ${shops.total === 1 ? 'brand' : 'brands'} with ${shops.meta?.totalBranches ?? 0} ${shops.meta?.totalBranches === 1 ? 'branch' : 'branches'}${q ? ` for “${q}”` : ''}${range !== 'city' && !areaMissing ? ` within ${scopeLabel}` : ''}${areaName && range !== 'block' ? ` of ${areaName}` : ''}`
+                : 'Shops near you'}
+            </AppText>
+          )}
           <ViewToggle view={view} onChange={setView} />
+        </View>
+      ) : null}
+
+      {view === 'products' && canBrowse && !products.loading && !products.error && products.items.length > 0 ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }} accessibilityRole="radiogroup" accessibilityLabel="Sort products">
+          {CATALOG_SORTS.filter((s) => s.key !== 'nearest' || origin).map((s) => (
+            <Chip key={s.key} label={s.label} selected={sort === s.key} onPress={() => setSort(s.key)} />
+          ))}
+        </View>
+      ) : null}
+
+      {view === 'map' && cityId && !shops.loading && !shops.error && shops.items.length > 0 ? (
+        <View style={{ gap: spacing.md }}>
+          <NearbyMap
+            items={shops.items}
+            zones={selectedBlocks}
+            selectedIds={blockIds}
+            origin={shops.meta?.origin}
+            radiusKm={shops.meta?.radiusKm}
+            originLabel={coords ? 'You are here' : areaName ? `Searching from ${areaName}` : 'Search centre'}
+            onOpenBrand={openBrand}
+          />
+          <AppText variant="small">
+            Tap a pin, then its label, to see that brand’s products. Shaded areas are the blocks you are shopping in.
+            {shops.hasMore ? ' The map shows the shops loaded so far.' : ''}
+          </AppText>
+          {shops.hasMore ? <Button title="Load more shops" variant="outline" onPress={shops.loadMore} loading={shops.loadingMore} /> : null}
         </View>
       ) : null}
     </View>
@@ -121,12 +162,42 @@ export default function Nearby() {
         action={
           <View style={{ gap: spacing.md }}>
             <Button title="Use my location" onPress={detect} loading={nearby.status === 'detecting'} />
-            <Button title="Choose manually" variant="outline" onPress={() => setSheetOpen(true)} />
+            <Button title="Choose manually" variant="outline" onPress={openPicker} />
           </View>
         }
       />
     )
-  } else if (list.loading) {
+  } else if (view === 'products') {
+    if (!canBrowse) {
+      empty = (
+        <EmptyState
+          icon="package"
+          title="Choose your area to compare products"
+          message="Products are compared across the stores in your area. Pick one or more blocks, then a range narrower than the whole city."
+          action={<Button title="Choose area" onPress={openPicker} />}
+        />
+      )
+    } else if (products.loading) {
+      empty = (
+        <View style={{ gap: spacing.lg }}>
+          {[0, 1].map((i) => (
+            <Skeleton key={i} height={150} />
+          ))}
+        </View>
+      )
+    } else if (products.error) {
+      empty = <EmptyState icon="wifi-off" tone="error" title="Couldn't load products" message={products.error} action={<Button title="Try again" onPress={products.refresh} />} />
+    } else {
+      empty = (
+        <EmptyState
+          icon="package"
+          title={q ? `No products for “${q}” in your area` : 'No products in your area yet'}
+          message="Try a wider range, another block, or a different search."
+          action={wider ? <Button title={wider === 'city' ? 'Search the whole city' : `Try ${wider} km`} onPress={() => setRange(wider)} /> : undefined}
+        />
+      )
+    }
+  } else if (shops.loading) {
     empty = (
       <View style={{ gap: spacing.lg }}>
         {[0, 1].map((i) => (
@@ -134,71 +205,44 @@ export default function Nearby() {
         ))}
       </View>
     )
-  } else if (list.error) {
-    empty = <EmptyState icon="wifi-off" tone="error" title="Couldn't load nearby shops" message={list.error} action={<Button title="Try again" onPress={list.refresh} />} />
-  } else {
+  } else if (shops.error) {
+    empty = <EmptyState icon="wifi-off" tone="error" title="Couldn't load nearby shops" message={shops.error} action={<Button title="Try again" onPress={shops.refresh} />} />
+  } else if (shops.items.length === 0) {
     empty = (
       <EmptyState
         icon="shopping-bag"
-        title={q ? `Nothing for “${q}” within ${rangeLabel(range)}` : `No shops within ${rangeLabel(range)} yet`}
+        title={q ? `Nothing for “${q}” within ${scopeLabel}` : `No shops within ${scopeLabel} yet`}
         message={range === 'city' ? `We couldn't find any${q ? ' match' : ' shops'} in ${city?.name || 'this city'}. Try a different search.` : 'Try a wider range to see more shops.'}
         action={wider ? <Button title={wider === 'city' ? 'Search the whole city' : `Try ${wider} km`} onPress={() => setRange(wider)} /> : undefined}
       />
     )
   }
 
-  const showMap = view === 'map' && cityId && !list.loading && !list.error && list.items.length > 0
-  const showProducts = view === 'products' && cityId
+  const data = view === 'map' ? [] : view === 'products' ? products.items : shops.items
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: colors.paper }}>
       <FlatList
-        data={showMap || showProducts ? [] : list.items}
-        keyExtractor={(brand) => brand._id}
+        data={data}
+        keyExtractor={(item) => (view === 'products' ? item.catalogProductId : item._id)}
         contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.lg }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        ListHeaderComponent={
-          <>
-            {header}
-            {showProducts ? (
-              hasArea ? (
-                <CatalogResults blockIds={blockIds} origin={origin} range={range} q={q} />
-              ) : (
-                <Pressable onPress={() => setSheetOpen(true)} accessibilityRole="button" style={{ backgroundColor: colors.warningSoft, borderRadius: radius.md, padding: spacing.md }}>
-                  <AppText variant="small" style={{ color: colors.warning }}>
-                    Choose your area to compare products across the stores near you. <AppText variant="label" style={{ color: colors.warning }}>Choose area</AppText>
-                  </AppText>
-                </Pressable>
-              )
-            ) : null}
-            {showMap ? (
-              <View style={{ gap: spacing.md }}>
-                <NearbyMap
-                  items={list.items}
-                  zones={selectedBlocks}
-                  origin={meta?.origin}
-                  radiusKm={meta?.radiusKm}
-                  originLabel={coords ? 'You are here' : areaName ? `Searching from ${areaName}` : 'Search centre'}
-                  onOpenBrand={openBrand}
-                />
-                <AppText variant="small">
-                  Tap a pin, then its label, to see that brand’s products.
-                  {list.hasMore ? ' The map shows the shops loaded so far.' : ''}
-                </AppText>
-                {list.hasMore ? <Button title="Load more shops" variant="outline" onPress={list.loadMore} loading={list.loadingMore} /> : null}
-              </View>
-            ) : null}
-          </>
-        }
-        ListEmptyComponent={showMap || showProducts ? null : empty}
-        refreshing={list.refreshing}
-        onRefresh={list.refresh}
-        onEndReached={showMap || showProducts ? undefined : list.loadMore}
+        ListHeaderComponent={header}
+        ListEmptyComponent={empty}
+        refreshing={view !== 'map' && list.refreshing}
+        onRefresh={view === 'map' ? shops.refresh : list.refresh}
+        onEndReached={view === 'map' ? undefined : list.loadMore}
         onEndReachedThreshold={0.6}
-        renderItem={({ item }) => <NearbyBrandCard brand={item} onOpenProduct={(product) => router.push(`/product/${product._id}`)} onSeeAll={() => openBrand(item)} />}
+        renderItem={({ item }) =>
+          view === 'products' ? (
+            <CatalogProductCard item={item} onOpenProduct={(offer) => router.push(`/product/${offer.productId}`)} />
+          ) : (
+            <NearbyBrandCard brand={item} onOpenProduct={(product) => router.push(`/product/${product._id}`)} onSeeAll={() => openBrand(item)} />
+          )
+        }
         ListFooterComponent={
-          showMap || showProducts ? null : list.loadingMore ? (
+          view === 'map' ? null : list.loadingMore ? (
             <ActivityIndicator color={colors.clay} style={{ marginVertical: spacing.lg }} />
           ) : list.moreError ? (
             <Pressable onPress={list.loadMore} accessibilityRole="button" style={{ alignItems: 'center', padding: spacing.lg }}>
@@ -209,7 +253,6 @@ export default function Nearby() {
           ) : null
         }
       />
-      <LocationSheet visible={sheetOpen} onClose={() => setSheetOpen(false)} />
     </SafeAreaView>
   )
 }

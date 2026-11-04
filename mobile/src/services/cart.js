@@ -25,6 +25,15 @@ export async function removeFromCart(productId) {
   return res.data.cart
 }
 
+// Which lines the stores in the cart could still deliver to these blocks.
+export async function checkCartArea(blockIds) {
+  const res = await api.post('/cart/area-check', { blockIds })
+  return {
+    deliverable: Array.isArray(res.data?.deliverable) ? res.data.deliverable : [],
+    undeliverable: Array.isArray(res.data?.undeliverable) ? res.data.undeliverable : [],
+  }
+}
+
 const ISSUES = {
   PRODUCT_UNAVAILABLE: 'No longer available',
   BRAND_UNAVAILABLE: 'This brand is unavailable',

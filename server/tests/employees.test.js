@@ -128,19 +128,19 @@ describe('POST /api/v1/employees', () => {
     ['unknown permission', { ...good, permissions: ['root.everything'] }],
     ['duplicate permissions', { ...good, permissions: ['products.view', 'products.view'] }],
     ['bad phone', { ...good, phone: 'abc' }],
+    ['a privileged role', { ...good, role: 'SUPER_ADMIN' }],
   ])('400 for %s', async (_n, body) => {
     const { cookie } = actAs(ROLES.BRAND_ADMIN);
     expect((await post(cookie, body)).status).toBe(400);
     expect(User.create).not.toHaveBeenCalled();
   });
 
-  it('creates a BRAND_EMPLOYEE in the caller\'s brand; role/brandId from the body are ignored; no password in response', async () => {
+  it('creates a BRAND_EMPLOYEE in the caller\'s brand by default; brandId from the body is ignored; no password in response', async () => {
     const { cookie } = actAs(ROLES.BRAND_ADMIN);
     createWorld();
 
     const res = await post(cookie, {
       ...good,
-      role: 'SUPER_ADMIN',
       brandId: oid().toString(),
       permissions: [PERMISSIONS.PRODUCTS_VIEW],
       jobTitle: 'Cashier',
@@ -184,7 +184,37 @@ describe('POST /api/v1/employees', () => {
     expect((await post(cookie, { ...good, brandId: oid().toString() })).status).toBe(404);
   });
 
-  it('an employee cannot create someone with permissions they do not hold', async () => {
+  it('a brand admin creates a picker: the login is a PICKER with no brand-team permissions', async () => {
+    const { cookie } = actAs(ROLES.BRAND_ADMIN);
+    createWorld();
+
+    const res = await post(cookie, { ...good, role: ROLES.PICKER, jobTitle: 'Stock picker' });
+
+    expect(res.status).toBe(201);
+    expect(User.create.mock.calls[0][0][0]).toMatchObject({ role: ROLES.PICKER, brandId: brandId.toString() });
+    expect(Employee.create.mock.calls[0][0][0]).toMatchObject({ permissions: [], jobTitle: 'Stock picker' });
+    expect(res.body.employee.user.role).toBe(ROLES.PICKER);
+  });
+
+  it('a picker cannot carry brand-team permissions', async () => {
+    const { cookie } = actAs(ROLES.BRAND_ADMIN);
+    createWorld();
+    const res = await post(cookie, { ...good, role: ROLES.PICKER, permissions: [PERMISSIONS.PRODUCTS_VIEW] });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('PICKER_NO_PERMISSIONS');
+    expect(User.create).not.toHaveBeenCalled();
+  });
+
+  it('only the brand owner (or super admin) may create a picker', async () => {
+    const { cookie } = actAs(ROLES.BRAND_EMPLOYEE, { perms: [PERMISSIONS.EMPLOYEES_CREATE] });
+    createWorld();
+    const res = await post(cookie, { ...good, role: ROLES.PICKER });
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('PICKER_CREATE_FORBIDDEN');
+    expect(User.create).not.toHaveBeenCalled();
+  });
+
+  it("an employee cannot create someone with permissions they do not hold", async () => {
     const { cookie } = actAs(ROLES.BRAND_EMPLOYEE, { perms: [PERMISSIONS.EMPLOYEES_CREATE, PERMISSIONS.PRODUCTS_VIEW] });
     createWorld();
 
@@ -223,7 +253,7 @@ describe('PATCH /api/v1/employees/:id and DELETE', () => {
       { new: true, session: 'SESSION' }
     );
     expect(User.findOneAndUpdate).toHaveBeenCalledWith(
-      { _id: employee.userId, role: ROLES.BRAND_EMPLOYEE, brandId },
+      { _id: employee.userId, role: { $in: [ROLES.BRAND_EMPLOYEE, ROLES.PICKER] }, brandId },
       { $set: { name: 'New Name', isActive: false } }, // only profile/active fields
       { new: true, session: 'SESSION' }
     );
@@ -310,6 +340,20 @@ describe('PATCH /api/v1/employees/:id/permissions', () => {
 
     expect(res.status).toBe(403);
     expect(res.body.code).toBe('SELF_MODIFICATION');
+    expect(Employee.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('400 when the target is a picker, who never holds brand-team permissions', async () => {
+    const target = mkEmployee();
+    const { cookie, user } = actAs(ROLES.BRAND_ADMIN, { target });
+    User.findById.mockImplementation(async (id) =>
+      String(id) === String(user._id) ? user : mkUser({ _id: id, role: ROLES.PICKER })
+    );
+
+    const res = await put(cookie, target._id, [PERMISSIONS.PRODUCTS_VIEW]);
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('PICKER_NO_PERMISSIONS');
     expect(Employee.findOneAndUpdate).not.toHaveBeenCalled();
   });
 

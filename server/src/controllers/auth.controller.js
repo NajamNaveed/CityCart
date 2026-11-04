@@ -8,7 +8,7 @@ const { formatZodError } = require('../utils/formatZodError');
 const { changePasswordSchema } = require('../validators/password.validator');
 const { changePassword: changePasswordForUser, PasswordError } = require('../services/password.service');
 const { signToken } = require('../utils/jwt');
-const { isMobileClient, isPartnerClient } = require('../utils/clientType');
+const { isMobileClient, isStaffClient, isDeliveryClient } = require('../utils/clientType');
 const env = require('../config/env');
 
 // Staff sessions use the short-lived cookie (docs/06 §9); shoppers the
@@ -99,33 +99,48 @@ const loginFor = (portal) =>
     }
   };
 
-// Sign-in for the CityCart Partner app (docs/20). Only the app sends
-// `X-Client: partner`; the token comes back in the body (no cookie), is marked
-// as a partner token, and lasts one staff session. Only riders and brand team
-// members can use it; a wrong-role account gets the same generic error as a wrong
-// password, so nobody can probe which accounts exist.
-async function partnerLogin(req, res, next) {
-  if (!isPartnerClient(req)) {
-    return res.status(403).json({
-      success: false,
-      message: 'This sign-in is for the CityCart Partner app.',
-      code: 'PARTNER_APP_ONLY',
-    });
-  }
-  const parsed = loginSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ success: false, message: 'Validation failed.', errors: formatZodError(parsed.error) });
-  }
-  try {
-    const { user, token } = await loginUser(parsed.data, 'partner');
-    return res.status(200).json({ success: true, message: 'Login successful', user, token });
-  } catch (err) {
-    if (err instanceof AuthError) {
-      return res.status(err.status).json({ success: false, message: err.message });
+// Sign-in for the native staff and delivery apps (docs/20, docs/23). Each app
+// sends its own `X-Client` header; the token comes back in the body (no
+// cookie), is marked with the app it belongs to, and lasts one staff session.
+// Only that app's roles can use it; a wrong-role account gets the same generic
+// error as a wrong password, so nobody can probe which accounts exist.
+const APP_LOGIN = Object.freeze({
+  staff: {
+    check: isStaffClient,
+    code: 'STAFF_APP_ONLY',
+    message: 'This sign-in is for the CityCart Staff app.',
+  },
+  delivery: {
+    check: isDeliveryClient,
+    code: 'DELIVERY_APP_ONLY',
+    message: 'This sign-in is for the CityCart Delivery app.',
+  },
+});
+
+const appLoginFor = (portal) => {
+  const app = APP_LOGIN[portal];
+  return async function appLogin(req, res, next) {
+    if (!app.check(req)) {
+      return res.status(403).json({ success: false, message: app.message, code: app.code });
     }
-    return next(err);
-  }
-}
+    const parsed = loginSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, message: 'Validation failed.', errors: formatZodError(parsed.error) });
+    }
+    try {
+      const { user, token } = await loginUser(parsed.data, portal);
+      return res.status(200).json({ success: true, message: 'Login successful', user, token });
+    } catch (err) {
+      if (err instanceof AuthError) {
+        return res.status(err.status).json({ success: false, message: err.message });
+      }
+      return next(err);
+    }
+  };
+};
+
+const staffLogin = appLoginFor('staff');
+const deliveryLogin = appLoginFor('delivery');
 
 const login = loginFor('customer');
 const brandLogin = loginFor('brand');
@@ -199,4 +214,4 @@ async function changePassword(req, res, next) {
   }
 }
 
-module.exports = { register, login, brandLogin, partnerLogin, adminLogin, logout, me, changePassword };
+module.exports = { register, login, brandLogin, staffLogin, deliveryLogin, adminLogin, logout, me, changePassword };

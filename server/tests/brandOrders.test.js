@@ -244,6 +244,8 @@ describe('PATCH /api/v1/brand/orders/:id/status', () => {
       _id: orderId, brandId, customerId, shippingAddress, deliveryFee: 0, items: [],
     });
     Delivery.create.mockResolvedValue([]);
+    // Rider dispatch looks the new delivery up again after the transaction.
+    Delivery.findOne.mockReturnValue({ select: () => Promise.resolve(null) });
 
     const res = await patch(cookie, orderId, 'READY_FOR_SHIPMENT');
 

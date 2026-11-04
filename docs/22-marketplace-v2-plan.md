@@ -8,8 +8,11 @@ Status: **in progress.** Written after the project review with the head.
 | 1a Global categories | **done** (server, tests, admin page, brand form, seed, docs) |
 | 1b Shared catalogue and listings | **done** (server, tests, admin Catalogue page, brand product form, CSV import, seed, docs) |
 | 2 Zones: polygon blocks | **done** (server, tests, admin map editor, seed, docs) |
-| 3 Customer area flow, catalogue views, address book | **in progress**: 3a server done; 3b website done (area picker with overlaps, borders and map pin; range pills inside the chosen blocks; products grouped with offers; checkout with saved addresses and a delivery pin; cart delivery warning; saved-addresses page); 3c mobile customer app next, plus an "also sold by" list on the product page |
-| 4 to 7 | not started |
+| 3 Customer area flow, catalogue views, address book | **done**: 3a server; 3b website (area picker with overlaps, borders and map pin; range pills inside the chosen blocks; products grouped with offers; checkout with saved addresses and a delivery pin; cart delivery warning; saved-addresses page); 3c mobile customer app (same area flow, catalogue products with offers, address book, delivery pin at checkout, cart area warning) plus an area-only "also sold by" list on the website and mobile product pages |
+| 4 Picker and substitution | **done** (server, tests, partner picker screens, brand Team picker accounts, customer picker label, seed, docs) |
+| 5 Split the apps | **done** (three app-type sign-ins, new `delivery/` app, `partner/` reduced to the Staff app, rider tests moved, docs 20/23) |
+| 6 Partial delivery and door returns | **done** (server, tests, delivery app line review, Staff app and web returned-goods inbox, customer display, admin returns, seed, docs) |
+| 7 Polish, docs, release | **prepared** (docs, seed walkthrough, `npm run verify`, release runbook). Deploying to Render/Vercel and building the three APKs with EAS need the owner's credentials and approval |
 
 This plan covers eight changes: real zones, customer area choice, global categories, a shared
 product catalogue, three separate apps, a picker role, returns, and saved addresses. It ends
@@ -28,7 +31,7 @@ with the three Android APKs.
 | 5 | **Overlapping blocks:** the customer may select **one or several** blocks. He is never forced to pick only one. |
 | 6 | **APKs come last.** All three apps are built only after every phase below is done. |
 | 7 | **Security hardening is deferred.** It is not part of this plan. |
-| 8 | **New packages:** none beyond `react-native-webview` (already added for the free map). Polygon drawing and pin dropping reuse Leaflet. |
+| 8 | **New packages:** none beyond what the apps already install. The website draws polygons and drops pins with its existing Leaflet map; the customer app draws them with a self-contained OpenStreetMap viewer inside `react-native-webview` (`src/components/map/`). (It first used `react-native-maps`; that was replaced by the WebView so the app needs no Google Maps key or native map SDK.) |
 | 9 | **No customer return request after delivery, for now.** Only the **door case** stays: the rider records accepted and rejected items while delivering, whether the order is half or full. A customer coming back later to return something is **not** handled in v2. |
 | 10 | **Development database:** a new database name (for example `citycart_v2`) on the same Atlas cluster, set in the local `server/.env`. The live Render site keeps the old database until the release phase. |
 
@@ -42,8 +45,8 @@ with the three Android APKs.
 | Discovery | `/discover` has `scope=block \| radius \| city`, one `blockId`, and `radiusKm`. |
 | Categories | Owned by **one brand each** (`brandId` on Category). |
 | Products | Owned by one brand each (`brandId`). Two stores selling the same item means two full records. |
-| Apps | `mobile/` (customer) and `partner/` (brand owner, staff **and** rider in one app). |
-| Riders | Role `RIDER`, belongs to one brand, signs in only through the partner app. |
+| Apps | `mobile/` (customer), `partner/` (staff: brand team and picker) and `delivery/` (rider). |
+| Riders | Role `RIDER`, belongs to one brand, signs in only through the delivery app. |
 | Substitution | Exists (`OrderAdjustment`: PROPOSED, ACCEPTED, REMOVED, ORDER_CANCELLED, WITHDRAWN, EXPIRED). The **brand** proposes, the customer answers. |
 | Returns | **None.** Delivery has a `RETURNED` status and payment has `PARTIALLY_REFUNDED`, but there is no return flow. |
 | Addresses | The order keeps an address snapshot. There is **no saved address book**. |
@@ -125,11 +128,16 @@ Two layers:
 |---|---|---|---|
 | Customer | `mobile/` | `com.citycart.app` | CUSTOMER |
 | **Delivery** (new) | `delivery/` | `com.citycart.delivery` | RIDER |
-| **Staff** (the current partner app, rider screens removed) | `partner/` | `com.citycart.partner` | BRAND_ADMIN, BRAND_EMPLOYEE, PICKER |
+| **Staff** (the old partner app, rider screens removed) | `partner/` | `com.citycart.staff` | BRAND_EMPLOYEE, PICKER |
 
-- The sign-in app-type check (a rider already signs in only through the partner app today) extends to three app types. Each app rejects roles that do not belong to it, and the server enforces it.
+Brand owners (`BRAND_ADMIN`) and the super admin stay **web-only**; the server
+refuses their tokens in every app. The table's earlier `BRAND_ADMIN` entry for
+the Staff app was not implemented: widening it is a security decision for the
+owner (see `20-partner-app.md` §7).
+
+- The sign-in app-type check now covers three app types. Each app rejects roles that do not belong to it, and the server enforces it.
 - The delivery app takes over: assigned deliveries, live location sharing, delivery code, payment-proof photo, and the new door-return screen (§F).
-- The staff app shows a different home per role: owner or manager (orders, products, team), picker (pick queue).
+- The staff app shows the picker's queue and pick screen; brand owners, managers and records staff use the website.
 - Shared code (API client, theme, secure storage, push registration) is **copied** into `delivery/` to keep the repo simple. Extracting a shared package is optional later.
 - Riders stay **brand-scoped** for now.
 
@@ -146,7 +154,9 @@ Flow:
 4. The customer accepts, removes, or cancels (existing flow, including expiry and the push notification).
 5. **Packed:** the picker confirms. The order moves on to ready-for-pickup and the existing rider flow.
 
-Data: order gets `pickerId`, `pickStartedAt`, `packedAt`, and per line `pickStatus`, `pickedQty`. New order statuses are needed (for example `PICKING`, `PACKED`). Before adding them, read the current status list in `order.model.js`. If a status like `PREPARING` already exists, reuse it instead of adding a duplicate. Stock changes use the existing inventory movements.
+Data: order gets `pickerId`, `pickStartedAt`, `packedAt`, and per line `pickStatus`, `pickedQty`. No new order statuses were added: claiming moves `CONFIRMED → PROCESSING` and packing moves `PROCESSING → READY_FOR_SHIPMENT`, so the existing dashboard, rider flow and stock movements are unchanged. Stock changes use the existing inventory movements.
+
+**Branch note:** the plan says "queue of his branch", but an order carries no fulfilment branch and inventory is held per brand, so the queue is brand-wide. A branch-scoped queue would first need a branch on the order (and a decision on which branch fulfils an online order) — not invented here.
 
 ### F. Partial delivery at the door (returns, v2 scope)
 
@@ -251,16 +261,22 @@ Split into **1a (global categories, done)** and **1b (catalogue and listings, do
 
 **Done when:** the admin draws blocks, and the discover endpoint returns correct stores for single, overlapping, border and outside points.
 
-### Phase 3: Customer area flow, catalogue views and address book (L)
+### Phase 3: Customer area flow, catalogue views and address book (L) — done
+
+**How it was built:** the website and the customer app share one server model. `GET /blocks/at` answers "which blocks hold this point?" with `{ containing, nearest }`; the apps turn that into found / overlap / border / outside. Both remember `{ blockIds, coords, pinned, range }` on the device and send `scope=area` to `/discover`, with the radius applied inside the selected blocks. Polygons are drawn on the existing maps (Leaflet on the web, the OpenStreetMap WebView viewer on mobile) and tapping the map drops a delivery pin. `/catalog/browse` groups listings per catalogue product; `/catalog/browse/:catalogProductId` returns the area's offers or a 404 "not sold in your area", and the product page shows them as **area-only** "also sold by" (without an area it asks for one). Checkout requires a delivery location: a saved `addressId`, or a pin that `/blocks/at` puts inside a block, plus an optional `saveAddress`. The confirmation of "can these stores reach this spot?" stays on the server (`CHECKOUT_ISSUES` / `NOT_DELIVERABLE`, `OUTSIDE_DELIVERY_ZONE`), and the cart asks `POST /cart/area-check` to warn and offer removal. Tests: server scenarios in §A; website and mobile screen tests for single block, overlap, border, pin, catalogue offers, address CRUD and the checkout rules.
+
 - **Server:** `Address` collection and routes, checkout delivery rule (§A), cart area check.
-- **Website and mobile:** the shopping-area flow of §A (auto block, multi-select for overlaps, border case, pin mode, range pills, block shapes on the map). Mobile extends `NearbyMap.jsx` to draw polygons and accept a tapped point, still in the free Leaflet web view.
+- **Website and mobile:** the shopping-area flow of §A (auto block, multi-select for overlaps, border case, pin mode, range pills, block shapes on the map). Mobile draws the polygons and accepts a tapped point with the OpenStreetMap WebView viewer (`src/components/map/mapHtml.js`), with no Google Maps key.
 - **Catalogue for customers:** grouped product cards, offers list on the product page, search in the area.
 - **Checkout:** saved addresses, save-this-address, block check with a clear message when the store does not serve the address.
 - **Tests:** every scenario in §A on the server, plus screen tests for the multi-select, border and pin flows, and address CRUD.
 
 **Done when:** all four scenarios work end to end on both website and mobile: single block, overlap with both selected, border user choosing manually, and Samanabad customer pinning D Ground.
 
-### Phase 4: Picker and substitution (M)
+### Phase 4: Picker and substitution (M) — done
+
+**How it was built:** the server reuses `CONFIRMED`, `PROCESSING` and `READY_FOR_SHIPMENT` and adds `pickerId`, `pickStartedAt`, `packedAt` and per-line `pickStatus`/`pickedQty`. A `/picker/*` API (role `PICKER`, brand from the account) lists the brand queue, claims an order atomically, marks lines, proposes a change on short lines through the existing adjustment service (`proposedByRole: PICKER`, substitutes reserved in the same transaction) and packs, which creates the usual delivery. Serializers are allow-lists: first name and items only, never phone, address, price, total or payment. The Partner app sends pickers to a two-tab queue/settings flow and a pick screen with claim, per-line marking, substitute search, note, send, and pack confirmation. Brand admins create pickers from the web Team page (no permissions, refused for employees or with permissions). The customer proposal card adds "Suggested by the store's picker." Seed gives each active brand a picker, a mid-pick order and one pending picker proposal. Tests: `picker.integration.test.js` (isolation, privacy, claim races, line rules, proposal → acceptance → pack → delivery), employee creation, partner screen tests, and the web/mobile label. Known gap: the queue is brand-wide (see §E).
+
 - **Server:** role `PICKER`, pick queue endpoints, line pick statuses, `proposedBy` on adjustments (picker allowed to propose), new or reused order statuses, packed step.
 - **Staff app (`partner/`):** picker home with queue, pick screen (per-line picked, short, unavailable), propose substitute (same-store listings), pack confirmation. Brand admin can create pickers.
 - **Customer apps:** unchanged flow, but the proposal now notes "suggested by the store's picker".
@@ -269,7 +285,24 @@ Split into **1a (global categories, done)** and **1b (catalogue and listings, do
 
 **Done when:** an order moves from placed through picking, a substitution answered by the customer, packed, and ready for the rider.
 
-### Phase 5: Split the apps (M)
+### Phase 5: Split the apps (M) — done
+
+**How it was built:** the server's `PARTNER_ROLES` became `STAFF_APP_ROLES`
+(`BRAND_EMPLOYEE`, `PICKER`) and `DELIVERY_APP_ROLES` (`RIDER`), with two
+separate doors: `POST /auth/staff/login` (`X-Client: staff`) and
+`POST /auth/delivery/login` (`X-Client: delivery`). Each refuses the other's
+header and roles (`403 STAFF_APP_ONLY` / `DELIVERY_APP_ONLY`); a bearer token
+carrying the wrong `client` claim is `403 WRONG_APP` on every endpoint. The old
+`/auth/partner/login` was removed. A new Expo package `delivery/` copied the
+rider screens, services and tests and renamed itself CityCart Delivery
+(`citycart-delivery`, `com.citycart.delivery`); `partner/` dropped the rider
+group, rider services and rider tests, and is now CityCart Staff
+(`citycart-staff`, `com.citycart.staff`) for brand team members and pickers.
+Push registration exists in both apps (different destinations); location
+sharing lives only in Delivery. Root scripts became `dev:staff`,
+`dev:delivery`, `test:staff`, `test:delivery` and `test:apps`. Full detail:
+`20-partner-app.md` §5.10 and `23-delivery-app.md`.
+
 - Create `delivery/` from the rider screens and shared code, with its own package, icon and name. Remove rider screens from `partner/` and rename its display name to the Staff app.
 - Extend the sign-in app-type check to three apps. Each app rejects the wrong roles.
 - Move push registration and rider location sharing to the delivery app.
@@ -277,7 +310,8 @@ Split into **1a (global categories, done)** and **1b (catalogue and listings, do
 
 **Done when:** the three apps start and sign in only with their own roles.
 
-### Phase 6: Partial delivery at the door (M)
+### Phase 6: Partial delivery at the door (M) — done
+
 - **Server:** `Return` model and service (door source), completion with accepted and rejected quantities, order `fulfilment` and net totals, restock or write-off at the store, refunds for prepaid orders, commission and payout adjustment.
 - **Delivery app:** per-line accept or reject on completion, reasons and photo, payment collected for accepted lines only.
 - **Staff app and web (brand):** a returned-goods inbox (mark received, restock or write off).
@@ -288,15 +322,20 @@ Split into **1a (global categories, done)** and **1b (catalogue and listings, do
 
 **Done when:** a half-and-half order shows the correct totals, the rejected goods return to the store, stock is corrected, and the payout reflects it.
 
-### Phase 7: Polish, docs, release (M)
+**How it was built.** The rider's completion call now accepts `lines` and the server recomputes everything from the order: each line's `acceptedQty`/`rejectedQty` must sum to what was ordered, and refused lines need a reason (`DAMAGED`, `WRONG_ITEM`, `MISSING`, `NOT_WANTED`) with an optional private photo. The order gains `fulfilment` (`FULL`/`PARTIAL`/`NONE`), `returnedAmount`, `feeRefunded` (only a full rejection for a store-fault reason refunds the delivery fee) and `netTotal`; a half-and-half order charges COD only `netTotal`, and a prepaid order is refunded the refused value (plus the fee when it applies). A `Return` document stores the refused lines and their photos; `RETURNED` is now reachable on the order and delivery. The store takes the goods in through `POST /returns/:id/receive`, choosing per line **restock** or **write-off** (write-off is the default); restock is the only path that moves stock, with a `RETURN_RESTOCKED` movement. Brand analytics uses `netTotal` and excludes `RETURNED` orders, so the payout basis reflects returns even though the payout ledger itself is still a concept (docs/15 §7). Clients: the Delivery app's line review (kept/refused counters, reasons, camera photo, collect/refund preview), the Staff app's Returns tab and overview tile, the brand website's Returns pages, the admin website's returns list and totals, and a returned-order summary with the final total in the shopper app and both websites. Brand staff with `orders.view`/`delivery.view` receive `RETURN_IN_TRANSIT`. The seed now has orders in all three fulfilments and returns in both statuses (one restocked prepaid return, one in-transit COD return with a photo, one fully rejected COD order whose payment is cancelled). Tests: `server/tests/returns.test.js` (rules, money, stock, roles), `server/tests/integration/returns.integration.test.js` (real MongoDB), `server/tests/seedDemo.test.js`, the app suites and lint. Docs updated: 04, 05, 08, 09, 10, 11, 12, 15, 18, 19, 20, 23 and this file.
+
+### Phase 7: Polish, docs, release (M) — prepared, release pending owner
+
 - Full demo walkthrough (§7) on a freshly seeded cluster.
-- Update `docs/` (including `19-mobile-app.md`, which still describes the old Google map), add the delivery app doc, and update this file's status.
+- Update `docs/` (including `19-mobile-app.md`), add the delivery app doc, and update this file's status.
 - Run all suites: server unit and integration, client, mobile, delivery, staff.
 - Point Render's `MONGODB_URI` at the new database and deploy the v2 code together.
 - Set `EXPO_PUBLIC_API_URL` for each app in EAS (cloud builds do not read your local `.env`).
 - Build the three APKs with `npm run build:android:preview` in `mobile/`, `delivery/` and `partner/`.
 
 **Done when:** three installable APKs sign in against the live server and pass the walkthrough.
+
+**How it was prepared.** The repository side of Phase 7 is complete: `npm run verify` at the root runs lint in all five packages, the server unit suite, the server integration suite, the shopper suite and both app suites, then builds the website; `npm run test:all` runs just the test half. The demo seed was run against an isolated empty database and its walkthrough scenarios were checked (zones and overlap stores, the shared catalogue, pickers, fulfilments `FULL`/`PARTIAL`/`NONE`, and returns in `IN_TRANSIT`/`RECEIVED`). `docs/17` now has the v2 release runbook (Render/Vercel/EAS environment matrix, fresh-database seed, deploy order, APK commands and rollback), `docs/19`/`20`/`23` describe the current apps, and the walkthrough in §7 below is the ordered manual sequence. The remaining steps — pointing Render at the new Atlas cluster, deploying, and the three EAS APK builds — need the owner's credentials and explicit approval; they are not run by an agent.
 
 ---
 
@@ -342,22 +381,39 @@ Demo data must include the scenarios of the walkthrough in §7, so each one can 
 | D9 | Product reviews stay on the listing. |
 | D10 | Up to 10 saved addresses per customer. |
 | D11 | Pin dropping only, no address search service. |
-| D12 | No new packages beyond `react-native-webview`. |
+| D12 | No new packages: Leaflet on the web; on mobile, OpenStreetMap tiles in `react-native-webview` (a Google-free replacement for the original `react-native-maps`). |
 
 ---
 
 ## 7. Demo walkthrough (for the presentation)
 
-1. **Zones:** the super admin draws a new block and sees an overlap hint.
+Run this against a **freshly seeded** database (`npm run seed:demo`), with the API, website and all three apps pointed at that API. Use these seeded accounts (the seed prints them again at the end):
+
+| Who | Sign-in | Password |
+|---|---|---|
+| Super admin | `admin@citycart.local` on `/admin/login` | `Admin@12345` |
+| Brand owner (Loom & Co.) | `brand@citycart.local` on `/sell/login` | `Brand@12345` |
+| Records keeper (Loom & Co.) | `hira.anwar@citycart.demo` in the **Staff** app | `Demo@12345` |
+| Picker (Loom & Co.) | `areeba.saleem@citycart.demo` in the **Staff** app | `Demo@12345` |
+| Rider (Loom & Co.) | `shoaib.raza@citycart.demo` in the **Delivery** app | `Demo@12345` |
+| Customer | `sana.iqbal@citycart.demo` on `/login` and the shopper app | `Demo@12345` |
+
+1. **Zones:** the super admin opens `/admin/blocks`, draws or edits a block, and sees the overlap hint; save and reload.
 2. **Single block:** a customer inside one block sees its shape and only its stores.
-3. **Overlap:** a customer in an overlap sees both blocks ticked, unticks one, then ticks both again.
-4. **Border:** a customer outside every block gets the nearest blocks and chooses.
+3. **Overlap:** a customer in the D Ground / Peoples Colony overlap sees both blocks ticked, unticks one, then ticks both again; Mehr Menswear Faisal Chowk is found in both.
+4. **Border:** a customer outside every block gets the nearest blocks and chooses (for example Gulistan Colony offers Peoples Colony).
 5. **Other area:** a Samanabad customer drops a pin in D Ground and sees only D Ground stores, then delivers there.
-6. **Range:** the customer switches 2 km, 10 km, Whole block and the map updates.
-7. **No duplicates:** "Dalda Ghee 1 kg" appears once and shows three store offers.
-8. **Checkout:** the address is saved and preselected next time.
-9. **Picker:** a picker marks a line short, proposes a substitute, the customer accepts.
-10. **Delivery app:** a rider delivers, the customer keeps half, the rest goes back to the store, and the totals show the final amount.
+6. **Range:** the customer switches 2 km, 10 km, 20 km, the whole city and Whole block, and the map and results update.
+7. **No duplicates:** "Plain White Cotton Suit Length, 2.5 m" appears once in the catalogue and shows the three store offers (Loom & Co., Rangrez Prints, Mehr Menswear) with different prices.
+8. **Address book:** the customer saves an address, makes it default, and sees it preselected at the next checkout; an address outside every block is refused.
+9. **Picker:** the picker signs in on the Staff app, claims a picking order, marks a line short, proposes a substitute; the customer accepts or keeps the rest; the brand order shows "Suggested by the store's picker" and the picker packs.
+10. **Checkout:** a multi-brand cart becomes one order per brand; the delivery pin is checked against `/blocks/at`; notes are required; the address is saved and preselected next time.
+11. **Delivery app:** the rider opens the assigned delivery, takes the customer's six-digit code, completes it. For the door-return story, keep some units and refuse the rest with a reason (and optionally a photo); the app previews "Collect for what they kept" and the server confirms the final amount.
+12. **Staff app — returns:** the records keeper opens the Returns tab (the home tile shows "Returns to receive"), opens a return, views a refused line's photo, and taps **Mark received**, ticking only the sellable lines. The second attempt is refused; a write-off leaves stock alone.
+13. **Brand web:** `/brand/returns` lists the brand's returns with the money; the order detail shows the final total. **Admin web:** `/admin/returns` lists all brands with totals, and the admin can read but not receive.
+14. **Customer view:** the order in the website and shopper app shows what arrived, which lines came back and why, the returned value and the **Final total**. The customer gets the normal delivery notification and, for a prepaid return, a refund notification; the brand gets `RETURN_IN_TRANSIT`.
+15. **Access rules:** a Delivery-app token is refused by the Staff app and the website (`403 WRONG_APP`); a brand user cannot open another brand's return; only a brand user with `delivery.manage` can receive; the platform admin cannot receive.
+16. **Release:** deploy the API and website, then build the three APKs (`docs/17` §30). Sign each app in with its own role and repeat steps 2, 9, 11 and 12 against the live API.
 
 ---
 

@@ -4,8 +4,8 @@ jest.mock('../src/services/api', () => ({ __esModule: true, default: { get: jest
 import api from '../src/services/api'
 import {
   assignRider, decideProof, fetchActiveRiders, fetchCashCollectors, fetchCollectorCash, fetchOrder, fetchOrders, fetchOverview,
-  fetchProofLink, fetchProofQueue, fetchReceipt, fetchReceipts, fetchShipment, fetchShipments, onTheRoad, ORDER_FILTERS,
-  SHIPMENT_FILTERS, settleCash,
+  fetchProofLink, fetchProofQueue, fetchReceipt, fetchReceipts, fetchReturn, fetchReturnPhotoLink, fetchReturns, fetchReturnsSummary,
+  fetchShipment, fetchShipments, onTheRoad, ORDER_FILTERS, receiveReturn, RETURN_FILTERS, SHIPMENT_FILTERS, settleCash,
 } from '../src/services/records'
 
 beforeEach(() => jest.clearAllMocks())
@@ -109,7 +109,7 @@ describe('payment proofs to verify', () => {
 
 describe('the overview', () => {
   it('asks only for what the person may see', async () => {
-    expect(await fetchOverview({ deliveries: false, money: false })).toEqual({ counts: null, cash: null })
+    expect(await fetchOverview({ deliveries: false, money: false })).toEqual({ counts: null, cash: null, returns: null })
     expect(api.get).not.toHaveBeenCalled()
   })
 
@@ -126,11 +126,53 @@ describe('the overview', () => {
     expect(onTheRoad(null)).toBe(0)
   })
 
+  it('tells the overview how many returns are on their way back', async () => {
+    api.get.mockImplementation(async (url) => {
+      if (url === '/returns/summary') {
+        return { data: { summary: { IN_TRANSIT: { count: 2, returnedSubtotal: 3000 }, RECEIVED: { count: 5, returnedSubtotal: 9000 } } } }
+      }
+      return { data: { pagination: { total: 0 } } }
+    })
+    expect((await fetchOverview({ deliveries: true, returns: true })).returns).toEqual({ incoming: 2, incomingTotal: 3000 })
+  })
+
   it('a part that fails comes back empty instead of failing the whole screen', async () => {
     api.get.mockImplementation(async (url) => {
       if (url === '/deliveries') throw new Error('Network Error')
       return { data: { collectors: [] } }
     })
-    expect(await fetchOverview({ deliveries: true, money: true })).toEqual({ counts: null, cash: { total: 0, holders: 0 } })
+    expect(await fetchOverview({ deliveries: true, money: true })).toEqual({ counts: null, cash: { total: 0, holders: 0 }, returns: null })
+  })
+})
+
+describe('returned goods', () => {
+  it('lists with the filter only when chosen, reads one, its photo link, and receives it', async () => {
+    api.get.mockResolvedValue({ data: { returns: [{ _id: 'r1' }], pagination: { page: 2, pages: 4 } } })
+    expect(await fetchReturns('IN_TRANSIT', 2)).toEqual({ items: [{ _id: 'r1' }], pagination: { page: 2, pages: 4 } })
+    expect(api.get).toHaveBeenLastCalledWith('/returns', { params: { status: 'IN_TRANSIT', page: 2, limit: 20 } })
+
+    api.get.mockResolvedValue({ data: { return: { _id: 'r1' } } })
+    expect(await fetchReturn('r1')).toEqual({ _id: 'r1' })
+    expect(api.get).toHaveBeenLastCalledWith('/returns/r1')
+
+    api.get.mockResolvedValue({ data: { summary: { IN_TRANSIT: { count: 1 } } } })
+    expect(await fetchReturnsSummary()).toEqual({ IN_TRANSIT: { count: 1 } })
+    expect(api.get).toHaveBeenLastCalledWith('/returns/summary')
+
+    api.get.mockResolvedValue({ data: { url: 'https://example.test/photo', expiresAt: '2026-11-02T10:00:00.000Z' } })
+    expect(await fetchReturnPhotoLink('r1', 1)).toEqual({ url: 'https://example.test/photo', expiresAt: '2026-11-02T10:00:00.000Z' })
+    expect(api.get).toHaveBeenLastCalledWith('/returns/r1/photo', { params: { line: 1 } })
+
+    api.post.mockResolvedValue({ data: { return: { _id: 'r1', status: 'RECEIVED' } } })
+    expect(await receiveReturn('r1', [{ index: 0, restock: true }])).toEqual({ _id: 'r1', status: 'RECEIVED' })
+    expect(api.post).toHaveBeenLastCalledWith('/returns/r1/receive', { decisions: [{ index: 0, restock: true }] })
+  })
+
+  it('filters offer only the two return statuses', () => {
+    expect(RETURN_FILTERS).toEqual([
+      [undefined, 'All'],
+      ['IN_TRANSIT', 'On the way'],
+      ['RECEIVED', 'Received'],
+    ])
   })
 })

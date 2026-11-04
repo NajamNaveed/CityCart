@@ -10,43 +10,42 @@ export const countWords = (value = '') => {
   return trimmed ? trimmed.split(/\s+/).filter(Boolean).length : 0
 }
 
-// { field: message } for anything the server would refuse; empty when the form is fine.
-// With a saved address only the delivery notes are checked: the rest was validated when it was saved.
-export function validateCheckout(form, { savedAddress = false } = {}) {
+// Delivery notes are required and counted in words, as on the server.
+export function validateNotes(value) {
   const errors = {}
-  const text = (v) => String(v ?? '').trim()
-
-  if (!savedAddress) {
-    if (!text(form.fullName)) errors.fullName = 'Enter your full name.'
-    else if (text(form.fullName).length > 100) errors.fullName = 'That name is too long.'
-
-    if (!PHONE_PATTERN.test(text(form.phone))) errors.phone = 'Enter a valid phone number, like +92 300 1234567.'
-
-    if (!text(form.addressLine)) errors.addressLine = 'Enter your street address.'
-    else if (text(form.addressLine).length > 300) errors.addressLine = 'That address is too long.'
-
-    if (!text(form.city)) errors.city = 'Enter your city.'
-    else if (text(form.city).length > 100) errors.city = 'That city name is too long.'
-
-    if (text(form.postalCode).length > 20) errors.postalCode = 'That postal code is too long.'
-  }
-
-  const words = countWords(form.additionalInstructions)
+  const words = countWords(value)
   if (words < 1) errors.additionalInstructions = 'Delivery notes are required: the courier needs them to reach you.'
   else if (words > MAX_NOTE_WORDS) errors.additionalInstructions = `Delivery notes must be at most ${MAX_NOTE_WORDS} words.`
-  else if (text(form.additionalInstructions).length > MAX_NOTE_CHARS) errors.additionalInstructions = 'Delivery notes are too long.'
-
+  else if (String(value ?? '').trim().length > MAX_NOTE_CHARS) errors.additionalInstructions = 'Delivery notes are too long.'
   return errors
 }
 
-/**
- * The server reads the cart itself; the app sends where to deliver (the typed address and the pin),
- * how to pay, and whether to remember the address. `delivery` is
- * { pin: { lat, lng }, addressId?, saveAs? } where saveAs is the label to save a NEW address under.
- */
+// { field: message } for anything the server would refuse; empty when the form is fine.
+export function validateCheckout(form) {
+  const errors = {}
+  const text = (v) => String(v ?? '').trim()
+
+  if (!text(form.fullName)) errors.fullName = 'Enter your full name.'
+  else if (text(form.fullName).length > 100) errors.fullName = 'That name is too long.'
+
+  if (!PHONE_PATTERN.test(text(form.phone))) errors.phone = 'Enter a valid phone number, like +92 300 1234567.'
+
+  if (!text(form.addressLine)) errors.addressLine = 'Enter your street address.'
+  else if (text(form.addressLine).length > 300) errors.addressLine = 'That address is too long.'
+
+  if (!text(form.city)) errors.city = 'Enter your city.'
+  else if (text(form.city).length > 100) errors.city = 'That city name is too long.'
+
+  if (text(form.postalCode).length > 20) errors.postalCode = 'That postal code is too long.'
+
+  return { ...errors, ...validateNotes(form.additionalInstructions) }
+}
+
+// The server reads the cart itself; the app only sends where to deliver, how to pay,
+// and (optionally) which saved address this is or that it should be saved.
 export function orderBody(form, paymentMethod = 'COD', delivery = {}) {
   const text = (v) => String(v ?? '').trim()
-  const { pin, addressId, saveAs } = delivery
+  const label = text(delivery.saveLabel)
   return {
     paymentMethod,
     shippingAddress: {
@@ -57,21 +56,10 @@ export function orderBody(form, paymentMethod = 'COD', delivery = {}) {
       ...(text(form.postalCode) && { postalCode: text(form.postalCode) }),
       additionalInstructions: text(form.additionalInstructions),
     },
-    ...(pin && { deliveryLocation: { latitude: pin.lat, longitude: pin.lng } }),
-    ...(addressId ? { addressId } : text(saveAs) && { saveAddress: { label: text(saveAs) } }),
+    ...(delivery.pin && { deliveryLocation: { latitude: delivery.pin.lat, longitude: delivery.pin.lng } }),
+    ...(delivery.addressId && { addressId: delivery.addressId }),
+    ...(!delivery.addressId && label && { saveAddress: { label } }),
   }
-}
-
-/** The sentence to show for a checkout the server refused because of where it should be delivered, or '' for other errors. */
-export function deliveryProblem(err) {
-  const data = err?.response?.data
-  const unserved = (data?.issues || []).filter((i) => i.code === 'NOT_DELIVERABLE')
-  if (unserved.length > 0) {
-    const stores = [...new Set(unserved.map((i) => i.brandName).filter(Boolean))]
-    return `${stores.length ? stores.join(' and ') : 'Some stores'} cannot deliver to this spot. Choose another delivery spot, or remove those items from your cart.`
-  }
-  if (data?.code === 'OUTSIDE_DELIVERY_ZONE') return 'We do not deliver to that spot yet. Tap inside a shaded area on the map.'
-  return ''
 }
 
 // "shippingAddress.phone" -> "phone", so server errors land under the right field.
@@ -115,6 +103,7 @@ export async function fetchOrder(id) {
     delivery: res.data.delivery,
     adjustments: res.data.adjustments || [],
     adjustment: res.data.adjustment || null,
+    returnDoc: res.data.return || null,
   }
 }
 

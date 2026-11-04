@@ -849,9 +849,26 @@ paymentMethod
 paymentStatus
 orderStatus
 notes
+activeAdjustmentId
+pickerId
+pickStartedAt
+packedAt
+fulfilment
+returnedAmount
+feeRefunded
+netTotal
 createdAt
 updatedAt
 ```
+
+`activeAdjustmentId` points at the one waiting `OrderAdjustment` (null when none).
+`pickerId`, `pickStartedAt` and `packedAt` record who is picking the order and
+when picking started and packing finished (docs/08 §41.9).
+
+`fulfilment` (`FULL`, `PARTIAL`, `NONE`), `returnedAmount`, `feeRefunded` and
+`netTotal` are set once, when the delivery completes (docs/22 §F). `netTotal` is
+what the customer actually owes or keeps; readers fall back to `total` for orders
+from before door returns existed.
 
 ---
 
@@ -869,7 +886,9 @@ items[]
  ├── quantity
  ├── unitPrice
  ├── totalPrice
- └── image
+ ├── image
+ ├── pickStatus      PICKED | SHORT | UNAVAILABLE (unset = not checked yet)
+ └── pickedQty       units actually found (meaningful for SHORT)
 ```
 
 The order must not depend on the current Product document to reconstruct historical pricing.
@@ -975,6 +994,7 @@ assignedAt
 deliveryCode
 codeAttempts
 failureReason
+returnId
 createdAt
 updatedAt
 ```
@@ -1003,6 +1023,64 @@ RETURNED
 Delivery status, order status, and payment status are three separate fields and must never be merged.
 
 A delivery record is created when its order reaches `READY_FOR_SHIPMENT` (see order status in §25).
+
+`returnId` points at the door return created when the customer refused goods at
+delivery (null when everything was accepted).
+
+---
+
+# 25b. Return Model
+
+Collection:
+
+```text
+returns
+```
+
+One record per delivery that had refused goods (docs/22 §F, docs/08 §41.10).
+The order lines stay a historical snapshot; the return records what came back,
+why, and what the store decided to do with it.
+
+### Fields
+
+```text
+_id
+orderId
+deliveryId          unique: one return per delivery
+brandId
+customerId
+riderId             the rider who brought the goods back (empty for a courier)
+source              DOOR
+status              IN_TRANSIT | RECEIVED
+lines[]
+returnedSubtotal
+feeRefunded
+refundAmount
+currency
+receivedAt
+receivedBy
+createdAt
+updatedAt
+```
+
+### Return lines
+
+```text
+orderItemId
+productId
+productName         snapshot
+quantity            refused units (1 or more, never more than ordered)
+unitPrice           snapshot
+reason              DAMAGED | WRONG_ITEM | NOT_WANTED | MISSING
+photo.publicId      optional private Cloudinary path
+photo.fingerprint   optional ETag
+restock             false by default (write off); true when the store marks it sellable
+restockedAt
+```
+
+`feeRefunded` is true only when every unit was refused and at least one reason is
+the store's fault (`DAMAGED`, `WRONG_ITEM`, `MISSING`). `refundAmount` is the
+money actually refunded (prepaid orders only; zero for cash on delivery).
 
 ---
 

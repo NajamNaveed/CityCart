@@ -4,7 +4,7 @@ import { colors, radius, spacing } from '../theme'
 
 // One tappable row of a list: a title, a line or two under it, something on the
 // right (a price, a time) and an optional pill (a status).
-export default function ListRow({ title, subtitle, right, rightSub, pill, onPress, accessibilityLabel }) {
+export default function ListRow({ title, subtitle, right, rightSub, rightSubColor, pill, onPress, accessibilityLabel }) {
   return (
     <Pressable
       onPress={onPress}
@@ -28,7 +28,7 @@ export default function ListRow({ title, subtitle, right, rightSub, pill, onPres
         </View>
         <View style={{ alignItems: 'flex-end' }}>
           {right ? <AppText variant="label">{right}</AppText> : null}
-          {rightSub ? <AppText variant="small">{rightSub}</AppText> : null}
+          {rightSub ? <AppText variant="small" style={rightSubColor ? { color: rightSubColor } : undefined}>{rightSub}</AppText> : null}
         </View>
       </View>
     </Pressable>

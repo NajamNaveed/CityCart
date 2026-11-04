@@ -3,18 +3,23 @@
  *
  * Browsers keep the session in an HTTP-only cookie that JavaScript can never
  * read. A native app has no such cookie jar it can rely on, so it asks for the
- * token explicitly with `X-Client: mobile` and sends it back as
- * `Authorization: Bearer <token>`. The web app never sends that header, so it
- * never receives a token in a response body.
+ * token explicitly with `X-Client: mobile` (shopper), `X-Client: staff` or
+ * `X-Client: delivery`, and sends it back as `Authorization: Bearer <token>`.
+ * The web app never sends that header, so it never receives a token in a
+ * response body.
  */
 // Headers are read from `req.headers` (Node lower-cases the names) rather than
 // `req.get()`, so a request object without Express's helpers, such as the plain
 // object internal callers and tests pass to middleware, still works.
 const headerOf = (req, name) => (req && req.headers ? req.headers[name] : undefined);
 
-const isPartnerClient = (req) => String(headerOf(req, 'x-client') || '').trim().toLowerCase() === 'partner';
+const clientOf = (req) => String(headerOf(req, 'x-client') || '').trim().toLowerCase();
 
-const isMobileClient = (req) => String(headerOf(req, 'x-client') || '').trim().toLowerCase() === 'mobile';
+const isMobileClient = (req) => clientOf(req) === 'mobile';
+
+const isStaffClient = (req) => clientOf(req) === 'staff';
+
+const isDeliveryClient = (req) => clientOf(req) === 'delivery';
 
 /**
  * Reads `Authorization: Bearer <token>`.
@@ -33,4 +38,4 @@ function readBearerToken(req) {
   return { present: true, token: match ? match[1] : null };
 }
 
-module.exports = { isMobileClient, isPartnerClient, readBearerToken };
+module.exports = { isMobileClient, isStaffClient, isDeliveryClient, readBearerToken };

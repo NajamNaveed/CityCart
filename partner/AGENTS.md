@@ -23,7 +23,7 @@ npx expo install --fix      # fix incompatible package versions
 
 Run lint and tests before declaring any task done. This app is plain JavaScript (`.js`/`.jsx`), like the web client; there is no TypeScript.
 
-The repository-wide rules in `../AGENTS.md` and the plan in `../docs/20-partner-app.md` (read it first) apply here too. This app is for riders and brand team members only; it talks to the same API as the shopper app (`../mobile`) but sends `X-Client: partner` and signs in at `/auth/partner/login`. The API (`../server`) is the source of truth for data; this app never talks to the database directly.
+The repository-wide rules in `../AGENTS.md` and the plan in `../docs/20-partner-app.md` (read it first) apply here too. This app is for pickers and brand team members only; it talks to the same API as the shopper app (`../mobile`) but sends `X-Client: staff` and signs in at `/auth/staff/login`. Riders use the delivery app (`../delivery`). The API (`../server`) is the source of truth for data; this app never talks to the database directly.
 
 ## Navigation & Routing
 
