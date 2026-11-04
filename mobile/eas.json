@@ -13,12 +13,11 @@
       }
     },
     "preview": {
-      "extends": "production",
-      "distribution": "internal",
-      "android": {
-        "buildType": "apk"
-      }
-    },
+  "extends": "production",
+  "distribution": "internal",
+  "android": { "buildType": "apk" },
+  "env": { "EXPO_PUBLIC_API_URL": "https://citycart-n51q.onrender.com" }
+},
     "production": {
       "autoIncrement": true
     }
