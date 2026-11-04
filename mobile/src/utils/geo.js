@@ -19,3 +19,7 @@ export function mapsUrl({ latitude, longitude }, label = '') {
 }
 
 export const isValidLatLng = (lat, lng) => Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
+
+// A block's centre, where a range is measured from when the shopper chose the block by hand.
+export const latLngOfBlock = (block) =>
+  isValidLatLng(block?.latitude, block?.longitude) ? { lat: block.latitude, lng: block.longitude } : null

@@ -63,6 +63,20 @@ describe('Brand analytics', () => {
     expect(Delivery.aggregate.mock.calls[0][0][0].$match.brandId).toEqual(brandId);
   });
 
+  it('measures brand revenue and commission on the net total, so door returns reduce them', async () => {
+    const brandId = new mongoose.Types.ObjectId();
+    const admin = makeUser(ROLES.BRAND_ADMIN, { brandId });
+    Order.aggregate.mockResolvedValueOnce([{}]);
+    Inventory.aggregate.mockResolvedValueOnce([{}]);
+    Delivery.aggregate.mockResolvedValueOnce([]);
+
+    await request(app).get('/api/v1/brand/analytics').set(...asUser(admin));
+
+    const [, facet] = Order.aggregate.mock.calls[0][0];
+    expect(facet.$facet.summary[0].$group.revenue.$sum.$cond[1]).toEqual({ $ifNull: ['$netTotal', '$total'] });
+    expect(facet.$facet.salesTrend[1].$group.revenue.$sum).toEqual({ $ifNull: ['$netTotal', '$total'] });
+  });
+
   it('requires analytics.view from brand employees', async () => {
     const employeeUser = makeUser(ROLES.BRAND_EMPLOYEE, { brandId: new mongoose.Types.ObjectId() });
     User.findById.mockResolvedValue(employeeUser);

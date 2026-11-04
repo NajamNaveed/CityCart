@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { setUnauthorizedHandler } from '../services/api'
-import { stopSharingOnServer } from '../services/location'
-import { setShareLocation } from '../services/prefs'
 import { unregisterPush } from '../services/push'
 import { restoreSession, signIn, signOut } from '../services/session'
 import { AuthContext } from './contexts'
@@ -30,17 +28,16 @@ export function AuthProvider({ children }) {
   // would only fail (and be answered with another sign-out).
   const logout = useCallback(async (options) => {
     if (options?.remote !== false) {
-      // While the token still works: this phone stops getting this person's notifications, and their
-      // position is forgotten. Neither may keep going for whoever signs in next on this phone.
-      await Promise.allSettled([unregisterPush(), stopSharingOnServer()])
+      // While the token still works: this phone stops getting this person's notifications, so they
+      // do not keep arriving for whoever signs in next on this phone.
+      await Promise.allSettled([unregisterPush()])
     }
-    await setShareLocation(false)
     await signOut()
     setState({ status: 'signedOut', user: null, offline: false })
   }, [])
 
-  // If the server ever says the session is over (a deactivated rider, a reset
-  // password, an expired shift), sign out here too.
+  // If the server ever says the session is over (a deactivated team member, a
+  // reset password, an expired shift), sign out here too.
   useEffect(() => {
     setUnauthorizedHandler(() => logout({ remote: false }))
     return () => setUnauthorizedHandler(null)

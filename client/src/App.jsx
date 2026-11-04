@@ -21,6 +21,7 @@ import Cart from './pages/Cart'
 import Checkout from './pages/Checkout'
 import OrderPlaced from './pages/OrderPlaced'
 import MyOrders from './pages/MyOrders'
+import MyAddresses from './pages/MyAddresses'
 import Chat from './pages/Chat'
 import MyOrderDetail from './pages/MyOrderDetail'
 import Sell from './pages/Sell'
@@ -35,7 +36,6 @@ const BrandLayout = lazy(() => import('./components/brand/BrandLayout'))
 const Overview = lazy(() => import('./pages/brand/Overview'))
 const BrandProducts = lazy(() => import('./pages/brand/Products'))
 const ProductForm = lazy(() => import('./pages/brand/ProductForm'))
-const Categories = lazy(() => import('./pages/brand/Categories'))
 const BrandOrders = lazy(() => import('./pages/brand/Orders'))
 const BrandMessages = lazy(() => import('./pages/brand/Messages'))
 const BrandOrderDetail = lazy(() => import('./pages/brand/OrderDetail'))
@@ -47,14 +47,19 @@ const BrandSettings = lazy(() => import('./pages/brand/Settings'))
 const BrandAnalytics = lazy(() => import('./pages/brand/Analytics'))
 const InventoryHub = lazy(() => import('./pages/brand/InventoryHub'))
 const BrandReviews = lazy(() => import('./pages/brand/Reviews'))
+const BrandReturns = lazy(() => import('./pages/brand/Returns'))
+const BrandReturnDetail = lazy(() => import('./pages/brand/ReturnDetail'))
 const AdminLayout = lazy(() => import('./components/admin/AdminLayout'))
 const AdminLanding = lazy(() => import('./pages/admin/Landing'))
 const AdminBrands = lazy(() => import('./pages/admin/Brands'))
 const AdminBrandDetail = lazy(() => import('./pages/admin/BrandDetail'))
 const AdminOrders = lazy(() => import('./pages/admin/Orders'))
 const AdminOrderDetail = lazy(() => import('./pages/admin/OrderDetail'))
+const AdminReturns = lazy(() => import('./pages/admin/Returns'))
 const AdminCities = lazy(() => import('./pages/admin/Cities'))
 const AdminBlocks = lazy(() => import('./pages/admin/Blocks'))
+const AdminCategories = lazy(() => import('./pages/admin/Categories'))
+const AdminCatalogue = lazy(() => import('./pages/admin/Catalogue'))
 const AdminSettings = lazy(() => import('./pages/admin/Settings'))
 const AdminAnalytics = lazy(() => import('./pages/admin/Analytics'))
 const AdminUsers = lazy(() => import('./pages/admin/Users'))
@@ -110,6 +115,7 @@ function App() {
                     <Route path="checkout" element={<Checkout />} />
                     <Route path="order-placed" element={<OrderPlaced />} />
                     <Route path="orders" element={<MyOrders />} />
+                    <Route path="addresses" element={<MyAddresses />} />
                     <Route path="chat" element={<Chat />} />
                     <Route path="orders/:id" element={<MyOrderDetail />} />
                   </Route>
@@ -138,11 +144,12 @@ function App() {
                     <Route path="products" element={<BrandProducts />} />
                     <Route path="products/new" element={<ProductForm />} />
                     <Route path="products/:id" element={<ProductForm />} />
-                    <Route path="categories" element={<Categories />} />
                     <Route path="orders" element={<BrandOrders />} />
                     <Route path="messages" element={<BrandMessages />} />
                     <Route path="orders/:id" element={<BrandOrderDetail />} />
                     <Route path="deliveries" element={<Deliveries />} />
+                    <Route path="returns" element={<BrandReturns />} />
+                    <Route path="returns/:id" element={<BrandReturnDetail />} />
                     <Route path="reviews" element={<BrandReviews />} />
                     <Route path="team" element={<Team />} />
                     <Route path="riders" element={<Riders />} />
@@ -167,9 +174,12 @@ function App() {
                     <Route path="brands/:id" element={<AdminBrandDetail />} />
                     <Route path="orders" element={<AdminOrders />} />
                     <Route path="orders/:id" element={<AdminOrderDetail />} />
+                    <Route path="returns" element={<AdminReturns />} />
                     <Route path="reviews" element={<AdminReviews />} />
                     <Route path="cities" element={<AdminCities />} />
                     <Route path="blocks" element={<AdminBlocks />} />
+                    <Route path="categories" element={<AdminCategories />} />
+                    <Route path="catalogue" element={<AdminCatalogue />} />
                     <Route path="settings" element={<AdminSettings />} />
                     <Route path="analytics" element={<AdminAnalytics />} />
                     <Route path="users" element={<AdminUsers />} />

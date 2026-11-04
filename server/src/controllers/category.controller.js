@@ -2,13 +2,13 @@ const {
   createCategorySchema,
   updateCategorySchema,
   listCategoriesQuerySchema,
-  categoryTreeQuerySchema,
 } = require('../validators/category.validator');
 const { objectIdParamSchema } = require('../validators/common.validator');
 const {
   getPublicCategoryTree,
   listPublicCategories,
   getPublicCategoryById,
+  getCategoryByIdRaw,
   createCategory,
   applyCategoryUpdate,
   deactivateCategory,
@@ -65,19 +65,8 @@ async function create(req, res, next) {
     });
   }
 
-  // req.tenantBrandId comes from requireTenant (req.user.brandId) — never
-  // from client input. SUPER_ADMIN has no brand (tenantBrandId is null),
-  // and a category always needs one, so reject with a clear 400 rather
-  // than letting Mongoose's required-brandId error surface as a 500.
-  if (!req.tenantBrandId) {
-    return res.status(400).json({
-      success: false,
-      message: 'A brand account is required to create a category.',
-    });
-  }
-
   try {
-    const category = await createCategory(req.tenantBrandId, parsedBody.data);
+    const category = await createCategory(parsedBody.data);
     return res.status(201).json({ success: true, message: 'Category created', category });
   } catch (err) {
     if (err instanceof CategoryError) {
@@ -98,9 +87,11 @@ async function update(req, res, next) {
   }
 
   try {
-    // req.resource was loaded and brand-ownership-verified by
-    // requireBrandOwnership (routes/category.routes.js).
-    const category = await applyCategoryUpdate(req.resource, parsedBody.data);
+    const existing = await getCategoryByIdRaw(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Category not found.' });
+    }
+    const category = await applyCategoryUpdate(existing, parsedBody.data);
     return res.status(200).json({ success: true, message: 'Category updated', category });
   } catch (err) {
     if (err instanceof CategoryError) {
@@ -112,7 +103,11 @@ async function update(req, res, next) {
 
 async function remove(req, res, next) {
   try {
-    const category = await deactivateCategory(req.resource);
+    const existing = await getCategoryByIdRaw(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Category not found.' });
+    }
+    const category = await deactivateCategory(existing);
     return res.status(200).json({ success: true, message: 'Category deactivated', category });
   } catch (err) {
     if (err instanceof CategoryError) {
@@ -123,22 +118,10 @@ async function remove(req, res, next) {
 }
 
 async function tree(req, res, next) {
-  const parsedQuery = categoryTreeQuerySchema.safeParse(req.query);
-  if (!parsedQuery.success) {
-    return res.status(400).json({
-      success: false,
-      message: 'Validation failed.',
-      errors: formatZodError(parsedQuery.error),
-    });
-  }
-
   try {
-    const categories = await getPublicCategoryTree(parsedQuery.data.brandId);
+    const categories = await getPublicCategoryTree();
     return res.status(200).json({ success: true, categories });
   } catch (err) {
-    if (err instanceof CategoryError) {
-      return res.status(err.status).json({ success: false, message: err.message });
-    }
     return next(err);
   }
 }

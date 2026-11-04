@@ -37,20 +37,35 @@ function carryingBranches(product, branches) {
   return ids.length === 0 ? branches : branches.filter((b) => ids.includes(String(b._id)));
 }
 
-async function discover({ q, scope, cityId, blockId, radiusKm, lat, lng, page, limit }) {
+async function discover({ q, scope, cityId, blockId, blockIds, radiusKm, lat, lng, page, limit }) {
   const pageNumber = page || DEFAULT_PAGE;
   const limitNumber = limit || DEFAULT_LIMIT;
 
   // ---- 1. Where is the shopper measuring from? ---------------------------
   let block = null;
+  let areaBlocks = [];
   if (blockId) {
     block = await Block.findOne({ _id: blockId, isActive: true });
     if (!block) {
       throw new DiscoverError(404, 'Block not found.');
     }
+    areaBlocks = [block];
+  }
+  if (scope === 'area') {
+    // The shopper picked one or more blocks (several where zones overlap).
+    areaBlocks = await Block.find({ _id: { $in: blockIds }, isActive: true });
+    if (areaBlocks.length === 0) {
+      throw new DiscoverError(404, 'Block not found.');
+    }
+    if (new Set(areaBlocks.map((b) => String(b.cityId))).size > 1) {
+      throw new DiscoverError(400, 'Choose blocks from one city.');
+    }
+    [block] = areaBlocks;
   }
   const origin =
-    lat !== undefined ? { lat, lng } : block ? latLngFromPoint(block.center) : null;
+    lat !== undefined ? { lat, lng } : block && areaBlocks.length === 1 ? latLngFromPoint(block.center) : null;
+  const blocksMeta = areaBlocks.map((b) => ({ _id: b._id, name: b.name }));
+  const effectiveRadius = scope === 'radius' || (scope === 'area' && radiusKm !== undefined) ? radiusKm : null;
 
   // ---- 2. Which brands could appear? -------------------------------------
   const brandFilter = { status: 'ACTIVE' };
@@ -91,9 +106,10 @@ async function discover({ q, scope, cityId, blockId, radiusKm, lat, lng, page, l
     pagination: { page: pageNumber, limit: limitNumber, total: 0, pages: 0 },
     meta: {
       scope,
-      radiusKm: scope === 'radius' ? radiusKm : null,
+      radiusKm: effectiveRadius,
       origin,
       block: block ? { _id: block._id, name: block.name } : null,
+      blocks: blocksMeta,
       totalBranches: 0,
       ...extra,
     },
@@ -106,7 +122,15 @@ async function discover({ q, scope, cityId, blockId, radiusKm, lat, lng, page, l
   // ---- 3. Which branches are in range? -----------------------------------
   const branchFilter = { isActive: true, brandId: { $in: candidateIds } };
   if (scope === 'block') {
-    branchFilter.blockId = blockId;
+    // Every shop whose zone holds the pin, so a shop in an overlap shows in both blocks.
+    branchFilter.blockIds = blockId;
+  } else if (scope === 'area') {
+    branchFilter.blockIds = { $in: areaBlocks.map((b) => b._id) };
+    if (effectiveRadius !== null) {
+      branchFilter.location = {
+        $geoWithin: { $centerSphere: [[origin.lng, origin.lat], effectiveRadius / MONGO_EARTH_RADIUS_KM] },
+      };
+    }
   } else if (scope === 'radius') {
     // $geoWithin + $centerSphere is served by the 2dsphere index; distances
     // are computed below for display and ordering.
@@ -239,9 +263,10 @@ async function discover({ q, scope, cityId, blockId, radiusKm, lat, lng, page, l
     },
     meta: {
       scope,
-      radiusKm: scope === 'radius' ? radiusKm : null,
+      radiusKm: effectiveRadius,
       origin,
       block: block ? { _id: block._id, name: block.name } : null,
+      blocks: blocksMeta,
       totalBranches: branches.length,
     },
   };

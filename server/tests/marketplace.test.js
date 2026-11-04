@@ -16,6 +16,7 @@ jest.mock('../src/models/product.model', () => {
     findById: jest.fn(),
     create: jest.fn(),
     countDocuments: jest.fn(),
+    distinct: jest.fn(),
     STATUSES: actual.STATUSES,
   };
 });
@@ -93,30 +94,17 @@ describe('buildCategoryTree', () => {
 });
 
 describe('GET /api/v1/categories/tree', () => {
-  it('returns the nested tree for an ACTIVE brand (not shadowed by /:id)', async () => {
-    const brandId = oid();
+  it('returns the nested global tree (not shadowed by /:id)', async () => {
     const parent = { _id: oid(), name: 'Shoes' };
     const child = { _id: oid(), name: 'Sneakers', parentId: parent._id };
-    Brand.findOne.mockResolvedValue({ _id: brandId });
     Category.find.mockReturnValue({ sort: jest.fn().mockResolvedValue([parent, child]) });
 
-    const res = await request(app).get(`/api/v1/categories/tree?brandId=${brandId}`);
+    const res = await request(app).get('/api/v1/categories/tree');
 
     expect(res.status).toBe(200);
     expect(res.body.categories).toHaveLength(1);
     expect(res.body.categories[0].children[0].name).toBe('Sneakers');
-    expect(Category.find).toHaveBeenCalledWith({ brandId: brandId.toString(), isActive: true });
-  });
-
-  it('400 without a valid brandId', async () => {
-    expect((await request(app).get('/api/v1/categories/tree')).status).toBe(400);
-    expect((await request(app).get('/api/v1/categories/tree?brandId=x')).status).toBe(400);
-  });
-
-  it('404 for a non-ACTIVE or unknown brand', async () => {
-    Brand.findOne.mockResolvedValue(null);
-    const res = await request(app).get(`/api/v1/categories/tree?brandId=${oid()}`);
-    expect(res.status).toBe(404);
+    expect(Category.find).toHaveBeenCalledWith({ isActive: true });
   });
 });
 
@@ -125,7 +113,9 @@ describe('GET /api/v1/brands/:id/storefront', () => {
     const productId = oid();
     Brand.findOne.mockResolvedValue({ _id: brandId, name: 'Nike' });
     Store.findOne.mockResolvedValue({ name: 'Nike Store' });
-    Category.find.mockReturnValue({ sort: jest.fn().mockResolvedValue([{ _id: oid(), name: 'Shoes' }]) });
+    const categoryId = oid();
+    Product.distinct.mockResolvedValue([categoryId]);
+    Category.find.mockReturnValue({ sort: jest.fn().mockResolvedValue([{ _id: categoryId, name: 'Shoes' }]) });
     const limit = jest.fn().mockResolvedValue([{ _id: productId, name: 'Air' }]);
     Product.find.mockReturnValue({ sort: () => ({ limit }) });
     Inventory.find.mockResolvedValue([inv(productId)]);
@@ -158,7 +148,12 @@ describe('GET /api/v1/brands/:id/storefront', () => {
       status: 'ACTIVE',
       isActive: true,
     });
-    expect(Category.find).toHaveBeenCalledWith({ brandId: brandId.toString(), isActive: true });
+    // Only the categories this brand actually sells in (plus parents), never the whole tree.
+    expect(Product.distinct).toHaveBeenCalledWith('categoryId', {
+      brandId: brandId.toString(),
+      status: 'ACTIVE',
+      isActive: true,
+    });
   });
 
   it('404 for a non-ACTIVE brand and 400 for an invalid id', async () => {

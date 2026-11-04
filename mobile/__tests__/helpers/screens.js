@@ -2,7 +2,7 @@
 import React from 'react'
 import { Text } from 'react-native'
 import TestRenderer, { act } from 'react-test-renderer'
-import { AuthContext, CartContext, ChatContext, CityContext, NotificationContext } from '../../src/context/contexts'
+import { AuthContext, CartContext, ChatContext, CityContext, NearbyContext, NotificationContext } from '../../src/context/contexts'
 
 export const textOf = (node) => [].concat(node.props.children).flat(Infinity).filter((c) => typeof c === 'string' || typeof c === 'number').join('')
 export const screenText = (renderer) => renderer.root.findAllByType(Text).map(textOf).join(' | ')
@@ -20,18 +20,49 @@ export const signedOut = () => ({ status: 'signedOut', user: null, isReady: true
 // Renders an element with a chosen sign-in state and fake cart/city/chat values.
 export const notificationsValue = (over = {}) => ({ unreadCount: 0, refresh: jest.fn(), markRead: jest.fn().mockResolvedValue({}), markAllRead: jest.fn().mockResolvedValue(undefined), remove: jest.fn().mockResolvedValue(undefined), subscribeChat: jest.fn(() => jest.fn()), ...over })
 export const chatValue = (over = {}) => ({ unread: 0, refreshUnread: jest.fn().mockResolvedValue(undefined), subscribe: jest.fn(() => jest.fn()), ...over })
+export const nearbyValue = (over = {}) => ({
+  ready: true,
+  asked: true,
+  blocks: [],
+  blocksReady: true,
+  selectedBlocks: [],
+  blockIds: [],
+  areaName: '',
+  block: null,
+  blockId: '',
+  coords: null,
+  pinned: false,
+  origin: null,
+  range: 'block',
+  choices: { containing: [], nearest: [] },
+  status: 'idle',
+  canAskAgain: true,
+  pickerOpen: false,
+  setRange: jest.fn(),
+  chooseBlock: jest.fn(),
+  toggleBlock: jest.fn(),
+  toggleManualBlock: jest.fn(),
+  clearLocation: jest.fn(),
+  detect: jest.fn().mockResolvedValue('found'),
+  setPin: jest.fn(),
+  openPicker: jest.fn(),
+  closePicker: jest.fn(),
+  ...over,
+})
 
-export function tree(element, { auth = signedOut(), cart, city, notifications, chat } = {}) {
+export function tree(element, { auth = signedOut(), cart, city, nearby, notifications, chat } = {}) {
   const cartValue = cart || { itemCount: 0, addItem: jest.fn().mockResolvedValue({ itemCount: 1 }), setCount: jest.fn() }
   const cityValue = city || { cities: [], city: { _id: 'c1', name: 'Faisalabad' }, cityId: 'c1', setCityId: jest.fn(), ready: true }
   return (
     <AuthContext.Provider value={auth}>
       <CityContext.Provider value={cityValue}>
-        <CartContext.Provider value={cartValue}>
-          <NotificationContext.Provider value={notifications || notificationsValue()}>
-            <ChatContext.Provider value={chat || chatValue()}>{element}</ChatContext.Provider>
-          </NotificationContext.Provider>
-        </CartContext.Provider>
+        <NearbyContext.Provider value={nearby || nearbyValue()}>
+          <CartContext.Provider value={cartValue}>
+            <NotificationContext.Provider value={notifications || notificationsValue()}>
+              <ChatContext.Provider value={chat || chatValue()}>{element}</ChatContext.Provider>
+            </NotificationContext.Provider>
+          </CartContext.Provider>
+        </NearbyContext.Provider>
       </CityContext.Provider>
     </AuthContext.Provider>
   )

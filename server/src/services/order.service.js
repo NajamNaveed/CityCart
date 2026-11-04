@@ -1,12 +1,18 @@
 const Order = require('../models/order.model');
 const Payment = require('../models/payment.model');
 const Delivery = require('../models/delivery.model');
+const Return = require('../models/return.model');
 const Cart = require('../models/cart.model');
 const Product = require('../models/product.model');
 const Brand = require('../models/brand.model');
 const Inventory = require('../models/inventory.model');
+const Branch = require('../models/branch.model');
+const Address = require('../models/address.model');
 const Counter = require('../models/counter.model');
 const { runInTransaction } = require('../utils/transaction');
+const { pointFromLatLng } = require('../utils/geo');
+const { activeBlocksContaining } = require('./block.service');
+const { createAddress } = require('./address.service');
 const { deliveryForCustomer } = require('../utils/deliveryView');
 const { activeProvider } = require('../payments');
 const env = require('../config/env');
@@ -79,7 +85,7 @@ function toAddressSnapshot(a) {
  * same cart document, so one hits a write conflict, is retried, and then
  * sees an empty cart.
  */
-async function checkout(userId, { shippingAddress, paymentMethod }) {
+async function checkout(userId, { shippingAddress, paymentMethod, deliveryLocation, addressId, saveAddress }) {
   // Paying online is only possible while a payment provider is switched on (docs/10 §29).
   const online = paymentMethod === 'ONLINE_GATEWAY';
   if (online && !activeProvider()) {
@@ -90,6 +96,26 @@ async function checkout(userId, { shippingAddress, paymentMethod }) {
   // An unpaid online order only holds its stock for a while; then it is cancelled (see onlinePayment.service).
   const expiresAt = online ? new Date(Date.now() + env.payments.holdMinutes * 60 * 1000) : undefined;
   const address = toAddressSnapshot(shippingAddress);
+
+  // Where it goes. The HTTP API always sends a pin; a caller that does not (internal
+  // code) skips the delivery-zone rule. The blocks holding the pin are worked out
+  // here, on the server, and never taken from the client.
+  let delivery;
+  if (deliveryLocation) {
+    const blocks = await activeBlocksContaining(deliveryLocation.latitude, deliveryLocation.longitude);
+    if (blocks.length === 0) {
+      throw new OrderError(400, 'We do not deliver to this location yet. Pick a spot inside a delivery zone.', {
+        code: 'OUTSIDE_DELIVERY_ZONE',
+      });
+    }
+    delivery = {
+      location: pointFromLatLng(deliveryLocation.latitude, deliveryLocation.longitude),
+      blockIds: blocks.map((b) => b._id),
+    };
+  }
+  if (addressId && !(await Address.exists({ _id: addressId, userId }))) {
+    throw new OrderError(400, 'Address not found.', { code: 'ADDRESS_NOT_FOUND' });
+  }
   // Stock states that flipped to LOW/OUT during deduction, for the staff
   // alert after the transaction commits.
   const stockTransitions = [];
@@ -139,6 +165,30 @@ async function checkout(userId, { shippingAddress, paymentMethod }) {
         code: 'CHECKOUT_ISSUES',
         issues,
       });
+    }
+
+    // 1b. Every store in the cart must deliver to the pin: it needs an active shop
+    //     whose zone holds the pin. Reported with the other problems, per product.
+    if (delivery) {
+      const cartBrandIds = [...new Set(lines.map((l) => String(l.product.brandId)))];
+      const serving = await Branch.find({
+        brandId: { $in: cartBrandIds },
+        isActive: true,
+        blockIds: { $in: delivery.blockIds },
+      });
+      const served = new Set(serving.map((b) => String(b.brandId)));
+      const unserved = lines.filter((l) => !served.has(String(l.product.brandId)));
+      if (unserved.length > 0) {
+        throw new OrderError(409, 'Some items cannot be delivered to this location.', {
+          code: 'CHECKOUT_ISSUES',
+          issues: unserved.map(({ product }) => ({
+            productId: product._id,
+            name: product.name,
+            code: 'NOT_DELIVERABLE',
+            brandName: brandById.get(String(product.brandId))?.name,
+          })),
+        });
+      }
     }
 
     // 2. Deduct stock in a fixed (productId) order so concurrent checkouts
@@ -202,6 +252,8 @@ async function checkout(userId, { shippingAddress, paymentMethod }) {
         brandId,
         items,
         shippingAddress: address,
+        ...(delivery && { deliveryLocation: delivery.location, deliveryBlockIds: delivery.blockIds }),
+        ...(addressId && { addressId }),
         subtotal: fromCents(subtotalCents),
         deliveryFee: 0,
         discount: 0,
@@ -243,6 +295,28 @@ async function checkout(userId, { shippingAddress, paymentMethod }) {
   // failures are logged, never surfaced to the buyer.
   await notifyBrandOfNewOrders(orders);
   await notifyStockTransitions(stockTransitions);
+
+  // "Save this address": best-effort, after the order is safely placed. A full
+  // address book or a hiccup here must never undo an order.
+  if (saveAddress && !addressId && deliveryLocation) {
+    try {
+      await createAddress(userId, {
+        label: saveAddress.label,
+        fullName: shippingAddress.fullName,
+        phone: shippingAddress.phone,
+        addressLine: shippingAddress.addressLine,
+        city: shippingAddress.city,
+        state: shippingAddress.state,
+        postalCode: shippingAddress.postalCode,
+        country: shippingAddress.country,
+        additionalInstructions: shippingAddress.additionalInstructions,
+        latitude: deliveryLocation.latitude,
+        longitude: deliveryLocation.longitude,
+      });
+    } catch (err) {
+      console.error(`[orders] could not save the address after checkout: ${err.message}`);
+    }
+  }
 
   return orders;
 }
@@ -327,19 +401,25 @@ async function getOrderForUser(user, orderId) {
   if (!order) {
     throw new OrderError(404, 'Order not found.');
   }
-  const [payment, delivery, adjustments] = await Promise.all([
+  const [payment, delivery, adjustments, returnDoc] = await Promise.all([
     Payment.findOne({ orderId: order._id }),
     Delivery.findOne({ orderId: order._id }),
     listAdjustmentsForOrder(order._id),
+    Return.findOne({ orderId: order._id }),
   ]);
   // The waiting proposal first for the screens; the full list is the history.
   const adjustment = adjustments.find((a) => a.status === 'PROPOSED') || adjustments[0] || null;
+  // A door return (docs/22 §F), in the customer-safe shape: what came back and
+  // why, never the private photo path. Required lazily to avoid a module cycle
+  // through OrderError.
+  const { toReturnView } = require('./return.service');
   return {
     order,
     payment,
     delivery: user.role === 'CUSTOMER' ? deliveryForCustomer(delivery) : delivery,
     adjustments,
     adjustment,
+    return: returnDoc ? toReturnView(returnDoc, order.orderNumber) : null,
   };
 }
 

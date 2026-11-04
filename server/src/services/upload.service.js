@@ -102,6 +102,35 @@ function createPaymentProofSignature(brandId, deliveryId, { now = Date.now(), co
 }
 
 /**
+ * The optional photo of a refused item (docs/22 §F) is private, like a payment
+ * proof, and lives beside that delivery. The folder is derived from the brand
+ * and delivery only, never from client input.
+ */
+function returnPhotoFolder(brandId, deliveryId) {
+  return `citycart/brands/${brandId}/deliveries/${deliveryId}/returns`;
+}
+
+function createReturnPhotoSignature(brandId, deliveryId, { now = Date.now(), config = env.cloudinary } = {}) {
+  if (!isConfigured(config)) {
+    throw new UploadError(503, 'Return photos are not set up on this server yet.');
+  }
+
+  const timestamp = Math.floor(now / 1000);
+  const folder = returnPhotoFolder(brandId, deliveryId);
+  const signedParams = { allowed_formats: ALLOWED_FORMATS, folder, timestamp, type: 'authenticated' };
+
+  return {
+    uploadUrl: `https://api.cloudinary.com/v1_1/${config.cloudName}/image/upload`,
+    apiKey: config.apiKey,
+    timestamp,
+    folder,
+    allowedFormats: ALLOWED_FORMATS,
+    type: 'authenticated',
+    signature: signParams(signedParams, config.apiSecret),
+  };
+}
+
+/**
  * A short-lived signed link for one private proof photo. It expires in
  * `paymentProof.linkMinutes` (about five by default) and is generated only after
  * the caller has been authorized for that brand's payments.
@@ -148,9 +177,11 @@ async function destroyPrivateAsset(publicId, { config = env.cloudinary, fetchImp
 module.exports = {
   createProductImageSignature,
   createPaymentProofSignature,
+  createReturnPhotoSignature,
   createProofDownloadUrl,
   destroyPrivateAsset,
   paymentProofFolder,
+  returnPhotoFolder,
   signParams,
   signApiParams,
   isConfigured,

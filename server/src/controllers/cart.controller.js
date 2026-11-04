@@ -2,7 +2,9 @@ const {
   addItemSchema,
   updateItemSchema,
   productIdParamSchema,
+  areaCheckSchema,
 } = require('../validators/cart.validator');
+const { checkCartArea } = require('../services/cartArea.service');
 const {
   getCartView,
   addItem,
@@ -82,4 +84,18 @@ async function clear(req, res, next) {
   }
 }
 
-module.exports = { get, add, update, remove, clear };
+// Which cart items could still be delivered if the customer shops in these blocks?
+async function areaCheck(req, res, next) {
+  const parsed = areaCheckSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, errors: formatZodError(parsed.error) });
+  }
+  try {
+    const result = await checkCartArea(req.user._id, parsed.data.blockIds);
+    return res.status(200).json({ success: true, ...result });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+module.exports = { get, add, update, remove, clear, areaCheck };

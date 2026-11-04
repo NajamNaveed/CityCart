@@ -9,6 +9,8 @@ const User = require('../src/models/user.model');
 const Brand = require('../src/models/brand.model');
 const Store = require('../src/models/store.model');
 const Category = require('../src/models/category.model');
+const CatalogProduct = require('../src/models/catalogProduct.model');
+const Address = require('../src/models/address.model');
 const Product = require('../src/models/product.model');
 const Inventory = require('../src/models/inventory.model');
 const Employee = require('../src/models/employee.model');
@@ -18,6 +20,7 @@ const OrderAdjustment = require('../src/models/orderAdjustment.model');
 const InventoryMovement = require('../src/models/inventoryMovement.model');
 const Payment = require('../src/models/payment.model');
 const Delivery = require('../src/models/delivery.model');
+const Return = require('../src/models/return.model');
 const Review = require('../src/models/review.model');
 const Receipt = require('../src/models/receipt.model');
 const Notification = require('../src/models/notification.model');
@@ -25,9 +28,9 @@ const Counter = require('../src/models/counter.model');
 const { ALL_PERMISSIONS } = require('../src/config/permissions');
 
 const MODELS = {
-  cities: City, blocks: Block, branches: Branch, conversations: Conversation, messages: Message, users: User, brands: Brand, stores: Store, categories: Category, products: Product,
+  cities: City, blocks: Block, branches: Branch, conversations: Conversation, messages: Message, users: User, brands: Brand, stores: Store, categories: Category, catalogProducts: CatalogProduct, addresses: Address, products: Product,
   inventories: Inventory, employees: Employee, carts: Cart, orders: Order, orderAdjustments: OrderAdjustment, inventoryMovements: InventoryMovement, payments: Payment, receipts: Receipt,
-  deliveries: Delivery, reviews: Review, notifications: Notification, counters: Counter,
+  deliveries: Delivery, returns: Return, reviews: Review, notifications: Notification, counters: Counter,
 };
 
 const NOW = new Date('2026-10-04T10:00:00Z');
@@ -88,7 +91,8 @@ describe('demo dataset', () => {
     expect(unique(ds.brands.map((b) => b.slug))).toBe(true);
     expect(unique(ds.stores.map((s) => s.slug))).toBe(true);
     expect(unique(ds.stores.map((s) => id(s.brandId)))).toBe(true);
-    expect(unique(ds.categories.map((c) => `${id(c.brandId)}/${c.slug}`))).toBe(true);
+    expect(unique(ds.categories.map((c) => `${id(c.parentId)}/${c.slug}`))).toBe(true);
+    expect(unique(ds.catalogProducts.map((i) => i.barcode).filter(Boolean))).toBe(true);
     expect(unique(ds.products.map((p) => `${id(p.brandId)}/${p.slug}`))).toBe(true);
     expect(unique(ds.products.map((p) => p.sku))).toBe(true);
     expect(unique(ds.inventories.map((i) => id(i.productId)))).toBe(true);
@@ -96,6 +100,7 @@ describe('demo dataset', () => {
     expect(unique(ds.carts.map((c) => id(c.userId)))).toBe(true);
     expect(unique(ds.orders.map((o) => o.orderNumber))).toBe(true);
     expect(unique(ds.deliveries.map((d) => id(d.orderId)))).toBe(true);
+    expect(unique(ds.returns.map((r) => id(r.deliveryId)))).toBe(true);
   });
 
   it('is a Faisalabad-only marketplace with blocks, branches and per-branch catalogues', () => {
@@ -192,6 +197,73 @@ describe('demo dataset', () => {
     expect(ds.conversations.some((c) => c.brandUnread > 0)).toBe(true);
   });
 
+  it('shares one catalogue item between several stores, with a queue of requests for the admin', () => {
+    const shared = ds.catalogProducts.find((i) => i.barcode);
+    const listings = ds.products.filter((p) => id(p.catalogProductId) === id(shared._id));
+    expect(listings.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(listings.map((p) => id(p.brandId))).size).toBe(listings.length); // one listing per store
+    expect(new Set(listings.map((p) => p.price)).size).toBeGreaterThan(1); // each store sets its own price
+    const byStatus = (s) => ds.catalogProducts.filter((i) => i.status === s);
+    expect(byStatus('PENDING').length).toBeGreaterThanOrEqual(1);
+    expect(byStatus('REJECTED')[0].reviewNote).toBeTruthy();
+    expect(ds.catalogProducts.some((i) => i.scope === 'PRIVATE' && i.brandId)).toBe(true);
+    // items no store lists yet exist for the sample CSV import
+    const listed = new Set(ds.products.map((p) => id(p.catalogProductId)));
+    expect(ds.catalogProducts.filter((i) => i.status === 'ACTIVE' && i.scope === 'GLOBAL' && !listed.has(id(i._id))).length).toBeGreaterThanOrEqual(30);
+  });
+
+  it('draws every block as a valid zone, with overlaps, gaps and shops placed to demonstrate each', () => {
+    const { validateRing, pointInRing, ringFromGeoJson } = require('../src/utils/polygon');
+    const { computeBlockIds } = require('../src/utils/blockMembership');
+    const rings = ds.blocks.map((b) => ringFromGeoJson(b.area));
+    rings.forEach((ring) => expect(validateRing(ring).ok).toBe(true));
+    // a block's centre sits inside its own outline
+    ds.blocks.forEach((b, i) => expect(pointInRing(b.center.coordinates[1], b.center.coordinates[0], rings[i])).toBe(true));
+
+    const holders = (lat, lng) => ds.blocks.filter((_, i) => pointInRing(lat, lng, rings[i])).map((b) => b.name);
+    expect(holders(31.427, 73.097).sort()).toEqual(['D Ground', 'Peoples Colony']); // an overlap
+    expect(holders(31.4225, 73.091)).toEqual([]); // a gap between blocks: nobody's block
+
+    // each shop's blocks are exactly the blocks holding its pin
+    ds.branches.forEach((br) => {
+      expect(br.blockIds.map(id).sort()).toEqual(computeBlockIds(br.location, br.blockId, ds.blocks).map(id).sort());
+      expect(br.blockIds.map(id)).toContain(id(br.blockId)); // inside its own home block
+    });
+    // at least one shop stands in an overlap and is found in two blocks
+    expect(ds.branches.some((br) => br.blockIds.length === 2)).toBe(true);
+  });
+
+  it('gives customers saved addresses inside a block, and every order a delivery pin its store serves', () => {
+    const { ringFromGeoJson, pointInRing } = require('../src/utils/polygon');
+    const rings = new Map(ds.blocks.map((b) => [id(b._id), ringFromGeoJson(b.area)]));
+    const holding = (point) =>
+      ds.blocks.filter((b) => pointInRing(point.coordinates[1], point.coordinates[0], rings.get(id(b._id)))).map((b) => id(b._id));
+
+    // every saved address is somewhere we deliver, and each customer has exactly one default
+    ds.addresses.forEach((a) => expect(holding(a.location).length).toBeGreaterThan(0));
+    const customers = ds.users.filter((u) => u.role === 'CUSTOMER');
+    customers.forEach((c) => {
+      const mine = ds.addresses.filter((a) => id(a.userId) === id(c._id));
+      expect(mine.length).toBeGreaterThanOrEqual(1);
+      expect(mine.filter((a) => a.isDefault)).toHaveLength(1);
+      expect(mine.length).toBeLessThanOrEqual(10);
+    });
+    expect(ds.addresses.some((a) => a.label === 'Work')).toBe(true); // a customer with a second address
+
+    // each order's blocks are exactly the blocks holding its pin, and the store has a shop in one of them
+    ds.orders.forEach((o) => {
+      expect(o.deliveryBlockIds.map(id).sort()).toEqual(holding(o.deliveryLocation).sort());
+      const serves = ds.branches.some((br) => id(br.brandId) === id(o.brandId) && br.blockIds.some((b) => o.deliveryBlockIds.map(id).includes(id(b))));
+      expect(serves).toBe(true);
+      if (o.addressId) {
+        const saved = ds.addresses.find((a) => id(a._id) === id(o.addressId));
+        expect(id(saved.userId)).toBe(id(o.customerId));
+        expect(saved.location).toEqual(o.deliveryLocation);
+      }
+    });
+    expect(ds.orders.some((o) => o.addressId)).toBe(true);
+  });
+
   it('has every reference pointing at something that exists', () => {
     const ids = (list) => new Set(list.map((d) => id(d._id)));
     const cities = ids(ds.cities);
@@ -206,13 +278,30 @@ describe('demo dataset', () => {
     ds.brands.filter((b) => b.terminatedBy).forEach((b) => expect(users.has(id(b.terminatedBy))).toBe(true));
     ds.stores.forEach((s) => expect(brands.has(id(s.brandId))).toBe(true));
     ds.categories.forEach((c) => {
-      expect(brands.has(id(c.brandId))).toBe(true);
+      expect(c.brandId).toBeUndefined(); // categories are global
       if (c.parentId) expect(categories.has(id(c.parentId))).toBe(true);
     });
     ds.products.forEach((p) => {
       expect(brands.has(id(p.brandId))).toBe(true);
       const category = ds.categories.find((c) => id(c._id) === id(p.categoryId));
-      expect(category && id(category.brandId)).toBe(id(p.brandId)); // a product only uses its own brand's categories
+      expect(category).toBeDefined();
+      // a product points at a leaf: no category lists it as a parent
+      expect(ds.categories.some((c) => c.parentId && id(c.parentId) === id(p.categoryId))).toBe(false);
+    });
+    // Every listing points at a catalogue item and mirrors its name, category, description and images.
+    const items = new Map(ds.catalogProducts.map((i) => [id(i._id), i]));
+    ds.products.forEach((p) => {
+      const item = items.get(id(p.catalogProductId));
+      expect(item).toBeDefined();
+      expect(item.status).toBe('ACTIVE');
+      expect({ name: p.name, categoryId: id(p.categoryId), description: p.description, images: p.images }).toEqual({
+        name: item.name, categoryId: id(item.categoryId), description: item.description, images: item.images,
+      });
+    });
+    ds.catalogProducts.forEach((i) => {
+      expect(ds.categories.some((c) => id(c._id) === id(i.categoryId))).toBe(true);
+      if (i.brandId) expect(brands.has(id(i.brandId))).toBe(true);
+      if (i.mergedIntoId) expect(items.has(id(i.mergedIntoId))).toBe(true);
     });
     ds.inventories.forEach((i) => expect(id(productById.get(id(i.productId)).brandId)).toBe(id(i.brandId)));
     ds.employees.forEach((e) => {
@@ -232,6 +321,16 @@ describe('demo dataset', () => {
     });
     ds.payments.forEach((p) => expect(orders.has(id(p.orderId))).toBe(true));
     ds.deliveries.forEach((d) => expect(orders.has(id(d.orderId))).toBe(true));
+    const deliveries = new Set(ds.deliveries.map((d) => id(d._id)));
+    ds.returns.forEach((r) => {
+      expect(orders.has(id(r.orderId))).toBe(true);
+      expect(deliveries.has(id(r.deliveryId))).toBe(true);
+      expect(id(ds.deliveries.find((d) => id(d._id) === id(r.deliveryId)).returnId)).toBe(id(r._id));
+      expect(brands.has(id(r.brandId))).toBe(true);
+      expect(users.has(id(r.customerId))).toBe(true);
+      if (r.riderId) expect(users.has(id(r.riderId))).toBe(true);
+      expect(products.has(id(r.lines[0].productId))).toBe(true);
+    });
     ds.reviews.forEach((r) => {
       expect(products.has(id(r.productId))).toBe(true);
       expect(orders.has(id(r.orderId))).toBe(true);
@@ -245,10 +344,28 @@ describe('demo dataset', () => {
     });
     ds.employees.forEach((e) => {
       const user = ds.users.find((u) => id(u._id) === id(e.userId));
-      expect(user.role).toBe('BRAND_EMPLOYEE');
+      expect(['BRAND_EMPLOYEE', 'PICKER']).toContain(user.role);
       expect(id(user.brandId)).toBe(id(e.brandId));
       expect(user.isActive).toBe(e.isActive);
+      // A picker's access is the pick queue alone, never brand-team permissions.
+      if (user.role === 'PICKER') expect(e.permissions).toEqual([]);
     });
+  });
+
+  it('gives every active brand a picker, with work in the queue and one picker proposal', () => {
+    const active = ds.brands.filter((b) => b.status === 'ACTIVE');
+    active.forEach((b) => {
+      const pickers = ds.users.filter((u) => u.role === 'PICKER' && id(u.brandId) === id(b._id));
+      expect(pickers).toHaveLength(1);
+    });
+    expect(ds.orders.filter((o) => ['CONFIRMED', 'PROCESSING'].includes(o.orderStatus) && !o.activeAdjustmentId).length).toBeGreaterThan(0);
+    expect(ds.orders.some((o) => o.orderStatus === 'PROCESSING' && o.pickerId && o.pickStartedAt)).toBe(true);
+
+    const proposal = ds.orderAdjustments.find((a) => a.status === 'PROPOSED' && a.proposedByRole === 'PICKER');
+    expect(proposal).toBeTruthy();
+    const order = ds.orders.find((o) => id(o._id) === id(proposal.orderId));
+    expect(id(order.pickerId)).toBe(id(proposal.proposedBy));
+    expect(order.items.some((i) => ['SHORT', 'UNAVAILABLE'].includes(i.pickStatus))).toBe(true);
   });
 
   it('adds up: item totals, order totals, payments and refunds', () => {
@@ -258,7 +375,9 @@ describe('demo dataset', () => {
       expect(o.subtotal).toBe(subtotal);
       expect(o.total).toBe(subtotal + o.deliveryFee - o.discount + o.tax);
       const payment = ds.payments.find((p) => id(p.orderId) === id(o._id));
-      expect(payment.amount).toBe(o.total);
+      // Cash is collected for the accepted units only; a prepaid payment keeps its
+      // original amount and the refused part is refunded instead.
+      expect(payment.amount).toBe(o.paymentMethod === 'COD' && o.fulfilment === 'PARTIAL' ? o.netTotal : o.total);
       expect(payment.status).toBe(o.paymentStatus);
       const refunded = payment.refunds.reduce((sum, r) => sum + r.amount, 0);
       expect(payment.refundedAmount).toBe(refunded);
@@ -285,12 +404,69 @@ describe('demo dataset', () => {
   });
 
   it('only creates a delivery once an order is ready to ship, and its status agrees with the order', () => {
-    const after = ['READY_FOR_SHIPMENT', 'SHIPPED', 'OUT_FOR_DELIVERY', 'DELIVERED'];
+    const after = ['READY_FOR_SHIPMENT', 'SHIPPED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'RETURNED'];
     ds.orders.forEach((o) => {
       const delivery = ds.deliveries.find((d) => id(d.orderId) === id(o._id));
       expect(Boolean(delivery)).toBe(after.includes(o.orderStatus));
       if (o.orderStatus === 'DELIVERED') expect(delivery.status).toBe('DELIVERED');
+      if (o.orderStatus === 'RETURNED') expect(delivery.status).toBe('RETURNED');
     });
+  });
+
+  it('shows goods delivered in full, in part and not at all, with returns in each status', () => {
+    const fulfilments = new Set(ds.orders.map((o) => o.fulfilment).filter(Boolean));
+    expect(fulfilments).toEqual(new Set(['FULL', 'PARTIAL', 'NONE']));
+    expect(new Set(ds.returns.map((r) => r.status))).toEqual(new Set(['IN_TRANSIT', 'RECEIVED']));
+
+    ds.returns.forEach((r) => {
+      const order = ds.orders.find((o) => id(o._id) === id(r.orderId));
+      const delivery = ds.deliveries.find((d) => id(d._id) === id(r.deliveryId));
+      expect(order.fulfilment).toBe(order.orderStatus === 'RETURNED' ? 'NONE' : 'PARTIAL');
+      expect(delivery.status).toBe(order.orderStatus === 'RETURNED' ? 'RETURNED' : 'DELIVERED');
+      expect(r.source).toBe('DOOR');
+      expect(r.lines.length).toBeGreaterThan(0);
+
+      const returned = r.lines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
+      expect(r.returnedSubtotal).toBe(returned);
+      expect(order.returnedAmount).toBe(returned);
+      expect(order.feeRefunded).toBe(r.feeRefunded);
+      expect(order.netTotal).toBe(Math.max(0, order.total - returned - (order.feeRefunded ? order.deliveryFee : 0)));
+      expect(order.netTotal).toBeLessThanOrEqual(order.total);
+
+      r.lines.forEach((line) => {
+        const item = order.items.find((i) => id(i._id) === id(line.orderItemId));
+        expect(item).toBeDefined();
+        expect(id(item.productId)).toBe(id(line.productId));
+        // Quantity rules: at least one refused, never more than was ordered.
+        expect(line.quantity).toBeGreaterThanOrEqual(1);
+        expect(line.quantity).toBeLessThanOrEqual(item.quantity);
+      });
+
+      if (r.status === 'RECEIVED') {
+        expect(r.receivedAt).toBeTruthy();
+        expect(r.receivedBy).toBeTruthy();
+        r.lines.filter((line) => line.restock).forEach((line) => {
+          expect(line.restockedAt).toBeTruthy();
+          const movement = ds.inventoryMovements.find((m) => m.reason === 'RETURN_RESTOCKED'
+            && id(m.orderId) === id(order._id) && id(m.productId) === id(line.productId));
+          expect(movement).toBeDefined();
+          expect(movement.quantityChange).toBe(line.quantity);
+          expect(id(movement.by)).toBe(id(r.receivedBy));
+        });
+      } else {
+        expect(r.lines.every((line) => !line.restockedAt)).toBe(true);
+      }
+    });
+
+    // The whole-order refusal costs the customer nothing: no cash, no receipt.
+    const fullyRejected = ds.orders.find((o) => o.fulfilment === 'NONE');
+    expect(fullyRejected.orderStatus).toBe('RETURNED');
+    expect(fullyRejected.netTotal).toBe(0);
+    expect(fullyRejected.feeRefunded).toBe(true);
+    const rejectedPayment = ds.payments.find((p) => id(p.orderId) === id(fullyRejected._id));
+    expect(rejectedPayment.status).toBe('CANCELLED');
+    expect(rejectedPayment.paidAt).toBeUndefined();
+    expect(ds.receipts.some((receipt) => id(receipt.paymentId) === id(rejectedPayment._id))).toBe(false);
   });
 
   it('only has reviews from customers whose order containing that product was delivered', () => {
@@ -358,14 +534,17 @@ describe('demo dataset', () => {
     const online = ds.payments.filter((p) => p.method === 'ONLINE_GATEWAY');
     expect(online.length).toBeGreaterThan(0);
     online.forEach((p) => {
-      expect(p.status).toBe('PAID');
+      // A prepaid order whose goods were partly refused keeps its original amount
+      // and moves to PARTIALLY_REFUNDED (or REFUNDED when everything came back).
+      expect(['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED']).toContain(p.status);
       expect(p.provider).toBe('mock');
       expect(p.transactionReference).toMatch(/^mock_[0-9a-f]{24}$/);
       expect(p.expiresAt).toBeInstanceOf(Date);
       expect(p.paidAt >= p.createdAt).toBe(true);
       const order = ds.orders.find((o) => id(o._id) === id(p.orderId));
       expect(order.paymentMethod).toBe('ONLINE_GATEWAY');
-      expect(order.paymentStatus).toBe('PAID');
+      expect(order.paymentStatus).toBe(p.status);
+      expect(p.refundedAmount).toBe(p.refunds.reduce((sum, r) => sum + r.amount, 0));
     });
   });
 
@@ -379,15 +558,16 @@ describe('demo dataset', () => {
   it('shows every brand status, every order status that matters, and every notification type', () => {
     const present = (list) => new Set(list);
     expect(present(ds.brands.map((b) => b.status))).toEqual(present(['ACTIVE', 'PENDING', 'SUSPENDED', 'TERMINATED', 'REJECTED']));
-    ['PENDING', 'CONFIRMED', 'PROCESSING', 'READY_FOR_SHIPMENT', 'SHIPPED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED', 'REJECTED'].forEach(
+    ['PENDING', 'CONFIRMED', 'PROCESSING', 'READY_FOR_SHIPMENT', 'SHIPPED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'RETURNED', 'CANCELLED', 'REJECTED'].forEach(
       (status) => expect(ds.orders.some((o) => o.orderStatus === status)).toBe(true)
     );
     ['PAID', 'PENDING', 'CANCELLED', 'REFUNDED', 'PARTIALLY_REFUNDED'].forEach((status) =>
       expect(ds.payments.some((p) => p.status === status)).toBe(true)
     );
-    ['PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED', 'FAILED', 'READY_FOR_PICKUP'].forEach((status) =>
+    ['PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED', 'RETURNED', 'FAILED', 'READY_FOR_PICKUP'].forEach((status) =>
       expect(ds.deliveries.some((d) => d.status === status)).toBe(true)
     );
+    ['IN_TRANSIT', 'RECEIVED'].forEach((status) => expect(ds.returns.some((r) => r.status === status)).toBe(true));
     ['DRAFT', 'ACTIVE', 'INACTIVE', 'ARCHIVED'].forEach((status) => expect(ds.products.some((p) => p.status === status)).toBe(true));
     // PAYMENT_FAILED is left out on purpose: every order is cash on delivery, which cannot fail online.
     const types = new Set(ds.notifications.map((n) => n.type));

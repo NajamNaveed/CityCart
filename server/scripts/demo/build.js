@@ -7,7 +7,10 @@
 const mongoose = require('mongoose');
 
 const { slugify } = require('../../src/utils/slugify');
+const { innerPoint, toGeoJsonPolygon, ringFromGeoJson, pointInRing } = require('../../src/utils/polygon');
+const { computeBlockIds } = require('../../src/utils/blockMembership');
 const { PAYMENT_METHOD_FOR_COLLECTION } = require('../../src/config/paymentCollection');
+const { STORE_FAULT_REASONS } = require('../../src/config/returns');
 const { CITIES, BLOCKS, BRANCHES, BRANDS, CHATS, LONG_CHAT, CUSTOMERS, ADMIN, CARTS, REMARKS } = require('./catalog');
 
 const { ObjectId } = mongoose.Types;
@@ -51,6 +54,17 @@ function businessHours({ open, close, closed }) {
   return Object.fromEntries(DAYS.map((day) => [day, closed.includes(day) ? 'Closed' : `${open} to ${close}`]));
 }
 
+// One picker for each active demo brand (docs/22 §E): a brand account that
+// signs in on the partner app and only sees the pick queue.
+const PICKERS = {
+  loom: { name: 'Areeba Saleem', email: 'areeba.saleem@citycart.demo', phone: '+92 321 4487001' },
+  rangrez: { name: 'Fahad Iqbal', email: 'fahad.iqbal@citycart.demo', phone: '+92 302 7738190' },
+  mehr: { name: 'Nimra Aslam', email: 'nimra.aslam@citycart.demo', phone: '+92 345 6102287' },
+  sukoon: { name: 'Tahir Mehmood', email: 'tahir.mehmood@citycart.demo', phone: '+92 311 9054326' },
+  zaitoon: { name: 'Rabia Sattar', email: 'rabia.sattar@citycart.demo', phone: '+92 312 6680142' },
+  naqsh: { name: 'Waleed Akhtar', email: 'waleed.akhtar@citycart.demo', phone: '+92 301 3397650' },
+};
+
 // ── the builder ──────────────────────────────────────────────────────────────
 function buildDataset({ now = new Date(), hashes }) {
   const random = makeRandom(20260501);
@@ -60,8 +74,8 @@ function buildDataset({ now = new Date(), hashes }) {
   const ago = (ms) => new Date(now.getTime() - ms);
 
   const ds = {
-    cities: [], blocks: [], branches: [], conversations: [], messages: [], users: [], brands: [], stores: [], categories: [], products: [], inventories: [],
-    employees: [], carts: [], orders: [], payments: [], receipts: [], deliveries: [], orderAdjustments: [], inventoryMovements: [],
+    cities: [], blocks: [], branches: [], conversations: [], messages: [], users: [], brands: [], stores: [], categories: [], catalogProducts: [], addresses: [], products: [], inventories: [],
+    employees: [], carts: [], orders: [], payments: [], receipts: [], deliveries: [], returns: [], orderAdjustments: [], inventoryMovements: [],
     reviews: [], notifications: [], counters: [],
   };
 
@@ -81,9 +95,12 @@ function buildDataset({ now = new Date(), hashes }) {
   const faisalabad = cityByKey.faisalabad;
   const blockBySlug = {};
   for (const blk of BLOCKS) {
+    // Each block has a drawn boundary; its centre is a point guaranteed to be inside it.
+    const inside = innerPoint(blk.polygon);
     const doc = {
       _id: new ObjectId(), cityId: faisalabad._id, name: blk.name, slug: slugify(blk.name),
-      center: { type: 'Point', coordinates: [blk.longitude, blk.latitude] }, isActive: true,
+      center: { type: 'Point', coordinates: [Math.round(inside.lng * 1e6) / 1e6, Math.round(inside.lat * 1e6) / 1e6] },
+      area: toGeoJsonPolygon(blk.polygon), isActive: true,
       createdAt: ago(290 * DAY), updatedAt: ago(290 * DAY),
     };
     blockBySlug[doc.slug] = doc;
@@ -114,8 +131,49 @@ function buildDataset({ now = new Date(), hashes }) {
 
   const shoppers = customers.filter((c) => c.doc.isActive); // deactivated accounts do not place new orders
 
+  // ── saved addresses: every customer has a pin inside one of the blocks ──
+  const ringOfBlock = new Map(ds.blocks.map((b) => [String(b._id), ringFromGeoJson(b.area)]));
+  const blocksHolding = (lat, lng) => ds.blocks.filter((b) => b.isActive && pointInRing(lat, lng, ringOfBlock.get(String(b._id)))).map((b) => b._id);
+  // Streets that are not in one of the nine drawn blocks are placed in the nearest one.
+  const NEAREST_BLOCK = { 'Gulistan Colony': 'Peoples Colony', 'Civil Lines': 'Clock Tower', 'Canal Road': 'Gulberg' };
+  const pinIn = (block, step) => {
+    const [lng, lat] = block.center.coordinates;
+    const near = [lat + ((step * 37) % 5 - 2) * 0.0005, lng + ((step * 53) % 5 - 2) * 0.0005];
+    return blocksHolding(near[0], near[1]).some((id) => String(id) === String(block._id)) ? near : [lat, lng];
+  };
+  customers.forEach((c, i) => {
+    const named = ds.blocks.find((b) => c.address.includes(b.name));
+    const fallback = Object.keys(NEAREST_BLOCK).find((k) => c.address.includes(k));
+    const block = named || ds.blocks.find((b) => b.name === NEAREST_BLOCK[fallback]);
+    const [lat, lng] = pinIn(block, i);
+    c.pin = { type: 'Point', coordinates: [Math.round(lng * 1e6) / 1e6, Math.round(lat * 1e6) / 1e6] };
+    c.blockIds = blocksHolding(lat, lng);
+    const made = new Date(c.doc.createdAt.getTime() + DAY);
+    const home = {
+      _id: new ObjectId(), userId: c.doc._id, label: 'Home', fullName: c.name, phone: c.phone, addressLine: c.address,
+      city: c.city, state: c.state, postalCode: c.postalCode, country: 'Pakistan',
+      ...(c.note && { additionalInstructions: c.note }), location: c.pin, isDefault: true, createdAt: made, updatedAt: made,
+    };
+    c.addressId = home._id;
+    ds.addresses.push(home);
+    // The first few customers also saved a second address in another block (an office),
+    // which is how a customer shops for a block other than the one they live in.
+    if (i < 3) {
+      const office = ds.blocks[(ds.blocks.indexOf(block) + 3) % ds.blocks.length];
+      const [olat, olng] = pinIn(office, i + 7);
+      ds.addresses.push({
+        _id: new ObjectId(), userId: c.doc._id, label: 'Work', fullName: c.name, phone: c.phone, addressLine: `Office 2, ${office.name} Main Road`,
+        city: c.city, state: c.state, postalCode: c.postalCode, country: 'Pakistan',
+        location: { type: 'Point', coordinates: [Math.round(olng * 1e6) / 1e6, Math.round(olat * 1e6) / 1e6] },
+        isDefault: false, createdAt: new Date(made.getTime() + 3 * DAY), updatedAt: new Date(made.getTime() + 3 * DAY),
+      });
+    }
+  });
+
   // ── brands, stores, categories, products, inventory, staff ──
   const brands = [];
+  const globalCategoryByKey = new Map();
+  const catalogBySlug = new Map();
   for (const b of BRANDS) {
     const createdAt = ago(b.ageDays * DAY);
     const brandId = new ObjectId();
@@ -152,24 +210,35 @@ function buildDataset({ now = new Date(), hashes }) {
       const [dLat, dLng] = br.off;
       const [lng, lat] = block.center.coordinates;
       const made = new Date(createdAt.getTime() + (1 + i) * DAY);
+      const location = { type: 'Point', coordinates: [Math.round((lng + dLng) * 1e6) / 1e6, Math.round((lat + dLat) * 1e6) / 1e6] };
       const doc = {
-        _id: new ObjectId(), brandId, blockId: block._id, name: br.name, address: br.address, phone: br.phone,
-        location: { type: 'Point', coordinates: [Math.round((lng + dLng) * 1e6) / 1e6, Math.round((lat + dLat) * 1e6) / 1e6] },
+        _id: new ObjectId(), brandId, blockId: block._id, blockIds: computeBlockIds(location, block._id, ds.blocks),
+        name: br.name, address: br.address, phone: br.phone, location,
         isActive: br.isActive !== false, createdAt: made, updatedAt: made,
       };
       ds.branches.push(doc);
       return { def: br, doc };
     });
 
+    // Categories are GLOBAL (one tree for the platform). Each brand's category keys
+    // map onto shared documents, merged by "parent > name", so two brands that both
+    // sell in "Lawn Collection" use the very same category.
     const categoryByKey = {};
     for (const c of b.categories) {
-      const doc = {
-        _id: new ObjectId(), brandId, name: c.name, slug: slugify(c.name), description: c.description,
-        image: photo(`${b.key} ${c.key}`, 3, 800, 600), parentId: c.parent ? categoryByKey[c.parent]._id : null,
-        isActive: c.isActive !== false, createdAt: new Date(createdAt.getTime() + HOUR), updatedAt: new Date(createdAt.getTime() + HOUR),
-      };
+      const parentName = c.parent ? b.categories.find((x) => x.key === c.parent).name : '';
+      const globalKey = `${parentName}>${c.name}`;
+      let doc = globalCategoryByKey.get(globalKey);
+      if (!doc) {
+        doc = {
+          _id: new ObjectId(), name: c.name, slug: slugify(c.name), description: c.description,
+          image: photo(`${b.key} ${c.key}`, 3, 800, 600), parentId: c.parent ? categoryByKey[c.parent]._id : null,
+          order: ds.categories.length, isActive: c.isActive !== false,
+          createdAt: new Date(createdAt.getTime() + HOUR), updatedAt: new Date(createdAt.getTime() + HOUR),
+        };
+        globalCategoryByKey.set(globalKey, doc);
+        ds.categories.push(doc);
+      }
       categoryByKey[c.key] = doc;
-      ds.categories.push(doc);
     }
 
     const products = b.products.map((p, i) => {
@@ -179,9 +248,21 @@ function buildDataset({ now = new Date(), hashes }) {
       const parentKey = (b.categories.find((c) => c.key === p.c) || {}).parent;
       const carriers = branchDocs.filter(({ def }) => !def.only || def.only.includes(p.c) || (parentKey && def.only.includes(parentKey)));
       const branchIds = carriers.length === branchDocs.length ? [] : carriers.map(({ doc: br }) => br._id);
+      // The shared catalogue item: created once, then reused by every store that sells it.
+      let item = catalogBySlug.get(slugify(p.n));
+      if (!item) {
+        item = {
+          _id: new ObjectId(), name: p.n, slug: slugify(p.n), categoryId: categoryByKey[p.c]._id, description: p.d,
+          images: [photo(p.kw, 1), photo(p.kw, 2), photo(p.kw, 3)], scope: 'GLOBAL', status: 'ACTIVE', createdBy: admin._id,
+          ...(p.m && { manufacturer: p.m }), ...(p.size && { size: p.size }), ...(p.barcode && { barcode: p.barcode }),
+          createdAt: made, updatedAt: made,
+        };
+        catalogBySlug.set(item.slug, item);
+        ds.catalogProducts.push(item);
+      }
       const doc = {
-        _id: new ObjectId(), brandId, categoryId: categoryByKey[p.c]._id, name: p.n, slug: slugify(p.n), description: p.d,
-        images: [photo(p.kw, 1), photo(p.kw, 2), photo(p.kw, 3)], price: p.p,
+        _id: new ObjectId(), brandId, catalogProductId: item._id, categoryId: item.categoryId, name: item.name, slug: item.slug,
+        description: item.description, images: item.images, price: p.p,
         ...(p.cmp && { compareAtPrice: p.cmp }), sku: `${b.skuPrefix}-${pad(i + 1, 3)}`,
         isActive: status === 'ACTIVE' || status === 'DRAFT', status, attributes: p.a, branchIds, createdAt: made, updatedAt: made,
       };
@@ -227,7 +308,24 @@ function buildDataset({ now = new Date(), hashes }) {
       return user;
     });
 
-    brands.push({ def: b, doc: brandDoc, owner, store: storeDoc, categoryByKey, products, staff, riders, terminatedAt });
+    // Pickers: a brand account with no team permissions, listed with the staff
+    // in the brand's Team page so the owner can see and switch it off.
+    const pickers = (PICKERS[b.key] ? [PICKERS[b.key]] : []).map((p, i) => {
+      const joined = new Date(createdAt.getTime() + (5 + i) * DAY);
+      const user = userDoc({
+        name: p.name, email: p.email, phone: p.phone, role: 'PICKER', passwordHash: hashes.demo,
+        brandId, createdAt: joined, restrictedUntil,
+      });
+      ds.users.push(user);
+      ds.employees.push({
+        _id: new ObjectId(), userId: user._id, brandId, permissions: [],
+        permissionHistory: [{ by: owner._id, at: joined, added: [], removed: [] }],
+        jobTitle: 'Picker', isActive: true, createdAt: joined, updatedAt: joined,
+      });
+      return user;
+    });
+
+    brands.push({ def: b, doc: brandDoc, owner, store: storeDoc, categoryByKey, products, staff, riders, pickers, terminatedAt });
   }
   const brandByKey = Object.fromEntries(brands.map((b) => [b.def.key, b]));
 
@@ -236,6 +334,61 @@ function buildDataset({ now = new Date(), hashes }) {
     const match = brand.staff.find((s) => s.employee.isActive && s.employee.permissions.includes(permission));
     return match ? match.user : brand.owner;
   };
+
+  // ── catalogue-only items: in the shared catalogue, listed by no store yet ──
+  // These are the products the shipped sample CSV (sample-products-import.csv)
+  // lists for the first store, so the import demo works on a fresh database.
+  const sampleCatalog = require('./sample-catalog.json');
+  for (const row of sampleCatalog) {
+    const categoryDoc = ds.categories.find((c) => c.name === row.category && !ds.categories.some((x) => String(x.parentId) === String(c._id)));
+    if (!categoryDoc) throw new Error(`sample-catalog.json: unknown category "${row.category}"`);
+    if (catalogBySlug.has(slugify(row.name))) continue;
+    const made = new Date(now.getTime() - 20 * DAY);
+    const item = {
+      _id: new ObjectId(), name: row.name, slug: slugify(row.name), categoryId: categoryDoc._id, description: row.description,
+      images: row.images, scope: 'GLOBAL', status: 'ACTIVE', createdBy: admin._id, createdAt: made, updatedAt: made,
+    };
+    catalogBySlug.set(item.slug, item);
+    ds.catalogProducts.push(item);
+  }
+
+  // ── catalogue requests and a merged duplicate, so the admin queue is not empty ──
+  const brandDocOf = (key) => ds.brands.find((x) => x.name === BRANDS.find((b) => b.key === key).name);
+  const ownerOf = (brand) => ds.users.find((u) => u.role === 'BRAND_ADMIN' && String(u.brandId) === String(brand._id));
+  const leaf = (name) => ds.categories.find((c) => c.name === name);
+  const request = (brandKey, name, categoryName, extra) => {
+    const brand = brandDocOf(brandKey);
+    const made = ago(6 * DAY);
+    const item = {
+      _id: new ObjectId(), name, slug: slugify(name), categoryId: leaf(categoryName)._id, brandId: brand._id, createdBy: ownerOf(brand)._id,
+      images: [photo(slugify(name), 1)], createdAt: made, updatedAt: made, ...extra,
+    };
+    catalogBySlug.set(item.slug, item);
+    ds.catalogProducts.push(item);
+    return item;
+  };
+  // A store's own item, usable only by that store.
+  request('sukoon', 'Monogrammed Cushion Cover, made to order', 'Cushions & Rugs', {
+    description: 'Cushion cover embroidered with the buyer\'s initials. Made to order in about a week.', scope: 'PRIVATE', status: 'ACTIVE',
+  });
+  // Waiting for the platform admin.
+  request('zaitoon', 'Hand-Stitched Leather Slippers, Kids', 'Chappals & Sandals', {
+    description: 'Soft leather slippers for children, hand-stitched.', scope: 'GLOBAL', status: 'PENDING',
+  });
+  // Turned down, with the reason the store sees.
+  request('naqsh', 'Silver-Plated Anklet Pair', 'Earrings', {
+    description: 'Plain silver-plated anklets.', scope: 'GLOBAL', status: 'REJECTED',
+    reviewNote: 'Not a fit for the Earrings category. Please request it again under a jewellery category that fits.',
+    reviewedBy: admin._id, reviewedAt: ago(5 * DAY),
+  });
+  // A duplicate that an admin merged into the real item.
+  const shared = catalogBySlug.get(slugify('Plain White Cotton Suit Length, 2.5 m'));
+  const duplicateMade = ago(30 * DAY);
+  ds.catalogProducts.push({
+    _id: new ObjectId(), name: 'Plain White Cotton Suit Length 2.5m', slug: slugify('Plain White Cotton Suit Length 2.5m'),
+    categoryId: shared.categoryId, scope: 'GLOBAL', status: 'ARCHIVED', mergedIntoId: shared._id, createdBy: admin._id,
+    createdAt: duplicateMade, updatedAt: ago(25 * DAY),
+  });
 
   // ── open carts ──
   for (const [customerIndex, lines] of CARTS) {
@@ -323,6 +476,7 @@ function buildDataset({ now = new Date(), hashes }) {
           cursor = new Date(cursor.getTime() - between(1, i >= path.length - 2 ? 40 : 18) * HOUR);
         }
       }
+      const packedEvent = events.find((e) => e.status === 'READY_FOR_SHIPMENT');
       const byFor = (s) => {
         if (s === 'PENDING' || (s === 'CANCELLED')) return customer.doc._id;
         if (brandKey === 'quick' && s === 'REJECTED') return admin._id;
@@ -343,15 +497,25 @@ function buildDataset({ now = new Date(), hashes }) {
       // Some delivered orders were paid online, up front, through the (test) gateway: no cash for the rider to collect.
       const paidOnline = status === 'DELIVERED' && !flags.fullRefund && !flags.partRefund && ds.orders.length % 4 === 0;
 
+      // Delivered to the customer's pin when one of the store's shops serves that block;
+      // otherwise to a spot in the store's own block (an office or a friend's place).
+      const brandShops = ds.branches.filter((br) => String(br.brandId) === String(brand.doc._id) && br.isActive);
+      const servesHome = brandShops.some((br) => br.blockIds.some((id) => customer.blockIds.some((b) => String(b) === String(id))));
+      const delivery = servesHome
+        ? { location: customer.pin, blockIds: customer.blockIds, addressId: customer.addressId }
+        : (({ location, blockIds }) => ({ location, blockIds }))(brandShops[0] || ds.branches.find((br) => String(br.brandId) === String(brand.doc._id)));
+
       const order = {
         _id: new ObjectId(), orderNumber: '', customerId: customer.doc._id, brandId: brand.doc._id, items,
+        deliveryLocation: delivery.location, deliveryBlockIds: delivery.blockIds, ...(delivery.addressId && { addressId: delivery.addressId }),
         shippingAddress: {
           name: customer.name, phone: customer.phone, address: customer.address, city: customer.city, state: customer.state,
           country: 'Pakistan', postalCode: customer.postalCode, ...(customer.note && { additionalInstructions: customer.note }),
         },
         subtotal, deliveryFee, discount, tax, total, paymentMethod: paidOnline ? 'ONLINE_GATEWAY' : 'COD',
         paymentStatus: status === 'CANCELLED' || status === 'REJECTED' ? 'CANCELLED' : status === 'DELIVERED' ? 'PAID' : 'PENDING',
-        currency: 'PKR', orderStatus: status, statusHistory, ...(notes && { notes }), createdAt, updatedAt: finishedAt,
+        currency: 'PKR', orderStatus: status, statusHistory, ...(notes && { notes }),
+        ...(packedEvent && { packedAt: packedEvent.at }), createdAt, updatedAt: finishedAt,
       };
       if (flags.fullRefund) order.paymentStatus = 'REFUNDED';
       if (flags.partRefund) order.paymentStatus = 'PARTIALLY_REFUNDED';
@@ -431,6 +595,187 @@ function buildDataset({ now = new Date(), hashes }) {
     order.orderNumber = `CC-${year}-${pad(perYear[year], 6)}`;
   });
   for (const [year, seq] of Object.entries(perYear)) ds.counters.push({ _id: `order-${year}`, seq });
+
+  // ── door returns (docs/22 §F): what the rider brought back ──
+  // Three stories, so every screen has something to show: a damaged suit refused at
+  // the door and still travelling back with the rider; half a prepaid order refused,
+  // refunded and already taken in (the sellable piece went back on the shelf); and a
+  // whole cash order refused for damage, which ends RETURNED with nothing to collect.
+  const deliveryOf = (order) => ds.deliveries.find((d) => String(d.orderId) === String(order._id));
+  const completedAtOf = ({ events }) => events[events.length - 1].at;
+  // The line a partial refusal can take a unit from: one order line with several
+  // units, or one of several lines (so the rest of the order is still accepted).
+  const partialLine = (order) => order.items.find((i) => i.quantity > 1)
+    || (order.items.length > 1 ? order.items.find((i) => i.quantity === 1) : null);
+
+  const usedReturnOrders = new Set();
+  const usedReturnBrands = new Set();
+  const returnOrder = ({ paymentMethod, rider, netZero, partial }) => {
+    const pool = orders.filter((entry) => {
+      const { order, payment, flags } = entry;
+      const delivery = deliveryOf(order);
+      if (order.orderStatus !== 'DELIVERED' || flags.fullRefund || flags.partRefund) return false;
+      if (usedReturnOrders.has(String(order._id))) return false;
+      if (payment.status !== 'PAID' || payment.refunds.length) return false;
+      if (order.paymentMethod !== paymentMethod) return false;
+      if (!delivery || delivery.status !== 'DELIVERED') return false;
+      if (rider && !delivery.riderId) return false;
+      if (netZero && (order.tax !== 0 || order.discount !== 0 || order.deliveryFee === 0)) return false;
+      if (partial && !partialLine(order)) return false;
+      return true;
+    });
+    return pool.find((entry) => !usedReturnBrands.has(String(entry.order.brandId))) || pool[0] || null;
+  };
+
+  const returnLine = (item, quantity, reason, extra = {}) => ({
+    orderItemId: item._id, productId: item.productId, productName: item.productName,
+    quantity, unitPrice: item.unitPrice, reason, ...extra,
+  });
+
+  const addDoorReturn = ({ entry, status, lines, receivedAt, receivedBy }) => {
+    const { order, payment, events, deliveryHandler } = entry;
+    const delivery = deliveryOf(order);
+    const completedAt = completedAtOf(entry);
+    const returnedSubtotal = lines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
+    const everythingRejected = returnedSubtotal >= order.subtotal;
+    const feeRefunded = everythingRejected && lines.some((line) => STORE_FAULT_REASONS.includes(line.reason));
+    const netTotal = Math.max(0, order.total - returnedSubtotal - (feeRefunded ? order.deliveryFee : 0));
+    order.fulfilment = everythingRejected ? 'NONE' : 'PARTIAL';
+    order.returnedAmount = returnedSubtotal;
+    order.feeRefunded = feeRefunded;
+    order.netTotal = netTotal;
+
+    let refundAmount = 0;
+    if (order.paymentMethod === 'COD') {
+      if (netTotal > 0) {
+        // The rider collected for the accepted units only.
+        payment.amount = netTotal;
+        payment.updatedAt = completedAt;
+      } else {
+        // Nothing was accepted, so nothing was collected and the payment never happened.
+        payment.status = 'CANCELLED';
+        ['paidAt', 'confirmedBy', 'brandId', 'collectedBy', 'collectedAt', 'settledAt', 'settledBy', 'transactionReference', 'provider', 'collection']
+          .forEach((field) => delete payment[field]);
+        payment.updatedAt = completedAt;
+        order.paymentStatus = 'CANCELLED';
+        const job = receiptJobs.findIndex((r) => r.payment === payment);
+        if (job !== -1) receiptJobs.splice(job, 1);
+      }
+    } else {
+      // Prepaid money comes back for the refused goods (and the fee under the store-fault rule).
+      const due = returnedSubtotal + (feeRefunded ? order.deliveryFee : 0);
+      refundAmount = Math.min(due, order.total - payment.refundedAmount);
+      if (refundAmount > 0) {
+        payment.refundedAmount += refundAmount;
+        payment.refunds.push({
+          amount: refundAmount, by: delivery.riderId || deliveryHandler._id, at: completedAt,
+          reason: 'Items refused at the door were refunded.',
+        });
+        payment.status = payment.refundedAmount >= order.total ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
+        order.paymentStatus = payment.status;
+        payment.updatedAt = completedAt;
+      }
+    }
+
+    if (everythingRejected) {
+      // Everything went back: the order and its delivery end as RETURNED.
+      order.orderStatus = 'RETURNED';
+      const last = events[events.length - 1];
+      last.status = 'RETURNED';
+      order.statusHistory[order.statusHistory.length - 1] = {
+        status: 'RETURNED', by: delivery.riderId || deliveryHandler._id, at: last.at,
+      };
+    }
+
+    const ret = {
+      _id: new ObjectId(), orderId: order._id, deliveryId: delivery._id, brandId: order.brandId, customerId: order.customerId,
+      ...(delivery.riderId && { riderId: delivery.riderId }),
+      source: 'DOOR', status, lines, returnedSubtotal, feeRefunded, refundAmount, currency: order.currency || 'PKR',
+      ...(status === 'RECEIVED' && { receivedAt, receivedBy: receivedBy._id }),
+      createdAt: completedAt, updatedAt: receivedAt || completedAt,
+    };
+    ds.returns.push(ret);
+    delivery.returnId = ret._id;
+    delivery.status = everythingRejected ? 'RETURNED' : 'DELIVERED';
+    usedReturnOrders.add(String(order._id));
+    usedReturnBrands.add(String(order.brandId));
+
+    if (status === 'RECEIVED') {
+      for (const line of lines) {
+        if (!line.restock) continue;
+        const inventory = ds.inventories.find((inv) => String(inv.productId) === String(line.productId));
+        if (inventory && inventory.trackInventory) {
+          inventory.quantity += line.quantity;
+          inventory.updatedAt = receivedAt;
+        }
+        ds.inventoryMovements.push({
+          _id: new ObjectId(), productId: line.productId, brandId: order.brandId, orderId: order._id,
+          reason: 'RETURN_RESTOCKED', quantityChange: line.quantity, reservedChange: 0, by: receivedBy._id, createdAt: receivedAt,
+        });
+      }
+    }
+    return ret;
+  };
+
+  const inTransit = returnOrder({ paymentMethod: 'COD', rider: true, partial: true });
+  if (inTransit) {
+    const item = partialLine(inTransit.order);
+    const delivery = deliveryOf(inTransit.order);
+    addDoorReturn({
+      entry: inTransit, status: 'IN_TRANSIT',
+      lines: [returnLine(item, Math.min(1, item.quantity), 'DAMAGED', {
+        photo: {
+          publicId: `citycart/brands/${inTransit.order.brandId}/deliveries/${delivery._id}/returns/refused-${item._id}.jpg`,
+          fingerprint: `etag-refused-${item._id}`,
+        },
+      })],
+    });
+  }
+
+  const received = returnOrder({ paymentMethod: 'ONLINE_GATEWAY', partial: true });
+  if (received) {
+    const item = partialLine(received.order);
+    // The store takes the goods in the next day (never in the future).
+    const receivedAt = new Date(Math.min(now.getTime() - 2 * HOUR, completedAtOf(received).getTime() + 20 * HOUR));
+    addDoorReturn({
+      entry: received, status: 'RECEIVED', receivedAt, receivedBy: received.brand.owner,
+      lines: [returnLine(item, Math.min(1, item.quantity), 'NOT_WANTED', { restock: true, restockedAt: receivedAt })],
+    });
+  }
+
+  const fullyRejected = returnOrder({ paymentMethod: 'COD', netZero: true });
+  if (fullyRejected) {
+    addDoorReturn({
+      entry: fullyRejected, status: 'IN_TRANSIT',
+      lines: fullyRejected.order.items.map((item, index) => returnLine(item, item.quantity, index === 0 ? 'DAMAGED' : 'MISSING')),
+    });
+  }
+
+  // Every other delivered order arrived complete.
+  for (const { order } of orders) {
+    if (order.orderStatus !== 'DELIVERED' || order.fulfilment) continue;
+    order.fulfilment = 'FULL';
+    order.returnedAmount = 0;
+    order.feeRefunded = false;
+    order.netTotal = order.total;
+  }
+
+  // ── picking: accepted orders wait in the queue; one picker has started an order (docs/22 §E) ──
+  // CONFIRMED orders are already waiting, unclaimed. A PROCESSING order with a
+  // picker shows what a half-picked order looks like: only the last line to go.
+  const loomPicking = orders.find(({ order, brand }) => brand.def.key === 'loom' && order.orderStatus === 'PROCESSING');
+  if (loomPicking && loomPicking.brand.pickers.length) {
+    const picker = loomPicking.brand.pickers[0];
+    const startEvent = loomPicking.events.find((e) => e.status === 'PROCESSING');
+    loomPicking.order.pickerId = picker._id;
+    loomPicking.order.pickStartedAt = new Date(Math.min(now.getTime(), startEvent.at.getTime() + 5 * 60 * 1000));
+    loomPicking.order.items.forEach((item, i) => {
+      if (i < loomPicking.order.items.length - 1) {
+        item.pickStatus = 'PICKED';
+        item.pickedQty = item.quantity;
+      }
+    });
+  }
 
   // ── a few COD orders were paid at the door by transfer, wallet or card (docs/21 §I) ──
   // The money was received (the orders are paid), but nobody holds cash: each carries a
@@ -525,7 +870,7 @@ function buildDataset({ now = new Date(), hashes }) {
     total: subtotal + order.deliveryFee - order.discount + order.tax,
   });
 
-  const addAdjustment = ({ order, status, at, supplyAllBut, wantSubstitute, respondedAt, action, responseNote, restockRemoved, noteText }) => {
+  const addAdjustment = ({ order, status, at, supplyAllBut, wantSubstitute, respondedAt, action, responseNote, restockRemoved, noteText, proposer, proposerRole }) => {
     const { brand } = orderEntryById.get(String(order._id));
     const item = order.items[0];
     const supplyQuantity = Math.max(0, item.quantity - supplyAllBut);
@@ -547,7 +892,7 @@ function buildDataset({ now = new Date(), hashes }) {
     const totalsBefore = totalsSnapshot(order, order.subtotal);
     const totalsAfter = totalsSnapshot(order, order.subtotal - item.totalPrice + suppliedValue + (substitute ? substitute.unitPrice * substitute.quantity : 0));
     const totalsAfterRemoval = totalsSnapshot(order, order.subtotal - item.totalPrice + suppliedValue);
-    const proposedBy = handler(brand, 'orders.adjust');
+    const proposedBy = proposer || handler(brand, 'orders.adjust');
 
     const adjustment = {
       _id: new ObjectId(), orderId: order._id, brandId: order.brandId, customerId: order.customerId, status,
@@ -558,6 +903,7 @@ function buildDataset({ now = new Date(), hashes }) {
       }],
       stockReservations: substitute ? [{ productId: substitute.productId, quantity: substitute.quantity }] : [],
       restockRemoved: !!restockRemoved, totalsBefore, totalsAfter, totalsAfterRemoval, proposedBy: proposedBy._id,
+      ...(proposerRole && { proposedByRole: proposerRole }),
       expiresAt: new Date(at.getTime() + 24 * HOUR), respondedAt: respondedAt || null,
       response: status === 'PROPOSED' ? null : { action, by: status === 'EXPIRED' ? undefined : order.customerId, at: respondedAt, note: responseNote },
       createdAt: at, updatedAt: respondedAt || at,
@@ -617,6 +963,32 @@ function buildDataset({ now = new Date(), hashes }) {
     });
   }
 
+  // A picker found one unit missing and asked the customer. The order stays with
+  // that picker, the line is short, and the proposal says a picker suggested it.
+  const pickerEntry = orders.find(({ order, brand }) => brand.pickers.length
+    && order.orderStatus === 'PROCESSING'
+    && !order.activeAdjustmentId
+    && !order.pickerId);
+  if (pickerEntry) {
+    const picker = pickerEntry.brand.pickers[0];
+    const item = pickerEntry.order.items[0];
+    const at = new Date(now.getTime() - 4 * HOUR);
+    const supplied = Math.max(0, item.quantity - 1);
+    pickerEntry.order.pickerId = picker._id;
+    pickerEntry.order.pickStartedAt = new Date(at.getTime() - HOUR);
+    pickerEntry.order.items.forEach((line, i) => {
+      const units = i === 0 ? supplied : line.quantity;
+      line.pickStatus = units === 0 ? 'UNAVAILABLE' : units < line.quantity ? 'SHORT' : 'PICKED';
+      line.pickedQty = units;
+    });
+    usedOrders.add(pickerEntry.order._id);
+    addAdjustment({
+      order: pickerEntry.order, status: 'PROPOSED', at, supplyAllBut: 1, wantSubstitute: true,
+      proposer: picker, proposerRole: 'PICKER',
+      noteText: 'While picking your order I found one unit with a small mark. I can send the rest and offer a similar piece instead.',
+    });
+  }
+
   // ── reviews, written by customers whose orders were delivered ──
   const OPENERS = {
     5: ['Absolutely love it.', 'Better than I hoped.', 'Very happy with this order.'],
@@ -639,11 +1011,22 @@ function buildDataset({ now = new Date(), hashes }) {
     2: ['Hoping the next one is better.', 'Delivery was on time at least.'],
     1: ['I would think twice before ordering.', 'I have contacted the seller.'],
   };
+  // A customer reviews what they kept, never a unit the rider took back.
+  const returnedUnits = new Map();
+  for (const ret of ds.returns) {
+    for (const line of ret.lines) {
+      const key = String(line.orderItemId);
+      returnedUnits.set(key, (returnedUnits.get(key) || 0) + line.quantity);
+    }
+  }
+  const keptUnits = (item) => item.quantity - (returnedUnits.get(String(item._id)) || 0);
+
   const seenReviews = new Set();
   for (const { order, brand, events } of orders) {
     if (order.orderStatus !== 'DELIVERED') continue;
     const delivered = events[events.length - 1].at;
     for (const item of order.items) {
+      if (keptUnits(item) <= 0) continue;
       const key = `${order.customerId}-${item.productId}`;
       if (seenReviews.has(key) || random() > 0.82) continue;
       seenReviews.add(key);
@@ -741,11 +1124,16 @@ function buildDataset({ now = new Date(), hashes }) {
           const how = door ? { BANK_TRANSFER: 'bank transfer', WALLET: 'wallet', CARD_MACHINE: 'card machine' }[payment.collection.method] : '';
           note(brand.owner._id, 'PAYMENT_RECEIVED', door ? 'Payment received at the door' : 'Cash payment received',
             door
-              ? `${money(order.total)} was paid by ${how} for order ${order.orderNumber}. Check the photo and the reference before you count it.`
-              : `${money(order.total)} was collected on delivery for order ${order.orderNumber}.`,
+              ? `${money(payment.amount)} was paid by ${how} for order ${order.orderNumber}. Check the photo and the reference before you count it.`
+              : `${money(payment.amount)} was collected on delivery for order ${order.orderNumber}.`,
             { ...ref, paymentId: payment._id }, at);
           break;
         }
+        case 'RETURNED':
+          note(customer.doc._id, 'ORDER_REJECTED', 'Your order went back with the rider',
+            `Every item in order ${order.orderNumber} was refused at the door, so ${brand.def.name} took it back. You have not been charged.`,
+            ref, at);
+          break;
         case 'REJECTED':
           note(customer.doc._id, 'ORDER_REJECTED', 'Your order could not be fulfilled', `${brand.def.name} could not fulfil order ${order.orderNumber}. You have not been charged.`, ref, at);
           break;
@@ -786,6 +1174,27 @@ function buildDataset({ now = new Date(), hashes }) {
         message, ref, new Date(adj.respondedAt.getTime() + 60 * 1000)
       ));
     }
+  }
+
+  // Returned goods (docs/22 §F): the brand staff who handle orders or deliveries hear
+  // while the goods are still with the rider, and again once the store has taken them in.
+  for (const ret of ds.returns) {
+    const entry = orderEntryById.get(String(ret.orderId));
+    if (!entry) continue;
+    const ref = {
+      orderId: ret.orderId, orderNumber: entry.order.orderNumber, brandId: ret.brandId,
+      returnId: ret._id, deliveryId: ret.deliveryId, lines: ret.lines.length, returnedSubtotal: ret.returnedSubtotal,
+    };
+    const received = ret.status === 'RECEIVED';
+    const units = ret.lines.reduce((sum, line) => sum + line.quantity, 0);
+    brandReaders(entry.brand).forEach((u) => note(
+      u._id, 'RETURN_IN_TRANSIT',
+      received ? 'Returned goods taken in' : 'Returned goods on the way',
+      received
+        ? `${units} refused unit${units === 1 ? '' : 's'} from order ${entry.order.orderNumber} were taken in. Decide what goes back on sale.`
+        : `${units} refused unit${units === 1 ? '' : 's'} from order ${entry.order.orderNumber} are coming back with the rider.`,
+      ref, new Date(ret.updatedAt.getTime() + 60 * 1000)
+    ));
   }
 
   const productById = new Map(ds.products.map((p) => [String(p._id), p]));

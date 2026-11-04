@@ -7,6 +7,7 @@ jest.mock('../src/models/order.model');
 jest.mock('../src/models/payment.model');
 jest.mock('../src/models/delivery.model');
 jest.mock('../src/models/orderAdjustment.model');
+jest.mock('../src/models/return.model');
 jest.mock('../src/utils/transaction', () => ({
   runInTransaction: (work) => work('SESSION'),
 }));
@@ -19,6 +20,7 @@ const Order = require('../src/models/order.model');
 const Payment = require('../src/models/payment.model');
 const Delivery = require('../src/models/delivery.model');
 const OrderAdjustment = require('../src/models/orderAdjustment.model');
+const Return = require('../src/models/return.model');
 const notifications = require('../src/services/notification.service');
 const receipts = require('../src/services/receipt.service');
 const app = require('../src/app');
@@ -39,10 +41,10 @@ function signedIn(role, permissions) {
   }
   return user;
 }
-// The partner app sends a partner-marked Bearer token; web users send the cookie.
+// The delivery app sends a delivery-marked Bearer token; web users send the cookie.
 const asRider = () => {
   const user = signedIn(ROLES.RIDER);
-  const token = signToken({ userId: user._id, role: user.role, brandId: user.brandId, passwordVersion: 0, client: 'partner' }, { expiresIn: '8h' });
+  const token = signToken({ userId: user._id, role: user.role, brandId: user.brandId, passwordVersion: 0, client: 'delivery' }, { expiresIn: '8h' });
   return { header: ['Authorization', `Bearer ${token}`], user };
 };
 const asWeb = (role, permissions) => {
@@ -80,6 +82,7 @@ beforeEach(() => {
   jest.resetAllMocks();
   // getOrderForUser also loads the order's adjustment history.
   OrderAdjustment.find.mockReturnValue({ sort: () => Promise.resolve([]) });
+  Return.findOne.mockResolvedValue(null);
 });
 
 describe('access to /api/v1/rider/deliveries', () => {
@@ -337,7 +340,10 @@ describe('POST /api/v1/rider/deliveries/:id/complete', () => {
     Order.updateOne.mockResolvedValue({});
     const paymentId = oid();
     Payment.findOneAndUpdate.mockResolvedValue({ _id: paymentId });
-    Order.findOne.mockReturnValue({ select: () => Promise.resolve({ ...order, paymentStatus: 'PAID' }) });
+    Order.findOne.mockReturnValue({
+      select: () => Promise.resolve({ ...order, paymentStatus: 'PAID' }),
+      session: () => Promise.resolve(order),
+    });
 
     const res = await post(header, attempt._id, { code: '482913' });
 
@@ -350,7 +356,7 @@ describe('POST /api/v1/rider/deliveries/:id/complete', () => {
     });
     expect(Payment.findOneAndUpdate).toHaveBeenCalledWith(
       { orderId: order._id, status: 'PENDING' },
-      { $set: { status: 'PAID', paidAt: expect.any(Date), confirmedBy: user._id, brandId: order.brandId, collectedBy: user._id, collectedAt: expect.any(Date), 'collection.method': 'CASH' } },
+      { $set: { status: 'PAID', amount: 2450, paidAt: expect.any(Date), confirmedBy: user._id, brandId: order.brandId, collectedBy: user._id, collectedAt: expect.any(Date), 'collection.method': 'CASH' } },
       { session: 'SESSION' }
     );
     expect(notifications.notifyCustomerOfOrderStatus).toHaveBeenCalledWith(expect.anything(), 'DELIVERED');

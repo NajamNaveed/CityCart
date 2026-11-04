@@ -1,6 +1,6 @@
 const express = require('express');
 
-const { register, login, brandLogin, partnerLogin, adminLogin, logout, me, changePassword } = require('../controllers/auth.controller');
+const { register, login, brandLogin, staffLogin, deliveryLogin, adminLogin, logout, me, changePassword } = require('../controllers/auth.controller');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
 const { ROLES } = require('../config/roles');
@@ -11,7 +11,8 @@ const router = express.Router();
 router.post('/register', authLimiter, register);
 router.post('/login', authLimiter, login); // customers only
 router.post('/brand/login', authLimiter, brandLogin); // BRAND_ADMIN / BRAND_EMPLOYEE only
-router.post('/partner/login', authLimiter, partnerLogin); // RIDER / BRAND_EMPLOYEE, partner app only
+router.post('/staff/login', authLimiter, staffLogin); // BRAND_EMPLOYEE / PICKER, staff app only
+router.post('/delivery/login', authLimiter, deliveryLogin); // RIDER, delivery app only
 router.post('/admin/login', authLimiter, adminLogin); // SUPER_ADMIN / ADMIN_PARTNER only
 router.post('/logout', logout);
 router.get('/me', authenticate, me);

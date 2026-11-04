@@ -33,8 +33,9 @@ export default function Overview() {
   const router = useRouter()
   const { user } = useAuth()
   const tabs = visibleTabs(user)
-  const overview = useRemote('overview', () => fetchOverview({ deliveries: tabs.shipments, money: tabs.money }))
+  const overview = useRemote('overview', () => fetchOverview({ deliveries: tabs.shipments, money: tabs.money, returns: tabs.returns }))
   const goDeliveries = (status) => router.push({ pathname: '/shipments', params: status ? { status } : {} })
+  const goReturns = (status) => router.push({ pathname: '/returns', params: status ? { status } : {} })
 
   if (hasNoAccess(user)) {
     return (
@@ -44,7 +45,7 @@ export default function Overview() {
     )
   }
 
-  const { counts, cash } = overview.data || {}
+  const { counts, cash, returns } = overview.data || {}
   return (
     <Screen title="Overview" subtitle={user?.name ? `Hello, ${user.name}.` : undefined} refreshing={overview.refreshing} onRefresh={overview.reload}>
       {overview.status === 'loading' ? (
@@ -63,6 +64,14 @@ export default function Overview() {
               <Tile label="Failed" value={counts.FAILED} hint="Needs another try" onPress={() => goDeliveries('FAILED')} />
               <Tile label="Delivered" value={counts.DELIVERED} hint="All time" onPress={() => goDeliveries('DELIVERED')} />
             </View>
+          ) : null}
+          {returns ? (
+            <Tile
+              label="Returns to receive"
+              value={returns.incoming}
+              hint={returns.incomingTotal > 0 ? `${formatPrice(returns.incomingTotal)} coming back` : 'Nothing on the way'}
+              onPress={() => goReturns('IN_TRANSIT')}
+            />
           ) : null}
           {cash ? (
             <Tile

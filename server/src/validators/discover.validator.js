@@ -1,9 +1,20 @@
+const mongoose = require('mongoose');
 const { z } = require('zod');
 
 const { objectId, numberFromQuery } = require('./block.validator');
 
 const MIN_RADIUS_KM = 0.5;
 const MAX_RADIUS_KM = 50;
+
+// "a,b,c": the blocks the shopper has chosen (one, or several where zones overlap).
+const blockIdList = z
+  .string()
+  .trim()
+  .min(1)
+  .transform((value) => [...new Set(value.split(',').map((id) => id.trim()).filter(Boolean))])
+  .refine((ids) => ids.length >= 1 && ids.length <= 10 && ids.every((id) => mongoose.Types.ObjectId.isValid(id)), {
+    message: 'blockIds must be 1 to 10 valid ids separated by commas.',
+  });
 
 const intFromQuery = (max) =>
   z
@@ -27,9 +38,10 @@ const intFromQuery = (max) =>
 const discoverQuerySchema = z
   .object({
     q: z.string().trim().max(100).optional(),
-    scope: z.enum(['block', 'radius', 'city']).default('city'),
+    scope: z.enum(['block', 'radius', 'city', 'area']).default('city'),
     cityId: objectId.optional(),
     blockId: objectId.optional(),
+    blockIds: blockIdList.optional(),
     radiusKm: numberFromQuery
       .refine((n) => n >= MIN_RADIUS_KM && n <= MAX_RADIUS_KM, {
         message: `radiusKm must be between ${MIN_RADIUS_KM} and ${MAX_RADIUS_KM}.`,
@@ -49,6 +61,15 @@ const discoverQuerySchema = z
     if (data.scope === 'block' && !data.blockId) {
       issue('blockId', 'blockId is required when scope is "block".');
     }
+    if (data.scope === 'area') {
+      if (!data.blockIds) {
+        issue('blockIds', 'blockIds is required when scope is "area".');
+      }
+      // A radius is measured from the shopper, so it needs a position.
+      if (data.radiusKm !== undefined && data.lat === undefined) {
+        issue('lat', 'Send lat and lng to measure the radius from.');
+      }
+    }
     if (data.scope === 'radius') {
       if (data.radiusKm === undefined) {
         issue('radiusKm', 'radiusKm is required when scope is "radius".');
@@ -62,4 +83,4 @@ const discoverQuerySchema = z
     }
   });
 
-module.exports = { discoverQuerySchema, MIN_RADIUS_KM, MAX_RADIUS_KM };
+module.exports = { discoverQuerySchema, blockIdList, MIN_RADIUS_KM, MAX_RADIUS_KM };

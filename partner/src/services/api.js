@@ -3,15 +3,15 @@ import { API_URL } from './config'
 import { tokenStore } from './storage'
 
 /**
- * The API client. Every request says it comes from the partner app
- * (`X-Client: partner`, which the server requires for partner sign-in) and
+ * The API client. Every request says it comes from the staff app
+ * (`X-Client: staff`, which the server requires for staff sign-in) and
  * carries the stored token as `Authorization: Bearer`.
  */
 // eslint-disable-next-line import/no-named-as-default-member -- axios documents `axios.create` as the way to make a client
 const api = axios.create({
   baseURL: API_URL || undefined,
   timeout: 15000,
-  headers: { 'X-Client': 'partner' },
+  headers: { 'X-Client': 'staff' },
 })
 
 api.interceptors.request.use((config) => {
@@ -31,7 +31,7 @@ export function setUnauthorizedHandler(handler) {
 }
 
 // A wrong password at sign-in is also a 401: that is not a lost session.
-const AUTH_ENDPOINTS = /\/auth\/partner\/login$/
+const AUTH_ENDPOINTS = /\/auth\/staff\/login$/
 
 api.interceptors.response.use(
   (response) => response,
@@ -48,7 +48,8 @@ api.interceptors.response.use(
 // The server's 403 message is deliberately generic; its `code` says why.
 const FORBIDDEN_MESSAGES = {
   WEB_ONLY: 'Brand owners and admins sign in on the CityCart website.',
-  PARTNER_APP_ONLY: 'This sign-in is for the CityCart Partner app.',
+  WRONG_APP: 'This account signs in to a different CityCart app.',
+  STAFF_APP_ONLY: 'This sign-in is for the CityCart Staff app.',
 }
 
 // Backend errors are always { success: false, message, errors? }.

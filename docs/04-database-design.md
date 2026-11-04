@@ -435,7 +435,7 @@ Defined in `21-next-features-plan.md` §G.2.
 _id
 userId          → User (unique)
 permissions     [admin.brands | admin.users | admin.orders | admin.reviews |
-                 admin.locations | admin.settings | admin.analytics | admin.payments]
+                 admin.locations | admin.catalog | admin.settings | admin.analytics | admin.payments]
 readOnly        Boolean, default false
 isActive        Boolean, default true
 createdBy       → User (the Super Admin who added them)
@@ -501,30 +501,40 @@ categories
 
 ```text
 _id
-brandId
 name
 slug
 description
 image
 parentId
+order
 isActive
 createdAt
 updatedAt
 ```
 
-Categories are brand-scoped.
+Categories are **global**: one tree for the whole platform, owned by the super
+admin (or a partner with `admin.catalog`). They do not belong to a brand.
+(Changed in Marketplace v2, Phase 1 — see `docs/22-marketplace-v2-plan.md`.
+Categories used to be brand-scoped.)
 
 Example:
 
 ```text
-Brand A
- ├── Electronics
- │    ├── Phones
- │    └── Laptops
- └── Accessories
+Grocery
+ ├── Cooking Oil & Ghee
+ └── Pulses & Grains
+Bakery
+ └── Cakes
 ```
 
-`parentId` allows hierarchical categories.
+Rules:
+
+- `parentId` is `null` for a top-level category. The tree is **two levels
+  deep**: a parent must itself be top-level.
+- `slug` is unique among siblings (`{ parentId, slug }` unique index).
+- A product must point at an active **leaf** category (one with no active
+  subcategories).
+- A category with subcategories or products cannot be deactivated.
 
 ---
 
@@ -536,11 +546,20 @@ Collection:
 products
 ```
 
+A `Product` is a store's **listing** of a shared catalogue item (see §14.1,
+Marketplace v2 Phase 1b, `docs/22-marketplace-v2-plan.md`). The store sets its
+own price, SKU, status, stock and branches. `name`, `description`, `images` and
+`categoryId` are **copied from the catalogue item** when the listing is created and
+refreshed whenever the catalogue item changes, so cart, orders, shop pages and
+search keep reading them from the product as before. A store cannot edit them on
+the listing.
+
 ### Fields
 
 ```text
 _id
 brandId
+catalogProductId
 categoryId
 name
 slug
@@ -556,6 +575,9 @@ createdAt
 updatedAt
 ```
 
+A store lists a catalogue item once (checked by the service for
+`{ brandId, catalogProductId }` and by the `{ brandId, slug }` unique index).
+
 Whether stock is tracked for a product is controlled by `Inventory.trackInventory` (§18), not by a separate field on Product. Keeping a single flag avoids the two documents disagreeing about which one is authoritative.
 
 ### Product status
@@ -568,6 +590,70 @@ ARCHIVED
 ```
 
 The exact publication workflow may be expanded later.
+
+---
+
+## 14.1 Catalogue Product Model
+
+Collection:
+
+```text
+catalogproducts
+```
+
+One record per real-world item ("Dalda Ghee 1 kg"), shared by every store that
+sells it. In this project "Brand" means a seller, so the maker of the item is
+called `manufacturer`.
+
+### Fields
+
+```text
+_id
+name
+slug
+manufacturer
+categoryId
+description
+images
+size { value, unit }
+barcode
+scope
+status
+brandId
+createdBy
+reviewNote
+reviewedBy
+reviewedAt
+mergedIntoId
+createdAt
+updatedAt
+```
+
+`scope`:
+
+```text
+GLOBAL   visible to every store once ACTIVE
+PRIVATE  usable by one store only (brandId); needs no approval
+```
+
+`status`:
+
+```text
+ACTIVE
+PENDING   a store asked for a new global item; waiting for an admin
+REJECTED  an admin turned the request down (reviewNote tells the store why)
+ARCHIVED  retired, or merged into another item (mergedIntoId)
+```
+
+Rules:
+
+- `barcode` is unique across the catalogue (sparse index).
+- A GLOBAL item's name (slug) is unique among GLOBAL items that are ACTIVE or
+  PENDING. A PRIVATE item's name is unique within its store.
+- `categoryId` must be an active leaf category (docs §13).
+- Merging moves every listing to the target item and archives the duplicate.
+  It is refused while one store lists both.
+- An item cannot be archived while a store still lists it.
 
 ---
 
@@ -763,9 +849,26 @@ paymentMethod
 paymentStatus
 orderStatus
 notes
+activeAdjustmentId
+pickerId
+pickStartedAt
+packedAt
+fulfilment
+returnedAmount
+feeRefunded
+netTotal
 createdAt
 updatedAt
 ```
+
+`activeAdjustmentId` points at the one waiting `OrderAdjustment` (null when none).
+`pickerId`, `pickStartedAt` and `packedAt` record who is picking the order and
+when picking started and packing finished (docs/08 §41.9).
+
+`fulfilment` (`FULL`, `PARTIAL`, `NONE`), `returnedAmount`, `feeRefunded` and
+`netTotal` are set once, when the delivery completes (docs/22 §F). `netTotal` is
+what the customer actually owes or keeps; readers fall back to `total` for orders
+from before door returns existed.
 
 ---
 
@@ -783,7 +886,9 @@ items[]
  ├── quantity
  ├── unitPrice
  ├── totalPrice
- └── image
+ ├── image
+ ├── pickStatus      PICKED | SHORT | UNAVAILABLE (unset = not checked yet)
+ └── pickedQty       units actually found (meaningful for SHORT)
 ```
 
 The order must not depend on the current Product document to reconstruct historical pricing.
@@ -889,6 +994,7 @@ assignedAt
 deliveryCode
 codeAttempts
 failureReason
+returnId
 createdAt
 updatedAt
 ```
@@ -917,6 +1023,64 @@ RETURNED
 Delivery status, order status, and payment status are three separate fields and must never be merged.
 
 A delivery record is created when its order reaches `READY_FOR_SHIPMENT` (see order status in §25).
+
+`returnId` points at the door return created when the customer refused goods at
+delivery (null when everything was accepted).
+
+---
+
+# 25b. Return Model
+
+Collection:
+
+```text
+returns
+```
+
+One record per delivery that had refused goods (docs/22 §F, docs/08 §41.10).
+The order lines stay a historical snapshot; the return records what came back,
+why, and what the store decided to do with it.
+
+### Fields
+
+```text
+_id
+orderId
+deliveryId          unique: one return per delivery
+brandId
+customerId
+riderId             the rider who brought the goods back (empty for a courier)
+source              DOOR
+status              IN_TRANSIT | RECEIVED
+lines[]
+returnedSubtotal
+feeRefunded
+refundAmount
+currency
+receivedAt
+receivedBy
+createdAt
+updatedAt
+```
+
+### Return lines
+
+```text
+orderItemId
+productId
+productName         snapshot
+quantity            refused units (1 or more, never more than ordered)
+unitPrice           snapshot
+reason              DAMAGED | WRONG_ITEM | NOT_WANTED | MISSING
+photo.publicId      optional private Cloudinary path
+photo.fingerprint   optional ETag
+restock             false by default (write off); true when the store marks it sellable
+restockedAt
+```
+
+`feeRefunded` is true only when every unit was refused and at least one reason is
+the store's fault (`DAMAGED`, `WRONG_ITEM`, `MISSING`). `refundAmount` is the
+money actually refunded (prepaid orders only; zero for cash on delivery).
 
 ---
 
@@ -1630,3 +1794,97 @@ Any major schema change should be documented before implementation.
 ```text
 05-api-specification.md
 ```
+
+---
+
+# Appendix: Location Models (Block and Branch)
+
+Marketplace v2, Phase 2 (`docs/22-marketplace-v2-plan.md`).
+
+## Block (zones)
+
+Collection: `blocks`. A block is a neighbourhood of a city, drawn as a zone.
+
+```text
+_id
+cityId
+name
+slug
+center      GeoJSON Point, always INSIDE the zone (derived from the outline)
+area        GeoJSON Polygon, one closed ring, counter-clockwise (optional)
+isActive
+createdAt
+updatedAt
+```
+
+Rules:
+
+- `area` is checked before it is stored: 3 to 100 corners, no repeated corners,
+  edges must not cross, and the size must be between 0.01 km² and 1000 km².
+- `center` is derived from the outline (the centroid, or a point inside the shape
+  when the centroid falls outside a concave one). It cannot be edited on its own
+  while an outline exists.
+- A block with no `area` is a legacy, centre-only block. It holds only the shops
+  whose home block it is, and is matched to shoppers by nearest centre.
+- **Zones may overlap.** A shop in the overlap belongs to every block holding it.
+- Indexes: `{ cityId, slug }` unique, `center` 2dsphere, `area` 2dsphere.
+
+## Branch
+
+```text
+_id
+brandId
+blockId     the shop's home block, chosen by the brand
+blockIds    every active block whose zone contains the shop's pin
+name, address, phone
+location    GeoJSON Point (the shop's pin)
+isActive
+```
+
+- The pin must lie **inside** the home block's outline (legacy blocks: within 25 km
+  of the centre). A new shop with no pin gets the block's centre.
+- `blockIds` is maintained by the server only: when a shop is created or moved,
+  and for every shop of the city when a zone is redrawn or a block is switched on
+  or off. A shop with an empty `blockIds` is in no block and cannot be found by
+  area; the admin is told how many such shops a change causes.
+
+---
+
+# Appendix: Saved Addresses and Delivery Pins
+
+Marketplace v2, Phase 3.
+
+## Address
+
+Collection: `addresses`. A customer's saved delivery addresses (at most 10 each).
+
+```text
+_id
+userId
+label                    for example Home, Work
+fullName, phone
+addressLine, city, state, postalCode, country
+additionalInstructions   standing delivery notes, offered again at checkout
+location                 GeoJSON Point: the pin
+isDefault
+createdAt, updatedAt
+```
+
+- The pin must lie inside at least one active block (checked when saving), so a
+  saved address is always somewhere we deliver.
+- The blocks of an address are worked out from its pin when needed, never stored.
+- The first address is the default. Deleting the default promotes the most recent
+  remaining one.
+
+## Order delivery fields
+
+```text
+shippingAddress       snapshot of the address as typed (unchanged)
+deliveryLocation      GeoJSON Point: the delivery pin
+deliveryBlockIds      the active blocks that held the pin when the order was placed
+addressId             the saved address it came from, if any
+```
+
+The order keeps its own snapshot, so editing or deleting a saved address never
+changes an old order. `deliveryBlockIds` is worked out by the server, never taken
+from the client.

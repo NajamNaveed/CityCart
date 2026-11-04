@@ -48,7 +48,8 @@ async function getBrandAnalytics({ brandId, range }) {
                 deliveredOrders: { $sum: { $cond: [{ $eq: ['$orderStatus', DELIVERED] }, 1, 0] } },
                 cancelledOrders: { $sum: { $cond: [{ $in: ['$orderStatus', CANCELLED] }, 1, 0] } },
                 pendingOrders: { $sum: { $cond: [{ $eq: ['$orderStatus', 'PENDING'] }, 1, 0] } },
-                revenue: { $sum: { $cond: [{ $eq: ['$orderStatus', DELIVERED] }, '$total', 0] } },
+                // A partial door return reduces what the brand actually earned (docs/22 §F).
+                revenue: { $sum: { $cond: [{ $eq: ['$orderStatus', DELIVERED] }, { $ifNull: ['$netTotal', '$total'] }, 0] } },
               },
             },
             { $project: { _id: 0 } },
@@ -60,7 +61,7 @@ async function getBrandAnalytics({ brandId, range }) {
               $group: {
                 _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: 'UTC' } },
                 orders: { $sum: 1 },
-                revenue: { $sum: '$total' },
+                revenue: { $sum: { $ifNull: ['$netTotal', '$total'] } },
               },
             },
             { $sort: { _id: 1 } },
@@ -214,7 +215,8 @@ async function getPlatformAnalytics({ range }) {
                   orders: { $sum: 1 },
                   deliveredOrders: { $sum: { $cond: [{ $eq: ['$orderStatus', DELIVERED] }, 1, 0] } },
                   cancelledOrders: { $sum: { $cond: [{ $in: ['$orderStatus', CANCELLED] }, 1, 0] } },
-                  gmv: { $sum: { $cond: [{ $eq: ['$orderStatus', DELIVERED] }, '$total', 0] } },
+                  // Net of door returns, so commission follows what was really sold.
+                  gmv: { $sum: { $cond: [{ $eq: ['$orderStatus', DELIVERED] }, { $ifNull: ['$netTotal', '$total'] }, 0] } },
                 },
               },
               { $project: { _id: 0 } },
@@ -225,7 +227,7 @@ async function getPlatformAnalytics({ range }) {
                 $group: {
                   _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: 'UTC' } },
                   orders: { $sum: 1 },
-                  gmv: { $sum: { $cond: [{ $eq: ['$orderStatus', DELIVERED] }, '$total', 0] } },
+                  gmv: { $sum: { $cond: [{ $eq: ['$orderStatus', DELIVERED] }, { $ifNull: ['$netTotal', '$total'] }, 0] } },
                 },
               },
               { $sort: { _id: 1 } },
@@ -241,7 +243,7 @@ async function getPlatformAnalytics({ range }) {
                   _id: '$brand.cityId',
                   city: { $first: '$city.name' },
                   orders: { $sum: 1 },
-                  gmv: { $sum: { $cond: [{ $eq: ['$orderStatus', DELIVERED] }, '$total', 0] } },
+                  gmv: { $sum: { $cond: [{ $eq: ['$orderStatus', DELIVERED] }, { $ifNull: ['$netTotal', '$total'] }, 0] } },
                 },
               },
               { $sort: { orders: -1 } },
@@ -253,7 +255,7 @@ async function getPlatformAnalytics({ range }) {
                 $group: {
                   _id: '$brandId',
                   orders: { $sum: 1 },
-                  gmv: { $sum: { $cond: [{ $eq: ['$orderStatus', DELIVERED] }, '$total', 0] } },
+                  gmv: { $sum: { $cond: [{ $eq: ['$orderStatus', DELIVERED] }, { $ifNull: ['$netTotal', '$total'] }, 0] } },
                 },
               },
               { $sort: { gmv: -1, orders: -1 } },

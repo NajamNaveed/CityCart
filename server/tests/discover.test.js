@@ -171,7 +171,8 @@ describe('GET /api/v1/discover — block scope', () => {
     const res = await request(app).get(`/api/v1/discover?scope=block&blockId=${block._id}`);
 
     expect(res.status).toBe(200);
-    expect(Branch.find.mock.calls[0][0]).toMatchObject({ isActive: true, blockId: block._id.toString() });
+    // a shop is in the block when its zone holds the pin, so a shop in an overlap shows in both blocks
+    expect(Branch.find.mock.calls[0][0]).toMatchObject({ isActive: true, blockIds: block._id.toString() });
     expect(res.body.meta.block).toMatchObject({ name: 'Gulberg' });
     expect(res.body.meta.origin).toEqual({ lat: 31.4, lng: 73.1 });
     expect(res.body.items[0].nearestKm).toBe(0);
@@ -183,6 +184,93 @@ describe('GET /api/v1/discover — block scope', () => {
     Block.findOne.mockResolvedValue(null);
     const res = await request(app).get(`/api/v1/discover?scope=block&blockId=${oid()}`);
     expect(res.status).toBe(404);
+    expect(Branch.find).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/v1/discover — area scope (one or several blocks, optional range)', () => {
+  const gulberg = makeBlock('Gulberg', 31.4, 73.1);
+  const dGround = makeBlock('D Ground', 31.41, 73.09);
+
+  function given(blocks = [gulberg, dGround]) {
+    const brand = makeBrand('Local Co');
+    Block.find.mockResolvedValue(blocks);
+    Brand.find.mockResolvedValue([brand]);
+    Branch.find.mockResolvedValue([makeBranch(brand, blocks[0], 31.4, 73.1)]);
+    mockProducts();
+    return brand;
+  }
+  const ids = (...blocks) => blocks.map((b) => b._id).join(',');
+
+  it('finds shops in any of the chosen blocks and says which blocks were searched', async () => {
+    given();
+
+    const res = await request(app).get(`/api/v1/discover?scope=area&blockIds=${ids(gulberg, dGround)}`);
+
+    expect(res.status).toBe(200);
+    expect(Block.find.mock.calls[0][0]).toEqual({ _id: { $in: [gulberg._id.toString(), dGround._id.toString()] }, isActive: true });
+    const filter = Branch.find.mock.calls[0][0];
+    expect(filter.isActive).toBe(true);
+    expect(filter.blockIds).toEqual({ $in: [gulberg._id, dGround._id] });
+    expect(filter.location).toBeUndefined(); // no range: the whole block
+    expect(res.body.meta.scope).toBe('area');
+    expect(res.body.meta.radiusKm).toBeNull();
+    expect(res.body.meta.blocks.map((b) => b.name)).toEqual(['Gulberg', 'D Ground']);
+    expect(Brand.find.mock.calls[0][0].cityId).toBe(String(cityId));
+  });
+
+  it('measures from a single block\'s centre when no position is sent, but not from several', async () => {
+    given([gulberg]);
+    const one = await request(app).get(`/api/v1/discover?scope=area&blockIds=${ids(gulberg)}`);
+    expect(one.body.meta.origin).toEqual({ lat: 31.4, lng: 73.1 });
+
+    jest.clearAllMocks();
+    given();
+    const two = await request(app).get(`/api/v1/discover?scope=area&blockIds=${ids(gulberg, dGround)}`);
+    expect(two.body.meta.origin).toBeNull();
+  });
+
+  it('adds a range around the shopper inside the chosen blocks', async () => {
+    given();
+
+    const res = await request(app).get(`/api/v1/discover?scope=area&blockIds=${ids(gulberg, dGround)}&lat=31.4&lng=73.1&radiusKm=2`);
+
+    expect(res.status).toBe(200);
+    const filter = Branch.find.mock.calls[0][0];
+    expect(filter.blockIds).toEqual({ $in: [gulberg._id, dGround._id] });
+    expect(filter.location.$geoWithin.$centerSphere[0]).toEqual([73.1, 31.4]); // [lng, lat]
+    expect(filter.location.$geoWithin.$centerSphere[1]).toBeCloseTo(2 / 6378.1, 6);
+    expect(res.body.meta.radiusKm).toBe(2);
+    expect(res.body.meta.origin).toEqual({ lat: 31.4, lng: 73.1 });
+  });
+
+  it('ignores a repeated block id', async () => {
+    given();
+    await request(app).get(`/api/v1/discover?scope=area&blockIds=${ids(gulberg, gulberg)}`);
+    expect(Block.find.mock.calls[0][0]._id.$in).toEqual([gulberg._id.toString()]);
+  });
+
+  it('needs blockIds, a position for a range, and valid ids', async () => {
+    const get = (qs) => request(app).get(`/api/v1/discover?scope=area${qs}`);
+    expect((await get('')).status).toBe(400);
+    expect((await get(`&blockIds=${gulberg._id}&radiusKm=2`)).status).toBe(400); // range without lat/lng
+    expect((await get('&blockIds=nope')).status).toBe(400);
+    expect((await get(`&blockIds=${ids(gulberg)},nope`)).status).toBe(400);
+    const eleven = Array.from({ length: 11 }, () => oid()).join(',');
+    expect((await get(`&blockIds=${eleven}`)).status).toBe(400);
+    expect((await get(`&blockIds=${gulberg._id}&lat=31.4&lng=73.1&radiusKm=0.1`)).status).toBe(400); // below the minimum range
+    expect(Branch.find).not.toHaveBeenCalled();
+  });
+
+  it('answers 404 when none of the blocks exist or are active, and 400 for blocks of two cities', async () => {
+    Block.find.mockResolvedValue([]);
+    expect((await request(app).get(`/api/v1/discover?scope=area&blockIds=${oid()}`)).status).toBe(404);
+
+    const other = { ...makeBlock('Elsewhere', 24.8, 67.0), cityId: oid() };
+    Block.find.mockResolvedValue([gulberg, other]);
+    const res = await request(app).get(`/api/v1/discover?scope=area&blockIds=${ids(gulberg, other)}`);
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/one city/);
     expect(Branch.find).not.toHaveBeenCalled();
   });
 });

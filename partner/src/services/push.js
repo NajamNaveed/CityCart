@@ -4,7 +4,7 @@ import api from './api'
 
 /**
  * Push notifications (docs/12 §31). The server sends a push for every in-app notification, to the
- * phones that registered here, so a rider hears about a new delivery even when the app is closed.
+ * phones that registered here, so a team member hears about a new order even when the app is closed.
  *
  * Two honest limits, both handled without an error:
  *  - Expo Go cannot receive push notifications on Android (since SDK 53): this is skipped there. A
@@ -36,7 +36,7 @@ export async function registerForPush() {
       handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }),
     })
     if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync(CHANNEL, { name: 'Deliveries and orders', importance: Notifications.AndroidImportance.HIGH })
+      await Notifications.setNotificationChannelAsync(CHANNEL, { name: 'Orders and alerts', importance: Notifications.AndroidImportance.HIGH })
     }
 
     let { status } = await Notifications.getPermissionsAsync()
@@ -68,7 +68,6 @@ export async function unregisterPush() {
 // Where a tap on a notification should open, from what the server put in it. Plain data, so it is easy to test.
 export function destinationFor(role, data) {
   if (!data) return null
-  if (role === 'RIDER' && data.deliveryId) return `/delivery/${data.deliveryId}`
   if (role === 'BRAND_EMPLOYEE' && data.orderId) return `/order/${data.orderId}`
   return null
 }

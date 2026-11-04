@@ -52,7 +52,7 @@ function serialize(employee, user) {
     isActive: employee.isActive,
     createdAt: employee.createdAt,
     user: user
-      ? { _id: user._id, name: user.name, email: user.email, phone: user.phone, isActive: user.isActive }
+      ? { _id: user._id, name: user.name, email: user.email, phone: user.phone, role: user.role, isActive: user.isActive }
       : { _id: employee.userId },
   };
 }
@@ -89,13 +89,25 @@ async function getEmployee({ brandId, id }) {
 }
 
 /**
- * Creates the login (User, role BRAND_EMPLOYEE, in the brand) and the
- * Employee record together, in one transaction. brandId comes from the
+ * Creates the login (User, role BRAND_EMPLOYEE or PICKER, in the brand) and
+ * the Employee record together, in one transaction. brandId comes from the
  * caller's tenant (never a brand admin's body); initial permissions obey the
  * same no-escalation rule as later changes.
+ *
+ * Only a brand admin (or the super admin) may create a picker, and a picker
+ * never carries brand-team permissions — its access is the pick queue alone.
  */
-async function createEmployee({ brandId, actorPermissions, data }) {
-  const permissions = data.permissions || [];
+async function createEmployee({ brandId, actorPermissions, actorRole, data }) {
+  const role = data.role || ROLES.BRAND_EMPLOYEE;
+  if (role === ROLES.PICKER && ![ROLES.BRAND_ADMIN, ROLES.SUPER_ADMIN].includes(actorRole)) {
+    throw new EmployeeError(403, 'Only a brand owner can create a picker.', { code: 'PICKER_CREATE_FORBIDDEN' });
+  }
+  if (role === ROLES.PICKER && data.permissions && data.permissions.length > 0) {
+    throw new EmployeeError(400, 'A picker does not have brand-team permissions.', {
+      code: 'PICKER_NO_PERMISSIONS',
+    });
+  }
+  const permissions = role === ROLES.PICKER ? [] : data.permissions || [];
   assertCanManage(actorPermissions, permissions);
 
   const brand = await Brand.findById(brandId);
@@ -113,7 +125,7 @@ async function createEmployee({ brandId, actorPermissions, data }) {
         throw new EmployeeError(409, 'Email is already registered.');
       }
       const [user] = await User.create(
-        [{ name: data.name, email: data.email, passwordHash, role: ROLES.BRAND_EMPLOYEE, accountType: 'BRAND', brandId, phone: data.phone }],
+        [{ name: data.name, email: data.email, passwordHash, role, accountType: 'BRAND', brandId, phone: data.phone }],
         { session }
       );
       const [employee] = await Employee.create(
@@ -169,7 +181,7 @@ async function updateEmployee({ brandId, id, actorUserId, data }) {
     }
 
     const user = await User.findOneAndUpdate(
-      { _id: employee.userId, role: ROLES.BRAND_EMPLOYEE, brandId: employee.brandId },
+      { _id: employee.userId, role: { $in: [ROLES.BRAND_EMPLOYEE, ROLES.PICKER] }, brandId: employee.brandId },
       { $set: userFields },
       { new: true, session }
     );
@@ -192,6 +204,12 @@ async function setEmployeePermissions({ brandId, id, actorUserId, actorPermissio
   }
   if (String(employee.userId) === String(actorUserId)) {
     throw new EmployeeError(403, 'You cannot change your own permissions.', { code: 'SELF_MODIFICATION' });
+  }
+  const target = await User.findById(employee.userId);
+  if (target && target.role === ROLES.PICKER) {
+    throw new EmployeeError(400, 'A picker does not have brand-team permissions.', {
+      code: 'PICKER_NO_PERMISSIONS',
+    });
   }
 
   const current = employee.permissions;

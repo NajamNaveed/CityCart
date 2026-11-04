@@ -43,7 +43,7 @@ async function makeProduct({ brand, stock = 10, price = 10 }) {
   n += 1;
   const product = await Product.create({
     brandId: brand._id,
-    categoryId: oid(),
+    catalogProductId: oid(), categoryId: oid(),
     name: `P${n}`,
     slug: `p${n}`,
     sku: `S${n}`,

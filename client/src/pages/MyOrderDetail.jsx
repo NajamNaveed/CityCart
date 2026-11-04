@@ -7,6 +7,7 @@ import {
   MapPin,
   PackageCheck,
   ReceiptText,
+  RotateCcw,
   TriangleAlert,
   Truck,
 } from 'lucide-react'
@@ -18,6 +19,7 @@ import OrderChangePrompt from '../components/OrderChangePrompt'
 import ProductImage from '../components/ProductImage'
 import { Skeleton } from '../components/ui'
 import { formatDateTime, formatPrice, wrap } from '../ui'
+import { reasonLabel } from '../utils/returns'
 
 // While the order is on its way, the customer reads this code to the rider; the
 // rider cannot mark the order delivered without it (docs/11, docs/20 §7).
@@ -149,6 +151,7 @@ const STAGE_INDEX = { PENDING: 0, CONFIRMED: 1, PROCESSING: 2, READY_FOR_SHIPMEN
 const TERMINAL_PROBLEMS = {
   CANCELLED: 'This order was cancelled. Any reserved stock has been returned.',
   REJECTED: 'The brand could not fulfil this order. You were not charged.',
+  RETURNED: 'Everything in this order went back to the store with the rider.',
 }
 
 function ProgressStepper({ history, orderStatus }) {
@@ -206,9 +209,63 @@ function ProgressStepper({ history, orderStatus }) {
   )
 }
 
+// What arrived when the rider finished the order (docs/22 §F). The order keeps
+// the outcome even when nothing came back; the Return only exists when it did.
+function WhatArrived({ order, returnDoc }) {
+  if (!order.fulfilment) return null
+  const returned = Number(order.returnedAmount || 0)
+  const refunded = Number(returnDoc?.refundAmount || 0)
+  const net = order.netTotal ?? order.total
+  const outcome =
+    order.fulfilment === 'FULL'
+      ? 'Everything arrived.'
+      : order.fulfilment === 'NONE'
+        ? 'Your whole order went back to the store.'
+        : 'Part of your order came back.'
+  return (
+    <div className="mt-3.5 rounded-md border border-line bg-white p-4">
+      <p className="flex items-center gap-2 text-sm font-semibold text-ink">
+        <RotateCcw className="h-4 w-4 text-clay" aria-hidden="true" />
+        {outcome}
+      </p>
+      <p className="mt-1 text-[13px] text-muted">
+        {order.fulfilment === 'FULL'
+          ? 'All the items you ordered were delivered.'
+          : order.fulfilment === 'NONE'
+            ? 'The rider took every item back. You are only charged for goods you kept.'
+            : `${formatPrice(returned)} of goods went back with the rider. You pay only for what you kept.`}
+      </p>
+      <dl className="mt-3 space-y-1.5 text-[13px]">
+        {returned > 0 && (
+          <div className="flex justify-between">
+            <dt className="text-muted">Goods returned</dt>
+            <dd className="text-ink">{formatPrice(returned)}</dd>
+          </div>
+        )}
+        {order.feeRefunded && (
+          <div className="flex justify-between">
+            <dt className="text-muted">Delivery fee refunded</dt>
+            <dd className="text-ink">{formatPrice(order.deliveryFee)}</dd>
+          </div>
+        )}
+        {refunded > 0 && (
+          <div className="flex justify-between">
+            <dt className="text-muted">Refunded to you</dt>
+            <dd className="text-ink">{formatPrice(refunded)}</dd>
+          </div>
+        )}
+        <div className="flex justify-between border-t border-line pt-1.5 text-sm font-semibold">
+          <dt className="text-ink">Final total</dt>
+          <dd className="text-ink">{formatPrice(net)}</dd>
+        </div>
+      </dl>
+    </div>
+  )
+}
+
 export default function MyOrderDetail() {
   const { id } = useParams()
-  const [state, setState] = useState({ id: null, order: null, payment: null, delivery: null, adjustments: [], adjustment: null, error: '' })
+  const [state, setState] = useState({ id: null, order: null, payment: null, delivery: null, adjustments: [], adjustment: null, returnDoc: null, error: '' })
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState({ text: '', tone: 'ok' })
@@ -228,13 +285,14 @@ export default function MyOrderDetail() {
             delivery: res.data.delivery,
             adjustments: res.data.adjustments || [],
             adjustment: res.data.adjustment || null,
+            returnDoc: res.data.return || null,
             error: '',
           }),
       )
       .catch(
         (err) =>
           active &&
-          setState({ id, order: null, payment: null, delivery: null, adjustments: [], adjustment: null, error: getErrorMessage(err) }),
+          setState({ id, order: null, payment: null, delivery: null, adjustments: [], adjustment: null, returnDoc: null, error: getErrorMessage(err) }),
       )
     return () => {
       active = false
@@ -250,6 +308,7 @@ export default function MyOrderDetail() {
       delivery: res.data.delivery,
       adjustments: res.data.adjustments || [],
       adjustment: res.data.adjustment || null,
+      returnDoc: res.data.return || null,
       error: '',
     })
   }
@@ -307,9 +366,11 @@ export default function MyOrderDetail() {
     )
   }
 
-  const { order, payment, delivery, adjustment } = state
+  const { order, payment, delivery, adjustment, returnDoc } = state
   const a = order.shippingAddress || {}
   const problem = TERMINAL_PROBLEMS[order.orderStatus]
+  const returnedByItem = new Map((returnDoc?.lines || []).map((line) => [String(line.orderItemId), line]))
+  const finalTotal = order.netTotal ?? order.total
 
   return (
     <div className={`${wrap} max-w-4xl py-10`}>
@@ -364,13 +425,17 @@ export default function MyOrderDetail() {
         ) : (
           <ProgressStepper history={order.statusHistory} orderStatus={order.orderStatus} />
         )}
+        <WhatArrived order={order} returnDoc={returnDoc} />
       </div>
 
       <div className="mt-9 grid gap-10 lg:grid-cols-[1fr_17rem]">
         <section>
           <SectionTitle>Items</SectionTitle>
           <ul className="divide-y divide-line">
-            {order.items.map((item) => (
+            {order.items.map((item) => {
+              const back = returnedByItem.get(String(item._id))
+              const deliveredQty = item.quantity - (back?.quantity || 0)
+              return (
               <li key={`${item.productId}-${item.sku || ''}`} className="py-4 text-sm">
                 <div className="flex items-start gap-4">
                   <Link
@@ -387,6 +452,13 @@ export default function MyOrderDetail() {
                       <span className="block text-muted">
                         {item.quantity} × {formatPrice(item.unitPrice)}
                       </span>
+                      {order.fulfilment && (
+                        <span className={`block text-[12px] ${back ? 'text-clay' : 'text-muted'}`}>
+                          {back
+                            ? `${deliveredQty > 0 ? `${deliveredQty} delivered · ` : 'All '}${back.quantity} returned — ${reasonLabel(back.reason)}`
+                            : `${item.quantity} delivered`}
+                        </span>
+                      )}
                     </span>
                     <span className="font-semibold text-ink">{formatPrice(item.totalPrice)}</span>
                   </div>
@@ -402,7 +474,8 @@ export default function MyOrderDetail() {
                   />
                 )}
               </li>
-            ))}
+              )
+            })}
           </ul>
           <dl className="mt-2 space-y-2 border-t border-ink pt-4 text-sm">
             <div className="flex justify-between">
@@ -415,11 +488,32 @@ export default function MyOrderDetail() {
                 <dd className="text-ink">{formatPrice(order.deliveryFee)}</dd>
               </div>
             )}
+            {order.returnedAmount > 0 && (
+              <div className="flex justify-between">
+                <dt className="text-muted">Returned goods</dt>
+                <dd className="text-clay">− {formatPrice(order.returnedAmount)}</dd>
+              </div>
+            )}
+            {order.feeRefunded && (
+              <div className="flex justify-between">
+                <dt className="text-muted">Delivery fee refunded</dt>
+                <dd className="text-clay">− {formatPrice(order.deliveryFee)}</dd>
+              </div>
+            )}
             <div className="flex justify-between text-base font-semibold">
-              <dt className="text-ink">{order.paymentMethod === 'ONLINE_GATEWAY' ? 'Total' : 'Total (cash on delivery)'}</dt>
-              <dd className="text-ink">{formatPrice(order.total)}</dd>
+              <dt className="text-ink">
+                {order.fulfilment
+                  ? 'Final total'
+                  : order.paymentMethod === 'ONLINE_GATEWAY'
+                    ? 'Total'
+                    : 'Total (cash on delivery)'}
+              </dt>
+              <dd className="text-ink">{formatPrice(order.fulfilment ? finalTotal : order.total)}</dd>
             </div>
           </dl>
+          {returnDoc?.refundAmount > 0 && (
+            <p className="mt-2 text-[12.5px] text-muted">Refunded to your payment method: {formatPrice(returnDoc.refundAmount)}.</p>
+          )}
           {payment?.status === 'PAID' && <ReceiptNote orderId={order._id} />}
 
           {order.paymentMethod === 'ONLINE_GATEWAY' && payment?.status === 'PENDING' && order.orderStatus === 'PENDING' && (

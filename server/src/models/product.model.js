@@ -9,6 +9,13 @@ const mongoose = require('mongoose');
  * Whether stock is tracked lives on Inventory.trackInventory, not here
  * (§14 explicitly calls this out to avoid two documents disagreeing).
  *
+ * Marketplace v2 (docs/22): a Product is a store's LISTING of a shared
+ * CatalogProduct. `name`, `description`, `images` and `categoryId` are copied
+ * from the catalogue item when the listing is created and refreshed whenever the
+ * catalogue item changes, so every reader (cart, orders, shop pages, search)
+ * keeps working unchanged. The store only sets its own price, stock, SKU and
+ * branches.
+ *
  * `attributes` is intentionally Mixed/flexible per §17 ("the exact
  * product-attribute architecture can be expanded when variants are
  * implemented").
@@ -20,6 +27,12 @@ const productSchema = new mongoose.Schema(
     brandId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Brand',
+      required: true,
+      index: true,
+    },
+    catalogProductId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'CatalogProduct',
       required: true,
       index: true,
     },

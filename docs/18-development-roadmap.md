@@ -951,9 +951,10 @@ Rules for this programme:
 
 The software house guild requires extra mobile apps next to the marketplace:
 one for delivery riders and one for the person who keeps order and payment
-records. They are built as **one** role-based app, `partner/`, on the existing
-API. The full design, visibility rules and security decisions are in
-`20-partner-app.md`.
+records. They were built as **one** role-based app, `partner/`, on the existing
+API, and split into the **Staff app** (`partner/`) and the **Delivery app**
+(`delivery/`) in marketplace v2 Phase 5. The full design, visibility rules and
+security decisions are in `20-partner-app.md` and `23-delivery-app.md`.
 
 ```text
 Phase A  Rider foundation                                   DONE
@@ -965,8 +966,10 @@ Phase B  Receipts and cash records                         DONE
          Receipt model issued when a payment becomes PAID, visibility rules,
          COD collectedBy and settlement (API; screens arrive in C and D).
 
-Phase D0 Returns backend. FOUND MISSING: return statuses exist but nothing
-         can reach them (docs/20 §6.1). Needs a design agreed with the owner.
+Phase D0 Returns. Built as door returns in marketplace v2 Phase 6 (the
+         customer-request chain in docs/20 decision 8 was not built): per-line
+         refusal at completion, net totals, prepaid refunds, store restock or
+         write-off, and the returned-goods inbox (docs/08 §41.10, docs/20 §5.11).
 
 Phase C  Partner app: sign-in and rider screens; delivery code and receipt   DONE
          shown in the shopper app's order page and on the website. (Not yet run
@@ -983,6 +986,12 @@ Phase E  Online payments through a hosted gateway checkout with a signed   BUILT
 Phase F  Push notifications to the Partner app and opt-in rider location      BUILT
          (last seen + map link). Tested with mocks; push needs an EAS build to try
          on a phone (docs/20 §5.7).
+
+Phase S  Split the apps (marketplace v2 Phase 5)                             DONE
+         partner/ becomes the Staff app (BRAND_EMPLOYEE, PICKER); the new
+         delivery/ app takes the rider screens, push routing and location.
+         /auth/staff/login and /auth/delivery/login replace /auth/partner/login;
+         each app refuses the other's roles (docs/20 §5.10, docs/23).
 ```
 
 Each phase follows the dependency rule above: no new package without approval.

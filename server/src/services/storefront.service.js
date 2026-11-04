@@ -15,6 +15,26 @@ class StorefrontError extends Error {
 }
 
 /**
+ * The global categories this brand actually sells in, plus their parents, so the
+ * storefront shows a small tree instead of the whole platform tree.
+ */
+async function categoriesWithParents(ids) {
+  if (!ids || ids.length === 0) return [];
+  const used = await Category.find({ _id: { $in: ids }, isActive: true }).sort({ order: 1, name: 1 });
+  const parentIds = [...new Set(used.filter((c) => c.parentId).map((c) => String(c.parentId)))];
+  const parents = parentIds.length
+    ? await Category.find({ _id: { $in: parentIds }, isActive: true }).sort({ order: 1, name: 1 })
+    : [];
+  const seen = new Set();
+  return [...parents, ...used].filter((c) => {
+    const key = String(c._id);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/**
  * Public brand storefront (docs/07 §7): header (brand), store info,
  * categories, featured products. "All products" is the existing
  * GET /products?brandId=. Everything is scoped to this one brand, so a
@@ -31,13 +51,14 @@ async function getBrandStorefront(brandId) {
     throw new StorefrontError(404, 'Brand not found.');
   }
 
-  const [store, categories, featured] = await Promise.all([
+  const [store, usedCategoryIds, featured] = await Promise.all([
     Store.findOne({ brandId, isActive: true }),
-    Category.find({ brandId, isActive: true }).sort({ name: 1 }),
+    Product.distinct('categoryId', { brandId, status: 'ACTIVE', isActive: true }),
     Product.find({ brandId, status: 'ACTIVE', isActive: true })
       .sort({ createdAt: -1 })
       .limit(FEATURED_LIMIT),
   ]);
+  const categories = await categoriesWithParents(usedCategoryIds);
 
   return {
     brand,

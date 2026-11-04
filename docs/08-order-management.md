@@ -395,11 +395,15 @@ Brand has accepted the order.
 
 ### PROCESSING
 
-Brand is preparing the order.
+Brand is preparing the order. A picker has claimed the order and is walking
+the aisles (`pickerId`, `pickStartedAt`); each line carries `pickStatus`
+(`PICKED`/`SHORT`/`UNAVAILABLE`) and `pickedQty`.
 
 ### READY_FOR_SHIPMENT
 
-Order is prepared for delivery handoff.
+Order is prepared for delivery handoff. Reaching this status (a picker packs
+the order, or a brand admin moves it here) also creates the delivery record and
+assigns the brand's least-busy active rider (`11-delivery-system.md` §11a).
 
 ### SHIPPED
 
@@ -490,6 +494,18 @@ May:
 ### Brand Employee
 
 May perform order actions only when the relevant permission is assigned. Proposing or withdrawing a change needs `orders.adjust`, which is separate from `orders.manage`.
+
+### Picker
+
+The picker works through the Staff app, brand-scoped and with no brand-team
+permissions:
+
+* sees the picked brand's accepted orders (`CONFIRMED`) and orders in picking
+  (`PROCESSING`) that are unclaimed or theirs;
+* claims an order (`CONFIRMED → PROCESSING`), marks each line, proposes a change
+  on a short line, and packs the order (`PROCESSING → READY_FOR_SHIPMENT`);
+* never sees the customer's phone, delivery address, prices, totals or payment,
+  and cannot act on another brand's or another picker's order.
 
 ### Super Admin
 
@@ -1023,7 +1039,7 @@ READY_FOR_SHIPMENT and later   refused (409 NOT_ADJUSTABLE)
 * One proposal may wait per order at a time. `Order.activeAdjustmentId` is the gate and a partial unique index on `OrderAdjustment { orderId, status: 'PROPOSED' }` is the database backstop.
 * Resolved proposals stay as history; the brand may propose again later while the order is still in an adjustable status.
 * An online order must already be `PAID`; an unpaid online order is still on its payment hold and cannot be adjusted.
-* Only the brand can propose or withdraw. Only the customer who owns the order can answer. Brand employees need `orders.adjust` (separate from `orders.manage`).
+* Only the brand (or its picker, through the pick flow) can propose, and only the brand can withdraw. Only the customer who owns the order can answer. Brand employees need `orders.adjust` (separate from `orders.manage`).
 
 ## 41.2 The proposal
 
@@ -1110,7 +1126,8 @@ A customer who cancels the whole order gets the remaining paid amount refunded a
 
 ```text
 Customer       own proposals (website and shopper app)
-Brand          own brand's proposals (website; Partner app read-only)
+Brand          own brand's proposals (website; Staff app read-only)
+Picker         the waiting proposal of an order they are picking (note and expiry only)
 Super admin    read-only on the order detail (with admin.orders)
 Partner        read-only history (area admin.orders)
 Rider          nothing
@@ -1141,6 +1158,91 @@ tenant isolation (brand A cannot touch brand B's order)
 orders.adjust permission
 no double processing of an answer
 ```
+
+## 41.9 Picking and packing (added November 2026, Phase 4)
+
+A picker works the accepted orders of their brand through the Staff app
+(`22-marketplace-v2-plan.md` §E, `20-partner-app.md`):
+
+```text
+CONFIRMED                      in the queue
+  claim                        → PROCESSING, pickerId, pickStartedAt, statusHistory entry
+PROCESSING                     every line marked PICKED / SHORT / UNAVAILABLE
+  a short or unavailable line  → propose a change (the §41 flow, proposedByRole PICKER)
+  all lines PICKED             → pack (409 PICKING_INCOMPLETE otherwise)
+  pack                         → READY_FOR_SHIPMENT, packedAt, delivery created (READY_FOR_PICKUP)
+```
+
+* Claiming is an atomic compare-and-set (`CONFIRMED`, unclaimed, no waiting
+  proposal). Two pickers racing produce one winner; the other gets `409
+  PICK_TAKEN`. Claiming again is idempotent.
+* A short pick requires a count from 1 to one below the ordered quantity;
+  `PICKED` means the whole quantity and `UNAVAILABLE` means zero.
+* A picker proposal may only cover short/unavailable lines, and its substitutes
+  are reserved in the same transaction like a brand proposal. While it waits the
+  picker cannot repack or change lines (`409 ADJUSTMENT_PENDING`).
+* Packing is refused while a proposal waits and creates exactly one delivery;
+  a repeat pack is refused (`409 NOT_PICKING`).
+* The picker sees no customer phone, address, prices, totals or payment — only
+  the first name and the items. Another brand's or another picker's order is a
+  `404`.
+* The queue is brand-wide: orders carry no fulfilment branch and stock is held
+  per brand, so a "branch queue" would need a branch on the order first.
+
+Tests: `server/tests/integration/picker.integration.test.js` (queue isolation,
+privacy, claim races, line rules, proposal + acceptance + reservation, pack and
+delivery, substitute search), plus the Staff app screen tests.
+
+## 41.10 Door returns (added November 2026, Phase 6)
+
+A customer can only refuse goods at the door, while the rider is there
+(`22-marketplace-v2-plan.md` §F). A return request after delivery is out of scope
+for v2.
+
+```text
+order OUT_FOR_DELIVERY
+  rider completes with per-line accepted/rejected quantities
+    nothing rejected     → DELIVERED, fulfilment FULL, netTotal = total
+    some rejected        → DELIVERED, fulfilment PARTIAL, netTotal = total − refused goods
+    everything rejected  → RETURNED, fulfilment NONE, netTotal = total − goods − fee (only under the fee rule)
+  refused goods          → Return (DOOR, IN_TRANSIT) and the delivery keeps returnId
+  store marks received   → Return RECEIVED, per line restock or write off
+```
+
+**Quantity rules.** The rider sends one line per order item. `acceptedQty` and
+`rejectedQty` are whole numbers, must add up to the ordered quantity, and a
+rejection needs a reason (`DAMAGED`, `WRONG_ITEM`, `NOT_WANTED`, `MISSING`).
+The client can never reject more than was ordered; the server recomputes every
+number and ignores any client total.
+
+**Money rules.** The customer pays for accepted units only (decision D7).
+Cash on delivery collects `netTotal`; a fully rejected cash order has nothing to
+collect, so its payment becomes `CANCELLED` and no receipt is issued. A prepaid
+order keeps its original payment amount and refunds the refused goods into the
+existing `Payment.refunds[]`; the payment becomes `PARTIALLY_REFUNDED` (or
+`REFUNDED` when everything came back). The delivery fee is refunded only when
+every line was refused and at least one reason is the store's fault (D6).
+
+**Stock.** Refused goods are not sellable until the store says so. Receiving a
+return records a per-line decision; only `restock: true` adds the units back
+(`RETURN_RESTOCKED` inventory movement). Write-off is the default, so damaged or
+missing goods never re-enter stock by accident.
+
+**Commission and payouts.** There is no payout ledger yet (docs/15 is still a
+design). Revenue in analytics already uses `netTotal` for delivered orders and
+excludes `RETURNED` orders, so a later payout calculation subtracts refused goods
+without a second adjustment.
+
+**Notifications.** The brand's order/delivery staff get `RETURN_IN_TRANSIT` when
+the goods are on their way; receiving them is the brand's own action and sends
+nothing further. The customer gets the normal delivery notification, a
+`REFUND_ISSUED` notification for prepaid money, and the order screen shows what
+arrived, what came back and the final total.
+
+Tests: `server/tests/returns.test.js` (pure quantity and money rules),
+`server/tests/integration/returns.integration.test.js` (role access, tenant
+isolation, receive races, restock, refunds, net totals, delivery/order status),
+plus seed checks for full, partial and fully rejected orders.
 
 ---
 

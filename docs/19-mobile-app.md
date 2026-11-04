@@ -16,7 +16,7 @@ CityCart/
 ├─ server/     the API (unchanged apart from the native-session support below)
 ├─ client/     the web app (unchanged)
 └─ mobile/     the Expo app (plain JavaScript, like the web app)
-   ├─ app.json  app.config.js  eas.json  package.json  .env (the API address; see .env.example)
+   ├─ app.json  eas.json  package.json  .env (the API address; see .env.example)
    ├─ src/
    │  ├─ app/          screens; each file is a route (Expo Router, SDK 57 puts routes in src/app)
    │  │  ├─ _layout.jsx        fonts, providers, splash screen
@@ -69,11 +69,11 @@ Installed once, inside `mobile/`, each with a stated reason:
 | axios | same HTTP client and interceptors as the web app |
 | socket.io-client | live chat and notifications |
 | expo-secure-store | the login token (Keychain / Keystore) |
-| @react-native-async-storage/async-storage | non-secret choices: city, block, range |
+| @react-native-async-storage/async-storage | non-secret choices: city, shopping area (blocks, pin, range) |
 | expo-location | the shopper's position for Nearby |
 | expo-font, @expo-google-fonts/poppins, @expo-google-fonts/fraunces | the brand fonts, importing only the five weights used |
 | @expo/vector-icons | tab and button icons (Feather, the family Lucide came from) |
-| react-native-maps | the Nearby map (Android release builds need a Google Maps key) |
+| react-native-webview | the Nearby map, which draws OpenStreetMap tiles inside the app (no Google Maps key, no native map SDK) |
 
 ## 6. Phases
 
@@ -83,8 +83,8 @@ Installed once, inside `mobile/`, each with a stated reason:
 | 1 | App foundation: Expo project, theme, API client, token storage, session rules, tab shell | done |
 | 2 | Login and register: forms with instant checks, safe return-to-where-you-were, account tab | done |
 | 3 | Browse: home, shop (search, sort, brand filter, endless scroll), brands, product page with photos and reviews | done |
-| 4 | Nearby: location permission, block detection, area picker, range, results, map | done |
-| 5 | Cart, checkout (cash on delivery), order confirmation, orders and tracking | done |
+| 4 | Nearby: location permission, shopping area (overlaps, border, dropped pin), range, results and products, map with block outlines | done |
+| 5 | Cart (with the area delivery warning), checkout with saved addresses and a delivery pin, order confirmation, orders and tracking; saved-address book | done |
 | 6 | Chat and notifications, unread badges | done |
 | 7 | Polish and release: states, offline handling, icon/splash, Android build, device tests | done |
 | later | Push notifications when the app is closed (needs a server device-token model); seller inbox | |
@@ -113,7 +113,7 @@ Everything here uses the public API, so no sign-in is needed.
 
 * **Home** (`(tabs)/index`): brands strip and the newest products, both for the chosen city; pull down to refresh.
 * **Shop** (`(tabs)/shop`): search (sent to the server after 400 ms of no typing), sort, brand filter, endless scroll in pages of 12. Star ratings are requested only for products not yet seen. A newer search always wins: an answer for an old search is discarded (`services/paging.js`).
-* **Brands** (`brands`) and **Product** (`product/[id]`): the product page has swipeable photos with a full-screen view, price and discount, stock, details, and the reviews summary with the reviews five at a time.
+* **Brands** (`brands`) and **Product** (`product/[id]`): the product page has swipeable photos with a full-screen view, price and discount, stock, details, and the reviews summary with the reviews five at a time. A catalogue product also shows **"Also sold by"** (the other stores in the shopper's area) above the reviews.
 * **City**: remembered on the phone (`context/CityProvider.jsx`); a remembered city that no longer exists falls back to "all cities".
 * **Opening the Shop from elsewhere** uses `shopHref()` (`utils/nav.js`), which stamps each request, because the Shop stays alive in the tab bar and would otherwise ignore asking for the same brand twice.
 * Photos hosted on Cloudinary are requested at the phone's real pixel width (same rule as the web); any other address is used as given. A missing or broken photo shows a monogram tile.
@@ -121,18 +121,26 @@ Everything here uses the public API, so no sign-in is needed.
 
 Tests: the paging rules, query building and helpers are unit tested, and `__tests__/screens.test.js` renders the real screens against a fake API (what is shown, loading and error states, and the Shop navigation rule).
 
-## 9. Nearby (Phase 4)
+## 9. Nearby and the shopping area (Phases 4 and v2 Phase 3)
 
-The same feature as the web app's Nearby page, on the same public endpoints
-(`GET /blocks`, `GET /blocks/resolve`, `GET /discover`).
+The same area model as the web app, on the same public endpoints
+(`GET /blocks`, `GET /blocks/at`, `GET /discover?scope=area`, `GET /catalog/browse`).
 
 * **Finding the shopper.** The first time the Nearby tab opens, the app asks for the
   phone's position once (the system permission prompt appears then, not at launch). It
   uses a recent known position when there is one (instant), otherwise waits up to 12
-  seconds for a fresh one. The server turns the position into a block and city.
-  Refusal, location switched off, a timeout and "outside every city we serve" each get
-  their own plain message, and a permission blocked for good offers **Open Settings**.
-  Choosing an area by hand never asks for the position.
+  seconds for a fresh one. The server turns the position into the blocks that hold it
+  (`/blocks/at`) and the app saves those `blockIds`. Refusal, location switched off, a
+  timeout and "outside every city we serve" each get their own plain message, and a
+  permission blocked for good offers **Open Settings**. Choosing an area by hand never
+  asks for the position.
+* **Overlaps and borders.** A spot inside two drawn blocks starts with **both** ticked and
+  the shopper may untick one (`This spot is in 2 blocks`). A spot between blocks shows the
+  nearest ones to choose from. A radius search measures from the shopper's position but
+  only inside the selected blocks.
+* **Dropped pin.** Tapping the map in the location sheet sends the point to `/blocks/at`
+  and switches the area to the blocks holding it (`pinned` is remembered on the phone).
+  This is how a shopper in Samanabad can shop in D Ground without moving his position.
 * **Privacy.** The position is rounded to about 11 metres and saved only on the phone
   (`prefs`, not secure storage: it is not a credential). The server receives it only as
   query parameters of the one search it answers; request logs drop query strings
@@ -142,26 +150,44 @@ The same feature as the web app's Nearby page, on the same public endpoints
   city and says so. An empty result offers the next wider range.
 * **Results** are brands with their nearest distance, branches (Directions and Call),
   and a few products, with "Only at ..." where a product is sold at some branches only.
-  They load ten brands at a time.
-* **Map.** `react-native-maps`: pins per branch, a marker at the search centre, and a
-  circle for a radius search. It uses the phone's own map: Apple Maps on iPhone (no
-  setup), Google Maps on Android. It works in Expo Go. **Android release builds need a
-  Google Maps API key**: set the `GOOGLE_MAPS_API_KEY` environment variable when building
-  (`app.config.js` passes it to the build), and restrict the key to the app's package name
-  in Google Cloud. Without a key the Android map is blank but everything else, including
-  Directions (which opens the maps app), works.
+  They load ten brands at a time. The **Products** view groups the catalogue: one card per
+  real product with the lowest price, the number of stores, and a list of those stores in
+  the area; a tap opens that store's listing.
+* **Map.** A `react-native-webview` showing a self-contained OpenStreetMap viewer
+  (`src/components/map/`): pins per branch, the delivery/shopping pin, a circle for a
+  radius search, and a highlighted outline for every selected block. Tiles come from
+  `tile.openstreetmap.org` with visible attribution, so there is no Google Maps key,
+  no native map SDK and no platform-specific setup; it behaves the same in Expo Go
+  and in release builds. Tiles, blocks and pins are laid out once in world pixels, so
+  a drag only moves that one GPU layer (a quick flick glides on and settles) and
+  never rebuilds the page mid-gesture; a pinch scales the layer continuously and snaps
+  to a whole zoom when the fingers lift; and a zoom step stretches the tiles already
+  on screen underneath the new level until it loads, so the map never flashes blank.
+  That keeps it as smooth as the Leaflet map on the website on low-end phones. The
+  +/− buttons zoom, and the pins/dot use the same shapes as the website map. A tap
+  places a pin (used by the location sheet, checkout and saved addresses) and a pin's
+  popup opens that brand. Directions still opens the phone's own maps app with
+  `mapsUrl`. The map only needs a data connection for its tiles; when they cannot
+  load the viewer shows a short "could not load" message.
+* **"Also sold by"** on the product page is **area-only**: it lists the other stores in
+  the shopper's area that sell the same catalogue product. Without an area it asks for
+  one; when nobody in the area sells it, it says so (a 404 from the server is that
+  answer, not an error).
 * The area is kept in `context/NearbyProvider.jsx` and the rules (query building, saved
   value checks, "find me" outcomes) in `services/nearby.js` and `services/location.js`,
-  both unit tested; the screen is covered by `__tests__/nearby-screen.test.js`.
+  both unit tested; the screen is covered by `__tests__/nearby-screen.test.js` and the
+  offers list by `__tests__/also-sold-by.test.js`.
 
-## 10. Cart, checkout and orders (Phase 5)
+## 10. Cart, checkout, addresses and orders (Phases 5 and v2 Phase 3)
 
-All on the existing customer endpoints (`/cart`, `/orders`); no server changes.
+All on the existing customer endpoints (`/cart`, `/addresses`, `/orders`).
 
-* **Cart** (tab, with the item count as a badge): the cart is the server's, grouped by brand; every change (quantity, remove) is answered with the fresh cart, which is what is shown. It re-reads when the tab is focused and on pull-down. A line that cannot be ordered (out of stock, unavailable) is marked and blocks checkout. Quantities are 1 to 99 per line; the product page adds 1 to 10 at once.
-* **Add to cart** is a bar at the bottom of the product page. A visitor who is not signed in is sent to sign in with `?next=/product/<id>?add=<qty>` and, once back, the page adds that quantity once and clears the parameter.* **Checkout:** address, delivery notes (required, 1 to 200 words, as on the web) and cash on delivery. The checks in `services/orders.js` were compared with the server's own validator on 43 cases (boundaries, phone formats, word limits) with no differences. The app sends only the address and payment method; **the server reads the cart and computes every price and total itself**. The place-order button is blocked from a second tap, and a failed order is retried without losing the form. A cart with several brands becomes one order per brand (the confirmation says so).
+* **Cart** (tab, with the item count as a badge): the cart is the server's, grouped by brand; every change (quantity, remove) is answered with the fresh cart, which is what is shown. It re-reads when the tab is focused and on pull-down. A line that cannot be ordered (out of stock, unavailable) is marked and blocks checkout. Quantities are 1 to 99 per line; the product page adds 1 to 10 at once. When the chosen area's stores cannot deliver a line, `POST /cart/area-check` produces a warning naming the items, with **Remove it** and **Change area**.
+* **Add to cart** is a bar at the bottom of the product page. A visitor who is not signed in is sent to sign in with `?next=/product/<id>?add=<qty>` and, once back, the page adds that quantity once and clears the parameter.
+* **Checkout:** the delivery address and a **delivery pin on the map**, delivery notes (required, 1 to 200 words, as on the web) and cash on delivery. Saved addresses are listed first (the default is preselected); "Deliver to a new address" shows the form, the map and "Save this address for next time" (on by default, with a name). A saved address sends its `addressId` and the order keeps its own snapshot; a new one sends `deliveryLocation` and optionally `saveAddress:{ label }`. The pin is checked with `/blocks/at`, and the order is refused locally outside a block; the server checks the same rules again (`OUTSIDE_DELIVERY_ZONE`, `ADDRESS_NOT_FOUND`, per-brand `NOT_DELIVERABLE`). The checks in `services/orders.js` were compared with the server's own validator on 43 cases (boundaries, phone formats, word limits) with no differences. **The server reads the cart and computes every price and total itself.** The place-order button is blocked from a second tap, and a failed order is retried without losing the form. A cart with several brands becomes one order per brand (the confirmation says so).
+* **Saved addresses** (`addresses/index` and `addresses/[id]`, from the Account tab): add, edit, delete (with a confirmation) and make default; the server caps a customer at 10 and refuses a pin outside every active block. An address whose block was removed shows "We no longer deliver to this spot." The new/edit form starts on the shopper's area pin (or the saved address's pin) and moves it by tapping the map.
 * **Confirmation** shows what was just placed from memory only (`rememberPlacedOrders`), not from the navigation address, and goes to the orders list if opened with nothing placed.
-* **Orders:** the list loads ten at a time; the detail shows a six-step progress view (or why an order was cancelled/rejected), items, totals, the delivery address, courier tracking when there is one, and cancelling while the order is still pending (with a confirmation).
+* **Orders:** the list loads ten at a time; the detail shows a six-step progress view (or why an order was cancelled/rejected), items, totals, the delivery address, courier tracking when there is one, and cancelling while the order is still pending (with a confirmation). **After delivery the detail shows what happened at the door** (v2 Phase 6): `order.fulfilment` says whether everything arrived (`FULL`), part of it (`PARTIAL`) or nothing (`NONE`), a notice explains it in words, refused lines are listed with their reasons, and the totals show “Returned goods” as a deduction with the **Final total** (`netTotal`) in place of the original total. The list also shows the final total. A `RETURNED` order is shown as such instead of “Delivered”. The detail is served by the existing `GET /orders/:id` (docs/05 §22f), so no app-side price is calculated.
 * **Not in this phase:** writing reviews after delivery (reviews are shown on product pages since Phase 3), and live order updates (pull down to refresh; live updates arrive with Phase 6's notifications).
 * Every screen that needs an account (`RequireCustomer`) shows a sign-in prompt that brings the shopper back to where they were.
 
@@ -234,12 +260,11 @@ screens against a fake server).
   Building needs an Expo account and the EAS CLI as a global tool:
   ```bash
   npm i -g eas-cli && eas login
-  eas secret:create --name GOOGLE_MAPS_API_KEY --value <key>   # release builds only
   npm run build:android            # production (AAB, for Play)
   npm run build:android:preview    # APK to install directly on a phone
   ```
-  `app.config.js` reads `GOOGLE_MAPS_API_KEY` from the environment, so the key
-  reaches release builds through the EAS secret and is never committed.
+  No maps key is needed for any profile: the map is OpenStreetMap inside a
+  WebView, so release builds show it with no extra configuration.
 
 ### Device-test checklist
 
@@ -251,25 +276,33 @@ phone (Expo Go while developing, a preview APK for release behaviour):
 2. **Browse** — home skeletons then content, shop search/sort/filter and
    endless scroll, product photos and reviews, "Chat with seller" asks a
    visitor to sign in and returns to the same product.
-3. **Nearby** — the location-permission wording appears, blocks load, the map
-   shows pins and pans to results (tiles render in the release build — that is
-   what the Google Maps key is for), Directions opens the maps app.
+3. **Nearby and the area** — the location-permission wording appears, blocks load
+   with their outlines, the map shows pins and pans to results (OpenStreetMap tiles
+   render in the release build), a pin's popup opens its brand, Directions opens the
+   maps app. Then: an overlap starts with both blocks ticked, a border point offers the
+   nearest blocks, a dropped pin switches the area, the Products view groups a catalogue
+   item across stores, and a product page's "Also sold by" lists the area's other stores.
 4. **Cart and checkout** — quantities, remove, an out-of-stock line blocks
-   checkout, a multi-brand cart splits into one order per brand on the
+   checkout, a cart line the area's stores cannot deliver shows the warning with
+   Remove/Change area, the delivery pin is checked against the block outlines, "Save this
+   address" is on by default, a multi-brand cart splits into one order per brand on the
    confirmation, a pending order can be cancelled.
-5. **Orders** — progress steps, pull-to-refresh, tracking link when the brand
+5. **Saved addresses** — Account → Saved addresses: add one by tapping the map, edit it,
+   make another default, delete one after confirming; a pin outside every block is
+   refused with a message; at checkout the default is preselected and its pin is reused.
+6. **Orders** — progress steps, pull-to-refresh, tracking link when the brand
    adds one.
-6. **Chat** — start from a product page, send and receive with the seller on
+7. **Chat** — start from a product page, send and receive with the seller on
    the web dashboard, unread pill on the conversation and the Account tab,
    receiving while the thread is open shows the message at once, badges settle
    after backgrounding and returning.
-7. **Notifications** — an order update arrives live, the badge increments,
+8. **Notifications** — an order update arrives live, the badge increments,
    tap follows to the order, mark-all-read and delete keep the badge honest.
-8. **Offline** — airplane mode shows the banner on every screen and requests
+9. **Offline** — airplane mode shows the banner on every screen and requests
    fail with "Cannot reach the server"; turning the connection back removes
    the banner and pull-to-refresh recovers without restarting the app.
-9. **Release build** — install the preview APK, repeat sign-in, nearby map and
-   one order end to end; the launcher icon and splash are the branded set.
+10. **Release build** — install the preview APK, repeat sign-in, nearby map and
+    one order end to end; the launcher icon and splash are the branded set.
 
 ## 13. Development
 
@@ -292,10 +325,18 @@ developing but not in release builds of Android.
   therefore covered by deactivating the account or changing the password.
 * No refresh tokens or push notifications in the first version.
 
-## 15. Related: the partner app
+## 15. Related: the Staff and Delivery apps
 
-Riders and the people who keep order records use a separate app, *CityCart
-Partner* (`partner/`, see `20-partner-app.md`). It shares this app's stack and API
-but has its own sign-in (`/auth/partner/login`, `X-Client: partner`); a shopper
-token never works there and a partner token never works here. This app will show
-the customer's delivery code (`GET /deliveries/:id/code`) on the order page while the order is on the road, and the receipt number (`GET /receipts/order/:orderId`) once it is paid (added with the Partner app's Phase C).
+Riders and the people who keep order records use two separate apps that share
+this app's stack and API:
+
+* *CityCart Staff* (`partner/`, see `20-partner-app.md`) for pickers and brand
+  team members: sign-in `/auth/staff/login`, `X-Client: staff`.
+* *CityCart Delivery* (`delivery/`, see `23-delivery-app.md`) for riders:
+  sign-in `/auth/delivery/login`, `X-Client: delivery`.
+
+A shopper token never works there, and a staff or delivery token never works
+here; the server checks the app mark on every request (docs/06). This app shows
+the customer's delivery code (`GET /deliveries/:id/code`) on the order page while
+the order is on the road, and the receipt number (`GET /receipts/order/:orderId`)
+once it is paid.

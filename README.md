@@ -122,10 +122,21 @@ The architecture is designed to support online payment gateways in the future.
 * Delivery charges
 * Delivery status tracking
 * Brand fulfillment workflow
+* Door returns: per-line accept/refuse with reasons and a photo
 * Failed delivery handling
 * Return handling
 
 Advanced courier and GPS integrations are planned for future versions.
+
+### 📱 Apps
+
+Three Expo apps run against the same API:
+
+* **CityCart** (`mobile/`) — shopper app: discover, cart, checkout, orders, live rider map, door-return results.
+* **CityCart Staff** (`partner/`) — brand team and pickers: pick queue, packing, handover, returned-goods inbox.
+* **CityCart Delivery** (`delivery/`) — riders: assigned runs, pickup, navigation, proof-of-delivery, door returns.
+
+Brand admins and the super admin stay on the website. Apps authenticate with bearer tokens and are refused cross-app tokens (`403 WRONG_APP`).
 
 ### ⭐ Reviews & Ratings
 
@@ -247,14 +258,19 @@ A Brand A employee must never be able to access Brand B resources, even if they 
 
 # 👤 User Roles
 
-CityCart currently defines four primary roles:
+CityCart currently defines these roles:
 
-| Role             | Scope                            |
-| ---------------- | -------------------------------- |
-| `SUPER_ADMIN`    | Entire platform                  |
-| `BRAND_ADMIN`    | Own brand                        |
-| `BRAND_EMPLOYEE` | Own brand + assigned permissions |
-| `CUSTOMER`       | Own customer resources           |
+| Role             | Scope                                      | Signs in on |
+| ---------------- | ------------------------------------------ | ----------- |
+| `SUPER_ADMIN`    | Entire platform                            | Website `/admin/login` |
+| `ADMIN_PARTNER`  | Platform admin, limited by admin permissions | Website `/admin/login` |
+| `BRAND_ADMIN`    | Own brand                                  | Website `/sell/login` |
+| `BRAND_EMPLOYEE` | Own brand + assigned permissions           | Website, Staff app, or both |
+| `PICKER`         | Own brand's pick queue only                | Staff app |
+| `RIDER`          | Own brand's assigned deliveries only       | Delivery app |
+| `CUSTOMER`       | Own customer resources                     | Website `/login` and shopper app |
+
+The Staff and Delivery apps refuse each other's tokens (`403 WRONG_APP`); brand owners and the super admin stay web-only.
 
 Authorization is implemented using:
 
@@ -377,9 +393,11 @@ CityCart/
 │   │
 │   └── package.json
 │
-├── partner/                     # CityCart Partner app for riders and brand team members (Expo) — docs/20
+├── partner/                     # CityCart Staff app: brand team members and pickers (Expo) — docs/20
 │
-├── mobile/                      # shopper app (React Native + Expo) — docs/19
+├── delivery/                    # CityCart Delivery app: riders (Expo) — docs/23
+│
+├── mobile/                      # CityCart shopper app (React Native + Expo) — docs/19
 │   ├── src/
 │   │   ├── app/                 # screens; each file is a route (Expo Router)
 │   │   ├── components/
@@ -427,7 +445,10 @@ CityCart/
 │   ├── 17-deployment.md
 │   ├── 18-development-roadmap.md
 │   ├── 19-mobile-app.md
-│   └── 20-partner-app.md       # partner programme: plan, status, handoff
+│   ├── 20-partner-app.md       # Staff app programme: plan, status, handoff
+│   ├── 21-next-features-plan.md
+│   ├── 22-marketplace-v2-plan.md
+│   └── 23-delivery-app.md
 │
 ├── AGENTS.md
 ├── .gitignore
@@ -543,6 +564,25 @@ Attempts to access Brand B Order
        ▼
        DENIED
 ```
+
+## Commands
+
+Run from the repository root:
+
+```bash
+npm test                 # server unit tests (Jest + MongoDB memory server)
+npm run test:integration # server API/integration tests
+npm run test:mobile      # shopper app
+npm run test:staff       # Staff app
+npm run test:delivery    # Delivery app
+npm run test:apps        # Staff + Delivery
+npm run test:all         # every suite above
+npm run lint             # ESLint for server, client, mobile, partner, delivery
+npm run build            # client production build
+npm run verify           # lint + test:all + build
+```
+
+Tests use in-memory MongoDB (`mongodb-memory-server`); no database or network access is required.
 
 ---
 
@@ -682,21 +722,35 @@ Main API areas include:
 
 ```text
 /auth
-/users
 /cities
+/blocks
+/branches               # live service-area branches
 /brands
 /stores
 /categories
+/catalog                # admin catalogue shared across stores
+/discover               # nearby stores and serviceability
+/chats                  # customer <-> brand conversations
 /products
 /inventory
 /cart
+/addresses
 /orders
-/payments
+/brand/orders
+/picker                 # pick queue and fulfilment
 /deliveries
+/rider/deliveries       # rider app
+/returns                # door returns inbox
+/payments
+/receipts
+/devices                # push-notification tokens
 /employees
+/riders
 /reviews
 /notifications
 /analytics
+/uploads
+/admin/*                # super admin and partner-admin areas
 ```
 
 Full API requirements and endpoint definitions are documented in:
@@ -733,6 +787,13 @@ The `docs/` directory contains the complete CityCart source of truth.
 | 16       | Testing Strategy          |
 | 17       | Deployment                |
 | 18       | Development Roadmap       |
+| 19       | Mobile App (shopper)      |
+| 20       | Staff App (partner)       |
+| 21       | Next Features Plan        |
+| 22       | Marketplace v2 Plan       |
+| 23       | Delivery App              |
+
+Release plans, runbooks, and per-phase status live in the plan documents (21–23). `docs/17-deployment.md` §30 holds the v2 release runbook.
 
 When implementation conflicts with documented business rules, the conflict should be identified and resolved before changing the architecture.
 
@@ -789,33 +850,34 @@ AI agents must read the relevant documentation before modifying the project.
 ### MVP
 
 * [x] Architecture documentation
-* [ ] Authentication
-* [ ] User management
-* [ ] Cities
-* [ ] Brands
-* [ ] Stores
-* [ ] Categories
-* [ ] Products
-* [ ] Inventory
-* [ ] Marketplace
-* [ ] Cart
-* [ ] Multi-brand checkout
-* [ ] Orders
-* [ ] COD payments
-* [ ] Delivery
-* [ ] Employee management
-* [ ] Permissions
-* [ ] Notifications
-* [ ] Reviews
-* [ ] Basic analytics
-* [ ] Brand dashboard
-* [ ] Super Admin dashboard
-* [ ] Automated testing
-* [ ] Production deployment
+* [x] Authentication
+* [x] User management
+* [x] Cities
+* [x] Brands
+* [x] Stores
+* [x] Categories
+* [x] Products
+* [x] Inventory
+* [x] Marketplace
+* [x] Cart
+* [x] Multi-brand checkout
+* [x] Orders
+* [x] COD payments
+* [x] Delivery
+* [x] Employee management
+* [x] Permissions
+* [x] Notifications
+* [x] Reviews
+* [x] Basic analytics
+* [x] Brand dashboard
+* [x] Super Admin dashboard
+* [x] Automated testing
+* [x] Mobile applications (shopper, staff, delivery)
+* [ ] Production deployment — v2 release pending owner
 
 ### Future
 
-* [ ] Online payment gateways
+* [ ] Online payment gateways — architecture and hold/refund flow exist; gateway stays disabled in production
 * [ ] Automated brand payouts
 * [ ] Commission management
 * [ ] Coupons
@@ -826,8 +888,7 @@ AI agents must read the relevant documentation before modifying the project.
 * [ ] Courier integrations
 * [ ] GPS delivery tracking
 * [ ] Email/SMS/WhatsApp notifications
-* [ ] Push notifications
-* [ ] Mobile applications
+* [ ] Push notifications — device registration exists; provider wiring pending
 * [ ] Advanced reporting
 
 ---

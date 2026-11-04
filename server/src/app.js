@@ -17,13 +17,18 @@ const brandRoutes = require('./routes/brand.routes');
 const storeRoutes = require('./routes/store.routes');
 
 const categoryRoutes = require('./routes/category.routes');
+const catalogRoutes = require('./routes/catalog.routes');
+const adminCatalogRoutes = require('./routes/adminCatalog.routes');
 const productRoutes = require('./routes/product.routes');
 
 const inventoryRoutes = require('./routes/inventory.routes');
 const cartRoutes = require('./routes/cart.routes');
+const addressRoutes = require('./routes/address.routes');
 const orderRoutes = require('./routes/order.routes');
 const brandOrderRoutes = require('./routes/brandOrder.routes');
+const pickerRoutes = require('./routes/picker.routes');
 const deliveryRoutes = require('./routes/delivery.routes');
+const returnRoutes = require('./routes/return.routes');
 const paymentRoutes = require('./routes/payment.routes');
 const cashRoutes = require('./routes/cash.routes');
 const receiptRoutes = require('./routes/receipt.routes');
@@ -99,13 +104,18 @@ app.use('/api/v1/brands', brandRoutes);
 app.use('/api/v1/stores', storeRoutes);
 
 app.use('/api/v1/categories', categoryRoutes);
+app.use('/api/v1/catalog', catalogRoutes);
+app.use('/api/v1/admin/catalog', adminCatalogRoutes);
 app.use('/api/v1/products', productRoutes);
 
 app.use('/api/v1/inventory', inventoryRoutes);
 app.use('/api/v1/cart', cartRoutes);
+app.use('/api/v1/addresses', addressRoutes);
 app.use('/api/v1/orders', orderRoutes);
 app.use('/api/v1/brand/orders', brandOrderRoutes);
+app.use('/api/v1/picker', pickerRoutes);
 app.use('/api/v1/deliveries', deliveryRoutes);
+app.use('/api/v1/returns', returnRoutes);
 app.use('/api/v1/payments/cash', cashRoutes);
 app.use('/api/v1/payments', paymentRoutes);
 app.use('/api/v1/receipts', receiptRoutes);

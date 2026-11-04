@@ -23,7 +23,7 @@ const { ROLES } = require('../config/roles');
  *
  * On success, attaches `req.tenantBrandId`:
  *   - SUPER_ADMIN  -> null (platform-wide, not restricted to one brand)
- *   - BRAND_ADMIN / BRAND_EMPLOYEE -> req.user.brandId (string)
+ *   - BRAND_ADMIN / BRAND_EMPLOYEE / PICKER -> req.user.brandId (string)
  *
  * Downstream code should treat `req.tenantBrandId === null` as "no
  * brand restriction applies" and otherwise scope every query to it.
@@ -46,7 +46,11 @@ function requireTenant(req, res, next) {
     return next();
   }
 
-  if (req.user.role === ROLES.BRAND_ADMIN || req.user.role === ROLES.BRAND_EMPLOYEE) {
+  if (
+    req.user.role === ROLES.BRAND_ADMIN ||
+    req.user.role === ROLES.BRAND_EMPLOYEE ||
+    req.user.role === ROLES.PICKER
+  ) {
     // Defense-in-depth: the User schema already requires brandId for
     // these roles (see models/user.model.js), but a tenant-scoped route
     // should never proceed on a missing brandId regardless.

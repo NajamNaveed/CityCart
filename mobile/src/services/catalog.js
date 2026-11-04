@@ -1,4 +1,5 @@
 import api from './api'
+import { isRadius } from '../utils/range'
 
 /**
  * Everything the browsing screens ask the API. The query building is pure so it
@@ -6,6 +7,7 @@ import api from './api'
  */
 export const PAGE_SIZE = 12
 export const REVIEWS_PAGE_SIZE = 5
+export const CATALOG_PAGE_SIZE = 12
 
 // Same four choices as the web shop.
 export const SORTS = [
@@ -61,4 +63,39 @@ export async function fetchProduct(id) {
 export async function fetchReviews(productId, page = 1) {
   const res = await api.get(`/products/${productId}/reviews`, { params: { limit: REVIEWS_PAGE_SIZE, page } })
   return { reviews: res.data.reviews || [], summary: res.data.summary, pagination: res.data.pagination }
+}
+
+// The shared catalogue grouped per real product, inside the shopper's area. Every
+// offer is a store listing, so the same item appears once with all its stores.
+export const CATALOG_SORTS = [
+  { key: 'name', label: 'Name' },
+  { key: 'price', label: 'Lowest price' },
+  { key: 'nearest', label: 'Nearest store' },
+]
+
+export function catalogQuery({ blockIds = [], origin = null, range = 'block', sort = 'name', q = '', page = 1, limit = CATALOG_PAGE_SIZE } = {}) {
+  if (!Array.isArray(blockIds) || blockIds.length === 0) return null
+  const text = String(q || '').trim()
+  // "Nearest" is meaningless without a position to measure from (several blocks chosen by hand).
+  const order = sort === 'nearest' && !origin ? 'name' : sort
+  return {
+    blockIds: blockIds.join(','),
+    sort: order,
+    page,
+    limit,
+    ...(text && { q: text }),
+    ...(origin && { lat: origin.lat, lng: origin.lng }),
+    ...(origin && isRadius(range) && { radiusKm: range }),
+  }
+}
+
+export async function fetchCatalogBrowse(query) {
+  const res = await api.get('/catalog/browse', { params: query })
+  return { items: res.data.items || [], pagination: res.data.pagination, meta: res.data.meta }
+}
+
+// Every store in the area that sells one catalogue item. 404 means "not sold here".
+export async function fetchCatalogOffers(catalogProductId, area) {
+  const res = await api.get(`/catalog/browse/${catalogProductId}`, { params: area })
+  return res.data
 }

@@ -10,6 +10,16 @@ export const countWords = (value = '') => {
   return trimmed ? trimmed.split(/\s+/).filter(Boolean).length : 0
 }
 
+// Delivery notes are required and counted in words, as on the server.
+export function validateNotes(value) {
+  const errors = {}
+  const words = countWords(value)
+  if (words < 1) errors.additionalInstructions = 'Delivery notes are required: the courier needs them to reach you.'
+  else if (words > MAX_NOTE_WORDS) errors.additionalInstructions = `Delivery notes must be at most ${MAX_NOTE_WORDS} words.`
+  else if (String(value ?? '').trim().length > MAX_NOTE_CHARS) errors.additionalInstructions = 'Delivery notes are too long.'
+  return errors
+}
+
 // { field: message } for anything the server would refuse; empty when the form is fine.
 export function validateCheckout(form) {
   const errors = {}
@@ -28,17 +38,14 @@ export function validateCheckout(form) {
 
   if (text(form.postalCode).length > 20) errors.postalCode = 'That postal code is too long.'
 
-  const words = countWords(form.additionalInstructions)
-  if (words < 1) errors.additionalInstructions = 'Delivery notes are required: the courier needs them to reach you.'
-  else if (words > MAX_NOTE_WORDS) errors.additionalInstructions = `Delivery notes must be at most ${MAX_NOTE_WORDS} words.`
-  else if (text(form.additionalInstructions).length > MAX_NOTE_CHARS) errors.additionalInstructions = 'Delivery notes are too long.'
-
-  return errors
+  return { ...errors, ...validateNotes(form.additionalInstructions) }
 }
 
-// The server reads the cart itself; the app only sends where to deliver and how to pay.
-export function orderBody(form, paymentMethod = 'COD') {
+// The server reads the cart itself; the app only sends where to deliver, how to pay,
+// and (optionally) which saved address this is or that it should be saved.
+export function orderBody(form, paymentMethod = 'COD', delivery = {}) {
   const text = (v) => String(v ?? '').trim()
+  const label = text(delivery.saveLabel)
   return {
     paymentMethod,
     shippingAddress: {
@@ -49,6 +56,9 @@ export function orderBody(form, paymentMethod = 'COD') {
       ...(text(form.postalCode) && { postalCode: text(form.postalCode) }),
       additionalInstructions: text(form.additionalInstructions),
     },
+    ...(delivery.pin && { deliveryLocation: { latitude: delivery.pin.lat, longitude: delivery.pin.lng } }),
+    ...(delivery.addressId && { addressId: delivery.addressId }),
+    ...(!delivery.addressId && label && { saveAddress: { label } }),
   }
 }
 
@@ -57,8 +67,8 @@ export function checkoutFieldErrors(fieldErrors = {}) {
   return Object.fromEntries(Object.entries(fieldErrors).map(([field, message]) => [field.replace(/^shippingAddress\./, ''), message]))
 }
 
-export async function placeOrder(form, paymentMethod = 'COD') {
-  const res = await api.post('/orders', orderBody(form, paymentMethod))
+export async function placeOrder(form, paymentMethod = 'COD', delivery = {}) {
+  const res = await api.post('/orders', orderBody(form, paymentMethod, delivery))
   return res.data.orders
 }
 
@@ -93,6 +103,7 @@ export async function fetchOrder(id) {
     delivery: res.data.delivery,
     adjustments: res.data.adjustments || [],
     adjustment: res.data.adjustment || null,
+    returnDoc: res.data.return || null,
   }
 }
 

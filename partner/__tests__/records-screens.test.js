@@ -45,7 +45,7 @@ import ShipmentScreen from '../src/app/shipment/[id]'
 import ReceiptScreen from '../src/app/receipt/[id]'
 import ProofScreen from '../src/app/proof/[paymentId]'
 import HandoverScreen from '../src/app/handover/[collectorId]'
-import { cleanup, has, isDisabled, press, pressByLabel, RIDER, screenText, show, signedIn, type } from './helpers/screens'
+import { cleanup, has, isDisabled, PICKER, press, pressByLabel, screenText, show, signedIn, type } from './helpers/screens'
 
 const ALL = ['orders.view', 'delivery.view', 'delivery.manage', 'riders.view', 'payments.view', 'payments.manage']
 const member = (...permissions) => signedIn({ id: 'u2', name: 'Maryam Javed', email: 'maryam@example.com', role: 'BRAND_EMPLOYEE', permissions })
@@ -98,6 +98,7 @@ describe('overview', () => {
     serve({
       'GET /deliveries': (config) => ({ data: { pagination: { total: counts[config.params.status] } } }),
       'GET /payments/cash/outstanding': { data: { collectors: [{ collectorId: 'c1', total: 1000 }, { collectorId: 'c2', total: 250 }] } },
+      'GET /returns/summary': { data: { summary: { IN_TRANSIT: { count: 2, returnedSubtotal: 3000 }, RECEIVED: { count: 1, returnedSubtotal: 500 } } } },
     })
 
   it('greets the person and shows what is happening, with cash still held by riders', async () => {
@@ -111,6 +112,8 @@ describe('overview', () => {
     expect(text).toMatch(/Delivered \| 40/)
     expect(text).toMatch(/Rs 1,250/)
     expect(text).toMatch(/2 people to hand it over/)
+    expect(text).toMatch(/Returns to receive \| 2/)
+    expect(text).toMatch(/Rs 3,000 coming back/)
   })
 
   it('opens the delivery list already filtered when a tile is tapped', async () => {
@@ -118,6 +121,8 @@ describe('overview', () => {
     const screen = await show(<Overview />, { auth: member(...ALL) })
     await pressByLabel(screen, 'Failed')
     expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/shipments', params: { status: 'FAILED' } })
+    await pressByLabel(screen, 'Returns to receive')
+    expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/returns', params: { status: 'IN_TRANSIT' } })
     await pressByLabel(screen, 'Cash with riders')
     expect(mockRouter.push).toHaveBeenLastCalledWith('/money')
   })
@@ -585,8 +590,8 @@ describe('account', () => {
     expect(auth.logout).toHaveBeenCalled()
   })
 
-  it('is never shown to a rider (the records screens belong to team members)', async () => {
+  it('is never shown to a picker (the records screens belong to team members)', async () => {
     mockParams = { id: 'o1' }
-    expect(screenText(await show(<OrderScreen />, { auth: signedIn(RIDER) }))).toBe('redirect:/')
+    expect(screenText(await show(<OrderScreen />, { auth: signedIn(PICKER) }))).toBe('redirect:/')
   })
 })

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { MapPin } from 'lucide-react'
 import api, { getErrorMessage, getFieldErrors } from '../../services/api'
 import Field from '../../components/Field'
@@ -6,8 +6,11 @@ import CoordinatesField from '../../components/CoordinatesField'
 import { Notice, PageHeader, Pager, selectClass, StatusBadge } from '../../components/brand/Bits'
 import { usePaged } from '../../hooks/usePaged'
 import { EmptyState, Skeleton } from '../../components/ui'
-import { parseLatLng } from '../../utils/geo'
+import { insidePolygon, parseLatLng } from '../../utils/geo'
 import { btnPine } from '../../ui'
+
+// Leaflet is only downloaded when the brand admin opens this page.
+const AreaMap = lazy(() => import('../../components/nearby/AreaMap'))
 
 const EMPTY = { name: '', blockId: '', address: '', phone: '', coords: '' }
 const COORDS_ERROR = 'Enter latitude and longitude, like 31.4186, 73.0790.'
@@ -50,6 +53,12 @@ export default function Branches() {
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }))
 
+  const selectedBlock = blocks.find((b) => b._id === form.blockId) || null
+  const pin = form.coords.trim() ? parseLatLng(form.coords) : null
+  const outside = Boolean(pin && selectedBlock?.polygon && !insidePolygon(pin, selectedBlock.polygon))
+  const zones = useMemo(() => (selectedBlock ? [selectedBlock] : []), [selectedBlock])
+  const selectedIds = useMemo(() => (form.blockId ? [form.blockId] : []), [form.blockId])
+
   function startEdit(branch) {
     setEditingId(branch._id)
     setFieldErrors({})
@@ -69,10 +78,11 @@ export default function Branches() {
     setForm(EMPTY)
   }
 
-  // Moving a branch to another block drops the old pin; blank means "use the block centre".
+  // Changing the block drops the old pin (it is probably outside the new one);
+  // blank means "use the block centre".
   function onBlockChange(e) {
     const blockId = e.target.value
-    setForm((f) => ({ ...f, blockId, coords: editingId && blockId !== f.blockId ? '' : f.coords }))
+    setForm((f) => ({ ...f, blockId, coords: blockId === f.blockId ? f.coords : '' }))
   }
 
   async function run(action, success) {
@@ -149,16 +159,51 @@ export default function Branches() {
           </div>
           <Field label="Address" id="br-address" name="address" value={form.address} onChange={set('address')} error={fieldErrors.address} placeholder="Street, landmark" />
           <Field label="Phone" id="br-phone" name="phone" value={form.phone} onChange={set('phone')} error={fieldErrors.phone} type="tel" />
-          <div className="sm:col-span-2">
-            <CoordinatesField
-              id="br-coords"
-              label="Exact location (optional)"
-              value={form.coords}
-              onChange={(coords) => setForm((f) => ({ ...f, coords }))}
-              error={fieldErrors.coords || fieldErrors.latitude}
-              hint="Leave empty to use the middle of the block. For accurate distances, paste the shop's coordinates from Google Maps."
-            />
-          </div>
+        </div>
+
+        <div className="mt-5">
+          <p className="mb-1.5 text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">Shop location on the map</p>
+          {form.blockId ? (
+            <>
+              <p className="mb-2 text-[12.5px] text-muted">
+                {selectedBlock?.name} is highlighted. Tap inside it to place the shop’s pin — the pin decides the distances shoppers see.
+              </p>
+              <Suspense fallback={<Skeleton className="h-[320px] w-full rounded-lg" />}>
+                <AreaMap
+                  key={form.blockId}
+                  zones={zones}
+                  selectedIds={selectedIds}
+                  pin={pin}
+                  height={320}
+                  onPick={(lat, lng) => setForm((f) => ({ ...f, coords: `${lat.toFixed(5)}, ${lng.toFixed(5)}` }))}
+                  label={`Map for placing the ${selectedBlock?.name || ''} branch`}
+                />
+              </Suspense>
+              {outside ? (
+                <p className="mt-2 text-[12.5px] text-clay" aria-live="polite">
+                  This pin is outside {selectedBlock.name}. Tap inside the highlighted outline.
+                </p>
+              ) : null}
+            </>
+          ) : (
+            <p className="rounded-md bg-paper px-3.5 py-3 text-[13px] text-muted">Choose a block to pin the shop on the map.</p>
+          )}
+        </div>
+
+        <div className="mt-4">
+          <CoordinatesField
+            id="br-coords"
+            label="Exact location (optional)"
+            value={form.coords}
+            onChange={(coords) => setForm((f) => ({ ...f, coords }))}
+            error={fieldErrors.coords || fieldErrors.latitude}
+            hint="Tap the map above, or type the coordinates. Leave empty to use the middle of the block."
+          />
+          {pin && selectedBlock ? (
+            <button type="button" onClick={() => setForm((f) => ({ ...f, coords: '' }))} className="mt-1 text-[12.5px] font-medium text-ink/70 transition hover:text-ink">
+              Use the middle of {selectedBlock.name}
+            </button>
+          ) : null}
         </div>
         <div className="mt-5 flex flex-wrap gap-3">
           <button type="submit" disabled={busy || !form.name.trim() || !form.blockId} className={btnPine}>

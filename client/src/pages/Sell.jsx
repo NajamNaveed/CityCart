@@ -5,7 +5,7 @@ import { btnCream, btnCreamOutline, sectionLabel, wrap } from '../ui'
 
 const STEPS = [
   ['Apply', 'Tell us about you, your brand and your first store. It is one form, and your store goes live as soon as you submit it.'],
-  ['Stock your shelves', 'Create categories, add products with prices and images, and set how many you have in stock.'],
+  ['Stock your shelves', 'Add products with prices and images, choose their category, and set how many you have in stock.'],
   ['Fulfil orders', 'Accept an order, pack it, hand it to delivery. Customers pay in cash when it arrives.'],
 ]
 

@@ -2,7 +2,7 @@ const User = require('../models/user.model');
 const AdminPartner = require('../models/adminPartner.model');
 const { hashPassword, comparePassword } = require('../utils/password');
 const { signToken } = require('../utils/jwt');
-const { ROLES, STAFF_ROLES, PARTNER_ROLES } = require('../config/roles');
+const { ROLES, STAFF_ROLES, STAFF_APP_ROLES, DELIVERY_APP_ROLES } = require('../config/roles');
 const env = require('../config/env');
 
 /**
@@ -84,14 +84,16 @@ async function registerUser({ name, email, password }) {
 const PORTAL_ROLES = Object.freeze({
   customer: [ROLES.CUSTOMER],
   brand: [ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE],
-  partner: PARTNER_ROLES,
+  staff: STAFF_APP_ROLES,
+  delivery: DELIVERY_APP_ROLES,
   admin: [ROLES.SUPER_ADMIN, ROLES.ADMIN_PARTNER],
 });
 
 const PORTAL_ACCOUNT_TYPES = Object.freeze({
   customer: 'CUSTOMER',
   brand: 'BRAND',
-  partner: 'BRAND',
+  staff: 'BRAND',
+  delivery: 'BRAND',
   admin: 'PLATFORM_ADMIN',
 });
 
@@ -151,9 +153,9 @@ async function loginUser({ email, password }, portal = 'customer') {
       role: user.role,
       brandId: user.brandId,
       passwordVersion: user.passwordVersion,
-      // Marks a partner-app token so it can only ever be used as one (see
-      // middleware/authenticate.js).
-      ...(portal === 'partner' && { client: 'partner' }),
+      // Marks an app token with the app it was issued to, so each app can
+      // only ever use its own token (see middleware/authenticate.js).
+      ...((portal === 'staff' || portal === 'delivery') && { client: portal }),
     },
     STAFF_ROLES.includes(user.role) ? { expiresIn: `${env.staffSessionHours}h` } : undefined,
   );

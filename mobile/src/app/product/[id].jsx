@@ -14,6 +14,7 @@ import ExpandableText from '../../components/ExpandableText'
 import ImageGallery from '../../components/ImageGallery'
 import ReviewsSection from '../../components/ReviewsSection'
 import Stars from '../../components/Stars'
+import AlsoSoldBy from '../../components/AlsoSoldBy'
 import { useAuth } from '../../hooks/useAuth'
 import { useCart } from '../../hooks/useCart'
 import { useRemote } from '../../hooks/useRemote'
@@ -205,6 +206,10 @@ function ProductView({ product, brand, resumeQty }) {
             ))}
           </View>
         ) : null}
+      </View>
+
+      <View style={{ paddingHorizontal: spacing.lg }}>
+        <AlsoSoldBy catalogProductId={product.catalogProductId} currentProductId={product._id} />
       </View>
 
       <ReviewsSection productId={product._id} />

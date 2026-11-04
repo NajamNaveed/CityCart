@@ -11,8 +11,8 @@ const permissionList = z
 
 const objectId = z.string().refine((v) => mongoose.Types.ObjectId.isValid(v), { message: 'Invalid id' });
 
-// Only BRAND_EMPLOYEE accounts can be created here — the role is never
-// client-supplied (docs/02 §19).
+// Only brand-team accounts can be created here — the role is chosen from two
+// fixed options and is never arbitrary client input (docs/02 §19).
 const createEmployeeSchema = z.object({
   brandId: objectId.optional(), // honored for SUPER_ADMIN only
   name: z.string().trim().min(1).max(100),
@@ -20,6 +20,8 @@ const createEmployeeSchema = z.object({
   password: z.string().min(MIN_PASSWORD_LENGTH, `password must be at least ${MIN_PASSWORD_LENGTH} characters`),
   phone: z.string().trim().regex(/^\+?[0-9][0-9\s-]{6,19}$/, 'Invalid phone number').optional(),
   jobTitle: z.string().trim().min(1).max(100).optional(),
+  // A picker has no brand-team permissions; the service enforces that.
+  role: z.enum(['BRAND_EMPLOYEE', 'PICKER'], { error: 'role must be BRAND_EMPLOYEE or PICKER' }).optional(),
   permissions: permissionList.optional(),
 });
 

@@ -47,3 +47,20 @@ export function formatDistance(km) {
   if (km < 1) return `${Math.round(km * 10) * 100} m`
   return `${km} km`
 }
+
+// A block as the API returns it ({ latitude, longitude, ... }) -> { lat, lng }.
+export function latLngOfBlock(block) {
+  return { lat: block.latitude, lng: block.longitude }
+}
+
+// Ray casting: is { lat, lng } inside an open [lat, lng] ring from the API?
+export function insidePolygon({ lat, lng }, ring = []) {
+  if (!Array.isArray(ring) || ring.length < 3) return false
+  let inside = false
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [latI, lngI] = ring[i]
+    const [latJ, lngJ] = ring[j]
+    if (latI > lat !== latJ > lat && lng < ((lngJ - lngI) * (lat - latI)) / (latJ - latI) + lngI) inside = !inside
+  }
+  return inside
+}

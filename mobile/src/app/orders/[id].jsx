@@ -22,6 +22,7 @@ import { getErrorMessage } from '../../services/api'
 import { awaitingPayment, canCancel, cancelOrder, CODE_VISIBLE_STATUSES, fetchDeliveryCode, fetchOrder, fetchReceipt, fetchRiderLocation, isOnline, locationMapUrl, TERMINAL_PROBLEMS } from '../../services/orders'
 import { formatDateTime, formatPrice, humanize, timeAgo } from '../../utils/format'
 import { isObjectId } from '../../utils/ids'
+import { reasonLabel, returnedByItem } from '../../utils/returns'
 import { colors, radius, spacing } from '../../theme'
 
 function Section({ title, children }) {
@@ -105,7 +106,7 @@ function ReceiptNote({ orderId }) {
 
 function OrderView({ data, refreshing, onRefresh, onChanged }) {
   const router = useRouter()
-  const { order, payment, delivery, adjustment } = data
+  const { order, payment, delivery, adjustment, returnDoc } = data
   const [cancelling, setCancelling] = useState(false)
   const [notice, setNotice] = useState('')
   const a = order.shippingAddress || {}
@@ -113,6 +114,8 @@ function OrderView({ data, refreshing, onRefresh, onChanged }) {
   const hasTracking = delivery && (delivery.trackingReference || delivery.assignedAgent || delivery.status === 'FAILED')
   const showCode = Boolean(delivery) && CODE_VISIBLE_STATUSES.includes(delivery.status)
   const paid = payment?.status === 'PAID'
+  const returnedLines = returnedByItem(returnDoc)
+  const finalTotal = order.netTotal ?? order.total
 
   async function doCancel() {
     setCancelling(true)
@@ -191,6 +194,33 @@ function OrderView({ data, refreshing, onRefresh, onChanged }) {
         {canCancel(order) ? <Button title="Cancel order" variant="outline" onPress={confirmCancel} loading={cancelling} /> : null}
       </Section>
 
+      {order.fulfilment ? (
+        <Section title="What arrived">
+          <Card style={{ gap: spacing.sm }}>
+            <AppText variant="strong">
+              {order.fulfilment === 'FULL'
+                ? 'Everything arrived.'
+                : order.fulfilment === 'NONE'
+                  ? 'Your whole order went back to the store.'
+                  : 'Part of your order came back.'}
+            </AppText>
+            <AppText variant="small">
+              {order.fulfilment === 'FULL'
+                ? 'All the items you ordered were delivered.'
+                : order.fulfilment === 'NONE'
+                  ? 'The rider took every item back. You are only charged for goods you kept.'
+                  : `${formatPrice(order.returnedAmount)} of goods went back with the rider. You pay only for what you kept.`}
+            </AppText>
+            {order.returnedAmount > 0 ? <Row label="Goods returned" value={formatPrice(order.returnedAmount)} /> : null}
+            {order.feeRefunded ? <Row label="Delivery fee refunded" value={formatPrice(order.deliveryFee)} /> : null}
+            {returnDoc?.refundAmount > 0 ? <Row label="Refunded to you" value={formatPrice(returnDoc.refundAmount)} /> : null}
+            <View style={{ borderTopWidth: 1, borderTopColor: colors.line, paddingTop: spacing.sm }}>
+              <Row label="Final total" value={formatPrice(finalTotal)} strong />
+            </View>
+          </Card>
+        </Section>
+      ) : null}
+
       {awaitingPayment({ order, payment }) ? (
         <Section title="Waiting for your payment">
           <Card style={{ gap: spacing.md }}>
@@ -209,38 +239,56 @@ function OrderView({ data, refreshing, onRefresh, onChanged }) {
 
       <Section title="Items">
         <View style={{ borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, overflow: 'hidden' }}>
-          {order.items.map((item, i) => (
+          {order.items.map((item, i) => {
+            const back = returnedLines.get(String(item._id))
+            const deliveredQty = item.quantity - (back?.quantity || 0)
+            return (
             <Pressable
               key={`${item.productId}-${i}`}
               onPress={() => router.push(`/product/${item.productId}`)}
               accessibilityRole="button"
-              accessibilityLabel={`${item.name}, quantity ${item.quantity}, ${formatPrice(item.lineTotal)}. Open product`}
+              accessibilityLabel={`${item.productName}, quantity ${item.quantity}, ${formatPrice(item.totalPrice)}. Open product`}
               style={[{ flexDirection: 'row', gap: spacing.md, padding: spacing.md, alignItems: 'center' }, i > 0 && { borderTopWidth: 1, borderTopColor: colors.line }]}
             >
-              <ProductImage src={item.image} name={item.name} width={56} style={{ width: 56, height: 70, borderRadius: radius.sm }} />
+              <ProductImage src={item.image} name={item.productName} width={56} style={{ width: 56, height: 70, borderRadius: radius.sm }} />
               <View style={{ flex: 1 }}>
                 <AppText variant="label" numberOfLines={2}>
-                  {item.name}
+                  {item.productName}
                 </AppText>
                 <AppText variant="small">
                   {item.quantity} × {formatPrice(item.unitPrice)}
                 </AppText>
+                {order.fulfilment ? (
+                  <AppText variant="small" style={{ fontSize: 12, color: back ? colors.clay : colors.muted }}>
+                    {back
+                      ? `${deliveredQty > 0 ? `${deliveredQty} delivered · ` : 'All '}${back.quantity} returned — ${reasonLabel(back.reason)}`
+                      : `${item.quantity} delivered`}
+                  </AppText>
+                ) : null}
               </View>
-              <AppText variant="strong">{formatPrice(item.lineTotal)}</AppText>
+              <AppText variant="strong">{formatPrice(item.totalPrice)}</AppText>
             </Pressable>
-          ))}
+            )
+          })}
         </View>
         <Card style={{ gap: spacing.sm }}>
           <Row label="Subtotal" value={formatPrice(order.subtotal)} />
-          {order.shippingFee > 0 ? <Row label="Delivery" value={formatPrice(order.shippingFee)} /> : null}
+          {order.deliveryFee > 0 ? <Row label="Delivery" value={formatPrice(order.deliveryFee)} /> : null}
+          {order.returnedAmount > 0 ? <Row label="Returned goods" value={`− ${formatPrice(order.returnedAmount)}`} /> : null}
+          {order.feeRefunded ? <Row label="Delivery fee refunded" value={`− ${formatPrice(order.deliveryFee)}`} /> : null}
           <View style={{ borderTopWidth: 1, borderTopColor: colors.line, paddingTop: spacing.sm }}>
-            <Row label="Total" value={formatPrice(order.total)} strong />
+            <Row label={order.fulfilment ? 'Final total' : 'Total'} value={formatPrice(order.fulfilment ? finalTotal : order.total)} strong />
           </View>
           <AppText variant="small" style={{ fontSize: 12 }}>
             {payment?.status === 'PAID'
               ? isOnline(order) ? 'Paid online.' : 'Paid in cash on delivery.'
               : isOnline(order) ? 'To be paid online.' : 'Pay in cash when your order arrives.'}
           </AppText>
+          {returnDoc?.refundAmount > 0 ? (
+            <AppText variant="small" style={{ fontSize: 12 }}>
+              Refunded to your payment method: {formatPrice(returnDoc.refundAmount)}.
+            </AppText>
+          ) : null}
           {paid ? <ReceiptNote orderId={order._id} /> : null}
         </Card>
       </Section>

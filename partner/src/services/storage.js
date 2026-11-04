@@ -1,8 +1,8 @@
 import * as SecureStore from 'expo-secure-store'
 
-// Its own key: this app and the shopper app can sit on the same phone, and one
-// must never pick up the other's session.
-const TOKEN_KEY = 'citycart.partner.session'
+// Its own key: the shopper, staff and delivery apps can sit on the same phone,
+// and one must never pick up another's session.
+const TOKEN_KEY = 'citycart.staff.session'
 
 /**
  * The login token lives only in the device's secure storage (iOS Keychain /

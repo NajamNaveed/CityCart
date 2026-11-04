@@ -26,6 +26,8 @@ const MODELS = {
   brands: require('../src/models/brand.model'),
   stores: require('../src/models/store.model'),
   categories: require('../src/models/category.model'),
+  catalogProducts: require('../src/models/catalogProduct.model'),
+  addresses: require('../src/models/address.model'),
   products: require('../src/models/product.model'),
   inventories: require('../src/models/inventory.model'),
   employees: require('../src/models/employee.model'),
@@ -36,6 +38,7 @@ const MODELS = {
   payments: require('../src/models/payment.model'),
   receipts: require('../src/models/receipt.model'),
   deliveries: require('../src/models/delivery.model'),
+  returns: require('../src/models/return.model'),
   reviews: require('../src/models/review.model'),
   notifications: require('../src/models/notification.model'),
   counters: require('../src/models/counter.model'),
@@ -103,6 +106,7 @@ Sign in (passwords are the same on every account in a group):
   Brand owner  /sell/login    brand@citycart.local            ${PASSWORDS.brand}   (Loom & Co., the fullest account)
   Other owners /sell/login    hamza.sheikh@citycart.demo and the rest   ${PASSWORDS.demo}
   Rider        partner app    shoaib.raza@citycart.demo (Loom & Co.)   ${PASSWORDS.demo}
+  Picker       partner app    areeba.saleem@citycart.demo (Loom & Co., one per active brand)   ${PASSWORDS.demo}
   Staff        /sell/login    usman.tariq@citycart.demo (orders) / fatima.noor@citycart.demo (catalogue)   ${PASSWORDS.demo}
   Records      partner app    hira.anwar@citycart.demo (Loom & Co.: orders, deliveries, riders, receipts, cash)   ${PASSWORDS.demo}
   Customers    /login         sana.iqbal@citycart.demo and the rest      ${PASSWORDS.demo}

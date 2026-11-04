@@ -70,6 +70,7 @@ async function proposeAdjustment(req, res, next) {
       brandId: req.tenantBrandId,
       orderId: params.data.id,
       userId: req.user._id,
+      userRole: req.user.role,
       ...body.data,
     });
     return res.status(201).json({ success: true, message: 'Proposal sent to the customer', adjustment });

@@ -19,7 +19,3 @@ export function sentence(message) {
 export function sentenceAll(errors = {}) {
   return Object.fromEntries(Object.entries(errors).map(([field, message]) => [field, sentence(message)]))
 }
-
-// The customer's proof-of-delivery code: exactly six digits.
-export const CODE_LENGTH = 6
-export const isValidCode = (code) => new RegExp(`^[0-9]{${CODE_LENGTH}}$`).test(String(code || ''))

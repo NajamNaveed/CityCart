@@ -33,7 +33,7 @@ function asRole(role, permissions) {
 const asRider = () => {
   const user = { _id: oid(), role: ROLES.RIDER, isActive: true, passwordVersion: 0, brandId };
   User.findById.mockResolvedValue(user);
-  const token = signToken({ userId: user._id, role: user.role, brandId, passwordVersion: 0, client: 'partner' }, { expiresIn: '8h' });
+  const token = signToken({ userId: user._id, role: user.role, brandId, passwordVersion: 0, client: 'delivery' }, { expiresIn: '8h' });
   return { header: ['Authorization', `Bearer ${token}`], user };
 };
 

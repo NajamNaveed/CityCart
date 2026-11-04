@@ -11,6 +11,7 @@ const {
   updateBlock,
   deactivateBlock,
   resolveBlock,
+  blocksAtPoint,
   BlockError,
 } = require('../services/block.service');
 const { formatZodError } = require('../utils/formatZodError');
@@ -56,6 +57,20 @@ async function resolve(req, res, next) {
       return res.status(200).json({ success: true, block: null, city: null, distanceKm: null });
     }
     return res.status(200).json({ success: true, ...match });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+// "Which blocks am I in?" — the blocks whose boundary contains the position
+// (none, one, or several when zones overlap) and the nearest others to offer.
+async function at(req, res, next) {
+  const parsed = resolveQuerySchema.safeParse(req.query);
+  if (!parsed.success) return invalid(res, parsed.error);
+
+  try {
+    const result = await blocksAtPoint(parsed.data);
+    return res.status(200).json({ success: true, ...result });
   } catch (err) {
     return next(err);
   }
@@ -114,4 +129,4 @@ async function remove(req, res, next) {
   }
 }
 
-module.exports = { list, resolve, create, update, remove };
+module.exports = { list, resolve, at, create, update, remove };

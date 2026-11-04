@@ -102,6 +102,13 @@ const deliverySchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    // The door return created when the customer refused goods (docs/22 §F).
+    // Present only for a partial or fully refused delivery.
+    returnId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Return',
+      default: null,
+    },
   },
   {
     timestamps: true,

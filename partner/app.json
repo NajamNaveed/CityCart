@@ -1,19 +1,19 @@
 {
   "expo": {
-    "name": "CityCart Partner",
-    "slug": "citycart-partner",
+    "name": "CityCart Staff",
+    "slug": "citycart-staff",
     "version": "1.0.0",
     "orientation": "portrait",
-    "scheme": "citycart-partner",
+    "scheme": "citycart-staff",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "light",
     "backgroundColor": "#f8f9fa",
     "ios": {
-      "bundleIdentifier": "com.citycart.partner",
+      "bundleIdentifier": "com.citycart.staff",
       "supportsTablet": false
     },
     "android": {
-      "package": "com.citycart.partner",
+      "package": "com.citycart.staff",
       "adaptiveIcon": {
         "backgroundColor": "#1e3a2f",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -34,23 +34,10 @@
       ],
       "expo-secure-store",
       [
-        "expo-location",
-        {
-          "locationWhenInUsePermission": "CityCart Partner uses your location, only while you choose to share it and have a delivery out, so the customer and your brand can see where you are."
-        }
-      ],
-      [
         "expo-notifications",
         {
           "color": "#1e3a2f",
           "defaultChannel": "default"
-        }
-      ],
-      [
-        "expo-image-picker",
-        {
-          "cameraPermission": "CityCart Partner uses the camera only to photograph a payment confirmation or card-machine slip at the door.",
-          "photosPermission": "CityCart Partner does not open your photo library; payment proof photos are taken with the camera."
         }
       ]
     ]

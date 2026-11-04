@@ -27,6 +27,13 @@ jest.mock('expo-router', () => {
 })
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default)
 jest.mock('@expo/vector-icons/Feather', () => () => null)
+jest.mock('../src/components/NearbyMap', () => {
+  const React = require('react')
+  const { View } = require('react-native')
+  return function MockNearbyMap() {
+    return <View testID="map" />
+  }
+})
 jest.mock('expo-secure-store', () => ({ getItemAsync: jest.fn().mockResolvedValue(null), setItemAsync: jest.fn(), deleteItemAsync: jest.fn(), WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'x' }))
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'))
 jest.mock('../src/services/api', () => ({
@@ -45,7 +52,7 @@ import OrderPlaced from '../src/app/order-placed'
 import Orders from '../src/app/orders/index'
 import OrderScreen from '../src/app/orders/[id]'
 import ProductScreen from '../src/app/product/[id]'
-import { CUSTOMER, cleanup, press, pressByLabel, screenText, show, signedIn, signedOut, textOf, tick, type } from './helpers/screens'
+import { CUSTOMER, cleanup, nearbyValue, press, pressByLabel, screenText, show, signedIn, signedOut, textOf, tick, type } from './helpers/screens'
 
 const ID = (n) => `64b7f0c2a1b2c3d4e5f6070${n}`
 const LAWN = { productId: ID(2), name: 'Mehrunisa Printed Lawn', image: '', unitPrice: 3600, quantity: 2, lineTotal: 7200 }
@@ -55,6 +62,7 @@ const LOOM = { brand: { _id: ID(1), name: 'Loom & Co.' }, items: [LAWN], subtota
 const MEHR = { brand: { _id: ID(4), name: 'Mehr Menswear' }, items: [KURTA], subtotal: 2500 }
 const CART = cartOf(LOOM, MEHR)
 
+const ORDER_ITEM = { _id: ID(7), productId: ID(2), productName: 'Mehrunisa Printed Lawn', image: '', quantity: 2, unitPrice: 3600, totalPrice: 7200 }
 const ORDER = {
   _id: ID(5),
   orderNumber: 'CC-20261004-0007',
@@ -62,14 +70,19 @@ const ORDER = {
   orderStatus: 'PENDING',
   createdAt: '2026-10-04T10:00:00Z',
   statusHistory: [{ status: 'PENDING', at: '2026-10-04T10:00:00Z' }],
-  items: [{ productId: ID(2), name: 'Mehrunisa Printed Lawn', image: '', quantity: 2, unitPrice: 3600, lineTotal: 7200 }],
+  items: [ORDER_ITEM],
   subtotal: 7200,
-  shippingFee: 0,
+  deliveryFee: 0,
   total: 7200,
   shippingAddress: { name: 'Sana Iqbal', address: 'House 41, Street 5', city: 'Faisalabad', state: 'Punjab', postalCode: '38000', phone: '+92 300 1234567', additionalInstructions: 'Blue gate' },
 }
 
 const httpError = (status, message, extra = {}) => Object.assign(new Error(message), { response: { status, data: { message, ...extra } } })
+
+const BLOCK = { _id: ID(9), name: 'Gulberg' }
+const POSITION = { lat: 31.4, lng: 73.1 }
+// A shopper with an area chosen, so checkout has a delivery spot to send.
+const nearby = () => nearbyValue({ blockIds: [BLOCK._id], selectedBlocks: [BLOCK], areaName: BLOCK.name, coords: POSITION, origin: POSITION })
 
 afterEach(cleanup)
 
@@ -80,11 +93,14 @@ beforeEach(() => {
   rememberPlacedOrders([])
   api.get.mockImplementation(async (url) => {
     if (url === '/cart') return { data: { cart: CART } }
+    if (url === '/addresses') return { data: { addresses: [] } }
+    if (url === '/blocks/at') return { data: { containing: [BLOCK], nearest: [] } }
     throw new Error(`unexpected GET ${url}`)
   })
+  api.post.mockResolvedValue({ data: { deliverable: [], undeliverable: [] } })
 })
 
-const auth = () => ({ auth: signedIn() })
+const auth = () => ({ auth: signedIn(), nearby: nearby() })
 
 describe('Cart', () => {
   it('asks a signed-out visitor to sign in, and brings them back', async () => {
@@ -151,6 +167,46 @@ describe('Cart', () => {
     expect(text).toContain('Out of stock')
     expect(text).toContain('Remove or fix the items marked above')
     expect(text).not.toContain('Checkout')
+  })
+
+  it('warns when the shops in the cart cannot deliver to the chosen area, and removes those items', async () => {
+    let checks = 0
+    api.post.mockImplementation(async (url) => {
+      if (url === '/cart/area-check') {
+        checks += 1
+        // Once the item is removed, the fresh check has nothing to complain about.
+        return {
+          data: {
+            deliverable: [KURTA.productId],
+            undeliverable: checks === 1 ? [{ productId: LAWN.productId, name: LAWN.name, brandName: 'Loom & Co.' }] : [],
+          },
+        }
+      }
+      throw new Error(`unexpected POST ${url}`)
+    })
+    api.delete.mockResolvedValue({ data: { cart: cartOf(MEHR) } })
+    const near = nearby()
+    const renderer = await show(<CartScreen />, { auth: signedIn(), nearby: near })
+
+    expect(api.post).toHaveBeenCalledWith('/cart/area-check', { blockIds: [BLOCK._id] })
+    const text = screenText(renderer)
+    expect(text).toContain('One item cannot be delivered to Gulberg')
+    expect(text).toContain('Mehrunisa Printed Lawn (Loom & Co.)')
+
+    await press(renderer, 'Remove it')
+    expect(api.delete).toHaveBeenCalledWith(`/cart/items/${LAWN.productId}`)
+    expect(screenText(renderer)).not.toContain('Mehrunisa Printed Lawn')
+  })
+
+  it('offers to change the area instead', async () => {
+    api.post.mockImplementation(async (url) => {
+      if (url === '/cart/area-check') return { data: { deliverable: [], undeliverable: [{ productId: LAWN.productId, name: LAWN.name, brandName: 'Loom & Co.' }] } }
+      throw new Error(`unexpected POST ${url}`)
+    })
+    const near = nearby()
+    const renderer = await show(<CartScreen />, { auth: signedIn(), nearby: near })
+    await press(renderer, 'Change area')
+    expect(near.openPicker).toHaveBeenCalled()
   })
 
   it('invites the shopper to start shopping when the cart is empty', async () => {
@@ -259,14 +315,74 @@ describe('Checkout', () => {
     for (const expected of ['Delivery address', 'Full name', 'Cash on delivery', '2 × Mehrunisa Printed Lawn', '1 × Classic Kurta', 'Total to pay', 'Rs 9,700', 'becomes 2 separate orders', 'Place order · Rs 9,700']) expect(text).toContain(expected)
   })
 
+  it('delivers to a saved address without asking for the map pin again', async () => {
+    const ADDRESS = {
+      _id: ID(8),
+      label: 'Home',
+      isDefault: true,
+      fullName: 'Sana Iqbal',
+      phone: '+92 300 1234567',
+      addressLine: 'House 41, Street 5',
+      city: 'Faisalabad',
+      postalCode: '',
+      additionalInstructions: 'Blue gate',
+      latitude: 31.41,
+      longitude: 73.08,
+      blocks: [BLOCK],
+    }
+    api.get.mockImplementation(async (url) => {
+      if (url === '/cart') return { data: { cart: CART } }
+      if (url === '/addresses') return { data: { addresses: [ADDRESS] } }
+      throw new Error(`unexpected GET ${url}`)
+    })
+    api.post.mockResolvedValue({ data: { orders: [{ _id: ID(5), orderNumber: 'CC-1', total: 9700, items: [{}] }] } })
+    const renderer = await show(<Checkout />, auth())
+
+    const text = screenText(renderer)
+    expect(text).toContain('Home')
+    expect(text).toContain('Default')
+    expect(text).toContain('Delivering to Gulberg')
+    expect(text).not.toContain('Full name') // the saved address replaces the form
+    expect(renderer.root.findAll((n) => n.props.accessibilityLabel === 'Delivery notes')[0].props.value).toBe('Blue gate')
+
+    await press(renderer, 'Place order · Rs 9,700')
+    expect(api.post).toHaveBeenCalledWith('/orders', {
+      paymentMethod: 'COD',
+      shippingAddress: { fullName: 'Sana Iqbal', phone: '+92 300 1234567', addressLine: 'House 41, Street 5', city: 'Faisalabad', additionalInstructions: 'Blue gate' },
+      deliveryLocation: { latitude: 31.41, longitude: 73.08 },
+      addressId: ADDRESS._id,
+    })
+  })
+
+  it('will not send an order to a pin outside the delivery areas', async () => {
+    api.get.mockImplementation(async (url) => {
+      if (url === '/cart') return { data: { cart: CART } }
+      if (url === '/addresses') return { data: { addresses: [] } }
+      if (url === '/blocks/at') return { data: { containing: [], nearest: [{ _id: BLOCK._id, distanceKm: 0.4 }] } }
+      throw new Error(`unexpected GET ${url}`)
+    })
+    const renderer = await show(<Checkout />, auth())
+    await fill(renderer)
+    await press(renderer, 'Place order · Rs 9,700')
+    expect(screenText(renderer)).toContain('We do not deliver to that spot yet')
+    expect(api.post).not.toHaveBeenCalled()
+  })
+
+  it('names the stores that cannot reach the delivery spot', async () => {
+    api.post.mockRejectedValue(httpError(409, 'Some items cannot be delivered to this location.', { code: 'CHECKOUT_ISSUES', issues: [{ code: 'NOT_DELIVERABLE', brandName: 'Loom & Co.' }] }))
+    const renderer = await show(<Checkout />, auth())
+    await fill(renderer)
+    await press(renderer, 'Place order · Rs 9,700')
+    expect(screenText(renderer)).toContain('Loom & Co. cannot deliver to this spot')
+  })
+
   it('explains what is missing and sends nothing', async () => {
     const renderer = await show(<Checkout />, auth())
     await press(renderer, 'Place order · Rs 9,700')
     const text = screenText(renderer)
-    expect(text).toContain('Please check the highlighted fields.')
+    expect(text).toContain('Delivery notes are required')
     expect(text).toContain('Enter a valid phone number')
     expect(text).toContain('Enter your street address.')
-    expect(text).toContain('Delivery notes are required')
     expect(api.post).not.toHaveBeenCalled()
   })
 
@@ -274,7 +390,7 @@ describe('Checkout', () => {
     const created = [{ _id: ID(5), orderNumber: 'CC-1', total: 7200, items: [{}] }, { _id: ID(6), orderNumber: 'CC-2', total: 2500, items: [{}] }]
     api.post.mockResolvedValue({ data: { orders: created } })
     const cart = { itemCount: 3, addItem: jest.fn(), setCount: jest.fn() }
-    const renderer = await show(<Checkout />, { auth: signedIn(), cart })
+    const renderer = await show(<Checkout />, { auth: signedIn(), cart, nearby: nearby() })
 
     await fill(renderer)
     await press(renderer, 'Place order · Rs 9,700')
@@ -283,6 +399,8 @@ describe('Checkout', () => {
     expect(api.post).toHaveBeenCalledWith('/orders', {
       paymentMethod: 'COD',
       shippingAddress: { fullName: 'Sana Iqbal', phone: '+92 300 1234567', addressLine: 'House 41, Street 5', city: 'Faisalabad', additionalInstructions: 'Blue gate, call on arrival.' },
+      deliveryLocation: { latitude: POSITION.lat, longitude: POSITION.lng },
+      saveAddress: { label: 'Home' },
     })
     expect(cart.setCount).toHaveBeenCalledWith(0)
     expect(takePlacedOrders()).toEqual(created)
@@ -388,6 +506,52 @@ describe('Order detail', () => {
     for (const expected of ['CC-20261004-0007', 'Pending', 'Payment pending', 'Placed', 'Confirmed', 'Out for delivery', 'Delivered', 'Mehrunisa Printed Lawn', '2 × Rs 3,600', 'Rs 7,200', 'Pay in cash when your order arrives', 'Sana Iqbal', 'House 41, Street 5', 'Faisalabad, Punjab, 38000', 'Notes: Blue gate', 'Cancel order']) {
       expect(text).toContain(expected)
     }
+  })
+
+  describe('what arrived and what came back', () => {
+    const delivered = { ...ORDER, orderStatus: 'DELIVERED', statusHistory: [{ status: 'PENDING' }, { status: 'DELIVERED' }] }
+    const returnOf = (line, extra = {}) => ({ lines: [line], ...extra })
+
+    it('shows a half-and-half order line by line, with the final total', async () => {
+      const order = { ...delivered, fulfilment: 'PARTIAL', returnedAmount: 1800, feeRefunded: false, netTotal: 5400 }
+      serve(order, {
+        payment: { status: 'PAID' },
+        return: returnOf({ orderItemId: ORDER_ITEM._id, productName: ORDER_ITEM.productName, quantity: 1, unitPrice: 3600, reason: 'DAMAGED' }, { returnedSubtotal: 1800, refundAmount: 0 }),
+      })
+      const text = screenText(await show(<OrderScreen />, auth()))
+      expect(text).toContain('What arrived')
+      expect(text).toContain('Part of your order came back.')
+      expect(text).toContain('1 delivered · 1 returned — Damaged')
+      expect(text).toContain('Goods returned')
+      expect(text).toContain('− Rs 1,800')
+      expect(text).toContain('Final total')
+      expect(text).toContain('Rs 5,400')
+    })
+
+    it('shows a fully returned prepaid order, the refund and the refunded delivery fee', async () => {
+      const order = { ...delivered, paymentMethod: 'ONLINE_GATEWAY', orderStatus: 'RETURNED', fulfilment: 'NONE', returnedAmount: 7200, feeRefunded: true, netTotal: 0, deliveryFee: 250, total: 7450 }
+      serve(order, {
+        payment: { status: 'REFUNDED' },
+        return: returnOf({ orderItemId: ORDER_ITEM._id, productName: ORDER_ITEM.productName, quantity: 2, unitPrice: 3600, reason: 'DAMAGED' }, { returnedSubtotal: 7200, refundAmount: 7450 }),
+      })
+      const text = screenText(await show(<OrderScreen />, auth()))
+      expect(text).toContain('Your whole order went back to the store.')
+      expect(text).toContain('All 2 returned — Damaged')
+      expect(text).toContain('Delivery fee refunded')
+      expect(text).toContain('Refunded to you')
+      expect(text).toContain('Rs 7,450')
+      expect(text).toContain('Final total')
+      expect(text).toContain('Rs 0')
+    })
+
+    it('says everything arrived when nothing came back', async () => {
+      serve({ ...delivered, fulfilment: 'FULL', returnedAmount: 0, netTotal: 7200 }, { payment: { status: 'PAID' } })
+      const text = screenText(await show(<OrderScreen />, auth()))
+      expect(text).toContain('Everything arrived.')
+      expect(text).toContain('2 delivered')
+      expect(text).toContain('Final total')
+      expect(text).not.toContain('Goods returned')
+    })
   })
 
   it('shows courier tracking once it exists', async () => {
@@ -530,6 +694,8 @@ describe('paying online', () => {
   const serveCheckout = (methods) =>
     api.get.mockImplementation(async (url) => {
       if (url === '/cart') return { data: { cart: CART } }
+      if (url === '/addresses') return { data: { addresses: [] } }
+      if (url === '/blocks/at') return { data: { containing: [BLOCK], nearest: [] } }
       if (url === '/payments/methods') {
         if (methods instanceof Error) throw methods
         return { data: { methods } }

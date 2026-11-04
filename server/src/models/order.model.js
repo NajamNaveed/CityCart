@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const geoPointSchema = require('./geoPoint.schema');
 
 /**
  * Order model — one of the most important entities in CityCart.
@@ -15,6 +16,8 @@ const mongoose = require('mongoose');
  * profile change never alters an existing order.
  */
 const { ORDER_STATUSES } = require('../config/orderStatuses');
+const { PICK_STATUSES } = require('../config/pickStatuses');
+const { FULFILMENTS } = require('../config/returns');
 
 // Payment status is tracked independently of order status (§25, §27) —
 // these must never be merged into a single field.
@@ -56,6 +59,16 @@ const orderItemSchema = new mongoose.Schema({
   },
   image: {
     type: String,
+  },
+  // Filled in while the order is picked (docs/22 §E). A line without a status
+  // has not been looked at yet; `pickedQty` is meaningful for SHORT.
+  pickStatus: {
+    type: String,
+    enum: PICK_STATUSES,
+  },
+  pickedQty: {
+    type: Number,
+    min: 0,
   },
 });
 
@@ -107,6 +120,15 @@ const orderSchema = new mongoose.Schema(
       type: addressSnapshotSchema,
       required: true,
     },
+    // Where it is delivered (the pin) and the blocks that held the pin when the
+    // order was placed. `addressId` is the saved address it came from, if any; the
+    // snapshot above is what the order keeps, so editing that address changes nothing here.
+    deliveryLocation: { type: geoPointSchema },
+    deliveryBlockIds: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Block' }],
+      default: undefined,
+    },
+    addressId: { type: mongoose.Schema.Types.ObjectId, ref: 'Address' },
     subtotal: {
       type: Number,
       required: true,
@@ -162,6 +184,28 @@ const orderSchema = new mongoose.Schema(
       ref: 'OrderAdjustment',
       default: null,
     },
+    // The picker who took the order and when; `packedAt` is set when the
+    // packed order becomes READY_FOR_SHIPMENT (docs/22 §E).
+    pickerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true,
+    },
+    pickStartedAt: { type: Date, default: null },
+    packedAt: { type: Date, default: null },
+    // Door returns (docs/22 §F). Set once when the delivery completes: how much
+    // of the order actually arrived (FULL/PARTIAL/NONE), the value of the refused
+    // goods, the fee when it was refunded, and the final amount the customer owes
+    // (or, when prepaid, keeps). Older orders have no netTotal; readers fall back
+    // to `total`.
+    fulfilment: {
+      type: String,
+      enum: FULFILMENTS,
+    },
+    returnedAmount: { type: Number, default: 0, min: 0 },
+    feeRefunded: { type: Boolean, default: false },
+    netTotal: { type: Number, min: 0 },
     // Audit trail (docs/08 §36): who moved the order to which status, when.
     statusHistory: {
       type: [
@@ -189,6 +233,7 @@ const orderSchema = new mongoose.Schema(
 // Compound index example from §34, for the common
 // "a brand's orders by status" query pattern.
 orderSchema.index({ brandId: 1, orderStatus: 1 });
+orderSchema.index({ brandId: 1, orderStatus: 1, pickerId: 1 });
 orderSchema.index({ brandId: 1, createdAt: 1 });
 orderSchema.index({ createdAt: 1 });
 // Compound index example from §34, for "a customer's orders, newest

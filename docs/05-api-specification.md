@@ -194,17 +194,31 @@ of a seller or admin account is refused with `403 WEB_ONLY` on every endpoint.
 The web client does not send `X-Client` and never receives a token in a body.
 See docs/06 (Native App Sessions).
 
-### Partner app sign-in
+### Staff and Delivery app sign-in
+
+There are three native app types: shopper (`mobile/`), staff (`partner/`) and
+delivery (`delivery/`). Each has its own sign-in endpoint, and the server refuses
+an app that sends the wrong header.
 
 ```text
-POST /api/v1/auth/partner/login        (header X-Client: partner)
+POST /api/v1/auth/staff/login          (header X-Client: staff)
+POST /api/v1/auth/delivery/login       (header X-Client: delivery)
 ```
 
-Body `{ "email", "password" }`. Only `RIDER` and `BRAND_EMPLOYEE` accounts can
-sign in; any other account, a wrong password and an unknown email all answer the
-same `401`. Without the header: `403 PARTNER_APP_ONLY`. The response contains the
-token (marked as a partner token, one staff session long) and sets no cookie.
-See `20-partner-app.md`.
+Body `{ "email", "password" }`.
+
+* **Staff:** only `BRAND_EMPLOYEE` and `PICKER` accounts. Without the header:
+  `403 STAFF_APP_ONLY`.
+* **Delivery:** only `RIDER` accounts. Without the header:
+  `403 DELIVERY_APP_ONLY`.
+
+Any other account, a wrong password and an unknown email all answer the same
+`401`. The response contains the token (one staff session long) and sets no
+cookie. The token carries `client: "staff"` or `client: "delivery"`, and that
+mark is checked on every Bearer request: a staff token is refused for riders,
+a delivery token is refused for staff or shoppers, and any app token is refused
+for a brand owner, the super admin or a shopper (`403 WRONG_APP`). See
+`20-partner-app.md` (Staff) and `23-delivery-app.md` (Delivery).
 
 ---
 
@@ -562,6 +576,10 @@ Base:
 /api/v1/categories
 ```
 
+Categories are global (one tree for the platform, two levels deep). Reading is
+public. Writing needs the super admin, or an admin partner with `admin.catalog`
+(a read-only partner cannot write). Brands cannot create or edit categories.
+
 ## List Categories
 
 ```text
@@ -571,10 +589,20 @@ GET /api/v1/categories
 Query:
 
 ```text
-?brandId=
+?parentId=
 ```
 
-Public users may retrieve active categories.
+Public users may retrieve active categories only.
+
+---
+
+## Category Tree
+
+```text
+GET /api/v1/categories/tree
+```
+
+Returns the whole active tree: top-level categories, each with `children`.
 
 ---
 
@@ -592,13 +620,12 @@ GET /api/v1/categories/:id
 POST /api/v1/categories
 ```
 
-Required:
+Body: `name` (required), `description`, `image`, `parentId`, `order`.
 
-```text
-categories.create
-```
+Required: super admin, or admin partner with `admin.catalog`.
 
-The server determines the user's brand.
+`parentId` must be a top-level category (two levels only). A name must be
+unique among siblings (409 otherwise).
 
 ---
 
@@ -608,13 +635,11 @@ The server determines the user's brand.
 PATCH /api/v1/categories/:id
 ```
 
-Required:
+Required: super admin, or admin partner with `admin.catalog`.
 
-```text
-categories.update
-```
-
-The category must belong to the user's brand.
+`slug` never changes. A category that has subcategories cannot be moved under
+another category. Deactivating (`isActive: false`) is refused with 409 while
+products or subcategories depend on it.
 
 ---
 
@@ -624,13 +649,165 @@ The category must belong to the user's brand.
 DELETE /api/v1/categories/:id
 ```
 
-Required:
+Required: super admin, or admin partner with `admin.catalog`.
+
+Soft delete (deactivation). Refused with 409 while products or child categories
+depend on the category.
+
+---
+
+# 11.1 Catalogue Endpoints
+
+The shared product catalogue (Marketplace v2, Phase 1b).
+
+## For stores
 
 ```text
-categories.delete
+GET  /api/v1/catalog                 ?q=&categoryId=&page=&limit=
+GET  /api/v1/catalog/mine            the store's own requests and private items
+GET  /api/v1/catalog/:id
+POST /api/v1/catalog/requests        ask for a new item
 ```
 
-The backend should check whether products or child categories depend on the category before deleting it.
+Reading needs `products.view`, requesting needs `products.create`, and the account
+must belong to a brand. `GET /catalog` returns ACTIVE global items plus the store's
+own private items. `q` searches name, manufacturer and barcode.
+
+`POST /catalog/requests` body: `name`, `categoryId` (required), `manufacturer`,
+`description`, `images`, `size {value, unit}`, `barcode`, `private`.
+`private: true` creates a PRIVATE, ACTIVE item usable at once by that store;
+otherwise a GLOBAL item is created as PENDING for an admin to review.
+
+## For platform admins
+
+Required: super admin, or an admin partner with `admin.catalog`.
+
+```text
+GET    /api/v1/admin/catalog               ?status=&scope=&q=&categoryId=&page=&limit=
+POST   /api/v1/admin/catalog               create a GLOBAL, ACTIVE item
+PATCH  /api/v1/admin/catalog/:id           edit; refreshes every store listing
+POST   /api/v1/admin/catalog/:id/approve   PENDING -> ACTIVE
+POST   /api/v1/admin/catalog/:id/reject    body { note }; PENDING -> REJECTED
+POST   /api/v1/admin/catalog/:id/merge     body { intoId }
+DELETE /api/v1/admin/catalog/:id           archive (409 while stores list it)
+```
+
+---
+
+# 11.2 Block and Discovery Endpoints (zones)
+
+Marketplace v2, Phase 2.
+
+## Blocks
+
+```text
+GET    /api/v1/blocks               ?cityId=&isActive=          public
+GET    /api/v1/blocks/at            ?lat=&lng=                  public
+GET    /api/v1/blocks/resolve       ?lat=&lng=                  public (nearest centre)
+POST   /api/v1/blocks               super admin or admin.locations
+PATCH  /api/v1/blocks/:id           super admin or admin.locations
+DELETE /api/v1/blocks/:id           deactivates
+```
+
+A block is returned as `{ _id, cityId, name, slug, isActive, latitude, longitude,
+polygon }`. `latitude`/`longitude` is the centre. `polygon` is the outline as an
+open list of `[lat, lng]` pairs, or `null` for a block that has none.
+
+`POST` body: `cityId`, `name`, and either `polygon` (preferred) or `latitude` +
+`longitude`. `PATCH` accepts `name`, `polygon` (`null` removes the outline),
+`latitude` + `longitude` (only for a block with no outline) and `isActive`.
+A bad outline answers 400 with a message such as "The outline crosses itself."
+
+`POST` and `PATCH` return the block plus `overlaps` (other active blocks the zone
+touches) and, after a change that can move shops between blocks,
+`branchesWithoutBlock` (shops now in no block).
+
+`GET /blocks/at` answers "which blocks am I in?":
+
+```text
+{ containing: [block + distanceKm ...],   every active block whose zone holds the position
+  nearest:    [block + distanceKm ...] }  up to 5 other nearby blocks, for a border or outside position
+```
+
+`containing` has none, one, or several entries (where zones overlap).
+
+## Discover
+
+```text
+GET /api/v1/discover?scope=area&blockIds=a,b&lat=&lng=&radiusKm=
+```
+
+`scope=area` finds shops in any of the chosen blocks (1 to 10, one city). With
+`radiusKm` (0.5 to 50) it also limits to that distance around `lat`/`lng` (both
+required); without it the whole block(s). The response `meta.blocks` lists the
+blocks searched. `scope=block&blockId=` still works and now returns every shop
+whose zone holds the pin, so a shop in an overlap shows in both blocks.
+
+---
+
+# 11.3 Address and Shopping-Area Endpoints
+
+Marketplace v2, Phase 3.
+
+## Saved addresses (customers only)
+
+```text
+GET    /api/v1/addresses
+POST   /api/v1/addresses
+PATCH  /api/v1/addresses/:id
+POST   /api/v1/addresses/:id/default
+DELETE /api/v1/addresses/:id
+```
+
+An address is returned with `latitude`, `longitude` (the pin) and `blocks` (the
+blocks that currently hold it). `POST` body: `label`, `fullName`, `phone`,
+`addressLine`, `city`, `latitude`, `longitude`, and optionally `state`,
+`postalCode`, `country`, `additionalInstructions`, `isDefault`. A pin outside every
+zone answers 400 `OUTSIDE_DELIVERY_ZONE`; an eleventh address answers 409
+`ADDRESS_LIMIT`. An address that is not the caller's answers 404.
+
+## Browsing the catalogue in a shopping area (public)
+
+```text
+GET /api/v1/catalog/browse?blockIds=a,b&lat=&lng=&radiusKm=&q=&categoryId=&sort=&page=&limit=
+GET /api/v1/catalog/browse/:catalogProductId?blockIds=a,b&lat=&lng=&radiusKm=
+```
+
+`blockIds` (required) is the shopper's area: one block, or several where zones
+overlap. `radiusKm` limits to shops within that distance of `lat`/`lng`. `sort` is
+`name` (default), `price` or `nearest` (needs a position). Each item is one real
+product with its `offers`, cheapest first:
+
+```text
+{ catalogProductId, name, manufacturer, size, images, minPrice, maxPrice,
+  offerCount, inStock, nearestKm,
+  offers: [ { productId, brandId, brandName, price, availability, branchCount, nearestKm } ] }
+```
+
+Adding to the cart uses an offer's `productId` (the store's listing).
+
+## Cart and checkout
+
+```text
+POST /api/v1/cart/area-check   body { blockIds: [...] }
+```
+
+Read-only. Answers `{ deliverable: [productId], undeliverable: [{ productId, name,
+brandName }] }`: which cart items a store can still deliver in those blocks. The app
+shows it when the customer changes shopping area and asks before removing items.
+
+`POST /api/v1/orders` now also takes:
+
+```text
+deliveryLocation   { latitude, longitude }   required: the delivery pin
+addressId          a saved address of the customer (kept on the order)
+saveAddress        { label }                 save this address for next time
+```
+
+The server finds the blocks holding the pin. No block: 400 `OUTSIDE_DELIVERY_ZONE`.
+A store with no active shop in those blocks: 409 `CHECKOUT_ISSUES`, with an issue
+`NOT_DELIVERABLE` for each of its items, and nothing is ordered. Saving the address
+is best-effort and never undoes an order.
 
 ---
 
@@ -690,6 +867,13 @@ products.create
 ```
 
 The backend automatically associates the product with the authenticated user's brand.
+
+A product is a store's listing of a catalogue item. Body: `catalogProductId`
+(required), `price` (required), and optionally `compareAtPrice`, `sku`, `status`,
+`isActive`, `branchIds`, `attributes`. The name, description, images and category
+are copied from the catalogue item and cannot be sent. The item must be ACTIVE and
+either GLOBAL or the store's own PRIVATE item. A store can list an item only once
+(409).
 
 ---
 
@@ -955,11 +1139,17 @@ Besides `order`, `payment` and `delivery`, the response carries the order's chan
   "payment": { },
   "delivery": { },
   "adjustments": [ ],
-  "adjustment": { }
+  "adjustment": { },
+  "return": { }
 }
 ```
 
 `adjustments` is the full history, newest first. `adjustment` is the one waiting for an answer, or the latest proposal when none is waiting. Both are empty (`[]` / `null`) when the brand never proposed a change.
+
+`return` is the customer-safe door return for this order (docs/22 §F), or `null`.
+It carries the refused lines, reasons, `restocked` flags and the refund, never the
+brand id, rider id or private photo paths. The order itself carries `fulfilment`,
+`returnedAmount`, `feeRefunded` and `netTotal`.
 
 ---
 
@@ -1294,6 +1484,7 @@ Every endpoint below that says "Super Admin only" (or "Super Admin") is now
 | `admin.orders`      | `/admin/orders` and admin order detail |
 | `admin.reviews`     | `/admin/reviews` and review moderation |
 | `admin.locations`   | city and block writes |
+| `admin.catalog`     | category writes (and, later, the shared catalogue) |
 | `admin.settings`    | `/admin/settings` |
 | `admin.analytics`   | `/admin/analytics` |
 | `admin.payments`    | `/payments/events` and receipt readers for platform admins |
@@ -1753,6 +1944,8 @@ PATCH /api/v1/deliveries/:deliveryId/rider
 Body `{ "riderId": "<id>" }` assigns an active rider of the same brand (also
 sets `assignedAgent` to the rider's name and notifies the rider with
 `DELIVERY_ASSIGNED`); `{ "riderId": null }` removes the rider. Required: `delivery.manage`.
+This is the manual override: a new delivery is already assigned automatically to
+the brand's least-busy active rider (`11-delivery-system.md` §11a).
 Errors: `404` rider not in this brand or inactive; `409 DELIVERY_FINAL`;
 `409 NO_RIDER_ASSIGNED` (removing when none). `PATCH /deliveries/:id` with a typed
 `assignedAgent` answers `409 USE_RIDER_ASSIGNMENT` while a rider is assigned.
@@ -1789,8 +1982,25 @@ GET   /rider/deliveries?scope=active|history
 GET   /rider/deliveries/:id
 PATCH /rider/deliveries/:id/status      { status: PICKED_UP|IN_TRANSIT|OUT_FOR_DELIVERY|FAILED, failureReason? }
 POST  /rider/deliveries/:id/proof-upload   signed upload for a door payment photo (docs/10 §31)
-POST  /rider/deliveries/:id/complete    { code, collection? }  six digits
+POST  /rider/deliveries/:id/return-upload  signed upload for a refused item's photo (docs/22 §F)
+POST  /rider/deliveries/:id/complete    { code, collection?, lines? }  six digits
 ```
+
+`lines` is the per-item answer at the door (docs/22 §F). Send one entry per order
+item; omitting it means everything was accepted:
+
+```json
+{
+  "lines": [
+    { "itemId": "<order item id>", "acceptedQty": 1, "rejectedQty": 1, "reason": "DAMAGED", "photo": { "publicId": "<path>", "fingerprint": "<etag>" } }
+  ]
+}
+```
+
+`reason` is required when `rejectedQty` is greater than zero and is one of
+`DAMAGED`, `WRONG_ITEM`, `NOT_WANTED`, `MISSING`. The server checks that
+`acceptedQty + rejectedQty` equals the ordered quantity. A photo is optional and
+must have been uploaded with `return-upload` into this delivery's folder.
 
 `collection` records how the customer paid at the door:
 
@@ -1817,6 +2027,102 @@ customer account, brand, prices or the code. `complete`
 errors: `422 INVALID_CODE` (with `attemptsRemaining`), `429 CODE_LOCKED`,
 `409 INVALID_TRANSITION`, `409 NO_DELIVERY_CODE`, plus the proof errors above.
 Deactivating a rider (`PATCH /riders/:id` with `isActive: false`) answers `409 RIDER_HAS_OPEN_DELIVERIES` while the rider still has open deliveries. Customers receive their delivery without `riderId`, `codeAttempts` or `deliveryCode`. See `20-partner-app.md`.
+
+---
+
+# 22c. Picker Endpoints
+
+Base `/api/v1/picker` (role `PICKER` only; the brand always comes from the
+account and every query is pinned to it, anything else is `404`):
+
+```text
+GET   /picker                       pick queue (?page, ?limit) -> { orders, pagination }
+GET   /picker/:id                   one order (the picker's own, or unclaimed and waiting)
+POST  /picker/:id/claim             take the order: CONFIRMED -> PROCESSING
+PATCH /picker/:id/items/:itemId     { pickStatus: PICKED|SHORT|UNAVAILABLE, pickedQty? }
+POST  /picker/:id/propose           { note, restockRemoved?, substitutes? } -> 201 adjustment
+POST  /picker/:id/pack              PROCESSING -> READY_FOR_SHIPMENT (creates the delivery)
+GET   /picker/products?q=           same-brand active listings to offer as a substitute -> { products, pagination }
+```
+
+The queue holds accepted orders (`CONFIRMED`) and orders in picking
+(`PROCESSING`) that are unclaimed or claimed by the signed-in picker. A picker's
+view contains the order number, status, `createdAt`, pick times, the customer's
+**first name**, item names/SKUs/images/quantities, `pickStatus`, `pickedQty`,
+`claimedByMe`, and the waiting proposal's note/expiry. It never contains the
+customer's phone, delivery address, prices, totals or payment details, and
+`GET /picker/products` returns only `_id`, `name`, `sku` and `image` (no price).
+
+`PATCH .../items/:itemId`: `PICKED` (whole quantity), `SHORT` (integer
+`pickedQty` from 1 to quantity − 1) or `UNAVAILABLE` (`pickedQty` 0). The picker
+must hold the claim and the order must be `PROCESSING` with no waiting proposal.
+
+`POST .../propose` takes only the short/unavailable lines. Each substitute is
+`{ orderItemId, productId, quantity }`, must be a different listing of the same
+brand, and is reserved in stock in the same transaction. The proposal is the
+existing `OrderAdjustment` flow, records `proposedBy` (the picker) and
+`proposedByRole: "PICKER"`, and expires after 24 hours.
+
+Errors: `409 PICK_TAKEN`, `409 NOT_PICKABLE`, `409 ADJUSTMENT_PENDING`,
+`409 CLAIM_REQUIRED`, `409 NOT_YOUR_ORDER`, `409 NOT_PICKING`,
+`409 ORDER_CHANGED`, `409 PICKING_INCOMPLETE` (not every line marked),
+`409 NOTHING_TO_PROPOSE`, `409 DUPLICATE_SUBSTITUTE`,
+`409 SUBSTITUTE_NOT_SHORT`, `400 INVALID_PICKED_QUANTITY`, and the adjustment
+errors for substitutes. See `20-partner-app.md` and `22-marketplace-v2-plan.md` §E.
+
+---
+
+# 22f. Door Return Endpoints
+
+Base:
+
+```text
+/api/v1/returns
+```
+
+The brand's returned-goods inbox (docs/22 §F, docs/08 §41.10). Brand users need
+`delivery.view`; platform admins with `admin.orders` see every brand. Every query
+is pinned to the signed-in user's brand — a return id from another brand is `404`.
+
+```text
+GET  /returns?status=IN_TRANSIT|RECEIVED&page=1&limit=20   -> { returns, pagination }
+GET  /returns/summary                                      -> { summary }
+GET  /returns/:id                                          -> { return }
+GET  /returns/:id/photo?line=0                             -> { url, expiresAt }
+POST /returns/:id/receive                                  -> { message, return }
+```
+
+`summary` counts and totals the brand's returns (or the platform's, for an admin):
+
+```json
+{
+  "IN_TRANSIT": { "count": 1, "returnedSubtotal": 4400 },
+  "RECEIVED": { "count": 1, "returnedSubtotal": 430 },
+  "returnedSubtotal": 4830,
+  "refundAmount": 430
+}
+```
+
+A return view joins the order number and carries `lines` (with `hasPhoto`), the
+`returnedSubtotal`, `feeRefunded`, `refundAmount`, `receivedAt` and status. It never
+contains another brand's data or the private Cloudinary path.
+
+`GET /returns/:id/photo` answers a short-lived signed URL for one line's private
+photo (`line` defaults to 0); `404 RETURN_PHOTO_NOT_FOUND` when the line has none.
+`503 RETURN_PHOTO_NOT_CONFIGURED` when Cloudinary is not set up.
+
+`POST /returns/:id/receive` is brand-only and needs `delivery.manage` (a platform
+admin cannot change a brand's stock from here). The body is optional:
+
+```json
+{ "decisions": [ { "index": 0, "restock": true }, { "index": 1, "restock": false } ] }
+```
+
+Only lines marked `restock: true` go back into stock; a line with no decision keeps
+the safe default (write off). One atomic `IN_TRANSIT → RECEIVED` update wins, and
+restock plus its `RETURN_RESTOCKED` inventory movement commit with it. Errors:
+`409 RETURN_ALREADY_RECEIVED`, `400 INVALID_RETURN_DECISIONS`, `404` unknown return
+or line.
 
 ---
 

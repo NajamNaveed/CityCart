@@ -3,6 +3,7 @@ const { z } = require('zod');
 const { DELIVERY_STATUSES } = require('../config/deliveryStatuses');
 const { DELIVERY_SETTABLE_STATUSES, RIDER_SETTABLE_STATUSES } = require('../config/deliveryTransitions');
 const { COLLECTION_METHODS, COLLECTION_WALLETS } = require('../config/paymentCollection');
+const { RETURN_REASONS, RETURN_STATUSES } = require('../config/returns');
 const { CODE_PATTERN, CODE_LENGTH } = require('../utils/deliveryCode');
 
 const objectId = z.string().refine((value) => mongoose.Types.ObjectId.isValid(value), { message: 'Invalid id' });
@@ -14,19 +15,43 @@ const listDeliveriesQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).optional(),
 });
 
+/**
+ * One order line at the door (docs/22 §F): the rider splits the ordered
+ * quantity into accepted and rejected units. The server checks that the two
+ * add up to the ordered quantity and that a rejection has a reason.
+ */
+const returnLineSchema = z.object({
+  itemId: objectId,
+  acceptedQty: z.number({ error: 'acceptedQty must be a number' }).int().min(0),
+  rejectedQty: z.number({ error: 'rejectedQty must be a number' }).int().min(0),
+  reason: z.enum(RETURN_REASONS, { error: `reason must be one of: ${RETURN_REASONS.join(', ')}` }).optional(),
+  photo: z
+    .object({
+      publicId: z.string().trim().min(1).max(300),
+      fingerprint: z.string().trim().min(1).max(200),
+    })
+    .strict()
+    .optional(),
+});
+
 // Only status (+ a reason for FAILED) can be sent. The order and payment
 // status are NEVER settable here (docs/05 §22a) — they follow the delivery
-// server-side.
+// server-side. `lines` completes a delivery with the per-line answers; the
+// server derives the order status, totals and refunds from them.
 const updateDeliveryStatusSchema = z
   .object({
     status: z.enum(DELIVERY_SETTABLE_STATUSES, {
       error: `status must be one of: ${DELIVERY_SETTABLE_STATUSES.join(', ')}`,
     }),
     failureReason: z.string().trim().min(1).max(300).optional(),
+    lines: z.array(returnLineSchema).min(1).max(100).optional(),
   })
   .superRefine((value, ctx) => {
     if (value.status === 'FAILED' && !value.failureReason) {
       ctx.addIssue({ code: 'custom', path: ['failureReason'], message: 'failureReason is required when status is FAILED' });
+    }
+    if (value.lines !== undefined && value.status !== 'DELIVERED') {
+      ctx.addIssue({ code: 'custom', path: ['lines'], message: 'lines are only used when status is DELIVERED' });
     }
   });
 
@@ -113,6 +138,32 @@ const collectionSchema = z
 const completeDeliverySchema = z.object({
   code: z.string().trim().regex(CODE_PATTERN, `code must be ${CODE_LENGTH} digits`),
   collection: collectionSchema.optional(),
+  lines: z.array(returnLineSchema).min(1).max(100).optional(),
+});
+
+// The store's returned-goods inbox (docs/22 §F). `decisions` is optional:
+// without it every line keeps its safe default (write off).
+const receiveReturnSchema = z.object({
+  decisions: z
+    .array(
+      z.object({
+        index: z.number({ error: 'index must be a number' }).int().min(0),
+        restock: z.boolean({ error: 'restock must be a boolean' }),
+      })
+    )
+    .max(200)
+    .optional()
+    .default([]),
+});
+
+const listReturnsQuerySchema = z.object({
+  status: z.enum(RETURN_STATUSES).optional(),
+  page: z.coerce.number().int().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(50).optional(),
+});
+
+const returnPhotoQuerySchema = z.object({
+  line: z.coerce.number().int().min(0).optional().default(0),
 });
 
 // A rider's position (docs/11 §30). Numbers only, in range; accuracy is the phone's estimate in metres.
@@ -132,4 +183,8 @@ module.exports = {
   riderStatusSchema,
   completeDeliverySchema,
   collectionSchema,
+  returnLineSchema,
+  receiveReturnSchema,
+  listReturnsQuerySchema,
+  returnPhotoQuerySchema,
 };

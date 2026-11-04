@@ -33,7 +33,7 @@ async function readyOrder() {
   n += 1;
   const brand = await Brand.create({ name: `B${n}`, slug: `b${n}`, cityId: oid(), status: 'ACTIVE' });
   const product = await Product.create({
-    brandId: brand._id, categoryId: oid(), name: `P${n}`, slug: `p${n}`, sku: `S${n}`,
+    brandId: brand._id, catalogProductId: oid(), categoryId: oid(), name: `P${n}`, slug: `p${n}`, sku: `S${n}`,
     price: 25, status: 'ACTIVE', isActive: true,
   });
   await Inventory.create({ productId: product._id, brandId: brand._id, quantity: 10 });
@@ -76,7 +76,7 @@ describe('delivery lifecycle (real MongoDB)', () => {
     n += 1;
     const brand = await Brand.create({ name: `B${n}`, slug: `b${n}`, cityId: oid(), status: 'ACTIVE' });
     const product = await Product.create({
-      brandId: brand._id, categoryId: oid(), name: `P${n}`, slug: `p${n}`, sku: `S${n}`, price: 5, status: 'ACTIVE', isActive: true,
+      brandId: brand._id, catalogProductId: oid(), categoryId: oid(), name: `P${n}`, slug: `p${n}`, sku: `S${n}`, price: 5, status: 'ACTIVE', isActive: true,
     });
     await Inventory.create({ productId: product._id, brandId: brand._id, quantity: 5 });
     const user = oid();
