@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { MapPin } from 'lucide-react'
 import api, { getErrorMessage, getFieldErrors } from '../../services/api'
 import Field from '../../components/Field'
+import PakistanCityPicker from '../../components/PakistanCityPicker'
 import { Notice, PageHeader, Pager, StatusBadge } from '../../components/brand/Bits'
 import { usePaged } from '../../hooks/usePaged'
 import { EmptyState, Skeleton } from '../../components/ui'
@@ -81,7 +82,14 @@ export default function Cities() {
       <Notice tone={message.tone}>{message.text}</Notice>
 
       <form onSubmit={onAdd} noValidate className="mb-8 grid gap-4 rounded-lg border border-line bg-white p-5 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end">
-        <Field label="New city" id="c-name" name="name" value={form.name} onChange={onChange} error={fieldErrors.name} required />
+        <PakistanCityPicker
+          id="c-name"
+          value={form.name}
+          onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+          onSelect={(city) => setForm({ name: city.name, state: city.province, country: city.country })}
+          error={fieldErrors.name}
+          takenNames={cities ? cities.map((c) => c.name) : []}
+        />
         <Field label="Province or state" id="c-state" name="state" value={form.state} onChange={onChange} error={fieldErrors.state} />
         <Field label="Country" id="c-country" name="country" value={form.country} onChange={onChange} error={fieldErrors.country} />
         <button type="submit" disabled={busy || !form.name.trim()} className={`${btnDark} h-11`}>

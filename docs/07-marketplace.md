@@ -107,6 +107,8 @@ Inactive cities may remain in the database for historical records.
 
 Super Admin controls city availability.
 
+When adding a city, the admin picks from a searchable, scrollable list of Pakistani cities. Selecting one fills the city name, its province or territory, and the country (`Pakistan`) automatically; the fields stay editable, and a city that is not on the list can still be typed by hand.
+
 ---
 
 # 6. Brand Discovery
