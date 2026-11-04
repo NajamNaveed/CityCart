@@ -40,6 +40,13 @@
           "defaultChannel": "default"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "5039e915-f611-43c8-b8c2-515eda981280"
+      }
+    },
+    "owner": "najamnaveed"
   }
 }

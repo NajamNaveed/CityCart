@@ -1,8 +1,8 @@
 {
   "cli": {
-    "version": "^57.0.0",
-    "appVersionSource": "remote"
-  },
+  "version": ">= 27.0.0",
+  "appVersionSource": "remote"
+},
   "build": {
     "development": {
       "extends": "production",
