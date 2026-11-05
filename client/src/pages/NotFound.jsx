@@ -16,7 +16,7 @@ export default function NotFound() {
             Back to home
           </Link>
           <Link
-            to="/shop"
+            to="/nearby"
             className="inline-flex h-11 items-center justify-center rounded-md border border-line bg-white px-6 text-[13px] font-medium uppercase tracking-[0.08em] text-ink transition hover:border-ink"
           >
             Browse the shop

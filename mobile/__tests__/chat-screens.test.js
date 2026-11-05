@@ -100,7 +100,7 @@ describe('conversation list', () => {
     expect(calls.length).toBeGreaterThanOrEqual(2)
   })
 
-  it('offers the shop when there are no conversations yet', async () => {
+  it('says so when there are no conversations yet', async () => {
     api.get.mockResolvedValue({ data: { conversations: [], pagination: { page: 1, pages: 1 } } })
     const screen = await show(<ChatScreen />, { auth: signedIn() })
     expect(screenText(screen)).toContain('No conversations yet')

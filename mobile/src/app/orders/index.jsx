@@ -37,7 +37,7 @@ function OrdersList({ userId }) {
         ) : list.error ? (
           <EmptyState icon="wifi-off" tone="error" title="Couldn't load your orders" message={list.error} action={<Button title="Try again" onPress={list.refresh} />} />
         ) : (
-          <EmptyState icon="package" title="No orders yet" message="When you place an order, you can follow it here." action={<Button title="Start shopping" onPress={() => router.replace('/shop')} />} />
+          <EmptyState icon="package" title="No orders yet" message="When you place an order, you can follow it here." action={<Button title="Start shopping" onPress={() => router.replace('/nearby')} />} />
         )
       }
       renderItem={({ item: order }) => {

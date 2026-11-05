@@ -8,7 +8,7 @@ Status: **in progress.** Written after the project review with the head.
 | 1a Global categories | **done** (server, tests, admin page, brand form, seed, docs) |
 | 1b Shared catalogue and listings | **done** (server, tests, admin Catalogue page, brand product form, CSV import, seed, docs) |
 | 2 Zones: polygon blocks | **done** (server, tests, admin map editor, seed, docs) |
-| 3 Customer area flow, catalogue views, address book | **done**: 3a server; 3b website (area picker with overlaps, borders and map pin; range pills inside the chosen blocks; products grouped with offers; checkout with saved addresses and a delivery pin; cart delivery warning; saved-addresses page); 3c mobile customer app (same area flow, catalogue products with offers, address book, delivery pin at checkout, cart area warning) plus an area-only "also sold by" list on the website and mobile product pages |
+| 3 Customer area flow, area browsing, address book | **done**: 3a server; 3b website (auto location, overlaps, borders and map picking; range pills inside the chosen blocks; shops with their products; checkout with saved addresses and a delivery pin; cart delivery warning; saved-addresses page); 3c mobile customer app (same area flow, shops and map views, address book, delivery pin at checkout, cart area warning) plus an area-only "also sold by" list on the website and mobile product pages. The public catalogue list and Products view were later removed |
 | 4 Picker and substitution | **done** (server, tests, partner picker screens, brand Team picker accounts, customer picker label, seed, docs) |
 | 5 Split the apps | **done** (three app-type sign-ins, new `delivery/` app, `partner/` reduced to the Staff app, rider tests moved, docs 20/23) |
 | 6 Partial delivery and door returns | **done** (server, tests, delivery app line review, Staff app and web returned-goods inbox, customer display, admin returns, seed, docs) |
@@ -114,10 +114,12 @@ Two layers:
 - A brand's unique items (a bakery's cake) can be created as `PRIVATE`, visible only to that brand and needing no approval.
 
 **What the customer sees (inside the shopping area)**
-- Grid cards are catalogue products: "Dalda Ghee 1 kg · from Rs X · 3 stores".
-- The product page lists the **offers** (store, price, distance, rating, stock), sorted by price or distance. Add to cart picks one specific listing.
+- Discovery is shop-first: area results are shops with their products. There is no public
+  catalogue grid or product listing — the former grouped "one item, N stores" view was removed.
+- The product page still lists the **offers** (store, price, distance, rating, stock) as
+  "also sold by", sorted by price or distance. Add to cart picks one specific listing.
 - The store page still shows that store's listings, unchanged in feel.
-- Search works on name, manufacturer and barcode, limited to the area.
+- Search works on shop and product names, limited to the area.
 - Orders still split per store, as they do now.
 
 **Reviews:** stay on the listing for v2 (no change). Revisit later.
@@ -263,13 +265,13 @@ Split into **1a (global categories, done)** and **1b (catalogue and listings, do
 
 ### Phase 3: Customer area flow, catalogue views and address book (L) — done
 
-**How it was built:** the website and the customer app share one server model. `GET /blocks/at` answers "which blocks hold this point?" with `{ containing, nearest }`; the apps turn that into found / overlap / border / outside. Both remember `{ blockIds, coords, pinned, range }` on the device and send `scope=area` to `/discover`, with the radius applied inside the selected blocks. Polygons are drawn on the existing maps (Leaflet on the web, the OpenStreetMap WebView viewer on mobile) and tapping the map drops a delivery pin. `/catalog/browse` groups listings per catalogue product; `/catalog/browse/:catalogProductId` returns the area's offers or a 404 "not sold in your area", and the product page shows them as **area-only** "also sold by" (without an area it asks for one). Checkout requires a delivery location: a saved `addressId`, or a pin that `/blocks/at` puts inside a block, plus an optional `saveAddress`. The confirmation of "can these stores reach this spot?" stays on the server (`CHECKOUT_ISSUES` / `NOT_DELIVERABLE`, `OUTSIDE_DELIVERY_ZONE`), and the cart asks `POST /cart/area-check` to warn and offer removal. Tests: server scenarios in §A; website and mobile screen tests for single block, overlap, border, pin, catalogue offers, address CRUD and the checkout rules.
+**How it was built:** the website and the customer app share one server model. `GET /blocks/at` answers "which blocks hold this point?" with `{ containing, nearest }`; the apps turn that into found / overlap / border / outside. Both remember `{ blockIds, coords, pinned, range }` on the device and send `scope=area` to `/discover`, with the radius applied inside the selected blocks. Polygons are drawn on the existing maps (Leaflet on the web, OpenStreetMap WebView viewer on mobile) and tapping the map picks the shopping area (and a delivery pin at checkout). Discovery is shop-first: `/discover` returns shops and their products; `/catalog/browse/:catalogProductId` returns the area's offers or a 404 "not sold in your area", and the product page shows them as **area-only** "also sold by" (without an area it asks for one). The public catalogue **list** (`/catalog/browse` and `GET /products`) was later removed — products are reached through a shop or a product page. Checkout requires a delivery location: a saved `addressId`, or a pin that `/blocks/at` puts inside a block, plus an optional `saveAddress`. The confirmation of "can these stores reach this spot?" stays on the server (`CHECKOUT_ISSUES` / `NOT_DELIVERABLE`, `OUTSIDE_DELIVERY_ZONE`), and the cart asks `POST /cart/area-check` to warn and offer removal. Tests: server scenarios in §A; website and mobile screen tests for single block, overlap, border, map picking, catalogue offers, address CRUD and the checkout rules.
 
 - **Server:** `Address` collection and routes, checkout delivery rule (§A), cart area check.
-- **Website and mobile:** the shopping-area flow of §A (auto block, multi-select for overlaps, border case, pin mode, range pills, block shapes on the map). Mobile draws the polygons and accepts a tapped point with the OpenStreetMap WebView viewer (`src/components/map/mapHtml.js`), with no Google Maps key.
-- **Catalogue for customers:** grouped product cards, offers list on the product page, search in the area.
+- **Website and mobile:** the shopping-area flow of §A (auto location with an on-demand detect button, multi-select for overlaps, border case, choosing the spot on the map, range pills, block shapes on the map). Mobile draws the polygons and accepts a tapped point with the OpenStreetMap WebView viewer (`src/components/map/mapHtml.js`), with no Google Maps key.
+- **Catalogue for customers:** shops with their products in the area, and the offers list on the product page; search in the area.
 - **Checkout:** saved addresses, save-this-address, block check with a clear message when the store does not serve the address.
-- **Tests:** every scenario in §A on the server, plus screen tests for the multi-select, border and pin flows, and address CRUD.
+- **Tests:** every scenario in §A on the server, plus screen tests for the multi-select, border and map-picking flows, and address CRUD.
 
 **Done when:** all four scenarios work end to end on both website and mobile: single block, overlap with both selected, border user choosing manually, and Samanabad customer pinning D Ground.
 
@@ -402,9 +404,9 @@ Run this against a **freshly seeded** database (`npm run seed:demo`), with the A
 2. **Single block:** a customer inside one block sees its shape and only its stores.
 3. **Overlap:** a customer in the D Ground / Peoples Colony overlap sees both blocks ticked, unticks one, then ticks both again; Mehr Menswear Faisal Chowk is found in both.
 4. **Border:** a customer outside every block gets the nearest blocks and chooses (for example Gulistan Colony offers Peoples Colony).
-5. **Other area:** a Samanabad customer drops a pin in D Ground and sees only D Ground stores, then delivers there.
+5. **Other area:** a Samanabad customer chooses a spot in D Ground on the map and sees only D Ground stores, then delivers there.
 6. **Range:** the customer switches 2 km, 10 km, 20 km, the whole city and Whole block, and the map and results update.
-7. **No duplicates:** "Plain White Cotton Suit Length, 2.5 m" appears once in the catalogue and shows the three store offers (Loom & Co., Rangrez Prints, Mehr Menswear) with different prices.
+7. **No duplicates:** "Plain White Cotton Suit Length, 2.5 m" appears once per store, and its product page's "Also sold by" lists the three store offers (Loom & Co., Rangrez Prints, Mehr Menswear) with different prices.
 8. **Address book:** the customer saves an address, makes it default, and sees it preselected at the next checkout; an address outside every block is refused.
 9. **Picker:** the picker signs in on the Staff app, claims a picking order, marks a line short, proposes a substitute; the customer accepts or keeps the rest; the brand order shows "Suggested by the store's picker" and the picker packs.
 10. **Checkout:** a multi-brand cart becomes one order per brand; the delivery pin is checked against `/blocks/at`; notes are required; the address is saved and preselected next time.

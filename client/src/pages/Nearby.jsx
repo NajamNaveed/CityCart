@@ -1,12 +1,10 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { LayoutList, LocateFixed, Map as MapIcon, MapPin, Package, Phone, Search, Store } from 'lucide-react'
+import { Layers, LayoutList, LocateFixed, Map as MapIcon, MapPin, Phone, Search, Store } from 'lucide-react'
 import api, { getErrorMessage } from '../services/api'
 import { useCity } from '../hooks/useCity'
 import { useNearby } from '../hooks/useNearby'
 import { isRadius } from '../utils/range'
-import CatalogResults from '../components/nearby/CatalogResults'
-import LocationChip from '../components/nearby/LocationChip'
 import RangeSelector from '../components/nearby/RangeSelector'
 import ProductImage from '../components/ProductImage'
 import { EmptyState, Skeleton } from '../components/ui'
@@ -85,7 +83,7 @@ function BrandResult({ brand }) {
             </p>
           </div>
         </div>
-        <Link to={`/shop?brandId=${brand._id}`} className="text-[13px] font-medium text-clay hover:underline">
+        <Link to={`/nearby?q=${encodeURIComponent(brand.name)}`} className="text-[13px] font-medium text-clay hover:underline">
           See all products
         </Link>
       </div>
@@ -128,14 +126,24 @@ function ResultsSkeleton() {
   )
 }
 
+const STATUS_NOTES = {
+  denied: 'Location is blocked for this site. Allow it in your browser settings, or choose your spot on the map.',
+  outside: "We don't serve this spot yet. Pick a spot inside a shaded area on the map.",
+  nodevice: "This device can't share its location. Choose your spot on the map.",
+  error: "We couldn't find your location. Try again, or choose your spot on the map.",
+}
+
 export default function Nearby() {
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
-  const [view, setView] = useState('list') // 'list' | 'map' | 'products'
-  const openBrand = useCallback((brand) => navigate(`/shop?brandId=${brand._id}`), [navigate])
+  const [view, setView] = useState('list') // 'list' | 'map'
+  const [showBlocks, setShowBlocks] = useState(true)
+  const [showShops, setShowShops] = useState(true)
+  const [picking, setPicking] = useState(false)
+  const openBrand = useCallback((brand) => navigate(`/nearby?q=${encodeURIComponent(brand.name)}`), [navigate])
   const q = params.get('q') || ''
   const { city, cityId } = useCity()
-  const { selectedBlocks, blockIds, areaName, coords, origin, range, setRange, blocksReady, openPicker, detect, status } = useNearby()
+  const { selectedBlocks, blockIds, areaName, coords, pinned, origin, range, setRange, blocksReady, detect, setPin, status } = useNearby()
 
   const [draft, setDraft] = useState(q)
   // A search sent from the navbar arrives as a new query string; show it in the box.
@@ -160,6 +168,18 @@ export default function Nearby() {
   const needsOrigin = isRadius(range) && hasArea && !origin
   // Distances without a position are measured from the centre of the chosen block.
   const fromBlockCentre = Boolean(!coords && selectedBlocks.length === 1)
+  const hasLocation = blockIds.length > 0 || Boolean(coords)
+  const openMapPicker = () => {
+    setView('map')
+    setPicking(true)
+  }
+  // Tapping the map sets the shopper's spot when none is set, or while they are
+  // deliberately changing it. Otherwise a tap leaves the saved spot alone.
+  const handleMapPick = (lat, lng) => {
+    if (!picking && hasLocation) return
+    setPicking(false)
+    setPin(lat, lng)
+  }
 
   const query = useMemo(() => {
     if (!cityId || !blocksReady) return null
@@ -237,15 +257,31 @@ export default function Nearby() {
       </form>
 
       <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-3">
-        <LocationChip />
+        <button
+          type="button"
+          onClick={detect}
+          disabled={status === 'detecting'}
+          className={`${btnOutline} h-9`}
+        >
+          <LocateFixed className={`h-4 w-4 ${status === 'detecting' ? 'animate-spin' : ''}`} aria-hidden="true" />
+          {status === 'detecting' ? 'Finding you…' : hasLocation ? 'Update my location' : 'Use my location'}
+        </button>
+        <p className="text-[13px] text-muted">
+          {areaName ? `Shopping in ${areaName}` : city ? city.name : 'Location not set'}
+          {coords && pinned ? ' · chosen on the map' : ''}
+        </p>
         <RangeSelector />
       </div>
+
+      {STATUS_NOTES[status] && (
+        <p className="mt-3 rounded-md bg-warning-soft px-3.5 py-2.5 text-[13px] text-warning">{STATUS_NOTES[status]}</p>
+      )}
 
       {needsArea && cityId && (
         <p className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md bg-warning-soft px-3.5 py-2.5 text-[13px] text-warning">
           <span>Choose your area to search {range === 'block' ? 'your block' : `within ${range} km`}. Showing the whole city for now.</span>
-          <button type="button" onClick={openPicker} className="font-semibold underline">
-            Choose area
+          <button type="button" onClick={openMapPicker} className="font-semibold underline">
+            Choose on the map
           </button>
         </p>
       )}
@@ -253,18 +289,71 @@ export default function Nearby() {
       {needsOrigin && (
         <p className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md bg-warning-soft px-3.5 py-2.5 text-[13px] text-warning">
           <span>With several blocks there is no single point to measure {range} km from, so showing all their shops. Set your exact spot to apply the range.</span>
-          <button type="button" onClick={openPicker} className="font-semibold underline">
+          <button type="button" onClick={openMapPicker} className="font-semibold underline">
             Set my spot
           </button>
         </p>
       )}
 
       <section className="mt-7" aria-live="polite">
-        {!cityId ? (
+        {view === 'map' ? (
+          <div className="relative">
+            <Suspense fallback={<Skeleton className="h-[460px] w-full rounded-lg" />}>
+              <NearbyMap
+                items={showShops ? items : []}
+                zones={showBlocks ? selectedBlocks : []}
+                origin={origin}
+                radiusKm={isRadius(range) && origin ? Number(range) : null}
+                originLabel={coords ? (pinned ? 'Your chosen spot' : 'You are here') : selectedBlocks.length === 1 ? `Centre of ${areaName}` : 'Search centre'}
+                pin={coords && pinned ? coords : null}
+                pickable={picking || !hasLocation}
+                onPick={handleMapPick}
+                onOpenBrand={openBrand}
+              />
+            </Suspense>
+            <div className="absolute right-3 top-3 z-[1000] flex flex-col items-end gap-2">
+              <div className="flex overflow-hidden rounded-md border border-line bg-white/95 text-[12.5px] font-medium shadow-sm backdrop-blur">
+                <button
+                  type="button"
+                  aria-pressed={showBlocks}
+                  onClick={() => setShowBlocks((v) => !v)}
+                  className={`inline-flex h-9 items-center gap-1.5 px-3 transition ${showBlocks ? 'bg-ink text-white' : 'text-ink/70 hover:text-ink'}`}
+                >
+                  <Layers className="h-4 w-4" aria-hidden="true" />
+                  Blocks
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={showShops}
+                  onClick={() => setShowShops((v) => !v)}
+                  className={`inline-flex h-9 items-center gap-1.5 border-l border-line px-3 transition ${showShops ? 'bg-ink text-white' : 'text-ink/70 hover:text-ink'}`}
+                >
+                  <Store className="h-4 w-4" aria-hidden="true" />
+                  Shops
+                </button>
+              </div>
+              <button
+                type="button"
+                aria-pressed={picking}
+                onClick={() => setPicking((v) => !v)}
+                className="inline-flex h-9 items-center gap-1.5 rounded-md border border-line bg-white/95 px-3 text-[12.5px] font-medium text-ink shadow-sm backdrop-blur transition hover:border-ink"
+              >
+                <MapPin className="h-4 w-4 text-clay" aria-hidden="true" />
+                {picking ? 'Cancel' : 'Choose location'}
+              </button>
+            </div>
+            {(picking || !hasLocation) && (
+              <p className="pointer-events-none absolute bottom-3 left-1/2 z-[1000] w-max max-w-[90%] -translate-x-1/2 rounded-full bg-ink/90 px-3.5 py-1.5 text-center text-[12.5px] text-white shadow">
+                {picking ? 'Tap the map to set your location.' : 'Tap the map to choose where you shop.'}
+              </p>
+            )}
+            {data?.pagination?.pages > 1 && <p className="mt-2 text-xs text-muted">The map shows the shops on this page of results.</p>}
+          </div>
+        ) : !cityId ? (
           <EmptyState
             icon={MapPin}
             title="Where are you shopping?"
-            message="Share your location or pick your city and area, and we'll show the shops near you."
+            message="Share your location or choose your spot on the map, and we'll show the shops near you."
             className="rounded-lg border border-dashed border-line bg-white"
             action={
               <div className="flex flex-wrap justify-center gap-3">
@@ -272,8 +361,9 @@ export default function Nearby() {
                   <LocateFixed className="h-4 w-4" aria-hidden="true" />
                   Use my location
                 </button>
-                <button type="button" onClick={openPicker} className={btnOutline}>
-                  Choose manually
+                <button type="button" onClick={() => setView('map')} className={btnOutline}>
+                  <MapIcon className="h-4 w-4" aria-hidden="true" />
+                  Open the map
                 </button>
               </div>
             }
@@ -303,20 +393,19 @@ export default function Nearby() {
         ) : (
           <>
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-[13px] text-muted">
-              {data.pagination.total} {data.pagination.total === 1 ? 'brand' : 'brands'} with {data.meta.totalBranches}{' '}
-              {data.meta.totalBranches === 1 ? 'branch' : 'branches'}
-              {q && <> for “{q}”</>}
-              {range === 'block' && !needsArea && <> within {rangeLabel(range)}</>}
-              {isRadius(range) && radiusApplied && <> within {rangeLabel(range)}</>}
-              {areaName && range !== 'block' && <> of {areaName}</>}
-              {fromBlockCentre && range !== 'block' && <> · from the centre of {areaName}</>}
-            </p>
+              <p className="text-[13px] text-muted">
+                {data.pagination.total} {data.pagination.total === 1 ? 'brand' : 'brands'} with {data.meta.totalBranches}{' '}
+                {data.meta.totalBranches === 1 ? 'branch' : 'branches'}
+                {q && <> for “{q}”</>}
+                {range === 'block' && !needsArea && <> within {rangeLabel(range)}</>}
+                {isRadius(range) && radiusApplied && <> within {rangeLabel(range)}</>}
+                {areaName && range !== 'block' && <> of {areaName}</>}
+                {fromBlockCentre && range !== 'block' && <> · from the centre of {areaName}</>}
+              </p>
               <div role="group" aria-label="Results view" className="inline-flex overflow-hidden rounded-md border border-line bg-white text-[13px] font-medium">
                 {[
                   ['list', 'Shops', LayoutList],
                   ['map', 'Map', MapIcon],
-                  ['products', 'Products', Package],
                 ].map(([value, label, Icon]) => (
                   <button
                     key={value}
@@ -331,37 +420,12 @@ export default function Nearby() {
                 ))}
               </div>
             </div>
-            {view === 'products' ? (
-              hasArea && range !== 'city' ? (
-                <CatalogResults blockIds={blockIds} origin={origin} radiusKm={isRadius(range) ? range : null} q={q} />
-              ) : (
-                <p className="rounded-md bg-paper px-3.5 py-3 text-[13px] text-muted">
-                  Choose your area to compare products across the stores near you.{' '}
-                  <button type="button" onClick={openPicker} className="font-semibold text-ink underline">
-                    Choose area
-                  </button>
-                </p>
-              )
-            ) : view === 'map' ? (
-              <Suspense fallback={<Skeleton className="h-[460px] w-full rounded-lg" />}>
-                <NearbyMap
-                  items={items}
-                  zones={selectedBlocks}
-                  origin={data.meta.origin}
-                  radiusKm={data.meta.radiusKm}
-                  originLabel={coords ? 'You are here' : selectedBlocks.length === 1 ? `Centre of ${areaName}` : 'Search centre'}
-                  onOpenBrand={openBrand}
-                />
-                {data.pagination.pages > 1 && <p className="mt-2 text-xs text-muted">The map shows the shops on this page of results.</p>}
-              </Suspense>
-            ) : (
-              <div className="space-y-5">
-                {items.map((brand) => (
-                  <BrandResult key={brand._id} brand={brand} />
-                ))}
-              </div>
-            )}
-            {view !== 'products' && data.pagination.pages > 1 && (
+            <div className="space-y-5">
+              {items.map((brand) => (
+                <BrandResult key={brand._id} brand={brand} />
+              ))}
+            </div>
+            {data.pagination.pages > 1 && (
               <div className="mt-7 flex items-center justify-between text-sm">
                 <button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)} className={`${btnOutline} h-9 px-4`}>
                   Previous

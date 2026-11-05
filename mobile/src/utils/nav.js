@@ -10,12 +10,11 @@ export function safeNext(raw, fallback = '/') {
   return raw
 }
 
-// Opens the Shop with a search and/or a brand already applied. The timestamp `t`
-// makes every call a NEW request: the Shop stays alive in the tab bar, so without it
-// asking for the same brand twice (after clearing the filter by hand) would look
-// like "nothing changed" and be ignored.
-export function shopHref({ q = '', brandId = '' } = {}) {
-  return { pathname: '/shop', params: { ...(q && { q }), ...(brandId && { brandId }), t: String(Date.now()) } }
+// Opens Nearby with a search and/or a view already applied. The timestamp `t`
+// makes every call a NEW request: Nearby stays mounted, so without it asking
+// for the same thing twice (after clearing the search by hand) would be ignored.
+export function nearbyHref({ q = '', view } = {}) {
+  return { pathname: '/nearby', params: { ...(q && { q }), ...(view && { view }), t: String(Date.now()) } }
 }
 
 export const loginHref = (next) => (next ? { pathname: '/login', params: { next } } : '/login')

@@ -13,7 +13,7 @@ import CityChip from '../components/CityChip'
 import { useCity } from '../hooks/useCity'
 import { useRemote } from '../hooks/useRemote'
 import { fetchBrands } from '../services/catalog'
-import { shopHref } from '../utils/nav'
+import { nearbyHref } from '../utils/nav'
 import { colors, spacing } from '../theme'
 
 export default function Brands() {
@@ -52,7 +52,7 @@ export default function Brands() {
         ListHeaderComponent={header}
         refreshing={brands.refreshing}
         onRefresh={brands.reload}
-        renderItem={({ item }) => <BrandCard brand={item} onPress={() => router.navigate(shopHref({ brandId: item._id }))} />}
+        renderItem={({ item }) => <BrandCard brand={item} onPress={() => router.navigate(nearbyHref({ q: item.name }))} />}
         ListEmptyComponent={
           brands.status === 'loading' ? (
             <View style={{ gap: spacing.md }}>

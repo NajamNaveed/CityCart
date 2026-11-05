@@ -16,6 +16,15 @@ const pinIcon = L.divIcon({
   popupAnchor: [0, -26],
 })
 
+// The spot the shopper picked, in a colour no shop uses.
+const chosenPinIcon = L.divIcon({
+  className: '',
+  html: '<span style="display:block;width:26px;height:26px;border-radius:50% 50% 50% 0;background:#1e3a2f;transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.45)"><span style="display:block;width:8px;height:8px;margin:7px;border-radius:50%;background:#fff"></span></span>',
+  iconSize: [26, 26],
+  iconAnchor: [13, 26],
+  popupAnchor: [0, -26],
+})
+
 // Popup content is built with DOM nodes and textContent, never HTML strings,
 // so a brand or branch name can never inject markup.
 function popupFor(brand, branch, onOpenBrand) {
@@ -42,11 +51,30 @@ function popupFor(brand, branch, onOpenBrand) {
   return root
 }
 
-// Shop locations as pins, the point distances are measured from, and the search radius.
-export default function NearbyMap({ items, zones = [], origin, radiusKm, originLabel = 'You are here', onOpenBrand }) {
+// Shop locations as pins, the point distances are measured from, the search
+// radius, and optionally the shopper's hand-picked spot. `pickable` turns the
+// map into a location chooser: a tap calls `onPick(lat, lng)`.
+export default function NearbyMap({
+  items,
+  zones = [],
+  origin,
+  radiusKm,
+  originLabel = 'You are here',
+  onOpenBrand,
+  pin,
+  pickable = false,
+  onPick,
+}) {
   const container = useRef(null)
   const mapRef = useRef(null)
   const layerRef = useRef(null)
+  // Leaflet handlers are bound once; these refs keep them current.
+  const pickableRef = useRef(pickable)
+  const onPickRef = useRef(onPick)
+  useEffect(() => {
+    pickableRef.current = pickable
+    onPickRef.current = onPick
+  })
 
   useEffect(() => {
     const map = L.map(container.current, { scrollWheelZoom: false }).setView(FALLBACK_CENTER, 12)
@@ -54,6 +82,9 @@ export default function NearbyMap({ items, zones = [], origin, radiusKm, originL
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(map)
+    map.on('click', (e) => {
+      if (pickableRef.current) onPickRef.current?.(e.latlng.lat, e.latlng.lng)
+    })
     layerRef.current = L.layerGroup().addTo(map)
     mapRef.current = map
     return () => {
@@ -61,6 +92,10 @@ export default function NearbyMap({ items, zones = [], origin, radiusKm, originL
       mapRef.current = null
     }
   }, [])
+
+  useEffect(() => {
+    if (container.current) container.current.style.cursor = pickable ? 'crosshair' : ''
+  }, [pickable])
 
   useEffect(() => {
     const map = mapRef.current
@@ -80,7 +115,7 @@ export default function NearbyMap({ items, zones = [], origin, radiusKm, originL
       for (const branch of brand.branches) {
         const point = [branch.latitude, branch.longitude]
         points.push(point)
-        L.marker(point, { icon: pinIcon, title: `${brand.name}: ${branch.name}` })
+        L.marker(point, { icon: pinIcon, title: `${brand.name}: ${branch.name}`, bubblingMouseEvents: false })
           .bindPopup(popupFor(brand, branch, onOpenBrand))
           .addTo(layer)
       }
@@ -98,10 +133,25 @@ export default function NearbyMap({ items, zones = [], origin, radiusKm, originL
       }
     }
 
+    if (pin) {
+      const spot = [pin.lat, pin.lng]
+      points.push(spot)
+      L.marker(spot, { icon: chosenPinIcon, title: 'Your chosen spot', bubblingMouseEvents: false })
+        .bindTooltip('Your chosen spot')
+        .addTo(layer)
+    }
+
     if (points.length === 0) map.setView(FALLBACK_CENTER, 12)
     else if (points.length === 1) map.setView(points[0], 15)
     else map.fitBounds(L.latLngBounds(points), { padding: [40, 40], maxZoom: 16 })
-  }, [items, zones, origin, radiusKm, originLabel, onOpenBrand])
+  }, [items, zones, origin, radiusKm, originLabel, onOpenBrand, pin])
 
-  return <div ref={container} role="region" aria-label="Map of nearby shops" className="isolate z-0 h-[460px] w-full overflow-hidden rounded-lg border border-line" />
+  return (
+    <div
+      ref={container}
+      role="region"
+      aria-label={pickable ? 'Map for choosing your location' : 'Map of nearby shops'}
+      className="isolate z-0 h-[460px] w-full overflow-hidden rounded-lg border border-line"
+    />
+  )
 }

@@ -65,7 +65,7 @@ function ConversationsList({ userId }) {
         ) : list.error ? (
           <EmptyState icon="wifi-off" tone="error" title="Couldn't load your messages" message={list.error} action={<Button title="Try again" onPress={list.refresh} />} />
         ) : (
-          <EmptyState icon="message-circle" title="No conversations yet" message="Open any product and choose “Chat with seller” to start one." action={<Button title="Browse products" onPress={() => router.navigate('/shop')} />} />
+          <EmptyState icon="message-circle" title="No conversations yet" message="Open any product and choose “Chat with seller” to start one." action={<Button title="Browse shops" onPress={() => router.navigate('/nearby')} />} />
         )
       }
       renderItem={({ item: conversation }) => (

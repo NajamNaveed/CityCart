@@ -19,20 +19,6 @@ const DEFAULT_PAGE = 1;
 const DEFAULT_LIMIT = 20;
 
 /**
- * Public product listing, per docs/05-api-specification.md §12 (List
- * Products) and §24-25 (query parameters, pagination response).
- *
- * "Public users should normally receive only active products": the
- * default is status ACTIVE. An explicit ?status= is honored (same
- * judgment call as Brand/Category), but isActive:true is ALWAYS
- * enforced — there is no documented query parameter to reveal an
- * isActive:false product publicly.
- *
- * cityId: Product has no cityId field (city belongs to Brand), so it is
- * resolved to the brands in that city. An explicit brandId takes
- * precedence over cityId.
- */
-/**
  * Adds `availability` (IN_STOCK | LOW_STOCK | OUT_OF_STOCK) to public
  * product results using ONE inventory query for the whole page.
  */
@@ -45,76 +31,6 @@ async function withAvailability(products) {
     ...(typeof p.toObject === 'function' ? p.toObject() : p),
     availability: map.get(String(p._id)) || 'OUT_OF_STOCK',
   }));
-}
-
-async function listPublicProducts({
-  cityId,
-  brandId,
-  categoryId,
-  search,
-  minPrice,
-  maxPrice,
-  page,
-  limit,
-  sort,
-  order,
-} = {}) {
-  // Public users only ever see ACTIVE + isActive products (hardening
-  // pass: the old ?status= override exposed DRAFT/INACTIVE products).
-  const filter = { isActive: true, status: 'ACTIVE' };
-
-  // Products of PENDING/SUSPENDED/REJECTED brands are never public. An
-  // explicit brandId and/or cityId only NARROWS the set of ACTIVE brands.
-  const brandFilter = { status: 'ACTIVE' };
-  if (brandId) {
-    brandFilter._id = brandId;
-  }
-  if (cityId) {
-    brandFilter.cityId = cityId;
-  }
-  const activeBrands = await Brand.find(brandFilter, '_id');
-  filter.brandId = { $in: activeBrands.map((brand) => brand._id) };
-
-  if (categoryId) {
-    filter.categoryId = categoryId;
-  }
-  if (search) {
-    filter.name = { $regex: escapeRegex(search), $options: 'i' };
-  }
-  if (minPrice !== undefined || maxPrice !== undefined) {
-    filter.price = {};
-    if (minPrice !== undefined) {
-      filter.price.$gte = minPrice;
-    }
-    if (maxPrice !== undefined) {
-      filter.price.$lte = maxPrice;
-    }
-  }
-
-  const pageNumber = page || DEFAULT_PAGE;
-  const limitNumber = limit || DEFAULT_LIMIT;
-  // `sort` is always one of the fixed allow-list enforced by
-  // validators/product.validator.js, never a raw client string.
-  const sortField = sort || 'createdAt';
-  const sortDirection = order === 'asc' ? 1 : -1;
-
-  const [items, total] = await Promise.all([
-    Product.find(filter)
-      .sort({ [sortField]: sortDirection })
-      .skip((pageNumber - 1) * limitNumber)
-      .limit(limitNumber),
-    Product.countDocuments(filter),
-  ]);
-
-  return {
-    items: await withAvailability(items),
-    pagination: {
-      page: pageNumber,
-      limit: limitNumber,
-      total,
-      pages: Math.ceil(total / limitNumber),
-    },
-  };
 }
 
 /**
@@ -291,7 +207,6 @@ async function archiveProduct(product) {
 
 module.exports = {
   withAvailability,
-  listPublicProducts,
   listBrandProducts,
   getPublicProductById,
   getProductByIdRaw,

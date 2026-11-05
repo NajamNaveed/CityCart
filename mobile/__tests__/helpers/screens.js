@@ -37,7 +37,6 @@ export const nearbyValue = (over = {}) => ({
   choices: { containing: [], nearest: [] },
   status: 'idle',
   canAskAgain: true,
-  pickerOpen: false,
   setRange: jest.fn(),
   chooseBlock: jest.fn(),
   toggleBlock: jest.fn(),
@@ -45,8 +44,6 @@ export const nearbyValue = (over = {}) => ({
   clearLocation: jest.fn(),
   detect: jest.fn().mockResolvedValue('found'),
   setPin: jest.fn(),
-  openPicker: jest.fn(),
-  closePicker: jest.fn(),
   ...over,
 })
 

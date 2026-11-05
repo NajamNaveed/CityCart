@@ -40,7 +40,7 @@ export default function AdjustmentPanel({ order, adjustments = [], adjustment, c
     setLoading(true)
     setProductError('')
     try {
-      const res = await api.get('/products', { params: { brandId: order.brandId, limit: 50 } })
+      const res = await api.get('/products/mine', { params: { limit: 50 } })
       setProducts(res.data.products || [])
     } catch (err) {
       setProductError(getErrorMessage(err))

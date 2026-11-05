@@ -1,12 +1,10 @@
 const {
   createProductSchema,
   updateProductSchema,
-  listProductsQuerySchema,
   listMyProductsQuerySchema,
 } = require('../validators/product.validator');
 const { objectIdParamSchema } = require('../validators/common.validator');
 const {
-  listPublicProducts,
   listBrandProducts,
   getPublicProductById,
   createProduct,
@@ -16,24 +14,6 @@ const {
 } = require('../services/product.service');
 const { getInventoryForProduct, serializeInventory } = require('../services/inventory.service');
 const { formatZodError } = require('../utils/formatZodError');
-
-async function list(req, res, next) {
-  const parsedQuery = listProductsQuerySchema.safeParse(req.query);
-  if (!parsedQuery.success) {
-    return res.status(400).json({
-      success: false,
-      message: 'Validation failed.',
-      errors: formatZodError(parsedQuery.error),
-    });
-  }
-
-  try {
-    const { items, pagination } = await listPublicProducts(parsedQuery.data);
-    return res.status(200).json({ success: true, products: items, pagination });
-  } catch (err) {
-    return next(err);
-  }
-}
 
 // GET /products/mine — the caller's own products, every status.
 async function mine(req, res, next) {
@@ -163,4 +143,4 @@ async function remove(req, res, next) {
   }
 }
 
-module.exports = { list, mine, mineById, getById, create, update, remove };
+module.exports = { mine, mineById, getById, create, update, remove };

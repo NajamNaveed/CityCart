@@ -51,11 +51,10 @@ The customer should be able to enter the marketplace from the main CityCart webs
 
 The marketplace should provide:
 
-* City selection
+* Area selection (city blocks or a radius)
 * Brand discovery
-* Product search
+* Shop search
 * Categories
-* Featured products
 * Featured brands
 * Product filtering
 * Product sorting
@@ -182,15 +181,14 @@ Existing historical orders must remain accessible to authorized users.
 
 # 9. Product Discovery
 
-Customers can discover products through:
+Customers discover products inside the shops that serve their area. Instead of a
+global product feed, discovery works shop-first:
 
-* City browsing
+* Area browsing (`GET /api/v1/discover`)
 * Brand storefronts
 * Categories
-* Search
-* Featured products
+* Search inside an area
 * Filters
-* Sorting
 
 Product cards should provide enough information for quick comparison.
 
@@ -251,26 +249,41 @@ Brand-specific categories must remain inside their brand's tenant boundary.
 
 ---
 
-# 12. Product Search
+# 12. Area Discovery and Search
 
-CityCart should provide product search.
+Customers do not browse a global product catalogue. They shop inside an **area**
+(chosen city blocks or a radius around a point) and discovery returns the shops
+in that area together with their products.
 
-Search may initially use MongoDB queries and indexes.
+Discovery is served by:
 
-Customers should be able to search by relevant product information such as:
-
-```text
-Product name
-Brand
-Category
+```http
+GET /api/v1/discover
 ```
 
-Search results should respect:
+Supported query parameters:
 
-* City
-* Active brands
-* Product availability
+```text
+?q=                free-text search over shop and product names
+?cityId=           restrict to one city
+?blockIds=a,b      the shopper's selected blocks
+?lat=&lng=         shopper point, used for radius discovery only (never stored)
+?radiusKm=         radius around the point
+?page=&limit=      pagination
+```
+
+Discovery must respect:
+
+* Active blocks, branches and brands
+* Product availability at a branch that serves the area
 * Tenant relationships
+* A reasonable maximum page size
+
+There is **no public product or catalogue listing endpoint**. Product details are
+fetched individually with `GET /api/v1/products/:id`; offers for one catalogue
+item ("also sold by") come from `GET /api/v1/catalog/browse/:catalogProductId`.
+Tenant-scoped product lists such as `GET /api/v1/products/mine` are for brand
+staff only.
 
 ---
 
@@ -282,16 +295,19 @@ A customer searches:
 "wireless headphones"
 ```
 
-CityCart may return:
+CityCart may return shops in the area that sell matching items:
 
 ```text
-Wireless Headphones
- ├── Brand A
- ├── Brand B
- └── Brand C
+Shop A
+ └── Wireless Headphones
+
+Shop B
+ └── Wireless Headphones
+ └── Wireless Earbuds
 ```
 
-If the customer has selected a city, results should be limited to products available within that marketplace context.
+Matching products are surfaced inside their shop, never as a standalone product
+list. Results are limited to shops that serve the shopper's selected area.
 
 ---
 
@@ -317,17 +333,11 @@ Filters must be validated server-side.
 
 # 15. Sorting
 
-Customers may sort products by:
+Shops are returned nearest-first when the shopper's position is known, and
+products inside each shop follow the shop's own ordering (search matches first,
+then newest).
 
-```text
-Newest
-Price: Low → High
-Price: High → Low
-Rating
-Popularity
-```
-
-Only supported sorting fields should be accepted by the API.
+Only supported ordering should be accepted by the API.
 
 Clients must not be allowed to inject arbitrary database fields into sorting queries.
 
@@ -335,22 +345,24 @@ Clients must not be allowed to inject arbitrary database fields into sorting que
 
 # 16. Pagination
 
-Product listings must use pagination.
+Discover results must use pagination.
 
 Example:
 
 ```http
-GET /api/v1/products?page=1&limit=20
+GET /api/v1/discover?blockIds=abc,def&page=1&limit=20
 ```
 
-The API should return pagination information such as:
+The API returns pagination information such as:
 
 ```json
 {
-  "page": 1,
-  "limit": 20,
-  "total": 100,
-  "totalPages": 5
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 100,
+    "pages": 5
+  }
 }
 ```
 

@@ -21,7 +21,7 @@ CityCart/
    │  ├─ app/          screens; each file is a route (Expo Router, SDK 57 puts routes in src/app)
    │  │  ├─ _layout.jsx        fonts, providers, splash screen
    │  │  ├─ (auth)/            login, register                     (Phase 2)
-   │  │  ├─ (tabs)/            index (home), nearby, cart, account (shop is a hidden route)
+   │  │  ├─ (tabs)/            index (home), nearby, cart, account
    │  │  ├─ product/[id].jsx                                        (Phase 3)
    │  │  ├─ checkout.jsx  order-placed.jsx                          (Phase 5)
    │  │  ├─ orders/            index, [id]                          (Phase 5)
@@ -82,7 +82,7 @@ Installed once, inside `mobile/`, each with a stated reason:
 | 0 | Server: bearer-token login for shoppers, tests, docs | done |
 | 1 | App foundation: Expo project, theme, API client, token storage, session rules, tab shell | done |
 | 2 | Login and register: forms with instant checks, safe return-to-where-you-were, account tab | done |
-| 3 | Browse: home, shop (search, sort, brand filter, endless scroll), brands, product page with photos and reviews | done |
+| 3 | Browse: home (brands and search), brands, product page with photos and reviews | done |
 | 4 | Nearby: location permission, shopping area (overlaps, border, dropped pin), range, results and products, map with block outlines | done |
 | 5 | Cart (with the area delivery warning), checkout with saved addresses and a delivery pin, order confirmation, orders and tracking; saved-address book | done |
 | 6 | Chat and notifications, unread badges | done |
@@ -111,37 +111,48 @@ Each phase ends with the server tests, lint and a successful app bundle.
 
 Everything here uses the public API, so no sign-in is needed.
 
-* **Home** (`(tabs)/index`): brands strip and the newest products, both for the chosen city; pull down to refresh.
-* **Shop** (`(tabs)/shop`): no longer a tab. The route stays for brand and product links (`shopHref()`), because those lists are still needed; the tab bar does not offer it. It keeps search (sent to the server after 400 ms of no typing), sort, brand filter, and endless scroll in pages of 12. Star ratings are requested only for products not yet seen. A newer search always wins: an answer for an old search is discarded (`services/paging.js`). Home search now sends the shopper to Nearby, which is block-scoped.
+* **Home** (`(tabs)/index`): a brands strip and a search box for the chosen city; pull down to refresh.
+  There is **no Shop tab and no public product list**: searching or tapping a brand opens
+  **Nearby** with that search pre-filled (`nearbyHref({ q })`), where results are scoped to the
+  shopper's area.
+* **Nearby** (`(tabs)/nearby`): the only browsing surface. It has a **Shops** list and a **Map**
+  view (see §9), a search box and the area controls. The area is the marketplace context — no
+  global catalogue is shown.
 * **Brands** (`brands`) and **Product** (`product/[id]`): the product page has swipeable photos with a full-screen view, price and discount, stock, details, and the reviews summary with the reviews five at a time. A catalogue product also shows **"Also sold by"** (the other stores in the shopper's area) above the reviews.
 * **City**: remembered on the phone (`context/CityProvider.jsx`); a remembered city that no longer exists falls back to "all cities".
-* **Opening the Shop from elsewhere** uses `shopHref()` (`utils/nav.js`), which stamps each request, because the Shop route stays mounted and would otherwise ignore asking for the same brand twice.
 * Photos hosted on Cloudinary are requested at the phone's real pixel width (same rule as the web); any other address is used as given. A missing or broken photo shows a monogram tile.
 * Add to cart arrived with Phase 5, and "Chat with seller" with Phase 6.
 
-Tests: the paging rules, query building and helpers are unit tested, and `__tests__/screens.test.js` renders the real screens against a fake API (what is shown, loading and error states, and the Shop navigation rule).
+Tests: the paging rules, query building and helpers are unit tested, and `__tests__/screens.test.js` renders the real screens against a fake API (what is shown and its loading and error states).
 
 ## 9. Nearby and the shopping area (Phases 4 and v2 Phase 3)
 
 The same area model as the web app, on the same public endpoints
-(`GET /blocks`, `GET /blocks/at`, `GET /discover?scope=area`, `GET /catalog/browse`).
+(`GET /blocks`, `GET /blocks/at`, `GET /discover?scope=area`).
 
-* **One location control.** The Nearby header owns the area picker; Home no longer shows a city chip and the website no longer shows a location control in its navbar. The website still asks for the shopper's position automatically on a first visit.
+* **Location controls live in the map view.** The Nearby map owns the area picker; there is no
+  separate location pop-up. Its top-right buttons toggle **Blocks** (outlines) and **Shops** (pins)
+  and offer **Choose location** (or **Cancel** while choosing). Home no longer shows a city chip or
+  a location setter, and the website no longer shows a location control in its navbar; the website
+  still asks for the shopper's position automatically on a first visit.
 * **Finding the shopper.** The first time the Nearby tab opens, the app asks for the
   phone's position once (the system permission prompt appears then, not at launch). It
   uses a recent known position when there is one (instant), otherwise waits up to 12
   seconds for a fresh one. The server turns the position into the blocks that hold it
-  (`/blocks/at`) and the app saves those `blockIds`. Refusal, location switched off, a
-  timeout and "outside every city we serve" each get their own plain message, and a
-  permission blocked for good offers **Open Settings**. Choosing an area by hand never
-  asks for the position.
+  (`/blocks/at`) and the app saves those `blockIds`. An explicit **Use my location** /
+  **Update my location** button under the search box runs the same detection on demand —
+  the separate "choose a location" option under the search was removed. Refusal, location
+  switched off, a timeout and "outside every city we serve" each get their own plain
+  message, and a permission blocked for good offers **Open Settings**.
 * **Overlaps and borders.** A spot inside two drawn blocks starts with **both** ticked and
   the shopper may untick one (`This spot is in 2 blocks`). A spot between blocks shows the
   nearest ones to choose from. A radius search measures from the shopper's position but
   only inside the selected blocks.
-* **Dropped pin.** Tapping the map in the location sheet sends the point to `/blocks/at`
-  and switches the area to the blocks holding it (`pinned` is remembered on the phone).
-  This is how a shopper in Samanabad can shop in D Ground without moving his position.
+* **Choosing on the map.** When no location is set, tapping the map picks the spot. When one is
+  already set, the shopper presses **Choose location** first (a tap otherwise leaves the saved
+  spot alone). The point goes to `/blocks/at` and switches the area to the blocks holding it
+  (`pinned` is remembered on the phone). This is how a shopper in Samanabad can shop in D Ground
+  without moving his position.
 * **Privacy.** The position is rounded to about 11 metres and saved only on the phone
   (`prefs`, not secure storage: it is not a credential). The server receives it only as
   query parameters of the one search it answers; request logs drop query strings
@@ -149,11 +160,10 @@ The same area model as the web app, on the same public endpoints
 * **Range.** This block, 2, 5, 10, 20 km, the whole city, or any custom distance from 0.5
   to 50 km. A range that needs an area the shopper has not given falls back to the whole
   city and says so. An empty result offers the next wider range.
-* **Results** are brands with their nearest distance, branches (Directions and Call),
-  and a few products, with "Only at ..." where a product is sold at some branches only.
-  They load ten brands at a time. The **Products** view groups the catalogue: one card per
-  real product with the lowest price, the number of stores, and a list of those stores in
-  the area; a tap opens that store's listing.
+* **Two views only.** **Shops** lists brands with their nearest distance, branches (Directions
+  and Call), and a few products, with "Only at ..." where a product is sold at some branches only.
+  They load ten brands at a time. The former **Products** view was removed: the public catalogue
+  listing no longer exists, so products are reached through their shop or a product page.
 * **Map.** A `react-native-webview` showing a self-contained OpenStreetMap viewer
   (`src/components/map/`): pins per branch, the delivery/shopping pin, a circle for a
   radius search, and a highlighted outline for every selected block. Tiles come from
@@ -166,10 +176,10 @@ The same area model as the web app, on the same public endpoints
   on screen underneath the new level until it loads, so the map never flashes blank.
   That keeps it as smooth as the Leaflet map on the website on low-end phones. The
   +/− buttons zoom, and the pins/dot use the same shapes as the website map. A tap
-  places a pin (used by the location sheet, checkout and saved addresses) and a pin's
-  popup opens that brand. Directions still opens the phone's own maps app with
-  `mapsUrl`. The map only needs a data connection for its tiles; when they cannot
-  load the viewer shows a short "could not load" message.
+  chooses the shopper's spot (see above) and a pin's popup opens that brand. Directions
+  still opens the phone's own maps app with `mapsUrl`. The map only needs a data
+  connection for its tiles; when they cannot load the viewer shows a short "could not
+  load" message.
 * **"Also sold by"** on the product page is **area-only**: it lists the other stores in
   the shopper's area that sell the same catalogue product. Without an area it asks for
   one; when nobody in the area sells it, it says so (a 404 from the server is that
@@ -275,15 +285,16 @@ phone (Expo Go while developing, a preview APK for release behaviour):
 
 1. **Launch and sign-in** — branded splash, home loads, register and login
    work, `?next=` returns to where the shopper was, sign-out clears the badges.
-2. **Browse** — home skeletons then content, shop search/sort/filter and
-   endless scroll, product photos and reviews, "Chat with seller" asks a
-   visitor to sign in and returns to the same product.
-3. **Nearby and the area** — the location-permission wording appears, blocks load
-   with their outlines, the map shows pins and pans to results (OpenStreetMap tiles
-   render in the release build), a pin's popup opens its brand, Directions opens the
-   maps app. Then: an overlap starts with both blocks ticked, a border point offers the
-   nearest blocks, a dropped pin switches the area, the Products view groups a catalogue
-   item across stores, and a product page's "Also sold by" lists the area's other stores.
+2. **Browse** — home skeletons then content, the brands strip, search and brand taps
+   open Nearby with the query applied, product photos and reviews, "Chat with seller"
+   asks a visitor to sign in and returns to the same product.
+3. **Nearby and the area** — the location-permission wording appears, the **Use my
+   location** button re-detects, blocks load with their outlines, the map shows pins and
+   pans to results (OpenStreetMap tiles render in the release build), the Blocks/Shops
+   toggles work, a pin's popup opens its brand, Directions opens the maps app. Then: an
+   overlap starts with both blocks ticked, a border point offers the nearest blocks, with
+   no area a map tap sets it and **Choose location** changes it later, and a product
+   page's "Also sold by" lists the area's other stores.
 4. **Cart and checkout** — quantities, remove, an out-of-stock line blocks
    checkout, a cart line the area's stores cannot deliver shows the warning with
    Remove/Change area, the delivery pin is checked against the block outlines, "Save this

@@ -1,6 +1,6 @@
 const express = require('express');
 
-const { list, mine, mineById, getById, create, update, remove } = require('../controllers/product.controller');
+const { mine, mineById, getById, create, update, remove } = require('../controllers/product.controller');
 const { exportCsv, importCsv } = require('../controllers/productCsv.controller');
 const { forProduct: reviewsForProduct } = require('../controllers/review.controller');
 const { getProductByIdRaw } = require('../services/product.service');
@@ -13,8 +13,6 @@ const { PERMISSIONS } = require('../config/permissions');
 
 const router = express.Router();
 
-// Public (docs/05 §12 — public users receive active products only)
-router.get('/', list);
 // The caller's own products, every status. Must stay above '/:id'.
 // A super admin has no brand (tenantBrandId is null), so the route is brand-staff only.
 router.get(

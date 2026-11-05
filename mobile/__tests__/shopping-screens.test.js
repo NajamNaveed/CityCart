@@ -207,7 +207,7 @@ describe('Cart', () => {
     const near = nearby()
     const renderer = await show(<CartScreen />, { auth: signedIn(), nearby: near })
     await press(renderer, 'Change area')
-    expect(near.openPicker).toHaveBeenCalled()
+    expect(mockRouter.navigate).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/nearby', params: expect.objectContaining({ view: 'map' }) }))
   })
 
   it('invites the shopper to start shopping when the cart is empty', async () => {
@@ -215,7 +215,7 @@ describe('Cart', () => {
     const renderer = await show(<CartScreen />, auth())
     expect(screenText(renderer)).toContain('Your cart is empty')
     await press(renderer, 'Start shopping')
-    expect(mockRouter.navigate).toHaveBeenCalledWith('/shop')
+    expect(mockRouter.navigate).toHaveBeenCalledWith('/nearby')
   })
 
   it('offers to try again when the cart cannot be loaded', async () => {

@@ -2,16 +2,14 @@ const Block = require('../models/block.model');
 const Branch = require('../models/branch.model');
 const Brand = require('../models/brand.model');
 const Product = require('../models/product.model');
-const Category = require('../models/category.model');
 const CatalogProduct = require('../models/catalogProduct.model');
-const { escapeRegex } = require('../utils/escapeRegex');
 const { distanceKm, latLngFromPoint, roundKm, MONGO_EARTH_RADIUS_KM } = require('../utils/geo');
 const { withAvailability } = require('./product.service');
 
 /**
- * Browsing the shared catalogue inside a shopping area (Marketplace v2, Phase 3,
- * docs/22 §C): one card per real product, with every store that sells it in the
- * area as an "offer". "Dalda Ghee 1 kg" appears once, "from Rs 1,200 · 3 stores".
+ * The offers for one catalogue product inside a shopping area (Marketplace v2,
+ * Phase 3, docs/22 §C): every store in the area that sells it, cheapest first —
+ * "Dalda Ghee 1 kg", "from Rs 1,200 · 3 stores".
  *
  * Public data only: ACTIVE brands, active shops, ACTIVE listings. The shopper's
  * position is used for this one request and never stored.
@@ -29,10 +27,6 @@ class CatalogBrowseError extends Error {
     this.status = status;
   }
 }
-
-const LISTING_CAP = 3000;
-const SEARCH_CAP = 500;
-const DEFAULT_LIMIT = 20;
 
 /** Blocks, shops in range, and the live brands behind them. */
 async function loadArea({ blockIds, lat, lng, radiusKm }) {
@@ -141,67 +135,6 @@ async function groupOffers(listings, area) {
   });
 }
 
-/** A category and, for a top-level one, its subcategories. */
-async function categoryAndChildren(categoryId) {
-  const children = await Category.find({ parentId: categoryId, isActive: true });
-  return [categoryId, ...children.map((c) => c._id)];
-}
-
-async function browseCatalog(params) {
-  const { q, categoryId, sort, page, limit } = params;
-  const pageNumber = page || 1;
-  const limitNumber = limit || DEFAULT_LIMIT;
-  const area = await loadArea(params);
-
-  const meta = {
-    blocks: area.blocks.map((b) => ({ _id: b._id, name: b.name })),
-    radiusKm: area.radiusKm,
-    origin: area.origin,
-  };
-  const empty = {
-    items: [],
-    pagination: { page: pageNumber, limit: limitNumber, total: 0, pages: 0 },
-    meta,
-  };
-  if (area.brandById.size === 0) return empty;
-
-  const filter = {
-    brandId: { $in: [...area.branchesByBrand.keys()] },
-    status: 'ACTIVE',
-    isActive: true,
-    catalogProductId: { $exists: true },
-  };
-  if (categoryId) {
-    filter.categoryId = { $in: await categoryAndChildren(categoryId) };
-  }
-  if (q) {
-    const rx = { $regex: escapeRegex(q), $options: 'i' };
-    const matches = await CatalogProduct.find({
-      status: 'ACTIVE',
-      $or: [{ name: rx }, { manufacturer: rx }, { barcode: q }],
-    }).limit(SEARCH_CAP);
-    if (matches.length === 0) return empty;
-    filter.catalogProductId = { $in: matches.map((m) => m._id) };
-  }
-
-  const listings = await Product.find(filter).limit(LISTING_CAP);
-  const groups = await groupOffers(listings, area);
-
-  const order = {
-    name: (a, b) => a.name.localeCompare(b.name),
-    price: (a, b) => a.minPrice - b.minPrice || a.name.localeCompare(b.name),
-    nearest: (a, b) => byNearest(a, b) || a.name.localeCompare(b.name),
-  }[sort || 'name'];
-  groups.sort(order);
-
-  const total = groups.length;
-  return {
-    items: groups.slice((pageNumber - 1) * limitNumber, pageNumber * limitNumber),
-    pagination: { page: pageNumber, limit: limitNumber, total, pages: Math.ceil(total / limitNumber) },
-    meta,
-  };
-}
-
 /** One catalogue product with all its offers in the area (the product page). */
 async function getCatalogOffers(catalogProductId, params) {
   const area = await loadArea(params);
@@ -223,4 +156,4 @@ async function getCatalogOffers(catalogProductId, params) {
   };
 }
 
-module.exports = { browseCatalog, getCatalogOffers, CatalogBrowseError };
+module.exports = { getCatalogOffers, CatalogBrowseError };

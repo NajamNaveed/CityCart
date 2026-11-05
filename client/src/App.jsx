@@ -11,7 +11,6 @@ import StoreLayout from './components/StoreLayout'
 import SellerLayout from './components/SellerLayout'
 import { GuestRoute, ProtectedRoute } from './components/RouteGuards'
 import Home from './pages/Home'
-import Shop from './pages/Shop'
 import Brands from './pages/Brands'
 import Nearby from './pages/Nearby'
 import ProductDetail from './pages/ProductDetail'
@@ -100,7 +99,6 @@ function App() {
                 {/* Shoppers */}
                 <Route element={<StoreLayout />}>
                   <Route index element={<Home />} />
-                  <Route path="shop" element={<Shop />} />
                   <Route path="brands" element={<Brands />} />
                   <Route path="nearby" element={<Nearby />} />
                   <Route path="product/:id" element={<ProductDetail />} />

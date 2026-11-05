@@ -23,7 +23,7 @@ import { fetchProduct, fetchReviews } from '../../services/catalog'
 import { clampQuantity, MAX_PRODUCT_QTY } from '../../services/cart'
 import { formatPrice } from '../../utils/format'
 import { isObjectId } from '../../utils/ids'
-import { loginHref, shopHref } from '../../utils/nav'
+import { loginHref, nearbyHref } from '../../utils/nav'
 import { availabilityInfo, discountPercent } from '../../utils/product'
 import { colors, radius, spacing } from '../../theme'
 
@@ -123,9 +123,9 @@ function ProductView({ product, brand, resumeQty }) {
       <View style={{ padding: spacing.lg }}>
         {brand ? (
           <Pressable
-            onPress={() => router.navigate(shopHref({ brandId: brand._id }))}
+            onPress={() => router.navigate(nearbyHref({ q: brand.name }))}
             accessibilityRole="button"
-            accessibilityLabel={`${brand.name}, see all products`}
+            accessibilityLabel={`${brand.name}, see their shops nearby`}
             style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, alignSelf: 'flex-start', minHeight: 44 }}
           >
             <BrandLogo brand={brand} size={28} />

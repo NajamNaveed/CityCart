@@ -53,7 +53,7 @@ function BrandCard({ brand, cityName, duplicate = false }) {
   return (
     <div data-brand-card className="w-80 shrink-0 will-change-transform">
       <Link
-        to={`/shop?brandId=${brand._id}`}
+        to={`/nearby?q=${encodeURIComponent(brand.name)}`}
         tabIndex={duplicate ? -1 : undefined}
         aria-hidden={duplicate || undefined}
         className="group relative flex h-[23.5rem] flex-col overflow-hidden rounded-2xl border border-line/80 bg-white shadow-xs transition-all duration-300 hover:border-clay/40 hover:shadow-lg hover:shadow-clay/5"

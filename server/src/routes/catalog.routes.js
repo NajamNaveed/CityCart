@@ -1,6 +1,6 @@
 const express = require('express');
 
-const { browseCatalog, browseOffers, listForBrand, listMine, getForBrand, request } = require('../controllers/catalog.controller');
+const { browseOffers, listForBrand, listMine, getForBrand, request } = require('../controllers/catalog.controller');
 const authenticate = require('../middleware/authenticate');
 const requirePermission = require('../middleware/requirePermission');
 const requireTenant = require('../middleware/requireTenant');
@@ -9,9 +9,8 @@ const { PERMISSIONS } = require('../config/permissions');
 
 const router = express.Router();
 
-// Public: shoppers browse the catalogue inside their shopping area (docs/22 §C).
-// These must stay above the '/:id' route below.
-router.get('/browse', browseCatalog);
+// Public: the offers for one catalogue product inside the shopper's area
+// (docs/22 §C). Must stay above the '/:id' route below.
 router.get('/browse/:id', validateObjectIdParam, browseOffers);
 
 // What a store can pick from when it lists a product (brand staff only).

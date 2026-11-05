@@ -17,7 +17,6 @@ import { CityProvider } from '../context/CityProvider'
 import { NearbyProvider } from '../context/NearbyProvider'
 import { NotificationProvider } from '../context/NotificationProvider'
 import OfflineBanner from '../components/OfflineBanner'
-import LocationSheet from '../components/LocationSheet'
 import { useAuth } from '../hooks/useAuth'
 import { colors } from '../theme'
 
@@ -39,8 +38,6 @@ function Shell({ fontsReady }) {
       <StatusBar style="dark" />
       <OfflineBanner />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.paper } }} />
-      {/* One picker for every screen: the tab header and checkout both open it. */}
-      <LocationSheet />
     </>
   )
 }

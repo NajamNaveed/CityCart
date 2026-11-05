@@ -50,7 +50,7 @@ export default function MyOrders() {
             message="When you order from a brand, it shows up here with live status."
             className="py-20"
             action={
-              <Link to="/shop" className={btnPrimary}>
+              <Link to="/nearby" className={btnPrimary}>
                 Start shopping
               </Link>
             }

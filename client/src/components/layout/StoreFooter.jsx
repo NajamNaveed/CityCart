@@ -10,7 +10,7 @@ export default function StoreFooter() {
 
   function pickCity(cityId) {
     setCityId(cityId)
-    navigate('/shop')
+    navigate('/nearby')
   }
 
   return (
@@ -48,8 +48,8 @@ export default function StoreFooter() {
           <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/40">Shop</p>
           <ul className="mt-4 space-y-2.5 text-[13.5px]">
             <li>
-              <Link to="/shop" className="text-white/75 transition hover:text-white">
-                All products
+              <Link to="/nearby" className="text-white/75 transition hover:text-white">
+                Shops near you
               </Link>
             </li>
             <li>

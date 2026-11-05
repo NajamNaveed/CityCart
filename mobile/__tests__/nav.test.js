@@ -1,4 +1,4 @@
-import { loginHref, registerHref, safeNext, shopHref } from '../src/utils/nav'
+import { loginHref, nearbyHref, registerHref, safeNext } from '../src/utils/nav'
 
 describe('safeNext (where to go after signing in)', () => {
   it('accepts paths inside the app', () => {
@@ -37,22 +37,23 @@ describe('auth links keep the destination', () => {
   })
 })
 
-describe('shopHref', () => {
+describe('nearbyHref', () => {
   it('carries only what was asked for', () => {
-    expect(shopHref({ q: 'lawn' }).params).toMatchObject({ q: 'lawn' })
-    expect(shopHref({ q: 'lawn' }).params).not.toHaveProperty('brandId')
-    expect(shopHref({ brandId: 'b1' }).params).toMatchObject({ brandId: 'b1' })
-    expect(shopHref({ brandId: 'b1' }).params).not.toHaveProperty('q')
-    expect(shopHref().pathname).toBe('/shop')
-    expect(shopHref({ q: '' }).params).not.toHaveProperty('q')
+    expect(nearbyHref({ q: 'lawn' }).params).toMatchObject({ q: 'lawn' })
+    expect(nearbyHref({ view: 'map' }).params).toMatchObject({ view: 'map' })
+    expect(nearbyHref({ view: 'map' }).params).not.toHaveProperty('q')
+    expect(nearbyHref().pathname).toBe('/nearby')
+    expect(nearbyHref().params).not.toHaveProperty('q')
+    expect(nearbyHref().params).not.toHaveProperty('view')
+    expect(nearbyHref({ q: '' }).params).not.toHaveProperty('q')
   })
 
   it('is a new request every time, so asking for the same thing twice is not ignored', () => {
     jest.useFakeTimers()
     jest.setSystemTime(1000)
-    const first = shopHref({ brandId: 'b1' })
+    const first = nearbyHref({ q: 'lawn' })
     jest.setSystemTime(2000)
-    const second = shopHref({ brandId: 'b1' })
+    const second = nearbyHref({ q: 'lawn' })
     jest.useRealTimers()
     expect(first.params.t).not.toBe(second.params.t)
   })

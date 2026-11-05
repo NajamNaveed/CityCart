@@ -104,18 +104,6 @@ function browseFail(err, res, next) {
   return next(err);
 }
 
-// One card per real product in a shopping area, with every store's offer.
-async function browseCatalog(req, res, next) {
-  const query = browseQuerySchema.safeParse(req.query);
-  if (!query.success) return bad(res, query.error);
-  try {
-    const result = await browse.browseCatalog(query.data);
-    return res.status(200).json({ success: true, ...result });
-  } catch (err) {
-    return browseFail(err, res, next);
-  }
-}
-
 // One product and all its offers in the area (the product page).
 async function browseOffers(req, res, next) {
   const params = objectIdParamSchema.safeParse(req.params);
@@ -220,7 +208,6 @@ async function remove(req, res, next) {
 }
 
 module.exports = {
-  browseCatalog,
   browseOffers,
   listForBrand,
   listMine,

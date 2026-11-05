@@ -27,11 +27,7 @@ export function NearbyProvider({ children }) {
   // prompt can never appear before we know whether the shopper has seen it.
   const [asked, setAsked] = useState(true)
   const [status, setStatus] = useState('idle') // idle | detecting | found | overlap | border | outside | denied | servicesOff | timeout | error
-  const [canAskAgain, setCanAskAgain] = useState(true)
   const [blocksState, setBlocksState] = useState({ cityId: '', list: NO_BLOCKS })
-  // The last "which blocks am I in?" answer: the blocks holding the position, and the nearest others.
-  const [choices, setChoices] = useState({ containing: [], nearest: [] })
-  const [pickerOpen, setPickerOpen] = useState(false)
   const storedRef = useRef(stored)
 
   // At start: what was remembered.
@@ -83,47 +79,11 @@ export function NearbyProvider({ children }) {
 
   const setRange = useCallback((range) => update({ range: normalizeRange(range) }), [update])
 
-  // Picking blocks by hand means "measure from the blocks", not from a device fix or a pin.
-  const chooseBlock = useCallback((blockId) => update({ blockIds: [blockId], coords: null, pinned: false }), [update])
-  const toggleManualBlock = useCallback(
-    (blockId) =>
-      setStored((prev) => {
-        const has = prev.blockIds.includes(blockId)
-        const ids = has ? prev.blockIds.filter((id) => id !== blockId) : [...prev.blockIds, blockId].slice(0, 10)
-        const next = { ...prev, blockIds: ids, coords: null, pinned: false }
-        storedRef.current = next
-        prefs.set('nearby', next)
-        return next
-      }),
-    [],
-  )
-  // Ticking a block among those offered for the shopper's position keeps the position.
-  const toggleBlock = useCallback(
-    (blockId) =>
-      setStored((prev) => {
-        const has = prev.blockIds.includes(blockId)
-        // An overlap needs at least one block left ticked.
-        if (has && prev.blockIds.length === 1) return prev
-        const ids = has ? prev.blockIds.filter((id) => id !== blockId) : [...prev.blockIds, blockId].slice(0, 10)
-        const next = { ...prev, blockIds: ids }
-        storedRef.current = next
-        prefs.set('nearby', next)
-        return next
-      }),
-    [],
-  )
-  const clearLocation = useCallback(() => {
-    update({ blockIds: [], coords: null, pinned: false })
-    setStatus('idle')
-    setChoices({ containing: [], nearest: [] })
-  }, [update])
-
   // Apply a "which blocks am I in?" answer: inside a zone, inside an overlap, or between zones.
   const applyChoice = useCallback(
     (result, position, pinned) => {
       const containing = Array.isArray(result.containing) ? result.containing : []
       const nearest = Array.isArray(result.nearest) ? result.nearest : []
-      setChoices({ containing, nearest })
       if (containing.length > 0) {
         setCityId(containing[0].cityId)
         update({ blockIds: containing.map((b) => b._id), coords: position, pinned })
@@ -161,7 +121,6 @@ export function NearbyProvider({ children }) {
     setAsked(true)
     prefs.set('nearbyAsked', true)
     const result = await locateShopper()
-    setCanAskAgain(result.canAskAgain !== false)
     if (result.coords && result.containing) return applyChoice(result, result.coords, false)
     setStatus(result.status)
     return result.status
@@ -192,21 +151,12 @@ export function NearbyProvider({ children }) {
       pinned: stored.pinned,
       origin,
       range: stored.range,
-      choices,
       status,
-      canAskAgain,
-      pickerOpen,
       setRange,
-      chooseBlock,
-      toggleBlock,
-      toggleManualBlock,
-      clearLocation,
       detect,
       setPin,
-      openPicker: () => setPickerOpen(true),
-      closePicker: () => setPickerOpen(false),
     }),
-    [ready, asked, blocks, blocksReady, selectedBlocks, blockIds, areaName, stored.coords, stored.pinned, origin, stored.range, choices, status, canAskAgain, pickerOpen, setRange, chooseBlock, toggleBlock, toggleManualBlock, clearLocation, detect, setPin],
+    [ready, asked, blocks, blocksReady, selectedBlocks, blockIds, areaName, stored.coords, stored.pinned, origin, stored.range, status, setRange, detect, setPin],
   )
 
   return <NearbyContext.Provider value={value}>{children}</NearbyContext.Provider>

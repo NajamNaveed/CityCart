@@ -59,7 +59,6 @@ export function NearbyProvider({ children }) {
   // The last "which blocks am I in?" answer: the blocks holding the position, and the nearest others.
   const [choices, setChoices] = useState({ containing: [], nearest: [] })
   const [status, setStatus] = useState('idle') // idle | detecting | found | overlap | border | outside | denied | nodevice | error
-  const [pickerOpen, setPickerOpen] = useState(false)
 
   useEffect(() => {
     if (!cityId) return undefined
@@ -224,7 +223,6 @@ export function NearbyProvider({ children }) {
       range: stored.range,
       choices,
       status,
-      pickerOpen,
       setRange,
       chooseBlock,
       toggleBlock,
@@ -233,10 +231,8 @@ export function NearbyProvider({ children }) {
       detect,
       setPin,
       autoDetect,
-      openPicker: () => setPickerOpen(true),
-      closePicker: () => setPickerOpen(false),
     }),
-    [blocks, blocksReady, selectedBlocks, blockIds, areaName, stored.coords, stored.pinned, origin, stored.range, choices, status, pickerOpen, setRange, chooseBlock, toggleBlock, toggleManualBlock, clearLocation, detect, setPin, autoDetect],
+    [blocks, blocksReady, selectedBlocks, blockIds, areaName, stored.coords, stored.pinned, origin, stored.range, choices, status, setRange, chooseBlock, toggleBlock, toggleManualBlock, clearLocation, detect, setPin, autoDetect],
   )
 
   return <NearbyContext.Provider value={value}>{children}</NearbyContext.Provider>

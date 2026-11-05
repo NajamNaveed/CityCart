@@ -46,7 +46,7 @@ describe('AlsoSoldBy', () => {
     expect(api.get).not.toHaveBeenCalled()
 
     await press(renderer, 'Choose area')
-    expect(nearby.openPicker).toHaveBeenCalled()
+    expect(mockRouter.navigate).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/nearby', params: expect.objectContaining({ view: 'map' }) }))
   })
 
   it('lists the other stores, with distances and prices, and opens one', async () => {
@@ -113,9 +113,8 @@ describe('AlsoSoldBy', () => {
 
   it('lets the shopper change the area from the title', async () => {
     api.get.mockResolvedValue({ data: { item: { offers: [] } } })
-    const nearby = area()
-    const renderer = await open(<AlsoSoldBy catalogProductId={ID(3)} currentProductId={ID(2)} />, nearby)
+    const renderer = await open(<AlsoSoldBy catalogProductId={ID(3)} currentProductId={ID(2)} />)
     await press(renderer, 'Change area')
-    expect(nearby.openPicker).toHaveBeenCalled()
+    expect(mockRouter.navigate).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/nearby', params: expect.objectContaining({ view: 'map' }) }))
   })
 })

@@ -7,7 +7,7 @@ import { hasMorePages, initialPaging, pagingReducer } from '../services/paging'
  * `fetchPage(page)` must resolve { items, pagination: { page, pages, total }, meta? }; `meta` is
  * anything the first page carries besides items (the reviews summary), returned as `list.meta`.
  *
- *   const list = usePagedList(key, (page) => fetchProducts({ ...query, page }))
+ *   const list = usePagedList(key, (page) => fetchDiscover({ ...query, page }))
  *   list.items, list.loading, list.error, list.loadMore(), list.refresh(), ...
  */
 export function usePagedList(key, fetchPage) {

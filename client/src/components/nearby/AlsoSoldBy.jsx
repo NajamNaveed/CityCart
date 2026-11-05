@@ -13,7 +13,7 @@ import { formatPrice } from '../../ui'
  * it sells the item, we say so instead of showing a farther shop.
  */
 export default function AlsoSoldBy({ catalogProductId, currentProductId }) {
-  const { blockIds, origin, range, openPicker } = useNearby()
+  const { blockIds, origin, range } = useNearby()
   const area = blockIds.length
     ? {
         blockIds: blockIds.join(','),
@@ -44,9 +44,9 @@ export default function AlsoSoldBy({ catalogProductId, currentProductId }) {
       <section className="mt-12 border-t border-line pt-8">
         <p className="text-[13px] text-muted">
           Choose your area to see the other stores that sell this product.{' '}
-          <button type="button" onClick={openPicker} className="font-medium text-ink underline underline-offset-4">
+          <Link to="/nearby" className="font-medium text-ink underline underline-offset-4">
             Choose area
-          </button>
+          </Link>
         </p>
       </section>
     )
@@ -94,9 +94,9 @@ export default function AlsoSoldBy({ catalogProductId, currentProductId }) {
         <h2 id="also-sold-by" className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
           Also sold by
         </h2>
-        <button type="button" onClick={openPicker} className="text-[12.5px] text-muted transition hover:text-ink">
+        <Link to="/nearby" className="text-[12.5px] text-muted transition hover:text-ink">
           Change area
-        </button>
+        </Link>
       </div>
       <p className="mt-1 text-[12.5px] text-muted">The same product at other stores in your area.</p>
       <ul className="mt-3 divide-y divide-line rounded-lg border border-line bg-white px-5">

@@ -54,11 +54,9 @@ const updateProductSchema = z
   });
 
 /**
- * docs/05 §12 (List Products) documents cityId, brandId, categoryId,
- * search, minPrice, maxPrice, status, page, limit, sort. docs/05 §24
- * (Query Parameters) requires validating allowed sort fields "to
- * prevent arbitrary or expensive queries" — enforced here via a fixed
- * enum rather than accepting any field name.
+ * docs/05 §12 (List Products) documented the public list's query parameters;
+ * that listing was removed with the Shop. The brand dashboard still validates
+ * its own listing below.
  */
 
 // Brand dashboard listing: every status is allowed (a brand sees its own drafts and archive).
@@ -69,22 +67,8 @@ const listMyProductsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional(),
 });
 
-const listProductsQuerySchema = z.object({
-  cityId: objectIdString.optional(),
-  brandId: objectIdString.optional(),
-  categoryId: objectIdString.optional(),
-  search: z.string().trim().min(1).optional(),
-  minPrice: z.coerce.number().min(0).optional(),
-  maxPrice: z.coerce.number().min(0).optional(),
-  page: z.coerce.number().int().min(1).optional(),
-  limit: z.coerce.number().int().min(1).max(100).optional(),
-  sort: z.enum(['createdAt', 'price', 'name']).optional(),
-  order: z.enum(['asc', 'desc']).optional(),
-});
-
 module.exports = {
   createProductSchema,
   updateProductSchema,
-  listProductsQuerySchema,
   listMyProductsQuerySchema,
 };

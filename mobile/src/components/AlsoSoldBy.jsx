@@ -10,6 +10,7 @@ import { fetchCatalogOffers } from '../services/catalog'
 import { areaParams } from '../services/nearby'
 import { formatDistance } from '../utils/geo'
 import { formatPrice } from '../utils/format'
+import { nearbyHref } from '../utils/nav'
 import { colors, radius, spacing } from '../theme'
 
 /**
@@ -20,7 +21,7 @@ import { colors, radius, spacing } from '../theme'
  */
 export default function AlsoSoldBy({ catalogProductId, currentProductId }) {
   const router = useRouter()
-  const { blockIds, origin, range, openPicker } = useNearby()
+  const { blockIds, origin, range } = useNearby()
   const area = blockIds.length > 0 ? areaParams({ blockIds, coords: origin, range }) : null
   const result = useRemote(`offers:${catalogProductId}:${JSON.stringify(area)}`, () =>
     catalogProductId && area ? fetchCatalogOffers(catalogProductId, area) : Promise.resolve(null),
@@ -33,7 +34,12 @@ export default function AlsoSoldBy({ catalogProductId, currentProductId }) {
       <AppText variant="small" style={{ textTransform: 'uppercase', letterSpacing: 1.2, fontSize: 11 }}>
         Also sold by
       </AppText>
-      <Pressable onPress={openPicker} accessibilityRole="button" hitSlop={8} style={{ minHeight: 36, justifyContent: 'center' }}>
+      <Pressable
+        onPress={() => router.navigate(nearbyHref({ view: 'map' }))}
+        accessibilityRole="button"
+        hitSlop={8}
+        style={{ minHeight: 36, justifyContent: 'center' }}
+      >
         <AppText variant="small" style={{ color: colors.clay }}>
           Change area
         </AppText>
@@ -46,7 +52,7 @@ export default function AlsoSoldBy({ catalogProductId, currentProductId }) {
       <View style={{ marginTop: spacing.xl, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: spacing.lg, gap: spacing.sm }}>
         {title}
         <AppText variant="small">Choose your area to see the other stores that sell this product.</AppText>
-        <Button title="Choose area" variant="outline" onPress={openPicker} />
+        <Button title="Choose area" variant="outline" onPress={() => router.navigate(nearbyHref({ view: 'map' }))} />
       </View>
     )
   }

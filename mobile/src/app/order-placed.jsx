@@ -64,7 +64,7 @@ export default function OrderPlaced() {
 
         <View style={{ alignSelf: 'stretch', gap: spacing.md }}>
           <Button title="View my orders" onPress={() => router.replace('/orders')} />
-          <Button title="Continue shopping" variant="outline" onPress={() => router.replace('/shop')} />
+          <Button title="Continue shopping" variant="outline" onPress={() => router.replace('/nearby')} />
         </View>
       </ScrollView>
     </SafeAreaView>

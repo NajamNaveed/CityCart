@@ -18,6 +18,7 @@ import { useRemote } from '../../hooks/useRemote'
 import { cartHasIssues, cartIsEmpty, checkCartArea, clampQuantity, fetchCart, issueText, MAX_CART_QTY, removeFromCart, setCartQuantity } from '../../services/cart'
 import { getErrorMessage } from '../../services/api'
 import { formatPrice } from '../../utils/format'
+import { nearbyHref } from '../../utils/nav'
 import { colors, radius, spacing } from '../../theme'
 
 function CartLine({ item, busy, onQuantity, onRemove, onOpen }) {
@@ -65,7 +66,7 @@ export default function CartScreen() {
   const router = useRouter()
   const { status, user } = useAuth()
   const { setCount } = useCart()
-  const { blockIds, areaName, openPicker } = useNearby()
+  const { blockIds, areaName } = useNearby()
   const signedIn = status === 'signedIn' && user?.role === 'CUSTOMER'
 
   const remote = useRemote(`cart:${signedIn ? user.id : 'none'}`, () => (signedIn ? fetchCart() : Promise.resolve(null)))
@@ -161,7 +162,7 @@ export default function CartScreen() {
         ) : remote.status === 'error' ? (
           <EmptyState icon="wifi-off" tone="error" title="Couldn't load your cart" message={remote.error} action={<Button title="Try again" onPress={refresh} />} />
         ) : cartIsEmpty(cart) ? (
-          <EmptyState icon="shopping-bag" title="Your cart is empty" message="Browse the shops in your city and add what you like." action={<Button title="Start shopping" onPress={() => router.navigate('/shop')} />} />
+          <EmptyState icon="shopping-bag" title="Your cart is empty" message="Browse the shops in your city and add what you like." action={<Button title="Start shopping" onPress={() => router.navigate('/nearby')} />} />
         ) : (
           <View style={{ gap: spacing.lg }}>
             {notice ? (
@@ -186,7 +187,7 @@ export default function CartScreen() {
                       Remove {undeliverable.length === 1 ? 'it' : 'them'}
                     </AppText>
                   </Pressable>
-                  <Pressable onPress={openPicker} accessibilityRole="button" hitSlop={8}>
+                  <Pressable onPress={() => router.navigate(nearbyHref({ view: 'map' }))} accessibilityRole="button" hitSlop={8}>
                     <AppText variant="label" style={{ color: colors.warning }}>
                       Change area
                     </AppText>

@@ -24,7 +24,7 @@ export default function Cart() {
   const [state, setState] = useState({ loading: true, cart: null, error: '' })
   const [busyId, setBusyId] = useState(null)
   const [notice, setNotice] = useState('')
-  const { blockIds, areaName, openPicker } = useNearby()
+  const { blockIds, areaName } = useNearby()
   // Which items the stores in the cart can still deliver to the shopping area (read-only check).
   const [areaCheck, setAreaCheck] = useState({ key: '', undeliverable: [] })
 
@@ -121,9 +121,9 @@ export default function Cart() {
             <button type="button" disabled={busyId === 'area'} onClick={removeUndeliverable} className="underline disabled:opacity-50">
               Remove {undeliverable.length === 1 ? 'it' : 'them'}
             </button>
-            <button type="button" onClick={openPicker} className="underline">
+            <Link to="/nearby" className="underline">
               Change area
-            </button>
+            </Link>
           </div>
         </div>
       )}
@@ -148,7 +148,7 @@ export default function Cart() {
           message="Browse the marketplace and add products from the brands in your city."
           className="py-20"
           action={
-            <Link to="/shop" className={btnPrimary}>
+            <Link to="/nearby" className={btnPrimary}>
               Start shopping
             </Link>
           }

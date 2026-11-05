@@ -52,22 +52,6 @@ describe('getPublicAvailability', () => {
   ])('%s -> %s', (_name, record, expected) => {
     expect(getPublicAvailability(record)).toBe(expected);
   });
-
-  it('never exposes exact quantities on public products', async () => {
-    const id = oid();
-    const brandId = oid();
-    Brand.find.mockResolvedValue([{ _id: brandId }]);
-    Product.find.mockReturnValue({
-      sort: () => ({ skip: () => ({ limit: () => Promise.resolve([{ _id: id, brandId }]) }) }),
-    });
-    Product.countDocuments.mockResolvedValue(1);
-    Inventory.find.mockResolvedValue([inv(id, { availableQuantity: 2, lowStockThreshold: 5 })]);
-
-    const res = await request(app).get('/api/v1/products');
-
-    expect(res.body.products[0].availability).toBe('LOW_STOCK');
-    expect(JSON.stringify(res.body)).not.toMatch(/availableQuantity|reservedQuantity/);
-  });
 });
 
 describe('buildCategoryTree', () => {

@@ -140,8 +140,8 @@ function ProductView({ product, brand }) {
             Home
           </Link>
           <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-          <Link to="/shop" className="transition hover:text-ink">
-            Shop
+          <Link to="/nearby" className="transition hover:text-ink">
+            Nearby
           </Link>
           {brand && (
             <>
@@ -206,7 +206,7 @@ function ProductView({ product, brand }) {
           {/* Buy box */}
           <div className="lg:pt-2">
             {brand && (
-              <Link to={`/shop?brandId=${brand._id}`} className={`${sectionLabel} transition hover:text-clay`}>
+              <Link to={`/nearby?q=${encodeURIComponent(brand.name)}`} className={`${sectionLabel} transition hover:text-clay`}>
                 {brand.name}
               </Link>
             )}
@@ -444,8 +444,8 @@ export default function ProductDetail() {
         message="It may have been removed, or the link is wrong."
         className="py-24"
         action={
-          <Link to="/shop" className={`${btnPrimary}`}>
-            Back to the shop
+          <Link to="/nearby" className={`${btnPrimary}`}>
+            Back to nearby shops
           </Link>
         }
       />

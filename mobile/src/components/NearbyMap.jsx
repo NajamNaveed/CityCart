@@ -17,7 +17,7 @@ const ALLOWED = /^(about:|data:|blob:)/
  * `rider` ({ lat, lng }) is a live position: it moves its dot without moving the
  * camera, so an order page can follow the rider without snapping away.
  */
-export default function NearbyMap({ items, zones = [], selectedIds = [], origin, pin, rider, radiusKm, originLabel, onOpenBrand, onPick, height = 420 }) {
+export default function NearbyMap({ items, zones = [], selectedIds = [], origin, pin, rider, radiusKm, originLabel, onOpenBrand, onPick, pickable = Boolean(onPick), height = 420 }) {
   const web = useRef(null)
   const brands = useRef(new Map())
   const handlers = useRef({})
@@ -31,11 +31,12 @@ export default function NearbyMap({ items, zones = [], selectedIds = [], origin,
     brands.current = new Map((items || []).map((brand) => [String(brand._id), brand]))
   }, [items])
 
-  const pickable = Boolean(onPick)
+  // Taps only count while the map is in choosing mode, even if a handler is passed.
+  const canPick = Boolean(pickable && onPick)
   // Refit only when what the map shows changes, not on every parent render.
-  const signature = JSON.stringify({ items, zones, selectedIds, origin, pin, radiusKm, originLabel, pickable })
+  const signature = JSON.stringify({ items, zones, selectedIds, origin, pin, radiusKm, originLabel, canPick })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const data = useMemo(() => JSON.stringify(buildMapData({ items, zones, selectedIds, origin, pin, radiusKm, originLabel, pickable })), [signature])
+  const data = useMemo(() => JSON.stringify(buildMapData({ items, zones, selectedIds, origin, pin, radiusKm, originLabel, pickable: canPick })), [signature])
 
   useEffect(() => {
     if (!ready) return
@@ -71,7 +72,7 @@ export default function NearbyMap({ items, zones = [], selectedIds = [], origin,
   }
 
   return (
-    <View testID="map" accessibilityLabel={pickable ? 'Map for choosing a spot' : rider ? 'Map of your delivery and rider' : 'Map of nearby shops'} style={[styles.frame, { height }]}>
+    <View testID="map" accessibilityLabel={canPick ? 'Map for choosing a spot' : rider ? 'Map of your delivery and rider' : 'Map of nearby shops'} style={[styles.frame, { height }]}>
       <WebView
         ref={web}
         source={{ html: MAP_HTML }}

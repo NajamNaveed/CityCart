@@ -76,7 +76,7 @@ export default function Brands() {
             {filtered.map((brand, i) => (
               <Reveal key={brand._id} delay={Math.min(i, 8) * 0.04} className="h-full">
                 <Link
-                  to={`/shop?brandId=${brand._id}`}
+                  to={`/nearby?q=${encodeURIComponent(brand.name)}`}
                   className="group flex h-full flex-col overflow-hidden rounded-xl border border-line bg-white shadow-sm shadow-ink/5 transition-all duration-300 hover:-translate-y-0.5 hover:border-ink/25 hover:shadow-lg hover:shadow-ink/5"
                 >
                   <div className="relative flex h-44 items-center justify-center bg-gradient-to-br from-cream via-sand to-paper">

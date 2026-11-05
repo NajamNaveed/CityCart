@@ -2,16 +2,12 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { HandCoins, MapPin, ShoppingBasket } from 'lucide-react'
-import api from '../services/api'
 import { useCity } from '../hooks/useCity'
 import { useBrands } from '../hooks/useBrands'
-import ProductCard from '../components/ProductCard'
 import BrandMarquee from '../components/home/BrandMarquee'
-import { useRatings } from '../hooks/useRatings'
-import ProductImage from '../components/ProductImage'
 import SectionHeader from '../components/SectionHeader'
 import { Reveal } from '../components/ui'
-import { btnOutline, btnPrimary, formatPrice, sectionLabel, wrap } from '../ui'
+import { btnOutline, btnPrimary, sectionLabel, wrap } from '../ui'
 
 const HEADLINES = ['Paid on delivery.', 'From brands near you.', 'In one single cart.']
 
@@ -55,25 +51,6 @@ function RotatingHeadline({ words }) {
 export default function Home() {
   const { city, cityId } = useCity()
   const { brands, loading: brandsLoading } = useBrands(cityId)
-  const [result, setResult] = useState({ key: null, items: [] })
-  const key = cityId || 'all'
-
-  useEffect(() => {
-    let active = true
-    api
-      .get('/products', { params: { limit: 8, sort: 'createdAt', order: 'desc', ...(cityId && { cityId }) } })
-      .then((res) => active && setResult({ key, items: res.data.products }))
-      .catch(() => active && setResult({ key, items: [] }))
-    return () => {
-      active = false
-    }
-  }, [cityId, key])
-
-  const loading = result.key !== key
-  const products = Array.isArray(result.items) ? result.items : []
-  const brandName = Object.fromEntries(brands.map((b) => [b._id, b.name]))
-  const ratings = useRatings(products.map((p) => p._id))
-  const featured = products.slice(0, 2)
 
   return (
     <>
@@ -83,7 +60,7 @@ export default function Home() {
           aria-hidden="true"
           className="pointer-events-none absolute -right-32 -top-40 h-[480px] w-[480px] rounded-full bg-cream blur-3xl"
         />
-        <div className={`${wrap} relative grid items-center gap-14 py-16 lg:grid-cols-[1.15fr_1fr] lg:py-24`}>
+        <div className={`${wrap} relative py-16 lg:py-24`}>
           <Reveal>
             <p className={sectionLabel}>{city ? `Shopping in ${city.name}` : 'The CityCart marketplace'}</p>
             <h1 className="font-display mt-5 text-[44px] font-semibold leading-[1.05] tracking-tight text-ink sm:text-6xl">
@@ -100,8 +77,8 @@ export default function Home() {
               your order arrives.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
-              <Link to="/shop" className={btnPrimary}>
-                Shop all products
+              <Link to="/nearby" className={btnPrimary}>
+                Browse nearby shops
               </Link>
               <Link to="/brands" className={btnOutline}>
                 Browse brands
@@ -116,24 +93,6 @@ export default function Home() {
               ))}
             </ul>
           </Reveal>
-
-          {featured.length === 2 && (
-            <Reveal delay={0.15} className="grid grid-cols-2 gap-5">
-              {featured.map((p, i) => (
-                <Link key={p._id} to={`/product/${p._id}`} className={`group block ${i === 1 ? 'lg:mt-14' : ''}`}>
-                  <div className="overflow-hidden rounded-lg bg-sand shadow-sm shadow-ink/5">
-                    <ProductImage
-                      src={p.images?.[0]}
-                      name={p.name}
-                      className="aspect-[3/4] w-full transition-transform duration-500 group-hover:scale-[1.04]"
-                    />
-                  </div>
-                  <p className="mt-3 line-clamp-1 text-sm font-medium text-ink">{p.name}</p>
-                  <p className="text-sm text-muted">{formatPrice(p.price)}</p>
-                </Link>
-              ))}
-            </Reveal>
-          )}
         </div>
       </section>
 
@@ -172,30 +131,6 @@ export default function Home() {
         )}
       </section>
 
-      {/* New arrivals */}
-      <section className={`${wrap} pt-16`}>
-        <Reveal>
-          <SectionHeader eyebrow="Just landed" title="New arrivals" to="/shop" linkLabel="View all products" />
-        </Reveal>
-        {loading ? (
-          <div className="grid grid-cols-2 gap-x-5 gap-y-10 md:grid-cols-3 lg:grid-cols-4">
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="aspect-[4/5] animate-pulse rounded-lg bg-sand" />
-            ))}
-          </div>
-        ) : products.length === 0 ? (
-          <p className="text-[15px] text-muted">No products have been listed yet. Check back soon.</p>
-        ) : (
-          <div className="grid grid-cols-2 gap-x-5 gap-y-10 md:grid-cols-3 lg:grid-cols-4">
-            {products.map((p, i) => (
-              <Reveal key={p._id} delay={Math.min(i, 7) * 0.05} className="h-full">
-                <ProductCard product={p} brandName={brandName[p.brandId]} rating={ratings[p._id]} />
-              </Reveal>
-            ))}
-          </div>
-        )}
-      </section>
-
       {/* Closing band before the footer */}
       <section className={`${wrap} pb-4 pt-20`}>
         <Reveal>
@@ -218,7 +153,7 @@ export default function Home() {
                 checkout, cash in hand at the door.
               </p>
               <div className="mt-8 flex flex-wrap justify-center gap-3">
-                <Link to="/shop" className={btnPrimary}>
+                <Link to="/nearby" className={btnPrimary}>
                   Start shopping
                 </Link>
                 <Link

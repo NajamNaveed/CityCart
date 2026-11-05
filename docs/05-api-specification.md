@@ -46,7 +46,7 @@ All APIs use:
 Example:
 
 ```text
-GET /api/v1/products
+GET /api/v1/discover
 ```
 
 Production base URL will be configured through an environment variable.
@@ -766,17 +766,17 @@ blocks that currently hold it). `POST` body: `label`, `fullName`, `phone`,
 zone answers 400 `OUTSIDE_DELIVERY_ZONE`; an eleventh address answers 409
 `ADDRESS_LIMIT`. An address that is not the caller's answers 404.
 
-## Browsing the catalogue in a shopping area (public)
+## The offers for one catalogue product (public)
 
 ```text
-GET /api/v1/catalog/browse?blockIds=a,b&lat=&lng=&radiusKm=&q=&categoryId=&sort=&page=&limit=
 GET /api/v1/catalog/browse/:catalogProductId?blockIds=a,b&lat=&lng=&radiusKm=
 ```
 
 `blockIds` (required) is the shopper's area: one block, or several where zones
-overlap. `radiusKm` limits to shops within that distance of `lat`/`lng`. `sort` is
-`name` (default), `price` or `nearest` (needs a position). Each item is one real
-product with its `offers`, cheapest first:
+overlap. `radiusKm` limits to shops within that distance of `lat`/`lng`. Shops
+open their catalogue from Nearby (shops and their products), so there is no
+catalogue-wide list endpoint. The item is the real product with its `offers`,
+cheapest first:
 
 ```text
 { catalogProductId, name, manufacturer, size, images, minPrice, maxPrice,
@@ -784,7 +784,8 @@ product with its `offers`, cheapest first:
   offers: [ { productId, brandId, brandName, price, availability, branchCount, nearestKm } ] }
 ```
 
-Adding to the cart uses an offer's `productId` (the store's listing).
+Adding to the cart uses an offer's `productId` (the store's listing). A product
+nobody in the area sells answers 404.
 
 ## Cart and checkout
 
@@ -819,28 +820,21 @@ Base:
 /api/v1/products
 ```
 
-## List Products
+## List the Caller's Products
+
+There is no public product listing. Shoppers browse the shops in their area
+(`GET /api/v1/discover`) and open a product from a shop. Brand staff read their
+own listings, every status, from:
 
 ```text
-GET /api/v1/products
+GET /api/v1/products/mine
 ```
 
-Supported query parameters:
+Required:
 
 ```text
-?cityId=
-?brandId=
-?categoryId=
-?search=
-?minPrice=
-?maxPrice=
-?status=
-?page=
-?limit=
-?sort=
+products.view
 ```
-
-Public users should normally receive only active products.
 
 ---
 

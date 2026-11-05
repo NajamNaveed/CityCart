@@ -275,7 +275,7 @@ export default function Notifications() {
           className="rounded-2xl border border-line/70 bg-white py-16"
           action={
             isCustomer ? (
-              <Link to="/shop" className={btnPrimary}>
+              <Link to="/nearby" className={btnPrimary}>
                 Explore marketplace
               </Link>
             ) : null

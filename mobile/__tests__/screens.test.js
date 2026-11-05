@@ -33,7 +33,6 @@ jest.mock('../src/services/api', () => {
 import api from '../src/services/api'
 import { CityProvider } from '../src/context/CityProvider'
 import Home from '../src/app/(tabs)/index'
-import Shop from '../src/app/(tabs)/shop'
 import Brands from '../src/app/brands'
 import ProductScreen from '../src/app/product/[id]'
 
@@ -55,18 +54,16 @@ const REVIEW = { _id: ID(3), rating: 5, title: 'Lovely fabric', comment: 'Soft a
 const SUMMARY = { average: 4.5, count: 2, distribution: { 5: 1, 4: 1, 3: 0, 2: 0, 1: 0 } }
 
 // A tiny fake of the CityCart API.
-function serve({ failProducts = false, emptyProducts = false } = {}) {
+function serve({ failBrands = false, emptyBrands = false } = {}) {
   api.get.mockImplementation(async (url) => {
     if (url === '/cities') return { data: { cities: [{ _id: ID(9), name: 'Faisalabad' }] } }
-    if (url === '/brands') return { data: { brands: [BRAND] } }
-    if (url === `/brands/${BRAND._id}`) return { data: { brand: BRAND } }
-    if (url === '/products') {
-      if (failProducts) throw Object.assign(new Error('Cannot reach the server. Check your connection.'), { response: undefined })
-      return { data: { products: emptyProducts ? [] : [PRODUCT], pagination: { page: 1, pages: 1, total: emptyProducts ? 0 : 1 } } }
+    if (url === '/brands') {
+      if (failBrands) throw new Error('Cannot reach the server. Check your connection.')
+      return { data: { brands: emptyBrands ? [] : [BRAND] } }
     }
+    if (url === `/brands/${BRAND._id}`) return { data: { brand: BRAND } }
     if (url === `/products/${PRODUCT._id}`) return { data: { product: PRODUCT } }
     if (url === `/products/${PRODUCT._id}/reviews`) return { data: { reviews: [REVIEW], summary: SUMMARY, pagination: { page: 1, pages: 1, total: 2 } } }
-    if (url === '/reviews/summary') return { data: { ratings: { [PRODUCT._id]: { average: 4.5, count: 2 } } } }
     throw new Error(`unexpected request ${url}`)
   })
 }
@@ -103,16 +100,12 @@ beforeEach(() => {
 })
 
 describe('Home', () => {
-  it('shows the brands and the new arrivals with price, discount and rating', async () => {
+  it('shows the brands and a way to search them', async () => {
     const text = screenText(await show(<Home />))
     expect(text).toContain('CityCart')
     expect(text).toContain('Loom & Co.')
-    expect(text).toContain('Mehrunisa Printed Lawn')
-    expect(text).toContain('Rs 3,600')
-    expect(text).toContain('Rs 4,400')
-    expect(text).toContain('18% off')
-    expect(text).toContain('4.5 (2)')
-    expect(text).toContain('Only a few left')
+    expect(text).toContain('Brands')
+    expect(text).not.toContain('New arrivals')
   })
 
   it('says so, with a way to retry, when the server cannot be reached', async () => {
@@ -123,84 +116,11 @@ describe('Home', () => {
     const text = screenText(await show(<Home />))
     expect(text).toContain("Can't reach the server")
     expect(text).toContain('Try again')
-    expect(text).not.toContain('New arrivals')
   })
 
-  it('says when nothing is on sale yet', async () => {
-    serve({ emptyProducts: true })
-    expect(screenText(await show(<Home />))).toContain('No products yet')
-  })
-})
-
-describe('Shop', () => {
-  it('lists products with a count, and sorts and filters offered', async () => {
-    const text = screenText(await show(<Shop />))
-    expect(text).toContain('Shop')
-    expect(text).toContain('1 product')
-    expect(text).toContain('Mehrunisa Printed Lawn')
-    expect(text).toContain('Newest')
-    expect(text).toContain('All brands')
-  })
-
-  it('asks the server for the search and brand it was opened with', async () => {
-    mockParams = { q: 'lawn', brandId: BRAND._id }
-    const text = screenText(await show(<Shop />))
-    const call = api.get.mock.calls.find(([url]) => url === '/products')
-    expect(call[1].params).toMatchObject({ search: 'lawn', brandId: BRAND._id, page: 1 })
-    expect(text).toContain('for “lawn”')
-    expect(text).toContain('Loom & Co.') // the brand chip shows the brand's name
-  })
-
-  it('offers to clear the search when nothing matches', async () => {
-    serve({ emptyProducts: true })
-    mockParams = { q: 'zzz' }
-    const text = screenText(await show(<Shop />))
-    expect(text).toContain('Nothing found for “zzz”')
-    expect(text).toContain('Clear search and filters')
-  })
-
-  it('shows an error with Try again when products cannot load', async () => {
-    serve({ failProducts: true })
-    const text = screenText(await show(<Shop />))
-    expect(text).toContain("Couldn't load products")
-    expect(text).toContain('Try again')
-  })
-})
-
-describe('Shop keeps up with the rest of the app', () => {
-  const productCalls = () => api.get.mock.calls.filter(([url]) => url === '/products').map(([, config]) => config.params)
-
-  it('applies a brand again after the shopper cleared it by hand', async () => {
-    mockParams = { brandId: BRAND._id, t: '1' }
-    const element = () =>
-      tree(
-        <CityProvider>
-          <Shop />
-        </CityProvider>,
-      )
-    const renderer = await show(<Shop />)
-    expect(productCalls().at(-1)).toMatchObject({ brandId: BRAND._id })
-
-    // the shopper taps the little x on the brand chip
-    const clear = renderer.root.findAll((n) => n.props.accessibilityLabel === `Remove ${BRAND.name}` && typeof n.props.onPress === 'function')[0]
-    await act(async () => clear.props.onPress())
-    for (let i = 0; i < 4; i += 1) await act(async () => { await Promise.resolve() })
-    expect(productCalls().at(-1)).not.toHaveProperty('brandId')
-
-    // then taps the same brand on Home: same brand, but a new request
-    mockParams = { brandId: BRAND._id, t: '2' }
-    await act(async () => renderer.update(element()))
-    for (let i = 0; i < 4; i += 1) await act(async () => { await Promise.resolve() })
-    expect(productCalls().at(-1)).toMatchObject({ brandId: BRAND._id })
-  })
-
-  it('does nothing new when the same request is delivered twice', async () => {
-    mockParams = { q: 'lawn', t: '5' }
-    const renderer = await show(<Shop />)
-    const before = productCalls().length
-    await act(async () => renderer.update(tree(<CityProvider><Shop /></CityProvider>)))
-    for (let i = 0; i < 4; i += 1) await act(async () => { await Promise.resolve() })
-    expect(productCalls().length).toBe(before)
+  it('says when no brand is selling yet', async () => {
+    serve({ emptyBrands: true })
+    expect(screenText(await show(<Home />))).toContain('No brands are selling here yet.')
   })
 })
 

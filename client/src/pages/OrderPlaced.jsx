@@ -71,7 +71,7 @@ export default function OrderPlaced() {
           <Link to="/orders" className={btnPrimary}>
             View my orders
           </Link>
-          <Link to="/shop" className={btnOutline}>
+          <Link to="/nearby" className={btnOutline}>
             Keep shopping
           </Link>
         </div>

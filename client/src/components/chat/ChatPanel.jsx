@@ -335,8 +335,8 @@ export default function ChatPanel({ mode, canReply = true }) {
                 {isBrand ? 'When a customer messages your brand, it shows up here.' : 'Open a product and choose “Chat with seller” to ask a question.'}
               </p>
               {!isBrand && (
-                <Link to="/shop" className="mt-4 text-[13px] font-medium text-clay underline">
-                  Browse products
+                <Link to="/nearby" className="mt-4 text-[13px] font-medium text-clay underline">
+                  Browse nearby shops
                 </Link>
               )}
             </div>
