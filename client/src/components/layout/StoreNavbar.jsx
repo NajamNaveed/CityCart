@@ -1,12 +1,9 @@
 import { useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
-import { Bell, ChevronDown, LayoutDashboard, LogOut, MapPin, Menu as MenuIcon, MessageCircle, Package, Search, ShoppingBag } from 'lucide-react'
+import { Bell, ChevronDown, LayoutDashboard, LogOut, Menu as MenuIcon, MessageCircle, Package, Search, ShoppingBag } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useCart } from '../../hooks/useCart'
-import { useCity } from '../../hooks/useCity'
 import { useChat } from '../../hooks/useChat'
-import { useNearby } from '../../hooks/useNearby'
-import LocationChip from '../nearby/LocationChip'
 import useNotifications from '../../hooks/useNotifications'
 import NotificationBell from '../NotificationBell'
 import Drawer from '../ui/Drawer'
@@ -33,7 +30,7 @@ function SearchForm({ className = '', autoFocus = false, onSubmitted }) {
   function onSubmit(e) {
     e.preventDefault()
     const q = new FormData(e.currentTarget).get('q').toString().trim()
-    navigate(q ? `/shop?search=${encodeURIComponent(q)}` : '/shop')
+    navigate(q ? `/nearby?q=${encodeURIComponent(q)}` : '/nearby')
     onSubmitted?.()
   }
 
@@ -185,31 +182,6 @@ function DrawerLink({ to, children, onClick }) {
   )
 }
 
-// The drawer's location row: city and area together, or an invitation to set them. The picker it opens changes both.
-function DrawerArea({ onOpen }) {
-  const { areaName, openPicker } = useNearby()
-  const { city } = useCity()
-  return (
-    <div>
-      <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Your location</p>
-      <button
-        type="button"
-        onClick={() => {
-          onOpen()
-          openPicker()
-        }}
-        className="flex w-full items-center justify-between rounded-md border border-line bg-white px-3 py-2.5 text-left text-[13.5px] text-ink transition hover:border-ink"
-      >
-        <span className="flex items-center gap-2">
-          <MapPin className="h-3.5 w-3.5 text-clay" aria-hidden="true" />
-          {areaName && city ? `${areaName}, ${city.name}` : areaName || (city ? city.name : 'Set your location')}
-        </span>
-        <span className="text-[12px] text-muted">Change</span>
-      </button>
-    </div>
-  )
-}
-
 // Bell / orders / cart as tiles inside the drawer (small screens only reach them here).
 function QuickAccess() {
   const { user } = useAuth()
@@ -271,20 +243,12 @@ export default function StoreNavbar() {
           <Link to="/" className="text-[22px] font-semibold tracking-tight text-ink">
             citycart<span className="text-clay">.</span>
           </Link>
-          {/* ONE location control: it opens the picker where the shopper chooses the city and the area.
-              Lives beside the logo because the right cluster has no room to spare; small screens use the drawer. */}
-          <div className="ml-2 hidden lg:block">
-            <LocationChip />
-          </div>
         </div>
 
         {/* Centred between the two side clusters; drops to the drawer below lg */}
         <nav aria-label="Main" className="hidden items-center gap-7 lg:flex">
           <NavLink to="/" end className={navLink}>
             Home
-          </NavLink>
-          <NavLink to="/shop" className={navLink}>
-            Shop
           </NavLink>
           <NavLink to="/brands" className={navLink}>
             Brands
@@ -336,15 +300,11 @@ export default function StoreNavbar() {
       <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title="Menu">
         <div className="space-y-5">
           <SearchForm autoFocus onSubmitted={() => setDrawerOpen(false)} />
-          <DrawerArea onOpen={() => setDrawerOpen(false)} />
           {user && <QuickAccess />}
 
           <nav aria-label="Mobile" className="space-y-1 border-t border-line pt-4">
             <DrawerLink to="/" onClick={() => setDrawerOpen(false)}>
               Home
-            </DrawerLink>
-            <DrawerLink to="/shop" onClick={() => setDrawerOpen(false)}>
-              Shop
             </DrawerLink>
             <DrawerLink to="/brands" onClick={() => setDrawerOpen(false)}>
               Brands

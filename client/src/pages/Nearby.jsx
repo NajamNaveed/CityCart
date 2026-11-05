@@ -138,6 +138,12 @@ export default function Nearby() {
   const { selectedBlocks, blockIds, areaName, coords, origin, range, setRange, blocksReady, openPicker, detect, status } = useNearby()
 
   const [draft, setDraft] = useState(q)
+  // A search sent from the navbar arrives as a new query string; show it in the box.
+  const [seenQuery, setSeenQuery] = useState(q)
+  if (q !== seenQuery) {
+    setSeenQuery(q)
+    setDraft(q)
+  }
   // The page number belongs to one set of filters; changing any of them starts again at page 1.
   const filterKey = JSON.stringify([cityId, blockIds, coords, range, q])
   const [pageState, setPageState] = useState({ filterKey, page: 1 })

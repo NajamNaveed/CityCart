@@ -21,7 +21,7 @@ CityCart/
    │  ├─ app/          screens; each file is a route (Expo Router, SDK 57 puts routes in src/app)
    │  │  ├─ _layout.jsx        fonts, providers, splash screen
    │  │  ├─ (auth)/            login, register                     (Phase 2)
-   │  │  ├─ (tabs)/            index (home), shop, nearby, cart, account
+   │  │  ├─ (tabs)/            index (home), nearby, cart, account (shop is a hidden route)
    │  │  ├─ product/[id].jsx                                        (Phase 3)
    │  │  ├─ checkout.jsx  order-placed.jsx                          (Phase 5)
    │  │  ├─ orders/            index, [id]                          (Phase 5)
@@ -112,10 +112,10 @@ Each phase ends with the server tests, lint and a successful app bundle.
 Everything here uses the public API, so no sign-in is needed.
 
 * **Home** (`(tabs)/index`): brands strip and the newest products, both for the chosen city; pull down to refresh.
-* **Shop** (`(tabs)/shop`): search (sent to the server after 400 ms of no typing), sort, brand filter, endless scroll in pages of 12. Star ratings are requested only for products not yet seen. A newer search always wins: an answer for an old search is discarded (`services/paging.js`).
+* **Shop** (`(tabs)/shop`): no longer a tab. The route stays for brand and product links (`shopHref()`), because those lists are still needed; the tab bar does not offer it. It keeps search (sent to the server after 400 ms of no typing), sort, brand filter, and endless scroll in pages of 12. Star ratings are requested only for products not yet seen. A newer search always wins: an answer for an old search is discarded (`services/paging.js`). Home search now sends the shopper to Nearby, which is block-scoped.
 * **Brands** (`brands`) and **Product** (`product/[id]`): the product page has swipeable photos with a full-screen view, price and discount, stock, details, and the reviews summary with the reviews five at a time. A catalogue product also shows **"Also sold by"** (the other stores in the shopper's area) above the reviews.
 * **City**: remembered on the phone (`context/CityProvider.jsx`); a remembered city that no longer exists falls back to "all cities".
-* **Opening the Shop from elsewhere** uses `shopHref()` (`utils/nav.js`), which stamps each request, because the Shop stays alive in the tab bar and would otherwise ignore asking for the same brand twice.
+* **Opening the Shop from elsewhere** uses `shopHref()` (`utils/nav.js`), which stamps each request, because the Shop route stays mounted and would otherwise ignore asking for the same brand twice.
 * Photos hosted on Cloudinary are requested at the phone's real pixel width (same rule as the web); any other address is used as given. A missing or broken photo shows a monogram tile.
 * Add to cart arrived with Phase 5, and "Chat with seller" with Phase 6.
 
@@ -126,6 +126,7 @@ Tests: the paging rules, query building and helpers are unit tested, and `__test
 The same area model as the web app, on the same public endpoints
 (`GET /blocks`, `GET /blocks/at`, `GET /discover?scope=area`, `GET /catalog/browse`).
 
+* **One location control.** The Nearby header owns the area picker; Home no longer shows a city chip and the website no longer shows a location control in its navbar. The website still asks for the shopper's position automatically on a first visit.
 * **Finding the shopper.** The first time the Nearby tab opens, the app asks for the
   phone's position once (the system permission prompt appears then, not at launch). It
   uses a recent known position when there is one (instant), otherwise waits up to 12

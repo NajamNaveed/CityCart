@@ -9,7 +9,6 @@ import SearchBar from '../../components/ui/SearchBar'
 import SectionHeader from '../../components/ui/SectionHeader'
 import Skeleton from '../../components/ui/Skeleton'
 import { BrandLogo } from '../../components/BrandCard'
-import CityChip from '../../components/CityChip'
 import ProductCard from '../../components/ProductCard'
 import { useCity } from '../../hooks/useCity'
 import { useRatings } from '../../hooks/useRatings'
@@ -42,16 +41,16 @@ export default function Home() {
     arrivals.reload()
   }
 
-  const goSearch = () => router.navigate(shopHref({ q: search.trim() }))
+  const goSearch = () => {
+    const q = search.trim()
+    router.navigate({ pathname: '/nearby', params: { ...(q && { q }), t: String(Date.now()) } })
+  }
 
   return (
     <Screen onRefresh={reload} refreshing={brands.refreshing || arrivals.refreshing}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.lg }}>
-        <View style={{ flex: 1, paddingRight: spacing.md }}>
-          <AppText variant="title">CityCart</AppText>
-          <AppText variant="small">{city ? `Shopping in ${city.name}` : 'Shopping in every city'}</AppText>
-        </View>
-        <CityChip />
+      <View style={{ marginBottom: spacing.lg }}>
+        <AppText variant="title">CityCart</AppText>
+        <AppText variant="small">{city ? `Shopping in ${city.name}` : 'Shopping in every city'}</AppText>
       </View>
 
       <SearchBar value={search} onChangeText={setSearch} onSubmit={goSearch} placeholder="Search products…" label="Search products" />

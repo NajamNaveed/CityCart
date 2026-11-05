@@ -8,7 +8,8 @@ const tab = (title, icon) => ({
   tabBarIcon: ({ color, size }) => <Feather name={icon} size={size} color={color} />,
 })
 
-// The five places a shopper goes. The cart shows how many items it holds; unread chats arrive with Phase 6.
+// The places a shopper goes. Shop keeps its route for brand and product links,
+// but it is no longer a tab: browsing starts from Nearby and its blocks.
 export default function TabsLayout() {
   const { itemCount } = useCart()
   return (
@@ -22,7 +23,7 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen name="index" options={tab('Home', 'home')} />
-      <Tabs.Screen name="shop" options={tab('Shop', 'shopping-bag')} />
+      <Tabs.Screen name="shop" options={{ href: null }} />
       <Tabs.Screen name="nearby" options={tab('Nearby', 'map-pin')} />
       <Tabs.Screen
         name="cart"

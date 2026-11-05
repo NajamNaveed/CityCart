@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, FlatList, Pressable, View } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import Feather from '@expo/vector-icons/Feather'
 import AppText from '../../components/ui/AppText'
@@ -25,6 +25,7 @@ import { nextRange, rangeLabel } from '../../utils/range'
 import { colors, radius, spacing } from '../../theme'
 
 const NOTHING = { items: [], pagination: { page: 1, pages: 0, total: 0 } }
+const paramText = (value) => (Array.isArray(value) ? value[0] : value) || ''
 
 const VIEWS = [
   ['shops', 'Shops', 'list'],
@@ -58,10 +59,21 @@ export default function Nearby() {
   const { city, cityId } = useCity()
   const nearby = useNearby()
   const { ready, asked, blocksReady, blockIds, selectedBlocks, areaName, coords, origin, range, detect, openPicker, setRange } = nearby
+  const params = useLocalSearchParams()
+  const qParam = paramText(params.q)
+  const requestId = paramText(params.t)
 
-  const [draft, setDraft] = useState('')
+  const [draft, setDraft] = useState(qParam)
   const [view, setView] = useState('shops')
   const [sort, setSort] = useState('name')
+
+  // This tab stays mounted, so a search sent from Home arrives as new params.
+  const [seen, setSeen] = useState({ q: qParam, requestId })
+  if (requestId !== seen.requestId || qParam !== seen.q) {
+    setSeen({ q: qParam, requestId })
+    setDraft(qParam)
+  }
+
   const q = useDebounced(draft.trim(), 400)
 
   // First time here: ask for the position once, after the screen has had a moment to appear.
