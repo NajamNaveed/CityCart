@@ -140,6 +140,28 @@ describe('GET /api/v1/deliveries and /:id', () => {
     expect((await request(app).get(`/api/v1/deliveries/${oid()}`).set(...cookie)).status).toBe(404);
     expect((await request(app).get('/api/v1/deliveries/nope').set(...cookie)).status).toBe(400);
   });
+
+  it('the customer sees that a non-cash payment is being checked, but not after it is refused', async () => {
+    const { cookie } = asRole(ROLES.CUSTOMER);
+    const id = oid();
+    const held = { paymentId: oid(), submittedAt: new Date() };
+    Delivery.findOne.mockReturnValue({
+      select: () => Promise.resolve({ _id: id, status: 'OUT_FOR_DELIVERY', pendingCompletion: held }),
+    });
+
+    let res = await request(app).get(`/api/v1/deliveries/${id}`).set(...cookie);
+    expect(res.status).toBe(200);
+    expect(res.body.delivery.paymentPending).toBe(true);
+    // The rider's door answer stays internal.
+    expect(res.body.delivery.pendingCompletion).toBeUndefined();
+
+    Delivery.findOne.mockReturnValue({
+      select: () => Promise.resolve({ _id: id, status: 'OUT_FOR_DELIVERY', pendingCompletion: { ...held, rejectedAt: new Date() } }),
+    });
+    res = await request(app).get(`/api/v1/deliveries/${id}`).set(...cookie);
+    // The rider is collecting again, so it is no longer "being checked".
+    expect(res.body.delivery.paymentPending).toBe(false);
+  });
 });
 
 describe('PATCH /api/v1/deliveries/:id/status', () => {
@@ -225,7 +247,7 @@ describe('PATCH /api/v1/deliveries/:id/status', () => {
     expect(Payment.findOneAndUpdate).toHaveBeenCalledWith(
       { orderId, status: 'PENDING' },
       // The collector holds the cash until the brand settles it.
-      { $set: { status: 'PAID', amount: 2450, paidAt: expect.any(Date), confirmedBy: user._id, brandId, collectedBy: user._id, collectedAt: expect.any(Date), 'collection.method': 'CASH' } },
+      { $set: { status: 'PAID', amount: 2450, paidAt: expect.any(Date), confirmedBy: user._id, brandId, collectedBy: user._id, collectedAt: expect.any(Date), method: 'COD', 'collection.method': 'CASH' } },
       { session: 'SESSION' }
     );
     // Delivered + cash collected, announced after the commit (docs/12 §5).
@@ -233,6 +255,26 @@ describe('PATCH /api/v1/deliveries/:id/status', () => {
     expect(notifications.notifyPaymentReceived).toHaveBeenCalledTimes(1);
     // The receipt is issued after the commit, for exactly this payment.
     expect(receipts.issueReceiptBestEffort).toHaveBeenCalledWith(paymentId);
+  });
+
+  it('409 PAYMENT_VERIFICATION_PENDING: the brand cannot move a delivery whose non-cash payment is being checked', async () => {
+    const { cookie } = asRole(ROLES.BRAND_ADMIN);
+    const previous = {
+      _id: oid(),
+      orderId: oid(),
+      status: 'OUT_FOR_DELIVERY',
+      pendingCompletion: { paymentId: oid(), submittedAt: new Date() },
+    };
+    world({ previous });
+
+    for (const body of [{ status: 'DELIVERED' }, { status: 'FAILED', failureReason: 'Customer refusing' }]) {
+      const res = await patch(cookie, previous._id, body);
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe('PAYMENT_VERIFICATION_PENDING');
+    }
+    expect(Order.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(Payment.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(Payment.updateOne).not.toHaveBeenCalled();
   });
 
   it('FAILED records the reason and leaves order and payment untouched', async () => {

@@ -63,7 +63,14 @@ function ProofDetail({ paymentId }) {
       await decideProof(paymentId, verification, verification === 'REJECTED' ? reason.trim() : undefined)
       setNotice({
         tone: 'success',
-        text: verification === 'VERIFIED' ? 'Marked as verified. The money is checked.' : 'Rejected. The brand owner has been told to look into it.',
+        text:
+          verification === 'VERIFIED'
+            ? proof.deliveryPending
+              ? 'Marked as verified. The money is checked and the delivery is complete.'
+              : 'Marked as verified. The money is checked.'
+            : proof.deliveryPending
+              ? 'Rejected. The rider is asked to collect the payment again.'
+              : 'Rejected. The brand owner has been told to look into it.',
       })
     } catch (err) {
       const code = err.response?.data?.code
@@ -111,6 +118,7 @@ function ProofDetail({ paymentId }) {
           <Card style={{ gap: spacing.md }}>
             <AppText variant="strong">Mark {formatPrice(proof.amount)} as verified?</AppText>
             <AppText variant="small">Only do this once you can see the money in the brand&apos;s account or statement.</AppText>
+            {proof.deliveryPending ? <AppText variant="small">This delivery is still out for delivery. Verifying completes it.</AppText> : null}
             <Button title="Yes, verified" onPress={() => decide('VERIFIED')} loading={busy} />
             <Button title="Cancel" variant="outline" onPress={() => setMode(null)} disabled={busy} />
           </Card>
@@ -119,7 +127,11 @@ function ProofDetail({ paymentId }) {
         {mode === 'reject' ? (
           <Card style={{ gap: spacing.md }}>
             <AppText variant="strong">Reject this payment?</AppText>
-            <AppText variant="small">The brand owner is told, and the money is not changed automatically.</AppText>
+            <AppText variant="small">
+              {proof.deliveryPending
+                ? 'Rejecting keeps the order unpaid: the rider is asked to collect the payment again, in cash or another way.'
+                : 'The brand owner is told, and the money is not changed automatically.'}
+            </AppText>
             <TextField label="Why is it rejected?" value={reason} onChangeText={setReason} maxLength={300} placeholder="For example: no such transfer on the statement" />
             <Button title="Reject payment" variant="danger" onPress={() => decide('REJECTED')} disabled={!reason.trim()} loading={busy} />
             <Button title="Cancel" variant="outline" onPress={() => setMode(null)} disabled={busy} />
@@ -171,6 +183,7 @@ function ProofDetail({ paymentId }) {
           <Row label="Method" value={formatPaymentMethod(proof.method, proof.wallet)} />
           <Row label="Reference" value={proof.reference} />
           <Row label="Taken" value={formatDateTime(proof.submittedAt)} />
+          {proof.deliveryPending ? <Row label="Delivery" value="Still out for delivery: this check completes it." /> : null}
         </Card>
 
         {proof.verification === 'SUBMITTED' ? (

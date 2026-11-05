@@ -35,6 +35,13 @@ export async function completeDelivery(id, code, collection, lines) {
   return res.data.delivery
 }
 
+// The brand refused the payment: collect it again (cash, or another method).
+// No code: the delivery was already answered with the first attempt.
+export async function retryDoorPayment(id, collection) {
+  const res = await api.post(`/rider/deliveries/${id}/payment`, { collection })
+  return res.data.delivery
+}
+
 // Step one of a non-cash payment: a signature for THIS delivery's private folder.
 export async function requestProofUpload(deliveryId) {
   const res = await api.post(`/rider/deliveries/${deliveryId}/proof-upload`)

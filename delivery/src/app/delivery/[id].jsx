@@ -15,7 +15,7 @@ import StatusPill from '../../components/StatusPill'
 import TextField from '../../components/ui/TextField'
 import { useRemote } from '../../hooks/useRemote'
 import { getErrorMessage } from '../../services/api'
-import { completeDelivery, fetchDelivery, requestProofUpload, requestReturnUpload, setDeliveryStatus, uploadPaymentProof, uploadReturnPhoto } from '../../services/deliveries'
+import { completeDelivery, fetchDelivery, requestProofUpload, requestReturnUpload, retryDoorPayment, setDeliveryStatus, uploadPaymentProof, uploadReturnPhoto } from '../../services/deliveries'
 import {
   RETURN_REASON_OPTIONS,
   WALLETS,
@@ -48,7 +48,7 @@ const EMPTY_PAYMENT = { method: null, wallet: 'JAZZCASH', reference: '', proof: 
 const PROOF_STATUS = {
   SUBMITTED: 'Waiting for the brand to check the payment.',
   VERIFIED: 'The brand checked this payment.',
-  REJECTED: 'The brand could not match this payment.',
+  REJECTED: 'The brand could not match this payment. Collect it again.',
 }
 
 const CODE_ERRORS = new Set(['INVALID_CODE', 'CODE_LOCKED', 'NO_DELIVERY_CODE'])
@@ -211,7 +211,7 @@ function DeliveryDetail({ id }) {
       setReason('')
       setPay(EMPTY_PAYMENT)
       setLines(null)
-      if (success) setNotice({ tone: 'ok', text: success })
+      if (success) setNotice({ tone: 'ok', text: typeof success === 'function' ? success(updated) : success })
     } catch (err) {
       setNotice({ tone: 'error', text: err.codeMessage || getErrorMessage(err) })
     } finally {
@@ -240,8 +240,27 @@ function DeliveryDetail({ id }) {
           })
         }
       },
-      'Delivered. Thank you!',
+      (updated) =>
+        updated.paymentPending
+          ? 'Payment sent for verification. The delivery completes once the brand verifies it.'
+          : 'Delivered. Thank you!',
     )
+
+  // After the brand refused the payment: collect it again. Cash completes at
+  // once; another method waits for a fresh check.
+  const retry = (payload, done) =>
+    run(
+      async () => {
+        try {
+          return await retryDoorPayment(id, payload)
+        } catch (err) {
+          throw Object.assign(err, { codeMessage: proofErrorMessage(err) })
+        }
+      },
+      done,
+    )
+
+  const retryCash = () => retry({ method: 'CASH' }, 'Delivered. Thank you!')
 
   const fail = () => run(() => setDeliveryStatus(id, 'FAILED', reason.trim()), 'Marked as not delivered.')
 
@@ -434,6 +453,20 @@ function DeliveryDetail({ id }) {
                 {formatPrice(cash.amount)}
               </AppText>
             </>
+          ) : cash.kind === 'pending' ? (
+            <>
+              <AppText variant="small">Payment at the door</AppText>
+              <AppText variant="strong">Waiting for the brand to verify the payment.</AppText>
+              <AppText variant="small">The delivery stays out until it is verified.</AppText>
+            </>
+          ) : cash.kind === 'rejected' ? (
+            <>
+              <AppText variant="small">Payment not verified</AppText>
+              <AppText variant="strong" style={{ color: colors.danger }}>
+                {cash.amount > 0 ? `Collect ${formatPrice(cash.amount)} again.` : 'Collect the payment again.'}
+              </AppText>
+              {delivery.paymentNote ? <AppText variant="small">Reason: {delivery.paymentNote}</AppText> : null}
+            </>
           ) : cash.kind === 'proof' ? (
             <>
               <AppText variant="small">Paid at the door</AppText>
@@ -488,13 +521,13 @@ function DeliveryDetail({ id }) {
           </Card>
         ) : null}
 
-        {!closed ? (
+        {!closed && !delivery.paymentPending ? (
           <View style={{ gap: spacing.md }}>
             {moves.map((m) => (
               <Button key={m.status} title={m.label} onPress={() => move(m.status, m.label)} loading={busy && mode === null} disabled={busy} />
             ))}
 
-            {canComplete(delivery.status) && mode !== 'fail' && mode !== 'method' && mode !== 'items' ? (
+            {canComplete(delivery.status) && !delivery.paymentRejected && mode !== 'fail' && mode !== 'method' && mode !== 'items' ? (
               mode === 'code' ? (
                 <Card style={{ gap: spacing.md }}>
                   <TextField
@@ -517,7 +550,7 @@ function DeliveryDetail({ id }) {
               )
             ) : null}
 
-            {canComplete(delivery.status) && mode === 'items' && lines ? (
+            {canComplete(delivery.status) && !delivery.paymentRejected && mode === 'items' && lines ? (
               <ItemReview
                 lines={lines}
                 delivery={delivery}
@@ -531,9 +564,27 @@ function DeliveryDetail({ id }) {
               />
             ) : null}
 
-            {canComplete(delivery.status) && mode === 'method' ? (
+            {canComplete(delivery.status) && delivery.paymentRejected && mode === null ? (
               <Card style={{ gap: spacing.md }}>
-                <AppText variant="small">How did the customer pay?</AppText>
+                <AppText variant="small">Collect the payment again, then say how the customer paid.</AppText>
+                <Button title="Customer paid in cash" onPress={retryCash} loading={busy} disabled={busy} />
+                <Button
+                  title="Collect another way"
+                  variant="outline"
+                  onPress={() => {
+                    setNotice(null)
+                    setPay(EMPTY_PAYMENT)
+                    setMode('retry')
+                  }}
+                  disabled={busy}
+                />
+                <AppText variant="small">Cash completes the delivery at once. Another method waits for the brand to verify it.</AppText>
+              </Card>
+            ) : null}
+
+            {canComplete(delivery.status) && (mode === 'method' || (delivery.paymentRejected && mode === 'retry')) ? (
+              <Card style={{ gap: spacing.md }}>
+                <AppText variant="small">{mode === 'retry' ? 'How is the customer paying now?' : 'How did the customer pay?'}</AppText>
                 <View style={{ gap: spacing.sm }}>
                   {paymentMethods.map((m) => (
                     <Button
@@ -596,21 +647,25 @@ function DeliveryDetail({ id }) {
                 ) : null}
 
                 <Button
-                  title="Complete delivery"
-                  onPress={() => complete(collectionPayload(pay), lines)}
+                  title={mode === 'retry' ? 'Send payment' : 'Complete delivery'}
+                  onPress={() =>
+                    mode === 'retry'
+                      ? retry(collectionPayload(pay), (d) => (d.paymentPending ? 'Payment sent for verification.' : 'Delivered. Thank you!'))
+                      : complete(collectionPayload(pay), lines)
+                  }
                   loading={busy}
                   disabled={!collectionReady(pay)}
                 />
                 <Button
                   title="Back"
                   variant="outline"
-                  onPress={() => { setNotice(null); setMode(lines ? 'items' : 'code') }}
+                  onPress={() => { setNotice(null); setMode(mode === 'retry' ? null : lines ? 'items' : 'code') }}
                   disabled={busy || proofBusy}
                 />
               </Card>
             ) : null}
 
-            {canComplete(delivery.status) && mode !== 'code' && mode !== 'method' ? (
+            {canComplete(delivery.status) && mode !== 'code' && mode !== 'method' && mode !== 'retry' ? (
               mode === 'fail' ? (
                 <Card style={{ gap: spacing.md }}>
                   <TextField label="Why could it not be delivered?" value={reason} onChangeText={setReason} maxLength={300} placeholder="For example: customer not reachable" />

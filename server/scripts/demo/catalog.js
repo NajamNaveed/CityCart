@@ -302,6 +302,7 @@ const BRANDS = [
       address: { addressLine: 'Shop 9, Peoples Colony No. 1 Market', city: 'Faisalabad', state: 'Punjab', country: 'Pakistan', postalCode: '38000' },
       contact: { phone: '+92 41 8553 981', email: 'studio@naqshjewellery.pk' }, hours: { open: '12:00', close: '21:00', closed: ['mon'] }, isActive: true,
     },
+    riders: [{ name: 'Adnan Yousaf', email: 'adnan.yousaf@citycart.demo', phone: '+92 303 4421908' }],
     staff: [{ name: 'Komal Shahid', email: 'komal.shahid@citycart.demo', phone: '+92 301 8832006', jobTitle: 'Studio Manager', permissions: [...P.productsAll, ...P.stock, ...P.orders, ...P.delivery, 'employees.view'] }],
     categories: [
       { key: 'earrings', name: 'Earrings', description: 'Jhumkas, studs and statement drops.' },

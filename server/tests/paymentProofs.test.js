@@ -34,10 +34,10 @@ const {
   signApiParams,
 } = require('../src/services/upload.service');
 const {
-  duplicateFlags,
   proofBelongsToDelivery,
   purgeVerifiedProofs,
 } = require('../src/services/paymentProof.service');
+const { duplicateFlags } = require('../src/services/payment.service');
 
 const oid = () => new mongoose.Types.ObjectId();
 const sha1 = (text) => crypto.createHash('sha1').update(text).digest('hex');
@@ -116,6 +116,13 @@ const storedPayment = (overrides = {}) => ({
 
 const listOf = (items) => ({ sort: () => ({ skip: () => ({ limit: () => Promise.resolve(items) }) }) });
 const paymentQuery = (value) => ({ session: () => Promise.resolve(value), select: () => Promise.resolve(value) });
+// A Mongoose query is awaited directly, chained with .select(), or chained with
+// .session(); this stand-in answers all three with the same document.
+const thenable = (value) => ({
+  select: () => thenable(value),
+  session: () => thenable(value),
+  then: (resolve, reject) => Promise.resolve(value).then(resolve, reject),
+});
 
 const originalCloudinary = { ...env.cloudinary };
 beforeEach(() => {
@@ -188,6 +195,16 @@ describe('POST /api/v1/rider/deliveries/:id/proof-upload', () => {
     expect(res.body.code).toBe('PROOF_NOT_ALLOWED');
   });
 
+  it('is refused while the brand is still checking a payment', async () => {
+    const { header } = asRider();
+    Delivery.findOne.mockReturnValue(thenable(delivery({ pendingCompletion: { paymentId: oid(), submittedAt: new Date() } })));
+
+    const res = await post(header, oid());
+
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('PAYMENT_VERIFICATION_PENDING');
+  });
+
   it('503 with a clear code when Cloudinary is not set up', async () => {
     const { header } = asRider();
     env.cloudinary = { cloudName: 'your_cloud_name', apiKey: 'your_api_key', apiSecret: 'your_api_secret' };
@@ -221,23 +238,53 @@ describe('POST /api/v1/rider/deliveries/:id/proof-upload', () => {
 describe('POST /api/v1/rider/deliveries/:id/complete with a non-cash collection', () => {
   const post = (header, id, body) => request(app).post(`/api/v1/rider/deliveries/${id}/complete`).set(...header).send(body);
 
-  function world({ order = codOrder(), viewPayment = { collection: { method: 'WALLET', verification: 'SUBMITTED' } }, duplicate = null } = {}) {
+  // A rider at the door with a non-cash payment: the pre-load, the code
+  // attempt, the held door answer, and the fresh read that builds the view.
+  function world({ order = codOrder(), viewPayment = { collection: { method: 'WALLET', verification: 'SUBMITTED' } }, duplicate = null, paidView = false } = {}) {
     const attempt = delivery({ orderId: order._id });
-    Delivery.findOneAndUpdate
-      .mockReturnValueOnce({ select: () => Promise.resolve(attempt) })
-      .mockResolvedValueOnce({ ...attempt, status: 'OUT_FOR_DELIVERY' });
-    Delivery.findById.mockReturnValue({ session: () => Promise.resolve({ ...attempt, status: 'DELIVERED' }) });
-    Order.findOneAndUpdate.mockResolvedValue(order);
-    Order.updateOne.mockResolvedValue({});
-    // After completion the order reads as PAID (the transaction just set it).
-    // Phase 6 reads the order inside the completion transaction (.session).
-    const paidOrder = { ...order, paymentStatus: 'PAID' };
-    Order.findOne.mockReturnValue({
-      select: () => Promise.resolve(paidOrder),
-      session: () => Promise.resolve(paidOrder),
+    const pending = { _id: oid(), orderId: order._id, collection: { method: 'WALLET', verification: 'SUBMITTED' } };
+    const held = { paymentId: pending._id, netTotal: 2450, submittedBy: attempt.riderId, submittedAt: new Date() };
+
+    Delivery.findOne
+      .mockReturnValueOnce(thenable(attempt))
+      // stagePendingPayment re-reads the delivery before holding the answer
+      .mockReturnValueOnce(thenable(attempt))
+      .mockReturnValue(thenable({ ...attempt, pendingCompletion: held }));
+
+    // The code attempt, the held answer, and the shared transition all use the
+    // same model call, so answer by what the update is trying to do.
+    Delivery.findOneAndUpdate.mockImplementation((filter, update) => {
+      if (update && update.$inc && update.$inc.codeAttempts) {
+        return { select: () => Promise.resolve({ ...attempt, codeAttempts: 1 }) };
+      }
+      if (update && update.$set && update.$set.pendingCompletion) {
+        return Promise.resolve({ ...attempt, pendingCompletion: update.$set.pendingCompletion });
+      }
+      return { select: () => Promise.resolve(attempt) };
     });
-    Payment.findOneAndUpdate.mockResolvedValue({ _id: oid() });
-    Payment.findOne.mockImplementation((filter) => paymentQuery(filter && filter.orderId ? viewPayment : duplicate));
+
+    Delivery.findById.mockReturnValue({ session: () => Promise.resolve(attempt) });
+
+    Order.findOneAndUpdate.mockResolvedValue({ ...order, paymentStatus: 'PAID' });
+    Order.updateOne.mockResolvedValue({});
+    // Completion reads the order inside the transaction; the view reads it after
+    // the payment flipped to PAID.
+    Order.findOne.mockReturnValue({
+      session: () => thenable(order),
+      select: () => thenable(paidView ? { ...order, paymentStatus: 'PAID' } : order),
+      then: (resolve, reject) => Promise.resolve(order).then(resolve, reject),
+    });
+
+    Payment.findOne.mockImplementation((filter) => {
+      if (!filter) return null;
+      // stagePendingPayment looks up the unpaid record…
+      if (filter.status === 'PENDING') return { session: () => Promise.resolve(pending) };
+      // …the rider's view reads the collection only…
+      if (filter.orderId) return { select: () => Promise.resolve(viewPayment) };
+      // …and duplicateFlags compares against other payments.
+      return { session: () => Promise.resolve(duplicate) };
+    });
+    Payment.findOneAndUpdate.mockResolvedValue(pending);
     Payment.updateOne.mockResolvedValue({});
     return attempt;
   }
@@ -293,7 +340,11 @@ describe('POST /api/v1/rider/deliveries/:id/complete with a non-cash collection'
 
     for (const badPath of badPaths) {
       const attempt = delivery();
-      Delivery.findOneAndUpdate.mockReturnValueOnce({ select: () => Promise.resolve(attempt) });
+      const order = codOrder({ _id: attempt.orderId });
+      Delivery.findOne.mockReturnValue(thenable(attempt));
+      Delivery.findOneAndUpdate.mockReturnValue({ select: () => Promise.resolve({ ...attempt, codeAttempts: 1 }) });
+      Order.findOne.mockReturnValue(thenable(order));
+
       const res = await post(header, attempt._id, {
         code: '482913',
         collection: collection(attempt, { proof: { publicId: badPath(attempt._id), fingerprint: 'etag-1' } }),
@@ -304,7 +355,7 @@ describe('POST /api/v1/rider/deliveries/:id/complete with a non-cash collection'
     expect(Payment.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
-  it('marks the payment PAID-but-unverified, without a collector or cash balance entry', async () => {
+  it('holds the door answer and keeps the money unpaid until the brand verifies it', async () => {
     const { header } = asRider();
     const attempt = world();
     const body = collection(attempt);
@@ -314,20 +365,47 @@ describe('POST /api/v1/rider/deliveries/:id/complete with a non-cash collection'
     expect(res.status).toBe(200);
     const [, update] = Payment.findOneAndUpdate.mock.calls[0];
     expect(update.$set).toMatchObject({
-      status: 'PAID',
       method: 'WALLET',
       'collection.method': 'WALLET',
       'collection.wallet': 'JAZZCASH',
       'collection.reference': 'JC-7788',
       'collection.proof': body.proof,
       'collection.verification': 'SUBMITTED',
+      'collection.submittedAt': expect.any(Date),
     });
+    // Nothing is collected and the payment is not PAID: verification does that.
+    expect(update.$set).not.toHaveProperty('status');
     expect(update.$set).not.toHaveProperty('collectedBy');
     expect(update.$set).not.toHaveProperty('collectedAt');
-    expect(res.body.delivery).toMatchObject({ status: 'DELIVERED', cashCollected: false, proofStatus: 'SUBMITTED', paymentOptions: [] });
-    expect(notifications.notifyPaymentReceived).toHaveBeenCalledWith(expect.anything(), { nonCash: true });
-    expect(receipts.issueReceiptBestEffort).toHaveBeenCalledTimes(1);
-    expect(Payment.updateOne).not.toHaveBeenCalled(); // no duplicates found
+
+    const [, held] = Delivery.findOneAndUpdate.mock.calls[1];
+    expect(held.$set.pendingCompletion).toMatchObject({ netTotal: 2450, submittedBy: expect.anything() });
+    // The delivery and its order are untouched.
+    expect(Order.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(notifications.notifyPaymentReceived).not.toHaveBeenCalled();
+    expect(receipts.issueReceiptBestEffort).not.toHaveBeenCalled();
+    expect(notifications.notifyBrandOfProofSubmitted).toHaveBeenCalledWith(
+      expect.objectContaining({ brandId, orderNumber: 'CC-2026-000042', amount: 2450, method: 'WALLET' })
+    );
+    expect(res.body.delivery).toMatchObject({
+      status: 'OUT_FOR_DELIVERY',
+      paymentPending: true,
+      amountToCollect: 0,
+      paymentOptions: [],
+      cashCollected: false,
+    });
+  });
+
+  it('a second completion is refused while the payment is being checked', async () => {
+    const { header } = asRider();
+    const attempt = delivery();
+    Delivery.findOne.mockReturnValue(thenable({ ...attempt, pendingCompletion: { paymentId: oid(), submittedAt: new Date() } }));
+
+    const res = await post(header, attempt._id, { code: '482913' });
+
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('PAYMENT_VERIFICATION_PENDING');
+    expect(Delivery.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
   it('flags a reused reference or a reused photo for the verifier', async () => {
@@ -344,15 +422,15 @@ describe('POST /api/v1/rider/deliveries/:id/complete with a non-cash collection'
     );
   });
 
-  it('cash on delivery still records the collector, and the collection method', async () => {
+  it('cash on delivery still completes at once, and records the collector', async () => {
     const { header } = asRider();
-    const attempt = world({ viewPayment: { collection: { method: 'CASH' } } });
+    const attempt = world({ viewPayment: { collection: { method: 'CASH' } }, paidView: true });
     const res = await post(header, attempt._id, { code: '482913' });
 
     expect(res.status).toBe(200);
     const [, update] = Payment.findOneAndUpdate.mock.calls[0];
-    expect(update.$set).toMatchObject({ 'collection.method': 'CASH', collectedBy: expect.anything() });
-    expect(res.body.delivery).toMatchObject({ cashCollected: true, amountToCollect: 0 });
+    expect(update.$set).toMatchObject({ status: 'PAID', method: 'COD', 'collection.method': 'CASH', collectedBy: expect.anything() });
+    expect(res.body.delivery).toMatchObject({ status: 'OUT_FOR_DELIVERY', cashCollected: true, amountToCollect: 0 });
   });
 
   it('an order paid up front cannot carry a proof', async () => {
@@ -366,6 +444,7 @@ describe('POST /api/v1/rider/deliveries/:id/complete with a non-cash collection'
     expect(Payment.findOneAndUpdate).not.toHaveBeenCalled();
   });
 });
+
 
 describe('GET /api/v1/rider/deliveries/cash', () => {
   it('sums only money physically collected (non-cash never has a collector)', async () => {
@@ -585,6 +664,7 @@ describe('PATCH /api/v1/payments/:id/proof — verify or reject', () => {
     const { cookie, user } = asRole(ROLES.BRAND_ADMIN);
     const payment = storedPayment();
     Payment.findOneAndUpdate.mockResolvedValue(decided());
+    Order.findById.mockReturnValue({ session: () => Promise.resolve({ orderNumber: 'CC-2026-000042', brandId }) });
 
     const res = await patch(cookie, payment._id, { verification: 'VERIFIED' });
 
@@ -597,27 +677,106 @@ describe('PATCH /api/v1/payments/:id/proof — verify or reject', () => {
         'collection.verification': 'SUBMITTED',
       },
       { $set: { 'collection.verification': 'VERIFIED', 'collection.verifiedBy': user._id, 'collection.verifiedAt': expect.any(Date) } },
-      { new: true }
+      { new: true, session: 'SESSION' }
     );
+    expect(res.body.proof.deliveryCompleted).toBe(false);
     expect(notifications.notifyBrandOfRejectedProof).not.toHaveBeenCalled();
   });
 
-  it('rejecting records the reason and raises a flag to the brand owner', async () => {
+  it('verifying a pending payment completes the held delivery in the same transaction', async () => {
+    const { cookie, user } = asRole(ROLES.BRAND_ADMIN);
+    const order = codOrder();
+    const pending = storedPayment({
+      orderId: order._id,
+      status: 'PENDING',
+      paidAt: undefined,
+      collection: {
+        method: 'WALLET',
+        wallet: 'JAZZCASH',
+        reference: 'JC-7788',
+        proof: { publicId: proofOf(brandId, oid()), fingerprint: 'etag-1' },
+        verification: 'VERIFIED',
+        verifiedBy: user._id,
+        verifiedAt: new Date(),
+      },
+    });
+    const deliveryDoc = {
+      _id: oid(),
+      orderId: order._id,
+      brandId,
+      riderId: oid(),
+      status: 'OUT_FOR_DELIVERY',
+      pendingCompletion: { paymentId: pending._id, netTotal: 2450, submittedAt: new Date() },
+    };
+
+    Payment.findOneAndUpdate
+      .mockResolvedValueOnce(pending) // the decision
+      .mockResolvedValueOnce({ _id: pending._id }); // the settlement
+    Order.findById.mockReturnValue({ session: () => Promise.resolve(order) });
+    Delivery.findOne.mockReturnValue({ select: () => ({ session: () => Promise.resolve(deliveryDoc) }) });
+    Delivery.findOneAndUpdate.mockReturnValue({ select: () => Promise.resolve(deliveryDoc) });
+    Order.findOne.mockReturnValue({ session: () => Promise.resolve(order) });
+    Order.findOneAndUpdate.mockResolvedValue({ ...order, paymentStatus: 'PAID' });
+    Order.updateOne.mockResolvedValue({});
+    Payment.findOne.mockReturnValue({ session: () => Promise.resolve(null) });
+    Delivery.findById.mockReturnValue({ session: () => Promise.resolve({ ...deliveryDoc, status: 'DELIVERED' }) });
+
+    const res = await patch(cookie, pending._id, { verification: 'VERIFIED' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.proof.deliveryCompleted).toBe(true);
+    // The delivery moves to DELIVERED and its held answer is cleared.
+    const [, deliveryUpdate] = Delivery.findOneAndUpdate.mock.calls[0];
+    expect(deliveryUpdate.$set.status).toBe('DELIVERED');
+    expect(deliveryUpdate.$unset).toEqual({ failureReason: '', pendingCompletion: '' });
+    // The settlement flips the payment to PAID + VERIFIED, never to cash.
+    const [, settle] = Payment.findOneAndUpdate.mock.calls[1];
+    expect(settle.$set).toMatchObject({
+      status: 'PAID',
+      method: 'WALLET',
+      'collection.verification': 'VERIFIED',
+      'collection.verifiedBy': user._id,
+    });
+    expect(settle.$set).not.toHaveProperty('collectedBy');
+    expect(notifications.notifyPaymentReceived).toHaveBeenCalledWith(expect.anything(), { nonCash: true, verified: true });
+  });
+
+  it('rejecting records the reason and asks the rider to collect again', async () => {
     const { cookie } = asRole(ROLES.BRAND_ADMIN);
     const updated = decided({ verification: 'REJECTED', note: 'No such transaction' });
-    const order = { orderNumber: 'CC-2026-000042', brandId };
+    const order = { _id: updated.orderId, orderNumber: 'CC-2026-000042', brandId };
+    const rider = { _id: oid(), riderId: oid() };
     Payment.findOneAndUpdate.mockResolvedValue(updated);
-    Order.findById.mockReturnValue({ select: () => Promise.resolve(order) });
+    Order.findById.mockReturnValue({ session: () => Promise.resolve(order) });
+    Delivery.findOne.mockReturnValue({ select: () => Promise.resolve(rider) });
+    Delivery.updateOne.mockResolvedValue({});
 
     const res = await patch(cookie, updated._id, { verification: 'REJECTED', note: 'No such transaction' });
 
     expect(res.status).toBe(200);
+    expect(res.body.proof.deliveryCompleted).toBe(false);
     const [, update] = Payment.findOneAndUpdate.mock.calls[0];
     expect(update.$set).toMatchObject({ 'collection.verification': 'REJECTED', 'collection.note': 'No such transaction' });
+    // The delivery stays out for delivery; only the hold is marked refused.
+    expect(Delivery.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(Delivery.updateOne).toHaveBeenCalledWith(
+      { orderId: updated.orderId, 'pendingCompletion.paymentId': updated._id },
+      { $set: { 'pendingCompletion.rejectedAt': expect.any(Date) } },
+      { session: 'SESSION' }
+    );
     expect(notifications.notifyBrandOfRejectedProof).toHaveBeenCalledWith({
       brandId,
       orderId: updated.orderId,
       orderNumber: 'CC-2026-000042',
+      paymentId: updated._id,
+      amount: 2450,
+      note: 'No such transaction',
+    });
+    expect(notifications.notifyRiderOfRejectedProof).toHaveBeenCalledWith({
+      userId: rider.riderId,
+      brandId,
+      orderNumber: 'CC-2026-000042',
+      deliveryId: rider._id,
       paymentId: updated._id,
       amount: 2450,
       note: 'No such transaction',
@@ -648,6 +807,7 @@ describe('PATCH /api/v1/payments/:id/proof — verify or reject', () => {
     const { cookie } = asRole(ROLES.SUPER_ADMIN);
     const payment = storedPayment();
     Payment.findOneAndUpdate.mockResolvedValue(decided());
+    Order.findById.mockReturnValue({ session: () => Promise.resolve({ orderNumber: 'CC-2026-000042', brandId }) });
 
     const res = await patch(cookie, payment._id, { verification: 'VERIFIED' });
 
@@ -655,7 +815,7 @@ describe('PATCH /api/v1/payments/:id/proof — verify or reject', () => {
     expect(Payment.findOneAndUpdate).toHaveBeenCalledWith(
       { _id: payment._id.toString(), 'collection.proof.publicId': { $exists: true, $ne: '' }, 'collection.verification': 'SUBMITTED' },
       expect.anything(),
-      { new: true }
+      { new: true, session: 'SESSION' }
     );
   });
 });
@@ -696,7 +856,26 @@ describe('duplicate flags', () => {
 });
 
 describe('retention of verified proof photos', () => {
-  const findLimit = (items) => ({ limit: () => Promise.resolve(items) });
+  // The query selects the private history too, then caps how many it handles.
+  const findLimit = (items) => ({ select: () => ({ limit: () => Promise.resolve(items) }) });
+  const retentionFilter = (cutoff) => ({
+    $or: [
+      {
+        'collection.verification': { $in: ['VERIFIED', 'REJECTED'] },
+        'collection.verifiedAt': { $lte: cutoff },
+        'collection.proof.publicId': { $exists: true, $ne: '' },
+      },
+      {
+        collectionHistory: {
+          $elemMatch: {
+            verification: { $in: ['VERIFIED', 'REJECTED'] },
+            verifiedAt: { $lte: cutoff },
+            'proof.publicId': { $exists: true, $ne: '' },
+          },
+        },
+      },
+    ],
+  });
   const verified = (daysAgo) =>
     storedPayment({
       collection: {
@@ -724,17 +903,50 @@ describe('retention of verified proof photos', () => {
     const deleted = await purgeVerifiedProofs({ now, config: CONFIG, destroy });
 
     const cutoff = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-    expect(Payment.find).toHaveBeenCalledWith({
-      'collection.verification': { $in: ['VERIFIED', 'REJECTED'] },
-      'collection.verifiedAt': { $lte: cutoff },
-      'collection.proof.publicId': { $exists: true, $ne: '' },
-    });
+    expect(Payment.find).toHaveBeenCalledWith(retentionFilter(cutoff));
     expect(destroy).toHaveBeenCalledWith(payment.collection.proof.publicId, { config: CONFIG });
     expect(Payment.updateOne).toHaveBeenCalledWith(
       { _id: payment._id, 'collection.proof.publicId': payment.collection.proof.publicId },
       { $unset: { 'collection.proof': '' }, $set: { 'collection.proofDeletedAt': now } }
     );
     expect(deleted).toBe(1);
+  });
+
+  it('also deletes the photo of an attempt the rider replaced', async () => {
+    const now = new Date('2026-10-28T00:00:00Z');
+    const archivedId = proofOf(brandId, oid(), 'refused');
+    const payment = storedPayment({
+      collection: {
+        method: 'WALLET',
+        reference: 'JC-7788',
+        proof: { publicId: proofOf(brandId, oid(), 'current'), fingerprint: 'etag-2' },
+        verification: 'SUBMITTED',
+      },
+      collectionHistory: [
+        {
+          method: 'WALLET',
+          reference: 'JC-0000',
+          proof: { publicId: archivedId, fingerprint: 'etag-1' },
+          verification: 'REJECTED',
+          verifiedAt: new Date(now.getTime() - 100 * 24 * 60 * 60 * 1000),
+        },
+      ],
+    });
+    Payment.find.mockReturnValue(findLimit([payment]));
+    Payment.updateOne.mockResolvedValue({});
+    const destroy = jest.fn().mockResolvedValue(true);
+
+    expect(await purgeVerifiedProofs({ now, config: CONFIG, destroy })).toBe(1);
+
+    expect(destroy).toHaveBeenCalledWith(archivedId, { config: CONFIG });
+    expect(Payment.updateOne).toHaveBeenCalledWith(
+      { _id: payment._id, 'collectionHistory.proof.publicId': archivedId },
+      {
+        $unset: { 'collectionHistory.$[entry].proof': '' },
+        $set: { 'collectionHistory.$[entry].proofDeletedAt': now },
+      },
+      { arrayFilters: [{ 'entry.proof.publicId': archivedId }] }
+    );
   });
 
   it('leaves the record alone when Cloudinary does not confirm the delete, and keeps going', async () => {

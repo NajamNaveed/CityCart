@@ -401,9 +401,16 @@ async function getOrderForUser(user, orderId) {
   if (!order) {
     throw new OrderError(404, 'Order not found.');
   }
+  // Only the customer view says whether a payment is waiting for its check,
+  // which needs the internal pending completion loaded.
+  const deliveryQuery = Delivery.findOne({ orderId: order._id });
+  const deliveryForView =
+    user.role === 'CUSTOMER' && deliveryQuery && typeof deliveryQuery.select === 'function'
+      ? deliveryQuery.select('+pendingCompletion')
+      : deliveryQuery;
   const [payment, delivery, adjustments, returnDoc] = await Promise.all([
     Payment.findOne({ orderId: order._id }),
-    Delivery.findOne({ orderId: order._id }),
+    deliveryForView,
     listAdjustmentsForOrder(order._id),
     Return.findOne({ orderId: order._id }),
   ]);

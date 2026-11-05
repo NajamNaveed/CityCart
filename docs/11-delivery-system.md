@@ -412,11 +412,15 @@ The payment workflow may also update the payment status for COD orders when paym
 **How the customer paid (implemented October 2026).** A rider completes a COD
 delivery with the customer's code and then records the money: **Cash**, **Bank
 transfer**, **Wallet** (JazzCash, Easypaisa, Other) or **Card machine**. Cash works
-as before. Every other choice requires a camera photo of the confirmation or the
-machine's slip and a reference (transaction id or approval code), and the payment is
-`PAID` but **unverified** until the brand checks it. A prepaid order shows no choice.
-Rules, privacy and retention are in `10-payment-system.md` §31; the endpoints are in
-`05-api-specification.md` §22b.
+as before and completes the delivery immediately. Every other choice requires a
+camera photo of the confirmation or the machine's slip and a reference (transaction
+id or approval code); the delivery then **stays `OUT_FOR_DELIVERY` with
+`pendingCompletion` set** until the brand verifies the payment, which is what marks
+the payment `PAID` and the delivery `DELIVERED`. A refusal keeps the delivery open
+and the rider collects again (`POST /rider/deliveries/:id/payment`); the customer's
+code is not asked again. The dashboard cannot move a delivery whose payment is
+waiting. A prepaid order shows no choice. Rules, privacy and retention are in
+`10-payment-system.md` §31; the endpoints are in `05-api-specification.md` §22b.
 
 ---
 
@@ -436,7 +440,8 @@ not proof of delivery. For a non-cash door payment the rider takes a camera-only
 and enters a reference. The photo is stored privately (never a public link), shown only
 to that brand's staff with payment permission through a short-lived signed link, and
 deleted 90 days after the brand decides. The customer never sees it; the rider sees only
-whether it is still waiting, verified or rejected. See `10-payment-system.md` §31.
+whether it is still waiting, verified or rejected, and a rejection sends them back to
+collect the payment again. See `10-payment-system.md` §31.
 
 Future implementations may also support:
 

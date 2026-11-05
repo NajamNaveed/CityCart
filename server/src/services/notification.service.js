@@ -210,18 +210,76 @@ async function notifyBrandOfCancelledOrder(order, { expired = false } = {}) {
 
 /**
  * Payment collected — fires exactly once, from whichever site flips the payment.
- * A non-cash payment is paid but still unverified by the brand (docs/21 §I.3).
+ * A non-cash payment only becomes paid when the brand verifies it, and that
+ * same decision completes the delivery (docs/10 §31); `verified` says so.
  */
-async function notifyPaymentReceived(order, { nonCash = false } = {}) {
+async function notifyPaymentReceived(order, { nonCash = false, verified = false } = {}) {
   if (!order) return;
   await notify({
     userIds: [order.customerId],
     type: 'PAYMENT_RECEIVED',
     title: 'Payment received',
-    message: nonCash
-      ? `Your payment for order ${order.orderNumber} has been received. The brand will verify it.`
-      : `Your cash payment for order ${order.orderNumber} has been received.`,
+    message: !nonCash
+      ? `Your cash payment for order ${order.orderNumber} has been received.`
+      : verified
+        ? `Your payment for order ${order.orderNumber} has been verified and the delivery is complete.`
+        : `Your payment for order ${order.orderNumber} has been received. The brand will verify it.`,
     data: orderData(order),
+  });
+}
+
+const COLLECTION_LABELS = {
+  BANK_TRANSFER: 'bank transfer',
+  WALLET: 'wallet',
+  CARD_MACHINE: 'card machine',
+};
+
+/**
+ * A rider sent a non-cash payment for checking; the brand's records keepers
+ * are the ones who can decide it (docs/10 §31, docs/21 §I.3).
+ */
+async function notifyBrandOfProofSubmitted({ brandId, orderId, orderNumber, paymentId, amount, method }) {
+  if (!brandId) return;
+  const staff = await brandStaffIds(brandId, {
+    anyOf: [PERMISSIONS.PAYMENTS_VIEW, PERMISSIONS.PAYMENTS_MANAGE],
+  });
+  if (staff.length === 0) return;
+  const label = COLLECTION_LABELS[method] || 'non-cash';
+  await notify({
+    userIds: staff,
+    type: 'PAYMENT_PROOF_SUBMITTED',
+    title: 'Payment to verify',
+    message: `A ${label} payment of PKR ${amount} for order ${orderNumber} is waiting for verification. The delivery completes once it is verified.`,
+    data: {
+      brandId: String(brandId),
+      orderId: orderId ? String(orderId) : undefined,
+      orderNumber,
+      paymentId: String(paymentId),
+      amount,
+      method,
+    },
+  });
+}
+
+/**
+ * The brand refused the rider's payment: the rider collects again while the
+ * delivery stays open (docs/10 §31). No amount moves.
+ */
+async function notifyRiderOfRejectedProof({ userId, brandId, orderNumber, deliveryId, paymentId, amount, note }) {
+  if (!userId) return;
+  await notify({
+    userIds: [userId],
+    type: 'PAYMENT_PROOF_REJECTED',
+    title: 'Payment not verified — collect again',
+    message: `The payment of PKR ${amount} for order ${orderNumber} was not verified${note ? `: ${note}` : '.'} Collect it again (cash or another method).`,
+    data: {
+      brandId: String(brandId),
+      deliveryId: String(deliveryId),
+      orderNumber,
+      paymentId: String(paymentId),
+      amount,
+      note: note || null,
+    },
   });
 }
 
@@ -555,7 +613,9 @@ module.exports = {
   notifyCustomerOfOrderStatus: bestEffort(notifyCustomerOfOrderStatus),
   notifyBrandOfCancelledOrder: bestEffort(notifyBrandOfCancelledOrder),
   notifyPaymentReceived: bestEffort(notifyPaymentReceived),
+  notifyBrandOfProofSubmitted: bestEffort(notifyBrandOfProofSubmitted),
   notifyBrandOfRejectedProof: bestEffort(notifyBrandOfRejectedProof),
+  notifyRiderOfRejectedProof: bestEffort(notifyRiderOfRejectedProof),
   notifyRefundIssued: bestEffort(notifyRefundIssued),
   notifyAdjustmentProposed: bestEffort(notifyAdjustmentProposed),
   notifyAdjustmentAnswered: bestEffort(notifyAdjustmentAnswered),

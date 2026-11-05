@@ -141,6 +141,12 @@ const completeDeliverySchema = z.object({
   lines: z.array(returnLineSchema).min(1).max(100).optional(),
 });
 
+// Collecting again after the brand refused a proof. No code: the door answer
+// and the customer's code were already recorded with the first attempt.
+const retryPaymentSchema = z.object({
+  collection: collectionSchema,
+});
+
 // The store's returned-goods inbox (docs/22 §F). `decisions` is optional:
 // without it every line keeps its safe default (write off).
 const receiveReturnSchema = z.object({
@@ -182,6 +188,7 @@ module.exports = {
   riderListQuerySchema,
   riderStatusSchema,
   completeDeliverySchema,
+  retryPaymentSchema,
   collectionSchema,
   returnLineSchema,
   receiveReturnSchema,

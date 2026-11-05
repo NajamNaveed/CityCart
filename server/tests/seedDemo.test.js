@@ -520,13 +520,29 @@ describe('demo dataset', () => {
       expect(p.method).not.toBe('COD');
       expect(p.collectedBy).toBeUndefined(); // non-cash money is never in a rider's hand
       expect(p.collection.reference).toMatch(/\S/);
-      const receipt = ds.receipts.find((r) => id(r.paymentId) === id(p._id));
-      expect(receipt.collectionMethod).toBe(p.collection.method);
-      expect(receipt.collectedByName).toBeUndefined();
+      expect(p.collection.submittedAt).toBeInstanceOf(Date);
+      // Only a verified payment completed its delivery and has a receipt; the
+      // ones still with the brand have nothing to receipt yet.
+      if (p.status === 'PAID') {
+        const receipt = ds.receipts.find((r) => id(r.paymentId) === id(p._id));
+        expect(receipt.collectionMethod).toBe(p.collection.method);
+        expect(receipt.collectedByName).toBeUndefined();
+      } else {
+        expect(p.status).toBe('PENDING');
+      }
     });
     expect(door.some((p) => p.collection.wallet)).toBe(true);
-    expect(door.some((p) => p.collection.duplicateReference && p.collection.duplicateProof)).toBe(true);
+    const attempts = ds.payments.flatMap((p) => [p.collection, ...(p.collectionHistory || [])]).filter(Boolean);
+    expect(attempts.some((c) => c.duplicateReference && c.duplicateProof)).toBe(true);
     expect(door.some((p) => p.collection.proofDeletedAt && !p.collection.proof)).toBe(true);
+
+    // A payment still waiting for its check holds the delivery open; a refused
+    // one keeps the door answer and sends the rider to collect again.
+    const held = ds.deliveries.filter((d) => d.pendingCompletion);
+    expect(held.some((d) => !d.pendingCompletion.rejectedAt)).toBe(true);
+    expect(held.some((d) => d.pendingCompletion.rejectedAt)).toBe(true);
+    held.forEach((d) => expect(d.status).toBe('OUT_FOR_DELIVERY'));
+    expect(ds.notifications.some((n) => n.type === 'PAYMENT_PROOF_SUBMITTED')).toBe(true);
     expect(ds.notifications.some((n) => n.type === 'PAYMENT_PROOF_REJECTED')).toBe(true);
   });
 

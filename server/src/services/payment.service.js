@@ -17,6 +17,8 @@ const fromCents = (cents) => cents / 100;
 function toPaymentView(user, payment) {
   if (!payment) return payment;
   const out = typeof payment.toObject === 'function' ? payment.toObject() : { ...payment };
+  // Earlier door attempts are audit data for the brand only.
+  delete out.collectionHistory;
   if (!out.collection) return out;
   const collection = { ...out.collection };
   delete collection.proof;
@@ -155,4 +157,18 @@ async function updatePaymentStatus({ userId, tenantBrandId, paymentId, status, r
   return updated;
 }
 
-module.exports = { getPaymentForOrder, updatePaymentStatus, toPaymentView };
+/**
+ * Duplicate use of the same reference or the same photo (Cloudinary's etag) on
+ * another payment of the brand. Only a flag for the person verifying; never a
+ * block (docs/10 §31.4).
+ */
+async function duplicateFlags({ brandId, paymentId, reference, fingerprint }, session) {
+  const base = { _id: { $ne: paymentId }, brandId };
+  const [sameReference, sameProof] = await Promise.all([
+    reference ? Payment.findOne({ ...base, 'collection.reference': reference }).session(session) : null,
+    fingerprint ? Payment.findOne({ ...base, 'collection.proof.fingerprint': fingerprint }).session(session) : null,
+  ]);
+  return { duplicateReference: Boolean(sameReference), duplicateProof: Boolean(sameProof) };
+}
+
+module.exports = { getPaymentForOrder, updatePaymentStatus, toPaymentView, duplicateFlags };

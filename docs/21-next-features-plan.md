@@ -143,17 +143,22 @@ of the payment confirmation** (or the machine's slip) and submits it.
 
 ## I.2 How the rider completes a delivery
 
-Enter the customer's code (as today), then **"How did the customer pay?"**: **Cash**, **Bank transfer**, **Wallet**
-(JazzCash, Easypaisa, Other) or **Card machine**. For anything but cash: take a **photo** (camera only) and type the
-**reference** (transaction id, or the machine's approval code). Then complete. A prepaid order shows none of this.
+Enter the customer's code (as today), answer the per-line accept/reject step, then **"How did the customer pay?"**:
+**Cash**, **Bank transfer**, **Wallet** (JazzCash, Easypaisa, Other) or **Card machine**. For anything but cash: take a
+**photo** (camera only) and type the **reference** (transaction id, or the machine's approval code) and submit. Cash
+completes the delivery there and then; a non-cash answer **holds the delivery open ("Payment waiting for
+verification")**, because the brand has not checked the money yet. A prepaid order shows none of this.
 
 ## I.3 Verification is the brand's control (important)
 
-A photo can be faked, so a non-cash payment is **paid but "unverified"** until the brand checks it against its own
+A photo can be faked, so a non-cash payment stays **unpaid and unverified** until the brand checks it against its own
 bank, wallet or card-machine statement. The records person sees a queue **"Payments to verify"** with the photo and
-reference, and chooses **Verified** or **Rejected** (with a reason). A rejection raises a flag to the brand owner;
-what happens next (collect again, write off) is the brand's decision and is recorded. Cash is unchanged: it still goes
-through the rider's cash hand-over; **non-cash payments never appear in the rider's cash balance**.
+reference, and chooses **Verified** or **Rejected** (with a reason). **Verifying is what completes the delivery**: the
+payment becomes PAID, the delivery DELIVERED, and the return/receipt steps run exactly as for cash, in one transaction.
+**Rejecting leaves the delivery out for delivery and the payment unpaid**; the rider is notified and **collects again**
+from the delivery screen (cash completes immediately, another non-cash method waits for a fresh check), and the brand
+owner is flagged. Cash is unchanged: it still goes through the rider's cash hand-over; **non-cash payments never appear
+in the rider's cash balance**. The brand dashboard cannot move a delivery whose payment is waiting.
 
 ## I.4 Photos are private (never public links)
 
@@ -173,12 +178,14 @@ The brand's view also shows the verification state. The existing receipt number 
 
 ## I.6 Data and API (summary)
 
-`Payment` gains `collection: { method, wallet?, reference, proof: { publicId, fingerprint }, verification:
-SUBMITTED | VERIFIED | REJECTED, verifiedBy, verifiedAt, note }`. Endpoints: a signed-upload request for the rider
-(`POST /rider/deliveries/:id/proof-upload`), the complete call extended with the collection details, the brand's
-queue (`GET /payments/proofs`), a signed view link (`GET /payments/:id/proof`), and the decision
-(`PATCH /payments/:id/proof`, needs `payments.manage`). The server checks that the photo path belongs to **this
-brand, this rider and this delivery**.
+`Payment` gains `collection: { method, wallet?, reference, proof: { publicId, fingerprint }, submittedAt,
+verification: SUBMITTED | VERIFIED | REJECTED, verifiedBy, verifiedAt, note }` and a private `collectionHistory` of
+refused attempts. `Delivery` gains `pendingCompletion: { paymentId, lines, netTotal, submittedBy, submittedAt,
+rejectedAt }` for the answer waiting on the brand. Endpoints: a signed-upload request for the rider
+(`POST /rider/deliveries/:id/proof-upload`), the complete call extended with the collection details, the rider's
+collect-again call (`POST /rider/deliveries/:id/payment`), the brand's queue (`GET /payments/proofs`), a signed view
+link (`GET /payments/:id/proof`), and the decision (`PATCH /payments/:id/proof`, needs `payments.manage`). The server
+checks that the photo path belongs to **this brand, this rider and this delivery**.
 
 ## I.7 What it needs
 
@@ -198,13 +205,15 @@ verification decisions; retention job; duplicate flags; receipts show the method
 ## I.9 Decisions (defaults)
 
 1. Methods: Cash, Bank transfer, Wallet (JazzCash, Easypaisa, Other), Card machine. 2. Private Cloudinary storage,
-not the database. 3. Keep photos 90 days after verification. 4. The customer never sees the photo. 5. A rejected proof
-is flagged and left to the brand (no automatic reversal).
+not the database. 3. Keep photos 90 days after verification. 4. The customer never sees the photo. 5. A non-cash
+answer waits for verification; verifying completes the delivery. 6. A rejected proof stays unpaid and open: the rider
+collects again (cash or another method), with no automatic reversal and no brand write-off flow.
 
 ## I.10 Steps
 
 I1 model, private upload signing, endpoints, tests; I2 rider screens (method, camera, reference); I3 records
 verification queue; I4 receipts, retention job, seed data; I5 docs (`10`, `11`, `05`, `20`).
 
-All five steps are built. Documentation was updated in `10`, `11`, `05`, `04`, `12` and `20`; the
-remaining unverified part is the camera on a real phone and an upload to a real Cloudinary account.
+All five steps are built, and a later change made verification the step that completes a non-cash delivery
+(§I.3). Documentation was updated in `10`, `11`, `05`, `04`, `12`, `19`, `20` and `23`; the remaining unverified
+part is the camera on a real phone and an upload to a real Cloudinary account.

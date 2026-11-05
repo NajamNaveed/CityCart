@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { RETURN_REASONS } = require('../config/returns');
 
 /**
  * Delivery model — tracked separately from Order and Payment.
@@ -24,6 +25,38 @@ const addressSnapshotSchema = new mongoose.Schema(
     country: { type: String },
     postalCode: { type: String },
     additionalInstructions: { type: String },
+  },
+  { _id: false }
+);
+
+// The rider's answer at the door, held until a non-cash payment is checked
+// (docs/10 §31). `itemId` is an Order item id, not an Order id.
+const pendingCompletionLineSchema = new mongoose.Schema(
+  {
+    itemId: { type: mongoose.Schema.Types.ObjectId, required: true },
+    acceptedQty: { type: Number, required: true, min: 0 },
+    rejectedQty: { type: Number, required: true, min: 0 },
+    reason: { type: String, enum: RETURN_REASONS },
+    photo: {
+      publicId: { type: String, trim: true },
+      fingerprint: { type: String, trim: true },
+    },
+  },
+  { _id: false }
+);
+
+// Not every completion sends lines (omitting them means everything was
+// accepted), so the array is absent rather than empty in that case.
+const pendingCompletionSchema = new mongoose.Schema(
+  {
+    paymentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Payment', required: true },
+    lines: { type: [pendingCompletionLineSchema], default: undefined },
+    netTotal: { type: Number, min: 0 },
+    submittedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    submittedAt: { type: Date },
+    // The brand refused this proof; the rider is asked to collect again. The
+    // door answer is kept so the retry does not have to be given again.
+    rejectedAt: { type: Date },
   },
   { _id: false }
 );
@@ -108,6 +141,13 @@ const deliverySchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Return',
       default: null,
+    },
+    // A non-cash payment was taken and the delivery waits for the brand's
+    // verification. Internal only: never selected by default, so no brand,
+    // rider or customer view can leak the stored answer by accident.
+    pendingCompletion: {
+      type: pendingCompletionSchema,
+      select: false,
     },
   },
   {

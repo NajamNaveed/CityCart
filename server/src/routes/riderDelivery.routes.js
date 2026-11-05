@@ -1,6 +1,17 @@
 const express = require('express');
 
-const { list, getById, updateStatus, complete, proofUpload, returnUpload, cash, shareLocation, stopSharing } = require('../controllers/riderDelivery.controller');
+const {
+  list,
+  getById,
+  updateStatus,
+  complete,
+  retryPayment,
+  proofUpload,
+  returnUpload,
+  cash,
+  shareLocation,
+  stopSharing,
+} = require('../controllers/riderDelivery.controller');
 const { riderLocationLimiter } = require('../middleware/rateLimiters');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
@@ -26,5 +37,7 @@ router.patch('/:id/status', updateStatus);
 router.post('/:id/proof-upload', proofUpload);
 router.post('/:id/return-upload', returnUpload);
 router.post('/:id/complete', complete);
+// Collecting again after a refused payment (no code: the delivery was already answered).
+router.post('/:id/payment', retryPayment);
 
 module.exports = router;

@@ -1,4 +1,10 @@
-const { riderListQuerySchema, riderStatusSchema, completeDeliverySchema, riderLocationSchema } = require('../validators/delivery.validator');
+const {
+  riderListQuerySchema,
+  riderStatusSchema,
+  completeDeliverySchema,
+  retryPaymentSchema,
+  riderLocationSchema,
+} = require('../validators/delivery.validator');
 const { recordLocation, clearLocation } = require('../services/riderLocation.service');
 const { createProofUpload } = require('../services/paymentProof.service');
 const { createReturnPhotoUpload } = require('../services/return.service');
@@ -8,6 +14,7 @@ const {
   getRiderDelivery,
   riderUpdateStatus,
   completeWithCode,
+  retryDoorPayment,
   riderCash,
 } = require('../services/riderDelivery.service');
 const { OrderError } = require('../services/order.service');
@@ -75,7 +82,34 @@ async function complete(req, res, next) {
       collection: body.data.collection,
       lines: body.data.lines,
     });
-    return res.status(200).json({ success: true, message: 'Delivery completed', delivery });
+    return res.status(200).json({
+      success: true,
+      message: delivery.paymentPending ? 'Payment sent for verification' : 'Delivery completed',
+      delivery,
+    });
+  } catch (err) {
+    return handleError(err, res, next);
+  }
+}
+
+// Collecting again after the brand refused the payment (docs/10 §31). Cash
+// completes the delivery; another non-cash method waits for a fresh check.
+async function retryPayment(req, res, next) {
+  const params = objectIdParamSchema.safeParse(req.params);
+  if (!params.success) return invalid(res, params.error);
+  const body = retryPaymentSchema.safeParse(req.body);
+  if (!body.success) return invalid(res, body.error);
+  try {
+    const delivery = await retryDoorPayment({
+      ...who(req),
+      id: params.data.id,
+      collection: body.data.collection,
+    });
+    return res.status(200).json({
+      success: true,
+      message: body.data.collection.method === 'CASH' ? 'Delivery completed' : 'Payment sent for verification',
+      delivery,
+    });
   } catch (err) {
     return handleError(err, res, next);
   }
@@ -137,4 +171,15 @@ async function stopSharing(req, res, next) {
   }
 }
 
-module.exports = { list, getById, updateStatus, complete, proofUpload, returnUpload, cash, shareLocation, stopSharing };
+module.exports = {
+  list,
+  getById,
+  updateStatus,
+  complete,
+  retryPayment,
+  proofUpload,
+  returnUpload,
+  cash,
+  shareLocation,
+  stopSharing,
+};

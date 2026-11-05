@@ -24,6 +24,8 @@ const Return = require('../src/models/return.model');
 const notifications = require('../src/services/notification.service');
 const receipts = require('../src/services/receipt.service');
 const app = require('../src/app');
+const env = require('../src/config/env');
+const { paymentProofFolder } = require('../src/services/upload.service');
 const { ROLES } = require('../src/config/roles');
 const { PERMISSIONS } = require('../src/config/permissions');
 const { signToken } = require('../src/utils/jwt');
@@ -366,7 +368,11 @@ describe('POST /api/v1/rider/deliveries/:id/complete', () => {
   it('a wrong code is counted atomically, refused with the tries left, and completes nothing', async () => {
     const { header, user } = asRider();
     const id = oid();
-    Delivery.findOneAndUpdate.mockReturnValue(withSelect(delivery({ _id: id, deliveryCode: '482913', codeAttempts: 1 })));
+    const order = codOrder();
+    const attempt = delivery({ _id: id, orderId: order._id, deliveryCode: '482913', codeAttempts: 1 });
+    Delivery.findOne.mockReturnValue(withSelect(attempt));
+    Order.findOne.mockResolvedValue(order);
+    Delivery.findOneAndUpdate.mockReturnValue(withSelect(attempt));
 
     const res = await post(header, id, { code: '000000' });
 
@@ -387,6 +393,7 @@ describe('POST /api/v1/rider/deliveries/:id/complete', () => {
     const { header, user } = asRider();
     const order = codOrder();
     const attempt = delivery({ orderId: order._id, deliveryCode: '482913', codeAttempts: 1 });
+    Delivery.findOne.mockReturnValue(withSelect(attempt)); // the pre-load gate
     Delivery.findOneAndUpdate
       .mockReturnValueOnce(withSelect(attempt)) // the counted try
       .mockResolvedValueOnce({ ...attempt, status: 'OUT_FOR_DELIVERY' }); // the status change
@@ -411,7 +418,7 @@ describe('POST /api/v1/rider/deliveries/:id/complete', () => {
     });
     expect(Payment.findOneAndUpdate).toHaveBeenCalledWith(
       { orderId: order._id, status: 'PENDING' },
-      { $set: { status: 'PAID', amount: 2450, paidAt: expect.any(Date), confirmedBy: user._id, brandId: order.brandId, collectedBy: user._id, collectedAt: expect.any(Date), 'collection.method': 'CASH' } },
+      { $set: { status: 'PAID', amount: 2450, paidAt: expect.any(Date), confirmedBy: user._id, brandId: order.brandId, collectedBy: user._id, collectedAt: expect.any(Date), method: 'COD', 'collection.method': 'CASH' } },
       { session: 'SESSION' }
     );
     expect(notifications.notifyCustomerOfOrderStatus).toHaveBeenCalledWith(expect.anything(), 'DELIVERED');
@@ -423,8 +430,12 @@ describe('POST /api/v1/rider/deliveries/:id/complete', () => {
 
   it('429 CODE_LOCKED after too many wrong tries; the correct code no longer helps', async () => {
     const { header } = asRider();
+    const locked = delivery({ status: 'OUT_FOR_DELIVERY', codeAttempts: 5 });
+    Delivery.findOne
+      .mockReturnValueOnce(withSelect(locked)) // the pre-load gate
+      .mockResolvedValueOnce(locked); // the disambiguating read after a refused update
+    Order.findOne.mockResolvedValue(codOrder());
     Delivery.findOneAndUpdate.mockReturnValue(withSelect(null));
-    Delivery.findOne.mockResolvedValue(delivery({ status: 'OUT_FOR_DELIVERY', codeAttempts: 5 }));
 
     const res = await post(header, oid(), { code: '482913' });
 
@@ -435,23 +446,206 @@ describe('POST /api/v1/rider/deliveries/:id/complete', () => {
 
   it('409 when the delivery is not out for delivery, 404 when it is not this rider\'s', async () => {
     const { header } = asRider();
-    Delivery.findOneAndUpdate.mockReturnValue(withSelect(null));
-    Delivery.findOne.mockResolvedValue(delivery({ status: 'PICKED_UP' }));
+    Delivery.findOne
+      .mockReturnValueOnce(withSelect(delivery({ status: 'PICKED_UP' })))
+      .mockReturnValueOnce(withSelect(null));
     const notOut = await post(header, oid(), { code: '482913' });
     expect(notOut.status).toBe(409);
     expect(notOut.body.code).toBe('INVALID_TRANSITION');
 
-    Delivery.findOne.mockResolvedValue(null);
     expect((await post(header, oid(), { code: '482913' })).status).toBe(404);
+    expect(Delivery.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
   it('409 NO_DELIVERY_CODE for a delivery that has no code, and nothing is completed', async () => {
     const { header } = asRider();
-    Delivery.findOneAndUpdate.mockReturnValue(withSelect(delivery({ deliveryCode: undefined, codeAttempts: 1 })));
+    const attempt = delivery({ deliveryCode: undefined, codeAttempts: 1 });
+    Delivery.findOne.mockReturnValue(withSelect(attempt));
+    Order.findOne.mockResolvedValue(codOrder());
+    Delivery.findOneAndUpdate.mockReturnValue(withSelect(attempt));
     const res = await post(header, oid(), { code: '482913' });
     expect(res.status).toBe(409);
     expect(res.body.code).toBe('NO_DELIVERY_CODE');
     expect(Order.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/v1/rider/deliveries/:id/payment (collect again after a refusal)', () => {
+  const post = (header, id, body) => request(app).post(`/api/v1/rider/deliveries/${id}/payment`).set(...header).send(body);
+  const thenable = (value) => ({
+    select: () => thenable(value),
+    session: () => thenable(value),
+    then: (resolve, reject) => Promise.resolve(value).then(resolve, reject),
+  });
+  const refused = (overrides = {}) =>
+    delivery({
+      pendingCompletion: { paymentId: oid(), netTotal: 2450, submittedBy: oid(), submittedAt: new Date(), rejectedAt: new Date() },
+      ...overrides,
+    });
+  const collection = (attempt, overrides = {}) => ({
+    method: 'BANK_TRANSFER',
+    reference: 'FT-900011',
+    proof: { publicId: `${paymentProofFolder(brandId, attempt._id)}/slip`, fingerprint: 'etag-2' },
+    ...overrides,
+  });
+
+  const originalCloudinary = { ...env.cloudinary };
+  beforeAll(() => {
+    env.cloudinary = { cloudName: 'democloud', apiKey: 'key123', apiSecret: 'secret456' };
+  });
+  afterAll(() => {
+    env.cloudinary = originalCloudinary;
+  });
+
+  it.each([
+    [{}],
+    [{ collection: {} }],
+    [{ collection: { method: 'CASH', reference: 'FT-123456' } }],
+    [{ collection: { method: 'CASH', proof: { publicId: 'x', fingerprint: 'y' } } }],
+    [{ collection: { method: 'BANK_TRANSFER', reference: 'FT-123456' } }],
+    [{ collection: { method: 'WALLET', reference: 'FT-123456' } }],
+  ])('400 for %j', async (body) => {
+    const { header } = asRider();
+    expect((await post(header, oid(), body)).status).toBe(400);
+    expect(Delivery.findOne).not.toHaveBeenCalled();
+  });
+
+  it("404 for another rider's delivery, 409 when it is closed, 409 when nothing was refused", async () => {
+    const { header } = asRider();
+    Delivery.findOne.mockReturnValueOnce(thenable(null));
+    expect((await post(header, oid(), { collection: { method: 'CASH' } })).status).toBe(404);
+
+    Delivery.findOne.mockReturnValueOnce(thenable(delivery({ status: 'DELIVERED' })));
+    const closed = await post(header, oid(), { collection: { method: 'CASH' } });
+    expect(closed.status).toBe(409);
+    expect(closed.body.code).toBe('INVALID_TRANSITION');
+
+    Delivery.findOne.mockReturnValueOnce(
+      thenable(delivery({ pendingCompletion: { paymentId: oid(), submittedAt: new Date() } }))
+    );
+    const notRefused = await post(header, oid(), { collection: { method: 'CASH' } });
+    expect(notRefused.status).toBe(409);
+    expect(notRefused.body.code).toBe('NO_REFUSED_PAYMENT');
+    expect(Delivery.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('cash completes the delivery at once and records it as COD, archiving the refused attempt', async () => {
+    const { header, user } = asRider();
+    const order = codOrder();
+    const attempt = refused({ orderId: order._id });
+    const prior = { _id: oid(), collection: { method: 'WALLET', wallet: 'JAZZCASH', reference: 'JC-7788', verification: 'REJECTED' } };
+    const paymentId = oid();
+
+    Delivery.findOne
+      .mockReturnValueOnce(thenable(attempt)) // the pre-load
+      .mockReturnValue(thenable({ ...attempt, status: 'DELIVERED', pendingCompletion: undefined })); // the view
+    Delivery.findOneAndUpdate.mockReturnValue(thenable(attempt));
+    Delivery.findById.mockReturnValue({ session: () => Promise.resolve({ ...attempt, status: 'DELIVERED' }) });
+
+    Payment.findOne
+      .mockReturnValueOnce({ session: () => Promise.resolve(prior) }) // the refused attempt to archive
+      .mockReturnValue({ select: () => Promise.resolve({ collection: { method: 'CASH' } }) }); // the view
+    Payment.updateOne.mockResolvedValue({});
+    Payment.findOneAndUpdate.mockResolvedValue({ _id: paymentId });
+
+    Order.findOne
+      .mockReturnValueOnce({ session: () => Promise.resolve(order) }) // the completion reads the order
+      .mockReturnValue({ select: () => Promise.resolve({ ...order, paymentStatus: 'PAID' }) }); // the view
+    Order.findOneAndUpdate.mockResolvedValue({ ...order, orderStatus: 'DELIVERED', paymentStatus: 'PAID' });
+    Order.updateOne.mockResolvedValue({});
+
+    const res = await post(header, attempt._id, { collection: { method: 'CASH' } });
+
+    expect(res.status).toBe(200);
+    expect(Payment.updateOne).toHaveBeenCalledWith(
+      { _id: prior._id, status: 'PENDING' },
+      { $push: { collectionHistory: prior.collection }, $unset: { collection: '' } },
+      { session: 'SESSION' }
+    );
+    expect(Payment.findOneAndUpdate).toHaveBeenCalledWith(
+      { orderId: order._id, status: 'PENDING' },
+      { $set: { status: 'PAID', amount: 2450, paidAt: expect.any(Date), confirmedBy: user._id, brandId: order.brandId, collectedBy: user._id, collectedAt: expect.any(Date), method: 'COD', 'collection.method': 'CASH' } },
+      { session: 'SESSION' }
+    );
+    // The shared completion clears the hold; the customer's code is not asked again.
+    expect(Delivery.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: attempt._id.toString(), brandId: brandId.toString(), riderId: user._id, status: { $in: ['OUT_FOR_DELIVERY'] } },
+      { $set: { status: 'DELIVERED' }, $unset: { failureReason: '', pendingCompletion: '' } },
+      { new: false, session: 'SESSION' }
+    );
+    expect(notifications.notifyPaymentReceived).toHaveBeenCalledTimes(1);
+    expect(res.body.delivery).toMatchObject({ status: 'DELIVERED', paymentRejected: false, cashCollected: true, amountToCollect: 0 });
+  });
+
+  it('another non-cash method waits for a fresh check, without counting a code attempt', async () => {
+    const { header } = asRider();
+    const order = codOrder();
+    const attempt = refused({ orderId: order._id });
+    const pending = { _id: oid(), orderId: order._id, collection: { method: 'WALLET', reference: 'JC-0000', verification: 'REJECTED' } };
+    const held = { paymentId: pending._id, netTotal: 2450, submittedAt: new Date() };
+    const body = collection(attempt);
+
+    Delivery.findOne
+      .mockReturnValueOnce(thenable(attempt)) // the pre-load
+      .mockReturnValueOnce(thenable(attempt)) // staging re-reads the delivery
+      .mockReturnValue(thenable({ ...attempt, pendingCompletion: held })); // the view
+    Delivery.findOneAndUpdate.mockImplementation((filter, update) =>
+      update && update.$set && update.$set.pendingCompletion
+        ? Promise.resolve({ ...attempt, pendingCompletion: update.$set.pendingCompletion })
+        : Promise.resolve(attempt)
+    );
+
+    Order.findOne.mockReturnValue(thenable(order));
+    Payment.findOne.mockImplementation((filter) => {
+      if (filter && filter.status === 'PENDING') return { session: () => Promise.resolve(pending) };
+      if (filter && filter._id) return { session: () => Promise.resolve(null) }; // duplicate checks
+      return { select: () => Promise.resolve({ collection: { method: 'BANK_TRANSFER', verification: 'SUBMITTED' } }) };
+    });
+    Payment.findOneAndUpdate.mockResolvedValue(pending);
+    Payment.updateOne.mockResolvedValue({});
+
+    const res = await post(header, attempt._id, { collection: body });
+
+    expect(res.status).toBe(200);
+    const [, update] = Payment.findOneAndUpdate.mock.calls[0];
+    expect(update.$set).toMatchObject({
+      method: 'BANK_TRANSFER',
+      'collection.method': 'BANK_TRANSFER',
+      'collection.reference': 'FT-900011',
+      'collection.proof': body.proof,
+      'collection.verification': 'SUBMITTED',
+    });
+    // The refused attempt moves to the audit history; the money stays unpaid.
+    expect(update.$push.collectionHistory).toEqual(pending.collection);
+    expect(update.$set).not.toHaveProperty('status');
+
+    const [heldFilter, heldUpdate] = Delivery.findOneAndUpdate.mock.calls[0];
+    expect(heldFilter).toMatchObject({ _id: attempt._id.toString(), status: 'OUT_FOR_DELIVERY' });
+    expect(heldUpdate.$set.pendingCompletion).toMatchObject({ netTotal: 2450 });
+    expect(heldUpdate.$set.pendingCompletion.rejectedAt).toBeUndefined();
+    // No code attempt is counted: the door answer and code were recorded already.
+    expect(Delivery.findOneAndUpdate.mock.calls.some(([, u]) => u.$inc && u.$inc.codeAttempts)).toBe(false);
+    expect(Order.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(res.body.delivery).toMatchObject({
+      status: 'OUT_FOR_DELIVERY',
+      paymentPending: true,
+      paymentRejected: false,
+      amountToCollect: 0,
+    });
+  });
+
+  it("refuses another delivery's photo", async () => {
+    const { header } = asRider();
+    const attempt = refused();
+    Delivery.findOne.mockReturnValue(thenable(attempt));
+
+    const res = await post(header, attempt._id, {
+      collection: collection(attempt, { proof: { publicId: `${paymentProofFolder(brandId, oid())}/slip`, fingerprint: 'etag-2' } }),
+    });
+
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe('PROOF_NOT_YOURS');
+    expect(Payment.findOneAndUpdate).not.toHaveBeenCalled();
   });
 });
 

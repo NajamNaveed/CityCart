@@ -26,7 +26,9 @@ const collectionSchema = new mongoose.Schema(
       publicId: { type: String, trim: true },
       fingerprint: { type: String, trim: true },
     },
-    // Non-cash payments start "paid but unverified"; the brand checks the proof.
+    // When the rider sent this collection for checking (docs/10 §31).
+    submittedAt: { type: Date },
+    // Non-cash payments wait unverified; the brand checks the proof.
     verification: { type: String, enum: PROOF_VERIFICATIONS },
     verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     verifiedAt: { type: Date },
@@ -126,6 +128,13 @@ const paymentSchema = new mongoose.Schema(
     // payment (docs/21 §I).
     collection: {
       type: collectionSchema,
+    },
+    // Every earlier door attempt this payment carried: a rejected proof is kept
+    // for the brand's audit when the rider collects again. Internal only.
+    collectionHistory: {
+      type: [collectionSchema],
+      default: undefined,
+      select: false,
     },
     // Refunds (docs/10 §13): cumulative total + an audit entry per refund.
     refundedAmount: {

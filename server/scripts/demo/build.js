@@ -787,8 +787,7 @@ function buildDataset({ now = new Date(), hashes }) {
   const oldProof = doorEntries.find((e) => now - e.payment.paidAt > 100 * DAY);
   const doorPlans = [
     { entry: oldProof, method: 'BANK_TRANSFER', reference: 'HBL-778812', verification: 'VERIFIED', note: 'Matched the August bank statement.', deleted: true },
-    { method: 'WALLET', wallet: 'JAZZCASH', reference: 'JC-994412', verification: 'SUBMITTED', duplicateReference: true, duplicateProof: true },
-    { method: 'CARD_MACHINE', reference: 'APPR-552310', verification: 'REJECTED', note: 'No card settlement matches this approval code.' },
+    { method: 'CARD_MACHINE', reference: 'APPR-552310', verification: 'VERIFIED', note: 'Card settlement matched the approval code.' },
     { method: 'WALLET', wallet: 'EASYPAISA', reference: 'EP-220145', verification: 'VERIFIED', note: 'Seen in the wallet statement.' },
   ];
   // The other three come from three different brands, so the queue is not all one shop's.
@@ -805,7 +804,10 @@ function buildDataset({ now = new Date(), hashes }) {
     const delivery = ds.deliveries.find((d) => String(d.orderId) === String(order._id));
     if (!delivery) continue;
     const folder = `citycart/brands/${brand.doc._id}/deliveries/${delivery._id}/payment-proofs`;
-    const verifiedAt = plan.verification === 'SUBMITTED' ? undefined : new Date(payment.paidAt.getTime() + 2 * HOUR);
+    // Verification is what completes the delivery, so the check and the money
+    // arrive together; the rider sent the proof a couple of hours earlier.
+    const submittedAt = new Date(payment.paidAt.getTime() - 2 * HOUR);
+    const verifiedAt = plan.verification === 'SUBMITTED' ? undefined : payment.paidAt;
 
     payment.method = PAYMENT_METHOD_FOR_COLLECTION[plan.method];
     // Non-cash money is never in a rider's hand: no collector, nothing to settle.
@@ -820,14 +822,15 @@ function buildDataset({ now = new Date(), hashes }) {
       ...(plan.wallet && { wallet: plan.wallet }),
       reference: plan.reference,
       proof: { publicId: `${folder}/${plan.reference.toLowerCase()}.jpg`, fingerprint: `etag-${plan.reference.toLowerCase()}` },
+      submittedAt,
       verification: plan.verification,
       ...(verifiedAt && {
         verifiedBy: brand.owner._id,
         verifiedAt,
         ...(plan.note && { note: plan.note }),
       }),
-      ...(plan.duplicateReference && { duplicateReference: true }),
-      ...(plan.duplicateProof && { duplicateProof: true }),
+      duplicateReference: Boolean(plan.duplicateReference),
+      duplicateProof: Boolean(plan.duplicateProof),
     };
     if (plan.deleted) {
       delete payment.collection.proof;
@@ -837,6 +840,101 @@ function buildDataset({ now = new Date(), hashes }) {
     // The receipt shows who took the cash; a non-cash payment has nobody to name.
     const job = receiptJobs.find((r) => r.payment === payment);
     if (job) job.collector = null;
+  }
+
+  // ── non-cash payments still with the brand (docs/10 §31) ──
+  // A non-cash payment completes its delivery only when the records keeper verifies
+  // it. Two riders are at the door: one is waiting for the check; one had the proof
+  // refused and is collecting again. Neither delivery is complete yet.
+  const awaitingCheck = orders.filter(({ order, payment, brand }) => {
+    const delivery = deliveryOf(order);
+    return order.orderStatus === 'OUT_FOR_DELIVERY' && order.paymentMethod === 'COD'
+      && payment.status === 'PENDING' && !payment.collection && !payment.refunds.length
+      && delivery && delivery.status === 'OUT_FOR_DELIVERY'
+      && (delivery.riderId || brand.riders.length > 0);
+  });
+  const waitingEntry = awaitingCheck[0];
+  const refusedEntry = (waitingEntry && awaitingCheck.find((e) => String(e.order.brandId) !== String(waitingEntry.order.brandId)))
+    || awaitingCheck[1];
+
+  const stageDoorPayment = (entry, { method, reference, verification, reject }) => {
+    const { order, payment, brand } = entry;
+    const delivery = deliveryOf(order);
+    // A delivery without a rider gets one of the brand's, so this rider's screen
+    // really shows the waiting/refused card.
+    if (!delivery.riderId && brand.riders.length) {
+      const rider = brand.riders[0];
+      delivery.riderId = rider._id;
+      delivery.assignedAgent = rider.name;
+      delivery.assignedAt = new Date(delivery.createdAt.getTime() + 30 * (HOUR / 60));
+    }
+    const folder = `citycart/brands/${brand.doc._id}/deliveries/${delivery._id}`;
+    const at = new Date(Math.min(now.getTime() - 20 * (HOUR / 60), delivery.updatedAt.getTime() + 20 * (HOUR / 60)));
+    const first = order.items[0];
+    const rejectedQty = reject ? Math.max(1, Math.floor(first.quantity / 2)) : 0;
+    const netTotal = Math.max(0, order.total - rejectedQty * first.unitPrice);
+
+    payment.method = PAYMENT_METHOD_FOR_COLLECTION[method];
+    payment.collection = {
+      method,
+      ...(method === 'WALLET' && { wallet: 'JAZZCASH' }),
+      reference,
+      proof: { publicId: `${folder}/payment-proofs/${reference.toLowerCase()}.jpg`, fingerprint: `etag-${reference.toLowerCase()}` },
+      submittedAt: at,
+      verification,
+      duplicateReference: false,
+      duplicateProof: false,
+      ...(reject && {
+        verifiedBy: brand.owner._id,
+        verifiedAt: new Date(at.getTime() + 10 * (HOUR / 60)),
+        note: 'No card settlement matches this approval code.',
+      }),
+    };
+    payment.updatedAt = at;
+
+    delivery.pendingCompletion = {
+      paymentId: payment._id,
+      lines: order.items.map((item) => (item === first && rejectedQty > 0
+        ? {
+            itemId: item._id, acceptedQty: item.quantity - rejectedQty, rejectedQty,
+            reason: 'DAMAGED',
+            photo: { publicId: `${folder}/returns/refused.jpg`, fingerprint: 'etag-refused' },
+          }
+        : { itemId: item._id, acceptedQty: item.quantity, rejectedQty: 0 })),
+      netTotal,
+      submittedBy: delivery.riderId,
+      submittedAt: at,
+      ...(reject && { rejectedAt: new Date(at.getTime() + 10 * (HOUR / 60)) }),
+    };
+    delivery.updatedAt = at;
+    return at;
+  };
+
+  if (waitingEntry) {
+    const at = stageDoorPayment(waitingEntry, { method: 'BANK_TRANSFER', reference: 'FT-771204', verification: 'SUBMITTED' });
+    const { brand } = waitingEntry;
+    const folder = `citycart/brands/${brand.doc._id}/deliveries/${deliveryOf(waitingEntry.order)._id}`;
+    // Two earlier attempts: one refused by the brand, one too old to keep a photo.
+    waitingEntry.payment.collectionHistory = [
+      {
+        method: 'CARD_MACHINE', reference: 'APPR-330011',
+        submittedAt: new Date(at.getTime() - 200 * DAY),
+        verification: 'REJECTED', verifiedBy: brand.owner._id, verifiedAt: new Date(at.getTime() - 200 * DAY + HOUR),
+        duplicateReference: false, duplicateProof: false,
+        proofDeletedAt: new Date(at.getTime() - 200 * DAY + 90 * DAY),
+      },
+      {
+        method: 'WALLET', wallet: 'JAZZCASH', reference: 'JC-771204',
+        proof: { publicId: `${folder}/payment-proofs/jc-771204.jpg`, fingerprint: 'etag-jc-771204' },
+        submittedAt: new Date(at.getTime() - 2 * HOUR),
+        verification: 'REJECTED', verifiedBy: brand.owner._id, verifiedAt: new Date(at.getTime() - HOUR),
+        note: 'The screenshot did not show the transaction id.',
+        duplicateReference: true, duplicateProof: true,
+      },
+    ];
+  }
+  if (refusedEntry) {
+    stageDoorPayment(refusedEntry, { method: 'CARD_MACHINE', reference: 'APPR-880451', verification: 'REJECTED', reject: true });
   }
 
   // A receipt for every paid payment, numbered in the order the money came in (one counter per year).
@@ -1147,11 +1245,32 @@ function buildDataset({ now = new Date(), hashes }) {
       const refund = payment.refunds[0];
       note(customer.doc._id, 'REFUND_ISSUED', 'A refund was issued', `${brand.def.name} refunded ${money(refund.amount)} for order ${order.orderNumber}.`, { ...ref, paymentId: payment._id }, new Date(refund.at.getTime() + 60 * 1000));
     }
+    if (payment.collection?.verification === 'SUBMITTED') {
+      // A non-cash payment at the door: the delivery waits for this check.
+      const delivery = deliveryOf(order);
+      const how = { BANK_TRANSFER: 'bank transfer', WALLET: 'wallet', CARD_MACHINE: 'card machine' }[payment.collection.method];
+      note(brand.owner._id, 'PAYMENT_PROOF_SUBMITTED', 'Payment to verify',
+        `A ${how} payment of ${money(payment.amount)} for order ${order.orderNumber} is waiting for verification. The delivery completes once it is verified.`,
+        { ...ref, paymentId: payment._id, orderNumber: order.orderNumber, amount: payment.amount, method: payment.collection.method },
+        new Date(payment.collection.submittedAt.getTime() + 60 * 1000));
+      if (delivery && delivery.riderId) {
+        note(delivery.riderId, 'PAYMENT_PROOF_SUBMITTED', 'Payment sent for verification',
+          `The ${how} payment for order ${order.orderNumber} is with the brand. The delivery completes once they check it.`,
+          { ...ref, deliveryId: delivery._id, paymentId: payment._id }, new Date(payment.collection.submittedAt.getTime() + 60 * 1000));
+      }
+    }
     if (payment.collection?.verification === 'REJECTED') {
+      const delivery = deliveryOf(order);
       note(brand.owner._id, 'PAYMENT_PROOF_REJECTED', 'Payment proof rejected',
-        `The payment of ${money(payment.amount)} for order ${order.orderNumber} was rejected: ${payment.collection.note} Decide what to do next.`,
+        `The payment of ${money(payment.amount)} for order ${order.orderNumber} was rejected: ${payment.collection.note} The rider is asked to collect it again.`,
         { ...ref, paymentId: payment._id, orderNumber: order.orderNumber, amount: payment.amount, note: payment.collection.note },
         new Date(payment.collection.verifiedAt.getTime() + 60 * 1000));
+      if (delivery && delivery.riderId) {
+        note(delivery.riderId, 'PAYMENT_PROOF_REJECTED', 'Payment not verified — collect again',
+          `The payment of ${money(payment.amount)} for order ${order.orderNumber} was not verified: ${payment.collection.note} Collect it again (cash or another method).`,
+          { ...ref, deliveryId: delivery._id, paymentId: payment._id, amount: payment.amount, note: payment.collection.note },
+          new Date(payment.collection.verifiedAt.getTime() + 60 * 1000));
+      }
     }
   }
 

@@ -559,6 +559,15 @@ export default function MyOrderDetail() {
             </div>
           )}
 
+          {delivery?.paymentPending && (
+            <div className="mt-6 rounded-lg border border-line bg-surface p-4 sm:p-5">
+              <p className="text-sm font-semibold text-ink">Payment being checked</p>
+              <p className="mt-1 text-[13px] leading-relaxed text-muted">
+                You paid the rider. The brand is checking the payment; your order is complete as soon as it is confirmed.
+              </p>
+            </div>
+          )}
+
           {order.orderStatus === 'PENDING' && (
             <div className="mt-8 rounded-lg border border-warning/30 bg-warning-soft p-4 sm:p-5">
               <div className="flex items-start gap-3">

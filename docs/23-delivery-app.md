@@ -13,7 +13,7 @@ the server sections it points to.
 | App package, icon, name | **Done** — `citycart-delivery`, *CityCart Delivery*, `com.citycart.delivery` |
 | Sign-in (`RIDER` only) | **Done** — `/auth/delivery/login` with `X-Client: delivery`; wrong roles refused |
 | Deliveries list and one delivery | **Done** — delivered already assigned (the least-busy rider gets it, docs/11 §11a; the brand admin can reassign on the web), picked up / out for delivery, six-digit code, failed attempt |
-| Door payment | **Done** — cash, bank transfer, wallet, card machine; camera photo + reference for non-cash |
+| Door payment | **Done** — cash completes at once; bank transfer, wallet or card machine with camera photo + reference waits for the brand's check |
 | Cash held | **Done** — collected and not yet handed to the brand |
 | Alerts | **Done** — the rider's notifications |
 | Location sharing | **Done, opt-in, foreground only** — last seen while an order is out for delivery |
@@ -106,9 +106,11 @@ enforce them.
 5. **Proof photos stay private.** The upload folder is built by the server from
    the brand and delivery; the rider cannot choose a path. The rider sees only
    the proof's status, never a signed link.
-6. **A non-cash door payment is unverified money.** It is `PAID` with
-   `collection.verification: SUBMITTED`, never sets `collectedBy`, and is absent
-   from the rider's cash balance until the brand decides it.
+6. **A non-cash door payment is unverified money.** The delivery stays
+   `OUT_FOR_DELIVERY` (`pendingCompletion`) and the payment stays `PENDING` until
+   the brand verifies it, which completes the delivery; a refusal sends the rider
+   back to collect. It never sets `collectedBy`, so it is absent from the rider's
+   cash balance.
 7. Location is shared **only** while the rider switches it on and only while an
    order is out for delivery. Only the latest position is stored. The rider can
    switch it off at any time in Account.
@@ -158,6 +160,16 @@ The customer can refuse part or all of an order at the door. The rider records i
 * **Photo (optional)** — a refused line can carry one camera photo, uploaded first through `POST /rider/deliveries/:id/return-upload`, which returns a signature for that delivery's own private `returns/` folder. The path is built by the server and the photo is camera-only, like the door-payment proof; the rider can retake it or retry a failed upload, and the delivery cannot complete while an upload is in flight.
 * **Completion** — sends `{ code, collection?, lines: [{ itemId, acceptedQty, rejectedQty, reason?, photo? }] }`. The server checks counts against the order and recomputes every amount; a refused payload answers `INVALID_RETURN_QUANTITY` / `INVALID_RETURN_REASON` and the screen explains it in the rider's words. If every line is refused the order and delivery become `RETURNED` and no cash is collected; a prepaid order is refunded. Fully accepted deliveries send no `lines` and behave exactly as before.
 * **Afterwards** — refused goods appear in the Staff app's returned-goods inbox (`20-partner-app.md` §5.11), and the rider's cash view only ever counts the accepted total (`netTotal`), never the original order total.
+
+### 6.2 Non-cash payment waits for the brand (docs/10 §31)
+
+Cash completes the delivery at the door. Choosing **Bank transfer**, **Wallet** or
+**Card machine** sends the photo and reference and stops there: the screen says
+**Payment waiting for verification**, the delivery stays out for delivery, and the
+code is not asked again. When the brand verifies the payment the server completes
+the delivery; if it refuses, the rider's screen re-opens the payment step
+(`POST /rider/deliveries/:id/payment`) so the rider can collect again — cash finishes
+the delivery, another non-cash method waits for a fresh check.
 
 ## 7. Tests
 
@@ -224,3 +236,7 @@ Server: `routes/riderDelivery.routes.js`, `controllers/riderDelivery.controller.
 * **2026-11 Phase 5 (marketplace v2):** app created from the rider half of the
   old Partner app; three-way sign-in; rider location and push moved here; Staff
   app reduced to records and picker roles; server, tests and docs updated.
+* **2026-11 Door payment gated on verification:** a non-cash answer now leaves the
+  delivery out for delivery ("Payment waiting for verification") until the brand
+  verifies it; a refusal re-opens the payment step to collect again, and cash still
+  completes at once.

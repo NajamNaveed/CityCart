@@ -60,7 +60,8 @@ function DuplicatePill() {
 }
 
 // Non-cash payments taken at the door wait here until someone checks the brand's
-// statement against the photo and the reference (docs/21 §I.3).
+// statement against the photo and the reference (docs/21 §I.3). A payment that
+// is still holding a delivery open says so: verifying completes the delivery.
 function Proofs({ segments }) {
   const router = useRouter()
   const list = usePagedList('records-proofs', (page) => fetchProofQueue('SUBMITTED', page))
@@ -90,12 +91,12 @@ function Proofs({ segments }) {
       empty={{
         icon: 'check-circle',
         title: 'Nothing to verify',
-        message: 'Non-cash payments taken at the door wait here until the money is checked.',
+        message: 'Non-cash payments taken at the door wait here. The delivery completes when the payment is verified.',
       }}
       renderItem={({ item }) => (
         <ListRow
           title={item.orderNumber || 'Payment'}
-          subtitle={`${formatPaymentMethod(item.method, item.wallet)}, ${item.reference}`}
+          subtitle={`${formatPaymentMethod(item.method, item.wallet)}, ${item.reference}${item.deliveryPending ? ' · delivery waiting' : ''}`}
           right={formatPrice(item.amount)}
           rightSub={formatDateTime(item.submittedAt)}
           pill={item.duplicateReference || item.duplicateProof ? <DuplicatePill /> : null}

@@ -1761,10 +1761,12 @@ total, at `GET /rider/deliveries/cash` (`{ cash: { count, total } }`). See
 ## Door Payment Proofs
 
 How the customer actually paid at the door (`10-payment-system.md` §31). A non-cash
-collection is `PAID` but unverified until the brand checks its statement.
+collection is held unverified: the payment stays `PENDING` and the delivery stays
+`OUT_FOR_DELIVERY` until the brand verifies it, which completes the delivery.
 
 ```text
 POST  /api/v1/rider/deliveries/:id/proof-upload      rider, own delivery out for delivery
+POST  /api/v1/rider/deliveries/:id/payment           rider, own delivery with a refused payment
 GET   /api/v1/payments/proofs?status=&page=&limit=   brand payments.view / platform admin.payments
 GET   /api/v1/payments/:id/proof                     brand payments.view: details + signed link
 PATCH /api/v1/payments/:id/proof                     brand payments.manage: { verification, note? }
@@ -1786,13 +1788,20 @@ a signed link valid for about 5 minutes.
 
 The decision body is `{ "verification": "VERIFIED" | "REJECTED", "note": "..." }`.
 `note` is required with `REJECTED` (1 to 300 characters), optional with `VERIFIED`.
-It answers `{ proof: { paymentId, verification, verifiedAt, note } }`. Every query is
-pinned to the caller's brand; another brand's payment is `404`. See
-`10-payment-system.md` §31.3 for the owner notification and the no-automatic-money rule.
+It answers `{ proof: { paymentId, verification, verifiedAt, note } }`. Verifying marks
+the payment `PAID` and completes the delivery in the same transaction; rejecting
+leaves both untouched and notifies the rider and the brand owner. Every query is
+pinned to the caller's brand; another brand's payment is `404`.
+
+`POST /rider/deliveries/:id/payment` is the collect-again call after a refusal. It
+takes the same `collection` body as the complete call (no delivery code): cash
+completes the delivery, another non-cash method waits for a fresh decision. Answers
+the same delivery view as the rider's detail. See `10-payment-system.md` §31.3.
 
 Errors: `503 PROOF_NOT_CONFIGURED`, `404 PROOF_NOT_FOUND` (no photo, or deleted),
 `409 PROOF_NOT_ALLOWED` (not out for delivery), `422 PROOF_NOT_YOURS`,
-`409 PAYMENT_PREPAID`, `409 PAYMENT_ALREADY_COLLECTED`, `409 PROOF_ALREADY_DECIDED`.
+`409 PAYMENT_PREPAID`, `409 PAYMENT_ALREADY_COLLECTED`, `409 PROOF_ALREADY_DECIDED`,
+`409 PAYMENT_VERIFICATION_PENDING` (a move while a proof waits), `409 NO_REFUSED_PAYMENT`.
 
 ---
 
@@ -1893,6 +1902,10 @@ Access must be restricted to:
 * The customer who owns the related order, or
 * Super Admin.
 
+The customer's view never carries the rider's internals or `pendingCompletion`; it
+exposes only `paymentPending: true` while a non-cash door payment waits for the brand
+(`10-payment-system.md` §31.3), and `false` before submission or after a refusal.
+
 ---
 
 ## Update Delivery Status
@@ -1984,6 +1997,7 @@ PATCH /rider/deliveries/:id/status      { status: PICKED_UP|IN_TRANSIT|OUT_FOR_D
 POST  /rider/deliveries/:id/proof-upload   signed upload for a door payment photo (docs/10 §31)
 POST  /rider/deliveries/:id/return-upload  signed upload for a refused item's photo (docs/22 §F)
 POST  /rider/deliveries/:id/complete    { code, collection?, lines? }  six digits
+POST  /rider/deliveries/:id/payment     { collection }  collect again after a refused proof
 ```
 
 `lines` is the per-item answer at the door (docs/22 §F). Send one entry per order
@@ -2014,16 +2028,19 @@ must have been uploaded with `return-upload` into this delivery's folder.
 ```
 
 It is optional; omitting it (or `method: "CASH"`) is cash. Cash must not carry
-`wallet`, `reference` or `proof` (`400`). Every non-cash method requires `wallet`
-for `WALLET`, a `reference` and a `proof`. A prepaid order refuses any collection
-(`409 PAYMENT_PREPAID`); a non-cash collection that arrives after the payment was
-already collected aborts the completion (`409 PAYMENT_ALREADY_COLLECTED`).
+`wallet`, `reference` or `proof` (`400`) and completes the delivery immediately. Every
+non-cash method requires `wallet` for `WALLET`, a `reference` and a `proof`; the call
+then answers `200` with the delivery still `OUT_FOR_DELIVERY` and `paymentPending:
+true` until the brand verifies the payment (`10-payment-system.md` §31.3). A prepaid
+order refuses any collection (`409 PAYMENT_PREPAID`); a non-cash collection that
+arrives after the payment was already collected aborts the completion
+(`409 PAYMENT_ALREADY_COLLECTED`).
 
 A rider's delivery view contains: order number, status, address (only while the
 delivery is open), the customer's checkout pin as `deliveryLocation`
 (`{ latitude, longitude }`, or `null` once closed), item names and quantities,
-`paymentMethod`, `amountToCollect`, `cashCollected`, and (for a non-cash door
-payment) `proofStatus`
+`paymentMethod`, `amountToCollect`, `cashCollected`, `paymentPending`,
+`paymentRejected`, and (for a non-cash door payment) `proofStatus`
 (`SUBMITTED`/`VERIFIED`/`REJECTED`) — never the reference or the photo. Never the
 customer account, brand, prices or the code. `complete`
 errors: `422 INVALID_CODE` (with `attemptsRemaining`), `429 CODE_LOCKED`,

@@ -35,9 +35,19 @@ export default function DeliveryCard({ delivery, onPress }) {
           <AppText variant="strong" style={{ color: colors.pine }}>
             Collect {formatPrice(cash.amount)}
           </AppText>
+        ) : cash.kind === 'rejected' ? (
+          <AppText variant="strong" style={{ color: colors.danger }}>
+            {cash.amount > 0 ? `Collect ${formatPrice(cash.amount)} again` : 'Collect again'}
+          </AppText>
         ) : (
           <AppText variant="small">
-            {cash.kind === 'collected' ? 'Cash collected' : cash.kind === 'proof' ? 'Paid at the door' : 'Paid online'}
+            {cash.kind === 'collected'
+              ? 'Cash collected'
+              : cash.kind === 'proof'
+                ? 'Paid at the door'
+                : cash.kind === 'pending'
+                  ? 'Payment being verified'
+                  : 'Paid online'}
           </AppText>
         )}
         <AppText variant="small">{timeAgo(delivery.assignedAt || delivery.updatedAt)}</AppText>

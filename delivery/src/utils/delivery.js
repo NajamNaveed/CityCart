@@ -71,6 +71,11 @@ export function cashSummary(delivery) {
   if (!delivery) return { kind: 'none' }
   // Everything came back: nothing was collected and nothing is owed.
   if (delivery.fulfilment === 'NONE') return { kind: 'none' }
+  // The rider sent a non-cash payment; the delivery stays out until the brand
+  // checks it (docs/10 §31).
+  if (delivery.paymentPending) return { kind: 'pending' }
+  // The brand refused it: collect the same amount again.
+  if (delivery.paymentRejected) return { kind: 'rejected', amount: delivery.amountToCollect }
   if (delivery.amountToCollect > 0) return { kind: 'collect', amount: delivery.amountToCollect }
   if (delivery.cashCollected) return { kind: 'collected' }
   // A non-cash payment at the door: no cash, and the rider only sees whether the
@@ -127,6 +132,9 @@ export function proofErrorMessage(err) {
   if (data?.code === 'PROOF_NOT_YOURS') return 'That photo does not belong to this delivery. Take it again.'
   if (data?.code === 'PAYMENT_PREPAID') return 'This order was already paid. There is nothing to collect.'
   if (data?.code === 'PAYMENT_ALREADY_COLLECTED') return 'This payment was already collected.'
+  if (data?.code === 'PAYMENT_VERIFICATION_PENDING') return 'The brand is still checking this payment. You cannot complete the delivery until it is verified.'
+  if (data?.code === 'NO_REFUSED_PAYMENT') return 'There is no refused payment on this delivery.'
+  if (data?.code === 'DELIVERY_CHANGED' || data?.code === 'PAYMENT_CHANGED') return 'Another change happened first. Reload this delivery and try again.'
   return getErrorMessage(err)
 }
 

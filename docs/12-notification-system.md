@@ -92,6 +92,7 @@ OUT_OF_STOCK
 
 PAYMENT_RECEIVED
 PAYMENT_FAILED
+PAYMENT_PROOF_SUBMITTED
 PAYMENT_PROOF_REJECTED
 REFUND_ISSUED
 
@@ -149,17 +150,22 @@ The customer answered the proposed change.
 
 The proposed change expired without an answer.
 
-A payment proof at the door was rejected and needs a decision.
+A payment proof at the door needs checking.
+
+A payment proof at the door was rejected and the rider must collect again.
 
 New review received.
 ```
 
-**Payment at the door (added October 2026).** When a COD payment is collected, the
-customer gets `PAYMENT_RECEIVED`; for a non-cash payment the message says the brand
-will verify it. A rejection sends `PAYMENT_PROOF_REJECTED` only to the brand's owners
-(`BRAND_ADMIN`, active), with the order number, amount, payment id and the reason.
-Nothing is sent to the customer about verification or rejection (`10-payment-system.md`
-§31.3). See `21-next-features-plan.md` §I.
+**Payment at the door (added October 2026).** When the rider sends a non-cash payment,
+`PAYMENT_PROOF_SUBMITTED` goes to the brand's staff with `payments.view` or
+`payments.manage` (the records keepers), with the order number, amount, method and
+payment id; verification completes the delivery. `PAYMENT_RECEIVED` is sent when the
+payment actually becomes `PAID` (cash at the door, or a verified non-cash payment). A
+rejection sends `PAYMENT_PROOF_REJECTED` (with the reason) to the assigned rider
+("collect again") and to the brand's owners (`BRAND_ADMIN`, active), so both sides act.
+Nothing is sent to the customer about verification or rejection
+(`10-payment-system.md` §31.3). See `21-next-features-plan.md` §I.
 
 Brand users should only receive information relevant to their brand and permissions.
 

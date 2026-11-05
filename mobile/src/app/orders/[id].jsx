@@ -261,6 +261,15 @@ function OrderView({ data, refreshing, onRefresh, onChanged }) {
         <RiderLocationCard deliveryId={delivery._id} destination={latLngOfGeoPoint(order.deliveryLocation)} />
       ) : null}
 
+      {delivery?.paymentPending ? (
+        <Card style={{ gap: spacing.xs }}>
+          <AppText variant="strong">Payment being checked</AppText>
+          <AppText variant="small">
+            You paid the rider. The brand is checking the payment; your order is complete as soon as it is confirmed.
+          </AppText>
+        </Card>
+      ) : null}
+
       {showCode ? <DeliveryCode deliveryId={delivery._id} /> : null}
 
       <Section title="Items">
@@ -308,7 +317,9 @@ function OrderView({ data, refreshing, onRefresh, onChanged }) {
           <AppText variant="small" style={{ fontSize: 12 }}>
             {payment?.status === 'PAID'
               ? isOnline(order) ? 'Paid online.' : 'Paid in cash on delivery.'
-              : isOnline(order) ? 'To be paid online.' : 'Pay in cash when your order arrives.'}
+              : delivery?.paymentPending
+                ? 'Paid to the rider; the brand is checking the payment.'
+                : isOnline(order) ? 'To be paid online.' : 'Pay in cash when your order arrives.'}
           </AppText>
           {returnDoc?.refundAmount > 0 ? (
             <AppText variant="small" style={{ fontSize: 12 }}>

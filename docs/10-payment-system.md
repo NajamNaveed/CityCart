@@ -482,7 +482,8 @@ Payment received
 Payment failed
 Refund issued
 Refund partially issued
-Payment proof rejected (brand owner; §31.3)
+Payment proof submitted (records keepers; §31.3)
+Payment proof rejected (rider: collect again; brand owner; §31.3)
 ```
 
 Notifications are handled by the notification system.
@@ -805,14 +806,18 @@ private photo of the confirmation or the card machine's slip.
 
 ## 31.1 What is recorded
 
-`Payment.collection` is written inside the same transaction that marks the COD payment
-`PAID` (delivery completion). It is never supplied from a browser.
+`Payment.collection` records the door answer. For cash it is written inside the
+transaction that marks the COD payment `PAID` and completes the delivery. For a
+non-cash payment it is written **when the rider submits it**, while the payment is
+still `PENDING` and the delivery is still `OUT_FOR_DELIVERY`; it is never supplied
+from a browser.
 
 ```text
 method          CASH | BANK_TRANSFER | WALLET | CARD_MACHINE
 wallet          WALLET only: JAZZCASH | EASYPAISA | OTHER
 reference       the transaction id or the card machine's approval code (never a card number)
 proof           { publicId, fingerprint }  private Cloudinary asset (non-cash only)
+submittedAt     when the rider sent this attempt
 verification    SUBMITTED | VERIFIED | REJECTED
 verifiedBy      the team member who decided
 verifiedAt      when
@@ -821,20 +826,37 @@ duplicateReference / duplicateProof   flags for the verifier
 proofDeletedAt  set when the retention job removed the photo
 ```
 
-A non-cash collection also changes the payment's own `method` (`BANK_TRANSFER`,
-`WALLET` or `CARD`) so reports and receipts say how it was paid. Cash keeps `COD`.
-**A non-cash payment is `PAID` immediately but unverified.** It never sets
-`collectedBy`, so it is absent from the rider's cash balance and from every hand-over
-list (§11a).
+A non-cash collection also sets the payment's own `method` (`BANK_TRANSFER`,
+`WALLET` or `CARD_MACHINE`) so reports and receipts say how it was paid. Cash keeps
+`COD`. **A non-cash payment is not `PAID` yet** (§31.3). It never sets `collectedBy`,
+so it is absent from the rider's cash balance and from every hand-over list (§11a).
+
+The delivery holds the rider's door answer in `Delivery.pendingCompletion`
+(never selected on ordinary reads):
+
+```text
+paymentId       the attempt waiting for a decision
+lines           the accepted/rejected lines the rider sent
+netTotal        the amount the customer actually paid
+submittedBy / submittedAt   the rider and when
+rejectedAt      set when the brand refused; cleared by a new attempt
+```
+
+A refused attempt is moved into the payment's private `collectionHistory` (same
+shape as `collection`) before the rider's next attempt overwrites `collection`, so
+the brand keeps the audit trail. Nothing about the customer's money moves on a
+refusal.
 
 ## 31.2 What the rider does
 
-The rider enters the customer's delivery code, then chooses **Cash**, **Bank transfer**,
-**Wallet** (JazzCash, Easypaisa, Other) or **Card machine**:
+The rider enters the customer's delivery code, answers the per-line accept/reject
+step, then chooses **Cash**, **Bank transfer**, **Wallet** (JazzCash, Easypaisa,
+Other) or **Card machine**:
 
 ```text
-CASH           no reference, no photo
-non-cash       a camera photo and a reference are both required (3 to 100 characters)
+CASH           no reference, no photo; the delivery completes immediately
+non-cash       a camera photo and a reference are both required (3 to 100 characters);
+               the delivery stays OUT_FOR_DELIVERY until the brand verifies it
 prepaid order  no choice at all; sending a collection is 409 PAYMENT_PREPAID
 ```
 
@@ -847,8 +869,15 @@ upload request requires the delivery to be `OUT_FOR_DELIVERY` (`409 PROOF_NOT_AL
 Without Cloudinary configured the answer is `503 PROOF_NOT_CONFIGURED` and the apps
 offer cash only.
 
+After a non-cash submission the rider's screen says **"Payment waiting for
+verification"**: the delivery is not theirs to finish any more, and the code is not
+asked again. If the brand refuses it, the rider is notified and collects again from
+the same delivery screen (`POST /rider/deliveries/:id/payment`, §31.3): cash
+completes immediately; another non-cash method is held for a fresh check.
+
 A brand user completing a delivery from the dashboard has no collection step and is
-recorded as cash, exactly as before.
+recorded as cash, exactly as before. While a non-cash payment is waiting, the brand
+dashboard cannot move the delivery either (`409 PAYMENT_VERIFICATION_PENDING`).
 
 ## 31.3 Verification (the brand's control)
 
@@ -856,15 +885,34 @@ A photo can be faked, so the money is not trusted until the brand matches it aga
 its own bank, wallet or card-machine statement:
 
 ```text
-SUBMITTED  -> VERIFIED   (payments.manage)  records verifiedBy/verifiedAt
-SUBMITTED  -> REJECTED   (payments.manage)  a reason is required; the brand owner is flagged
+SUBMITTED  -> VERIFIED   (payments.manage)  records verifiedBy/verifiedAt and, in the
+                                            same transaction, marks the payment PAID
+                                            and the delivery DELIVERED (Return + receipt
+                                            behave exactly like a cash completion)
+SUBMITTED  -> REJECTED   (payments.manage)  a reason is required; the delivery stays
+                                            OUT_FOR_DELIVERY, the payment stays PENDING,
+                                            the rider and the brand owner are notified
 VERIFIED / REJECTED -> anything else        409 PROOF_ALREADY_DECIDED, nothing changes
 ```
 
+Verification is therefore the **only** thing that completes a non-cash delivery; the
+customer stays "out for delivery" (with a "payment is being checked" note) until then.
 The decision is one conditional update, so two people cannot decide the same proof.
-A rejection notifies the brand's owners (`PAYMENT_PROOF_REJECTED`, `12-notification-system.md`).
-**No money moves automatically:** collecting again or writing it off is the brand's
-decision. The customer is not told whether the brand verified the photo.
+
+A rejection notifies the rider (`PAYMENT_PROOF_REJECTED`, "collect again") and the
+brand's owners (`12-notification-system.md`). The rider then collects from the
+delivery screen, with no new code attempt (`POST /rider/deliveries/:id/payment`):
+
+```text
+cash        the shared completion archives the refused attempt into collectionHistory,
+            collects the same amount for the same accepted lines and completes
+non-cash    a fresh attempt (photo + reference) replaces `collection`, clears the
+            refusal and waits for a new decision
+```
+
+**No money moves on the refusal itself**, and the customer is never told whether the
+brand verified the photo. Cancelling a delivery at `OUT_FOR_DELIVERY` from the brand
+dashboard is still not offered (existing limitation); the refusal path is the rider's.
 
 ## 31.4 Privacy, links and retention
 
@@ -886,9 +934,12 @@ decision. The customer is not told whether the brand verified the photo.
 
 ## 31.5 Receipts
 
-The receipt snapshots `collectionMethod`, `collectionWallet` and `collectionReference`
-(§28). The customer only ever sees how it was paid; the brand's view also sees the
-reference and the live verification state. No photo is ever shown to the customer.
+A non-cash receipt is created when the brand verifies the payment (cash still gets
+its receipt on completion). The receipt snapshots `collectionMethod`,
+`collectionWallet` and `collectionReference` (§28). The customer only ever sees how
+it was paid; the brand's view also sees the reference and the live verification
+state. No photo is ever shown to the customer, and a refused attempt never produces
+a receipt.
 
 ## 31.6 API and errors
 
@@ -902,7 +953,14 @@ Endpoints and request bodies are in `05-api-specification.md` §22. New error co
 409 PAYMENT_PREPAID            a collection was sent for an order paid up front
 409 PAYMENT_ALREADY_COLLECTED  a non-cash collection arrived after the payment was already collected
 409 PROOF_ALREADY_DECIDED      someone already verified/rejected this proof (with `verification`)
+409 PAYMENT_VERIFICATION_PENDING  a new answer (or a dashboard move) while a proof is waiting
+409 NO_REFUSED_PAYMENT         collecting again on a delivery whose payment was not refused
+409 PAYMENT_CHANGED / DELIVERY_CHANGED   another request changed the row; reload and retry
 ```
+
+The rider's collect-again endpoint is `POST /rider/deliveries/:id/payment`
+(no delivery code; body: the same `collection` object as the complete call); it is
+in `05-api-specification.md` §22.
 
 ## 31.7 Configuration
 
@@ -915,15 +973,21 @@ PAYMENT_PROOF_RETENTION_DAYS=90     days after the decision before the photo is 
 ## 31.8 Tests
 
 ```text
-server/tests/paymentProofs.test.js   queue scoping, signed link, decisions, duplicates, retention
-server/tests/riderDeliveries.test.js upload only for an own out-for-delivery, complete with collection,
-                                     prepaid/refusal, cash balance excludes non-cash
+server/tests/paymentProofs.test.js   queue scoping, signed link, decisions, duplicates, retention,
+                                     verification completing the delivery and a refusal leaving it open
+server/tests/riderDeliveries.test.js upload only for an own out-for-delivery, non-cash held for checking,
+                                     prepaid/refusal, collect-again (cash completes, non-cash re-stages),
+                                     another delivery's photo refused, cash balance excludes non-cash
+server/tests/deliveries.test.js      the customer sees "payment being checked" but not after a refusal;
+                                     the dashboard cannot move a delivery whose payment is waiting
 server/tests/receipts.test.js        method/wallet/reference snapshot; brand sees live state, customer does not
-server/tests/seedDemo.test.js        demo door payments in all three states, deleted photo, owner flag
+server/tests/seedDemo.test.js        demo door payments waiting/refused/verified, history, deleted photo, owner flag
 partner/__tests__/                   rider method/camera/reference screens, the "To verify" queue and detail,
                                      verify/reject flows; service request shapes; receipt check row
-mobile/__tests__/shopping-screens.test.js   the customer's receipt says how it was paid
+mobile/__tests__/shopping-screens.test.js   the customer's order page shows the verification wait
 ```
 
-Demo data (`npm run seed:demo`) includes verified, submitted, rejected and
-already-deleted proofs, a duplicate pair and a `PAYMENT_PROOF_REJECTED` notification.
+Demo data (`npm run seed:demo`) includes verified, submitted and refused proofs, a
+payment refused and waiting for the rider to collect again, an older attempt in
+`collectionHistory`, a duplicate pair and `PAYMENT_PROOF_SUBMITTED` /
+`PAYMENT_PROOF_REJECTED` notifications.

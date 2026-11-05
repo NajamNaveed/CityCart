@@ -995,11 +995,18 @@ deliveryCode
 codeAttempts
 failureReason
 returnId
+pendingCompletion
 createdAt
 updatedAt
 ```
 
 `riderId` is a `User` (role `RIDER`) of the same brand; `assignedAgent` keeps the display name (set to the rider's name on assignment). `deliveryCode` is the six-digit proof-of-delivery code (`select: false`, shown only to the customer); `codeAttempts` counts wrong tries. Index `{ riderId, status }` serves the rider's own list (run `npm run sync-indexes` where auto-indexing is off). See `11-delivery-system.md` §12 and §19, and `20-partner-app.md`.
+
+`pendingCompletion` (`select: false`, added October 2026) holds a rider's non-cash
+door answer until the brand verifies the payment (`10-payment-system.md` §31): the
+accepted/rejected `lines`, the `netTotal`, the `paymentId`, `submittedBy`,
+`submittedAt`, and `rejectedAt` once the brand refuses. While it is present the
+delivery stays `OUT_FOR_DELIVERY`; verification completes it and clears the field.
 
 `address` is a snapshot, captured the same way as `Order.shippingAddress`, so a later profile change never alters an existing delivery record.
 
@@ -1111,6 +1118,7 @@ collectedAt
 settledAt
 settledBy
 collection           how the customer paid at the door (docs/10 §31)
+collectionHistory    refused attempts, kept for the audit trail (`select: false`)
 refundedAmount
 refunds
 createdAt
@@ -1119,14 +1127,16 @@ updatedAt
 
 `brandId`, `collectedBy`, `collectedAt`, `settledAt` and `settledBy` record who holds cash-on-delivery money and when it was handed over (`10-payment-system.md` §11a). Index `{ brandId, collectedBy, settledAt }`.
 
-`collection` (added October 2026) is an embedded document written when a COD delivery
-is completed:
+`collection` (added October 2026) is an embedded document written when the rider
+answers the door. Cash writes it in the completion transaction; a non-cash answer
+writes it while the payment is still `PENDING`:
 
 ```text
 method          CASH | BANK_TRANSFER | WALLET | CARD_MACHINE
 wallet          JAZZCASH | EASYPAISA | OTHER (WALLET only)
 reference       transaction id / approval code (never a card number)
 proof           { publicId, fingerprint }  private Cloudinary asset (non-cash only)
+submittedAt     when the rider sent this attempt
 verification    SUBMITTED | VERIFIED | REJECTED
 verifiedBy      User
 verifiedAt
@@ -1135,11 +1145,16 @@ duplicateReference / duplicateProof   booleans
 proofDeletedAt  set when the retention job removed the photo
 ```
 
+`collectionHistory` keeps each refused attempt (same shape) when the rider collects
+again, so nothing the brand saw is overwritten.
+
 A non-cash collection sets the payment's `method` too (`BANK_TRANSFER`, `WALLET` or
-`CARD`), `status: PAID`, and `collection.verification: SUBMITTED`; it never sets
-`collectedBy`. Indexes: `{ brandId, 'collection.verification', paidAt }` for the
-verification queue, `{ brandId, 'collection.reference' }` and
-`{ 'collection.proof.fingerprint' }` for duplicate flags.
+`CARD_MACHINE`) and `collection.verification: SUBMITTED`, but leaves `status:
+PENDING` until the brand verifies it; it never sets `collectedBy`. Verification marks
+the payment `PAID` and completes the delivery in one transaction. Indexes:
+`{ brandId, 'collection.verification', paidAt }` for the verification queue,
+`{ brandId, 'collection.reference' }` and `{ 'collection.proof.fingerprint' }` for
+duplicate flags.
 
 Initial payment method:
 

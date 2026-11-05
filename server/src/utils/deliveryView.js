@@ -7,10 +7,14 @@
 function deliveryForCustomer(delivery) {
   if (!delivery) return delivery;
   const plain = typeof delivery.toObject === 'function' ? delivery.toObject() : { ...delivery };
+  // A refused attempt is no longer being checked: the rider is collecting again.
+  const paymentPending = Boolean(plain.pendingCompletion && !plain.pendingCompletion.rejectedAt);
   delete plain.riderId;
   delete plain.codeAttempts;
   delete plain.deliveryCode;
-  return plain;
+  // The rider's per-line door answer is internal until it is settled.
+  delete plain.pendingCompletion;
+  return { ...plain, paymentPending };
 }
 
 module.exports = { deliveryForCustomer };

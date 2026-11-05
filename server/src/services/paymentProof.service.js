@@ -3,8 +3,10 @@ const Order = require('../models/order.model');
 const Payment = require('../models/payment.model');
 const env = require('../config/env');
 const { ROLES } = require('../config/roles');
+const { runInTransaction } = require('../utils/transaction');
 const { OrderError } = require('./order.service');
-const { notifyBrandOfRejectedProof } = require('./notification.service');
+const { applyDeliveryStatus, dispatchDeliveryEvents } = require('./delivery.service');
+const { notifyBrandOfRejectedProof, notifyRiderOfRejectedProof } = require('./notification.service');
 const {
   UploadError,
   createPaymentProofSignature,
@@ -44,12 +46,15 @@ function proofItem(payment, orderNumber) {
     wallet: payment.collection.wallet || null,
     reference: payment.collection.reference,
     verification: payment.collection.verification,
-    submittedAt: payment.paidAt,
+    // Older payments only have paidAt; new submissions record when they were sent.
+    submittedAt: payment.collection.submittedAt || payment.paidAt || null,
     verifiedAt: payment.collection.verifiedAt || null,
     note: payment.collection.note || null,
     duplicateReference: Boolean(payment.collection.duplicateReference),
     duplicateProof: Boolean(payment.collection.duplicateProof),
     proofAvailable: Boolean(payment.collection.proof && payment.collection.proof.publicId),
+    // The delivery is still out until this decision: verification completes it.
+    deliveryPending: payment.status === 'PENDING',
   };
 }
 
@@ -65,7 +70,8 @@ async function listProofs(user, tenantBrandId, { status = 'SUBMITTED', page, lim
 
   const [items, total] = await Promise.all([
     Payment.find(filter)
-      .sort({ paidAt: 1 })
+      // Oldest first; a submission without one (legacy) counts as the oldest.
+      .sort({ 'collection.submittedAt': 1, paidAt: 1 })
       .skip((pageNumber - 1) * limitNumber)
       .limit(limitNumber),
     Payment.countDocuments(filter),
@@ -104,43 +110,115 @@ async function getProofLink(user, tenantBrandId, paymentId) {
 }
 
 /**
- * Verified or rejected, once. A rejection needs a reason (validator) and raises a
- * flag to the brand owner; nothing about the money changes automatically — what
- * happens next is the brand's decision (docs/21 §I.3).
+ * Verified or rejected, once (docs/10 §31):
+ *  - VERIFIED on a payment that is still PENDING completes the held delivery in
+ *    the same transaction, so the payment flips to PAID, the order is delivered
+ *    and its door return is created exactly once.
+ *  - REJECTED leaves the money and the delivery untouched and tells the rider to
+ *    collect again; it also raises a flag to the brand owner (docs/21 §I.3).
  */
 async function decideProof({ user, tenantBrandId, paymentId, verification, note }) {
   const scope = { _id: paymentId, ...scopeFor(user, tenantBrandId), ...HAS_PROOF };
   const now = new Date();
-  const set = {
-    'collection.verification': verification,
-    'collection.verifiedBy': user._id,
-    'collection.verifiedAt': now,
-  };
-  if (note !== undefined) set['collection.note'] = note;
+  let outcome = null;
 
-  const updated = await Payment.findOneAndUpdate(
-    { ...scope, 'collection.verification': 'SUBMITTED' },
-    { $set: set },
-    { new: true }
-  );
+  const updated = await runInTransaction(async (session) => {
+    const decision = {
+      'collection.verification': verification,
+      'collection.verifiedBy': user._id,
+      'collection.verifiedAt': now,
+    };
+    if (note !== undefined) decision['collection.note'] = note;
 
-  if (!updated) {
-    const existing = await Payment.findOne(scope);
-    if (!existing) {
-      throw new OrderError(404, 'Payment not found.');
+    const saved = await Payment.findOneAndUpdate(
+      { ...scope, 'collection.verification': 'SUBMITTED' },
+      { $set: decision },
+      { new: true, session }
+    );
+
+    if (!saved) {
+      const existing = await Payment.findOne(scope);
+      if (!existing) {
+        throw new OrderError(404, 'Payment not found.');
+      }
+      throw new OrderError(409, 'This payment proof has already been checked.', {
+        code: 'PROOF_ALREADY_DECIDED',
+        verification: existing.collection.verification,
+      });
     }
-    throw new OrderError(409, 'This payment proof has already been checked.', {
-      code: 'PROOF_ALREADY_DECIDED',
-      verification: existing.collection.verification,
+
+    const order = await Order.findById(saved.orderId).session(session);
+    outcome = { order, delivery: null, events: [] };
+
+    if (verification === 'REJECTED') {
+      // Still unpaid and still out for delivery: the rider collects again.
+      if (order) {
+        await Delivery.updateOne(
+          { orderId: order._id, 'pendingCompletion.paymentId': saved._id },
+          { $set: { 'pendingCompletion.rejectedAt': now } },
+          { session }
+        );
+      }
+      return saved;
+    }
+
+    // A payment already PAID belongs to the older flow (or a seed/demo row):
+    // only its check is recorded.
+    if (saved.status !== 'PENDING' || !order) return saved;
+
+    const deliveryQuery = Delivery.findOne({ orderId: order._id, brandId: order.brandId });
+    const delivery =
+      deliveryQuery && typeof deliveryQuery.select === 'function'
+        ? await deliveryQuery.select('+pendingCompletion').session(session)
+        : await deliveryQuery;
+    if (!delivery || !delivery.pendingCompletion) {
+      return saved;
+    }
+    if (String(delivery.pendingCompletion.paymentId) !== String(saved._id)) {
+      return saved;
+    }
+
+    const result = await applyDeliveryStatus({
+      brandId: order.brandId,
+      deliveryId: delivery._id,
+      status: 'DELIVERED',
+      userId: user._id,
+      collection: saved.collection,
+      lines: delivery.pendingCompletion.lines,
+      session,
+      verifiedPayment: { verifiedBy: user._id, verifiedAt: now },
     });
+    outcome = { order, delivery: delivery._id, events: result.events };
+    return saved;
+  });
+
+  if (outcome && outcome.events.length > 0) {
+    await dispatchDeliveryEvents(outcome.events);
   }
 
   if (verification === 'REJECTED') {
-    const order = await Order.findById(updated.orderId).select('orderNumber brandId');
+    const order = outcome.order;
+    let delivery = null;
+    if (order) {
+      const deliveryQuery = Delivery.findOne({ orderId: order._id });
+      delivery =
+        deliveryQuery && typeof deliveryQuery.select === 'function'
+          ? await deliveryQuery.select('riderId')
+          : await deliveryQuery;
+    }
     await notifyBrandOfRejectedProof({
       brandId: order ? order.brandId : updated.brandId,
       orderId: updated.orderId,
       orderNumber: order ? order.orderNumber : '',
+      paymentId: updated._id,
+      amount: updated.amount,
+      note,
+    });
+    await notifyRiderOfRejectedProof({
+      userId: delivery ? delivery.riderId : null,
+      brandId: order ? order.brandId : updated.brandId,
+      orderNumber: order ? order.orderNumber : '',
+      deliveryId: delivery ? delivery._id : null,
       paymentId: updated._id,
       amount: updated.amount,
       note,
@@ -152,20 +230,8 @@ async function decideProof({ user, tenantBrandId, paymentId, verification, note 
     verification: updated.collection.verification,
     verifiedAt: updated.collection.verifiedAt,
     note: updated.collection.note || null,
+    deliveryCompleted: Boolean(outcome && outcome.delivery),
   };
-}
-
-/**
- * Duplicate use of the same reference or the same photo (Cloudinary's etag) on
- * another payment of the brand. Only a flag for the person verifying; never a block.
- */
-async function duplicateFlags({ brandId, paymentId, reference, fingerprint }, session) {
-  const base = { _id: { $ne: paymentId }, brandId };
-  const [sameReference, sameProof] = await Promise.all([
-    reference ? Payment.findOne({ ...base, 'collection.reference': reference }).session(session) : null,
-    fingerprint ? Payment.findOne({ ...base, 'collection.proof.fingerprint': fingerprint }).session(session) : null,
-  ]);
-  return { duplicateReference: Boolean(sameReference), duplicateProof: Boolean(sameProof) };
 }
 
 // The photo path must be inside THIS brand's and THIS delivery's folder, which
@@ -178,13 +244,20 @@ function proofBelongsToDelivery({ brandId, deliveryId, publicId }) {
 
 // Step one of the rider's non-cash flow: a signed upload into the private folder.
 async function createProofUpload({ brandId, riderId, deliveryId }) {
-  const delivery = await Delivery.findOne({ _id: deliveryId, brandId, riderId });
+  const query = Delivery.findOne({ _id: deliveryId, brandId, riderId });
+  const delivery = query && typeof query.select === 'function' ? await query.select('+pendingCompletion') : await query;
   if (!delivery) {
     throw new OrderError(404, 'Delivery not found.');
   }
   if (delivery.status !== 'OUT_FOR_DELIVERY') {
     throw new OrderError(409, 'A payment photo can only be taken while the delivery is out for delivery.', {
       code: 'PROOF_NOT_ALLOWED',
+    });
+  }
+  // While the brand is checking a payment, a new proof has no place to go.
+  if (delivery.pendingCompletion && !delivery.pendingCompletion.rejectedAt) {
+    throw new OrderError(409, 'This delivery is waiting for its payment to be verified.', {
+      code: 'PAYMENT_VERIFICATION_PENDING',
     });
   }
   try {
@@ -210,27 +283,73 @@ async function purgeVerifiedProofs({
 
   const cutoff = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000);
   const payments = await Payment.find({
-    'collection.verification': { $in: ['VERIFIED', 'REJECTED'] },
-    'collection.verifiedAt': { $lte: cutoff },
-    ...HAS_PROOF,
-  }).limit(limit);
+    $or: [
+      {
+        'collection.verification': { $in: ['VERIFIED', 'REJECTED'] },
+        'collection.verifiedAt': { $lte: cutoff },
+        ...HAS_PROOF,
+      },
+      // Attempts the rider replaced after a refusal keep their own decision date.
+      {
+        collectionHistory: {
+          $elemMatch: {
+            verification: { $in: ['VERIFIED', 'REJECTED'] },
+            verifiedAt: { $lte: cutoff },
+            'proof.publicId': { $exists: true, $ne: '' },
+          },
+        },
+      },
+    ],
+  })
+    .select('+collectionHistory')
+    .limit(limit);
 
   let deleted = 0;
   for (const payment of payments) {
-    const publicId = payment.collection && payment.collection.proof && payment.collection.proof.publicId;
-    if (!publicId) continue;
-    let removed = false;
-    try {
-      removed = await destroy(publicId, { config });
-    } catch (err) {
-      console.error(`[payments] could not delete a proof photo: ${err.message}`);
+    const current = payment.collection && payment.collection.proof && payment.collection.proof.publicId;
+    // Only a photo whose own decision is past the cutoff may go: a row can match
+    // through an old archived attempt while its live attempt is still new.
+    const currentDue =
+      current &&
+      ['VERIFIED', 'REJECTED'].includes(payment.collection.verification) &&
+      payment.collection.verifiedAt &&
+      new Date(payment.collection.verifiedAt) <= cutoff;
+    const archived = (payment.collectionHistory || [])
+      .filter(
+        (entry) =>
+          entry.proof &&
+          entry.proof.publicId &&
+          ['VERIFIED', 'REJECTED'].includes(entry.verification) &&
+          entry.verifiedAt &&
+          new Date(entry.verifiedAt) <= cutoff
+      )
+      .map((entry) => entry.proof.publicId);
+    const publicIds = [...new Set([...(currentDue ? [current] : []), ...archived])];
+
+    for (const publicId of publicIds) {
+      let removed = false;
+      try {
+        removed = await destroy(publicId, { config });
+      } catch (err) {
+        console.error(`[payments] could not delete a proof photo: ${err.message}`);
+      }
+      if (!removed) continue;
+      await Payment.updateOne(
+        { _id: payment._id, 'collection.proof.publicId': publicId },
+        { $unset: { 'collection.proof': '' }, $set: { 'collection.proofDeletedAt': now } }
+      );
+      // A superseded attempt (a refused proof the rider replaced) is purged too,
+      // so audit history never keeps the photo longer than the live one.
+      await Payment.updateOne(
+        { _id: payment._id, 'collectionHistory.proof.publicId': publicId },
+        {
+          $unset: { 'collectionHistory.$[entry].proof': '' },
+          $set: { 'collectionHistory.$[entry].proofDeletedAt': now },
+        },
+        { arrayFilters: [{ 'entry.proof.publicId': publicId }] }
+      );
+      deleted += 1;
     }
-    if (!removed) continue;
-    await Payment.updateOne(
-      { _id: payment._id, 'collection.proof.publicId': publicId },
-      { $unset: { 'collection.proof': '' }, $set: { 'collection.proofDeletedAt': now } }
-    );
-    deleted += 1;
   }
   return deleted;
 }
@@ -239,7 +358,6 @@ module.exports = {
   listProofs,
   getProofLink,
   decideProof,
-  duplicateFlags,
   proofBelongsToDelivery,
   createProofUpload,
   purgeVerifiedProofs,
