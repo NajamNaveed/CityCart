@@ -27,17 +27,30 @@ The backend must enforce all security rules defined in this document. Frontend r
 
 # 2. User Roles
 
-CityCart has seven roles (`RIDER` and `PICKER` were added in October 2026, see `20-partner-app.md`; `ADMIN_PARTNER` is the delegated platform admin described in `21-next-features-plan.md` §G):
+CityCart has eight roles (`RIDER` and `PICKER` were added in October 2026, see `20-partner-app.md`; `ADMIN_PARTNER` is the delegated platform admin described in `21-next-features-plan.md` §G; `SERVICE_PROVIDER` is added in v3, see `24-marketplace-v3-plan.md`):
 
-| Role             | Scope            | Description                                |
-| ---------------- | ---------------- | ------------------------------------------ |
-| `SUPER_ADMIN`    | Platform-wide    | Owns the entire CityCart platform          |
-| `ADMIN_PARTNER`  | Platform-wide    | A delegated admin holding only ticked areas; web dashboard only |
-| `BRAND_ADMIN`    | One brand        | Owns and manages one brand/store           |
-| `BRAND_EMPLOYEE` | One brand        | Performs assigned tasks within a brand     |
-| `RIDER`          | One brand        | Delivers that brand's orders; Delivery app only |
-| `PICKER`         | One brand        | Picks and packs that brand's orders; Staff app only |
-| `CUSTOMER`       | Personal account | Shops and manages their own account/orders |
+| Role               | Scope            | Description                                |
+| ------------------ | ---------------- | ------------------------------------------ |
+| `SUPER_ADMIN`      | Platform-wide    | Owns the entire CityCart platform          |
+| `ADMIN_PARTNER`    | Platform-wide    | A delegated admin holding only ticked areas; web dashboard only |
+| `BRAND_ADMIN`      | One brand        | Owns and manages one brand/store           |
+| `BRAND_EMPLOYEE`   | One or more brands | Performs assigned tasks within a brand    |
+| `RIDER`            | One brand        | Delivers that brand's orders; Delivery app only |
+| `PICKER`           | One brand        | Picks and packs that brand's orders; Staff app only |
+| `SERVICE_PROVIDER` | One provider     | Owns one service-provider account; web dashboard |
+| `CUSTOMER`         | Personal account | Shops and manages their own account/orders |
+
+Every login has one `accountType`:
+
+```text
+CUSTOMER        the shopper account
+BRAND           brand owners, employees, pickers and riders
+SERVICE         service providers
+PLATFORM_ADMIN  super admin and admin partners
+```
+
+One email may hold one account of each type. The same email may also be an
+employee of several brands, with one membership per brand.
 
 ---
 
@@ -48,13 +61,19 @@ SUPER_ADMIN
     │
     ├── Platform Management
     │
-    └── Brand Management
+    ├── Brand Management
+    │       │
+    │       ├── BRAND_ADMIN
+    │       │       │
+    │       │       └── BRAND_EMPLOYEE
+    │       │               (may belong to several brands)
+    │       │
+    │       └── Brand Resources
+    │
+    └── Service Provider Management
             │
-            ├── BRAND_ADMIN
-            │       │
-            │       └── BRAND_EMPLOYEE
-            │
-            └── Brand Resources
+            └── SERVICE_PROVIDER
+                    (one provider, no employees in v3)
 
 CUSTOMER
     │
@@ -108,6 +127,35 @@ Brand
 ```
 
 A request from a brand user must be restricted to that user's brand.
+
+### Active membership
+
+An employee may belong to several brands. Every request runs in exactly one
+active membership, chosen at login (`24-marketplace-v3-plan.md` §3.3). The
+active `brandId` comes from the validated session and the active `Employee`
+record; `User.brandId` is only the home brand and is never used to authorize an
+employee request.
+
+```text
+Authenticated employee
+        ↓
+session.brandId + Employee(userId, brandId, isActive)
+        ↓
+req.tenantBrandId
+        ↓
+resource.brandId must match
+```
+
+### Service-provider tenant
+
+A service provider is a separate tenant (`ServiceProvider`) with its own
+resources, dashboard and billing account. Its `providerId` is derived from the
+authenticated session, never from the request body or query. A provider cannot
+read or change another provider's profile, offerings, bookings, chat, reviews
+or invoices.
+
+A service provider is not a brand and never receives a `brandId`. A customer,
+brand or provider account may share an email but never shares a session.
 
 ### Example
 
@@ -322,7 +370,7 @@ The Super Admin can:
 * Manage platform settings
 * Review brand activity
 * Manage platform-level notifications
-* Manage commissions and payouts when implemented
+* Manage seller billing: invoices, payment claims and freeze overrides (v3; replaces commissions/payouts)
 
 The Super Admin is not restricted to a single brand.
 
@@ -682,9 +730,12 @@ Example:
 ```js
 const product = await Product.findOne({
   _id: productId,
-  brandId: req.user.brandId
+  brandId: req.tenantBrandId
 });
 ```
+
+`req.tenantBrandId` is the active, server-validated brand from the session. It
+is never copied from `req.body`, `req.query` or `req.params`.
 
 The server must not trust:
 
@@ -719,6 +770,11 @@ An employee must not be able to assign permissions to themselves.
 
 An employee must not assign permissions that they are not authorized to manage.
 
+Permissions belong to the **membership**, not to the person. An employee who
+belongs to two brands has two independent permission sets. A permission granted
+in Brand A has no effect in Brand B, and removing the Brand A membership does
+not change the Brand B membership.
+
 ---
 
 # 19. Role Assignment Rules
@@ -745,6 +801,16 @@ Employees cannot promote themselves to:
 BRAND_ADMIN
 SUPER_ADMIN
 ```
+
+An employee may hold memberships in several brands. Adding an existing
+employee's email to another brand attaches a membership; it does not create a
+second `User` and does not copy the first brand's permissions. A person who is
+a `BRAND_ADMIN`, `PICKER` or `RIDER` somewhere else is refused for now with
+`409 ACCOUNT_ROLE_CONFLICT` (docs/24 §3.5).
+
+Removing an employee means removing their membership. The last membership's
+removal or an explicit account purge anonymizes the user and frees the email;
+financial and audit history is never deleted (docs/24 §3.6).
 
 ### Rider
 
@@ -773,6 +839,15 @@ partner, and cannot promote anyone to `SUPER_ADMIN` or `ADMIN_PARTNER`.
 
 Customers cannot change their own role.
 
+### Service Provider
+
+A `SERVICE_PROVIDER` account is created only through the service-provider
+signup on the seller landing. It is a `SERVICE` account type with its own
+`ServiceProvider` tenant, one active block and no employees in v3. The role,
+`providerId` and status are server-controlled; the provider cannot promote
+itself, create another provider, or act on another provider's resources. A
+super admin approves, suspends, terminates or restores a provider.
+
 ---
 
 # 20. Protected Actions
@@ -791,7 +866,7 @@ The following actions require strict authorization:
 * Modifying inventory quantities
 * Cancelling orders administratively
 * Managing platform settings
-* Managing commissions/payouts
+* Managing seller billing, invoices and payment claims
 * Deleting users
 * Deleting products or categories
 
@@ -935,9 +1010,13 @@ coupons.delete
 analytics.export
 
 commissions.view
-payouts.view
-payouts.manage
+
+billing.view
+billing.manage
 ```
+
+`billing.*` are the v3 seller-billing permissions (docs/15). They replace the
+old `payouts.*` idea: the platform is paid by sellers, it does not pay them.
 
 Adding a permission should not require redesigning the entire authorization system.
 
@@ -1041,10 +1120,10 @@ CityCart authorization must follow these principles:
 
 The RBAC implementation is considered complete when:
 
-* [ ] Four primary roles are implemented.
+* [ ] All roles are implemented, including `PICKER`, `RIDER` and `SERVICE_PROVIDER` (v3).
 * [ ] Users have appropriate role and scope information.
-* [ ] Brand users are associated with exactly one brand where required.
-* [ ] Employee permissions are stored and evaluated.
+* [ ] A brand user acts inside one active membership (multi-brand employees choose a workspace).
+* [ ] Employee permissions are stored per membership and evaluated against it.
 * [ ] Backend APIs enforce permissions.
 * [ ] Brand ownership is verified server-side.
 * [ ] Brand A cannot access Brand B's private resources.

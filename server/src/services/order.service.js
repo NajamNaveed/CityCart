@@ -14,8 +14,6 @@ const { pointFromLatLng } = require('../utils/geo');
 const { activeBlocksContaining } = require('./block.service');
 const { createAddress } = require('./address.service');
 const { deliveryForCustomer } = require('../utils/deliveryView');
-const { activeProvider } = require('../payments');
-const env = require('../config/env');
 const { evaluateLine } = require('./cart.service');
 const { deductStock, restockStock, getStockStatus, InventoryError } = require('./inventory.service');
 const { closeActiveAdjustment, listAdjustmentsForOrder } = require('./orderAdjustmentStock.service');
@@ -86,15 +84,6 @@ function toAddressSnapshot(a) {
  * sees an empty cart.
  */
 async function checkout(userId, { shippingAddress, paymentMethod, deliveryLocation, addressId, saveAddress }) {
-  // Paying online is only possible while a payment provider is switched on (docs/10 §29).
-  const online = paymentMethod === 'ONLINE_GATEWAY';
-  if (online && !activeProvider()) {
-    throw new OrderError(400, 'Online payment is not available right now. Please choose cash on delivery.', {
-      code: 'ONLINE_PAYMENTS_UNAVAILABLE',
-    });
-  }
-  // An unpaid online order only holds its stock for a while; then it is cancelled (see onlinePayment.service).
-  const expiresAt = online ? new Date(Date.now() + env.payments.holdMinutes * 60 * 1000) : undefined;
   const address = toAddressSnapshot(shippingAddress);
 
   // Where it goes. The HTTP API always sends a pin; a caller that does not (internal
@@ -278,7 +267,6 @@ async function checkout(userId, { shippingAddress, paymentMethod, deliveryLocati
         currency: CURRENCY,
         method: paymentMethod,
         status: 'PENDING',
-        ...(expiresAt && { expiresAt }),
       })),
       { session, ordered: true }
     );
@@ -440,7 +428,7 @@ async function getOrderForUser(user, orderId) {
 async function cancelMyOrder(userId, orderId) {
   const order = await runInTransaction(async (session) => {
     const order = await Order.findOneAndUpdate(
-      // An order that is already PAID (online) cannot be cancelled here: the money would be stuck.
+      // An order that is already paid cannot be cancelled here: the money would be stuck.
       { _id: orderId, customerId: userId, orderStatus: { $in: CANCELLABLE_BY_CUSTOMER }, paymentStatus: { $ne: 'PAID' } },
       {
         $set: { orderStatus: 'CANCELLED', paymentStatus: 'CANCELLED' },

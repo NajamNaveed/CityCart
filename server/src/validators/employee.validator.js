@@ -36,6 +36,14 @@ const updateEmployeeSchema = z
 
 const updatePermissionsSchema = z.object({ permissions: permissionList });
 
+// ?purge=account anonymizes the account after the last membership; a plain
+// DELETE only removes the membership (docs/24 §3.6).
+const removeEmployeeQuerySchema = z.object({ purge: z.enum(['account']).optional() });
+
+const removeEmployeeSchema = z.object({
+  removalReason: z.string().trim().max(500).optional(),
+});
+
 const listEmployeesQuerySchema = z.object({
   brandId: objectId.optional(), // SUPER_ADMIN filter only
   isActive: z.enum(['true', 'false']).optional().transform((v) => (v === undefined ? undefined : v === 'true')),
@@ -48,4 +56,6 @@ module.exports = {
   updateEmployeeSchema,
   updatePermissionsSchema,
   listEmployeesQuerySchema,
+  removeEmployeeQuerySchema,
+  removeEmployeeSchema,
 };

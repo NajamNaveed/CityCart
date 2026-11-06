@@ -558,9 +558,11 @@ Before release:
 
 Potential future features:
 
-* Online payment gateways.
-* Automated payouts.
-* Commission management.
+* Online payment gateways. **Not planned in v3** — the customer pays the
+  seller at the door and CityCart takes no online payment (docs/24 §1.1).
+* Automated payouts. **Not planned** — the platform is the payee, and sellers
+  are billed monthly (docs/15).
+* Commission management. **Promoted into v3 Phase 3** (docs/15).
 * Coupons.
 * Wishlist.
 * Product variants.
@@ -996,3 +998,54 @@ Phase S  Split the apps (marketplace v2 Phase 5)                             DON
 
 Each phase follows the dependency rule above: no new package without approval.
 Phases A, B, D and E need none; Phase C reuses the shopper app's package list.
+
+---
+
+# Addendum — Marketplace v3 Programme (November 2026)
+
+The full specification and locked decisions are in
+`24-marketplace-v3-plan.md`. This addendum records the order of work.
+
+```text
+Phase 0  Decisions, spec, doc reconciliation, SEO/SSR spike     IN PROGRESS
+Phase 1  Identity and tenant foundation
+         Multi-brand employee memberships, workspace login, deletion and
+         anonymization, email reuse, mock gateway removal, security baseline.
+
+Phase 2a Service-provider account and onboarding
+         SERVICE account type, provider tenant, block + pin, profile, approval.
+
+Phase 2b Service catalogue and discovery
+         Categories, offerings, provider pages, map, search, public pages.
+
+Phase 2c Booking lifecycle
+         Availability, request, chat, proposal, completion, reviews, ranking.
+
+Phase 3  Seller billing
+         1% commission ledger, monthly invoices, freeze ladder, bank details,
+         receipt claims, super-admin verification, help.
+
+Phase 4  Web redesign and SEO
+         Design system, customer site, seller landing, auth, product/service
+         pages, dashboard usability pass, SSR/prerender, accessibility, legal.
+
+Phase 5  Flutter shopper app (Android first)
+Phase 6  Flutter Staff app
+Phase 7  Flutter Delivery app
+Phase 8  Flutter Service Provider app (brand admin may follow later)
+Phase 9  Security audit, penetration test and release hardening
+```
+
+Rules for this programme:
+
+* No phase starts before the previous phase's exit gate in docs/24 passes.
+* Every phase updates the documents it touches and keeps the existing suites
+  green.
+* Security is continuous: Phase 1 establishes the baseline and every later
+  phase adds its authorization and validation tests. Phase 9 is the independent
+  audit, not the first security work.
+* Flutter phases start only after Phase 4 freezes the design system.
+* The React Native apps stay until the matching Flutter app passes its P0
+  device checklist.
+* No customer-facing online payment is added. Sellers are billed monthly; the
+  customer pays the seller at the door.

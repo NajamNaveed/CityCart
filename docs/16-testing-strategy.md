@@ -800,6 +800,22 @@ The testing strategy is implemented successfully when:
 
 ---
 
+## 33a. Marketplace v3 Test Programme (November 2026)
+
+docs/24 §10 sets the minimum coverage for each v3 phase. The invariants that
+apply to every phase:
+
+* Both paths are tested: the allowed path and the refused path.
+* A removed API, model or job also removes its tests; no test is skipped to
+  make a removal pass.
+* Cross-tenant tests cover brand ↔ brand, provider ↔ provider, brand ↔
+  provider, and customer ↔ customer.
+* Money tests use paisa integers and assert the rounding boundary.
+* A security fix ships with a regression test for the attack it closes.
+* The full existing server, client and app suites stay green after each phase.
+
+---
+
 ## 34. Source of Truth
 
 This document defines the authoritative testing strategy for CityCart.

@@ -4,14 +4,14 @@ const app = require('./app');
 const env = require('./config/env');
 const { connectDB, disconnectDB, describeConnectionError } = require('./config/db');
 const { initSockets, closeSockets } = require('./sockets');
-const { startPaymentExpiryJob } = require('./jobs/paymentExpiry');
 const { startAdjustmentExpiryJob } = require('./jobs/adjustmentExpiry');
 const { startPaymentProofRetentionJob } = require('./jobs/paymentProofRetention');
+const { startBrandTerminationCleanupJob } = require('./jobs/brandTerminationCleanup');
 
 let httpServer;
-let stopPaymentExpiryJob;
 let stopAdjustmentExpiryJob;
 let stopPaymentProofRetentionJob;
+let stopBrandTerminationCleanupJob;
 
 /**
  * Startup order matters: the database connection must succeed before the
@@ -39,12 +39,12 @@ async function start() {
   // policy, cookie-authenticated handshakes (see src/sockets/index.js).
   httpServer = http.createServer(app);
   initSockets(httpServer);
-  // Unpaid online orders give their stock back after their hold (docs/10 §29).
-  stopPaymentExpiryJob = startPaymentExpiryJob();
   // Unanswered change proposals expire after 24 hours (docs/21 §H).
   stopAdjustmentExpiryJob = startAdjustmentExpiryJob();
   // Checked payment-proof photos are deleted after their retention window (docs/21 §I.4).
   stopPaymentProofRetentionJob = startPaymentProofRetentionJob();
+  // Terminated brands release their staff emails once access has ended (docs/24 §3.7).
+  stopBrandTerminationCleanupJob = startBrandTerminationCleanupJob();
   httpServer.listen(env.port, () => {
     // eslint-disable-next-line no-console
     console.log(
@@ -69,9 +69,9 @@ async function shutdown(signal) {
   forceExitTimer.unref();
 
   try {
-    if (stopPaymentExpiryJob) stopPaymentExpiryJob();
     if (stopAdjustmentExpiryJob) stopAdjustmentExpiryJob();
     if (stopPaymentProofRetentionJob) stopPaymentProofRetentionJob();
+    if (stopBrandTerminationCleanupJob) stopBrandTerminationCleanupJob();
     if (httpServer) {
       await new Promise((resolve, reject) => {
         httpServer.close((err) => (err ? reject(err) : resolve()));

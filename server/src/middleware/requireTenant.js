@@ -43,6 +43,7 @@ function requireTenant(req, res, next) {
 
   if (req.user.role === ROLES.SUPER_ADMIN || (req.user.role === ROLES.ADMIN_PARTNER && req.adminPartner)) {
     req.tenantBrandId = null;
+    req.tenantType = 'PLATFORM';
     return next();
   }
 
@@ -53,11 +54,14 @@ function requireTenant(req, res, next) {
   ) {
     // Defense-in-depth: the User schema already requires brandId for
     // these roles (see models/user.model.js), but a tenant-scoped route
-    // should never proceed on a missing brandId regardless.
+    // should never proceed on a missing brandId regardless. For an
+    // employee this is the active membership brand set by authenticate,
+    // never the account's home brand (docs/24 §3.4).
     if (!req.user.brandId) {
       return deny('NO_BRAND');
     }
     req.tenantBrandId = req.user.brandId.toString();
+    req.tenantType = 'BRAND';
     return next();
   }
 

@@ -10,7 +10,7 @@ const { COLLECTION_METHODS, COLLECTION_WALLETS, PROOF_VERIFICATIONS } = require(
  * Payment status is tracked independently of order status (§27) — e.g.
  * an order can be DELIVERED while its payment is separately PAID.
  */
-const PAYMENT_METHODS = ['COD', 'CARD', 'BANK_TRANSFER', 'WALLET', 'ONLINE_GATEWAY'];
+const PAYMENT_METHODS = ['COD', 'CARD', 'BANK_TRANSFER', 'WALLET'];
 const PAYMENT_STATUSES = ['PENDING', 'PAID', 'FAILED', 'REFUNDED', 'PARTIALLY_REFUNDED', 'CANCELLED'];
 
 const collectionSchema = new mongoose.Schema(
@@ -96,8 +96,7 @@ const paymentSchema = new mongoose.Schema(
     paidAt: {
       type: Date,
     },
-    // Online payments only: when the stock hold ends. An order still unpaid then is
-    // cancelled and its stock released (docs/10 §29).
+    // Legacy gateway records: kept for existing rows and no longer written.
     expiresAt: {
       type: Date,
     },
@@ -165,7 +164,7 @@ const paymentSchema = new mongoose.Schema(
   }
 );
 
-// Finding the payment a gateway notification is about, and the expiry sweep.
+// Legacy gateway lookups (docs/10 §29). No new records carry these fields.
 paymentSchema.index({ provider: 1, transactionReference: 1 });
 paymentSchema.index({ method: 1, status: 1, expiresAt: 1 });
 

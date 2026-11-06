@@ -1,9 +1,7 @@
 const express = require('express');
 
 const { getForOrder, updateStatus, proofs, proofLink, decide } = require('../controllers/payment.controller');
-const { methods, startCheckout, webhook, mockPage, mockComplete, events } = require('../controllers/onlinePayment.controller');
 const authenticate = require('../middleware/authenticate');
-const requireRole = require('../middleware/requireRole');
 const requirePermission = require('../middleware/requirePermission');
 const requireAdminPermission = require('../middleware/requireAdminPermission');
 const requireTenant = require('../middleware/requireTenant');
@@ -14,25 +12,6 @@ const { PERMISSIONS } = require('../config/permissions');
 const { ADMIN_PERMISSIONS } = require('../config/adminPermissions');
 
 const router = express.Router();
-
-// --- Online payments (docs/10 §29) ---
-// What the customer can pay with.
-router.get('/methods', authenticate, requireRole(ROLES.CUSTOMER), methods);
-
-// The customer starts paying one of their own online orders and is sent to the gateway.
-router.post('/order/:orderId/checkout', paymentWriteLimiter, authenticate, requireRole(ROLES.CUSTOMER), startCheckout);
-
-// The gateway's notification. Not a user request: it is authenticated by its signature over the
-// raw body (see app.js for how the raw body is kept), checked before anything else happens.
-router.post('/webhooks/:provider', webhook);
-
-// The built-in TEST gateway's hosted page. Answers 404 unless the test gateway is on.
-router.get('/mock-checkout/:reference', mockPage);
-router.post('/mock-checkout/:reference/:choice', mockComplete);
-
-// What the gateway told us, including late payments and mismatches that need a
-// human. Super admin, or a partner with admin.payments.
-router.get('/events', authenticate, requireAdminPermission(ADMIN_PERMISSIONS.PAYMENTS), events);
 
 // Read: customer (own order), brand with payments.view (own orders), platform admin.
 router.get(

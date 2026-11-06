@@ -79,6 +79,7 @@ export default function AdminTeam() {
 
   const [editing, setEditing] = useState(null) // { id, permissions, readOnly }
   const [confirmOff, setConfirmOff] = useState(null)
+  const [confirmPurge, setConfirmPurge] = useState(null)
   const [resetting, setResetting] = useState(null)
   const [tempPassword, setTempPassword] = useState('')
 
@@ -166,6 +167,12 @@ export default function AdminTeam() {
         ? 'Partner reactivated. They can sign in again.'
         : 'Partner deactivated. They are signed out and cannot sign in.',
     ).then(() => setConfirmOff(null))
+
+  const purgePartner = (partner) =>
+    run(
+      () => api.delete(`/admin/partners/${partner._id}?purge=account`),
+      'Partner account deleted and the email freed. Their past actions stay in the activity log.',
+    ).then(() => setConfirmPurge(null))
 
   async function onResetPassword(e) {
     e.preventDefault()
@@ -338,14 +345,35 @@ export default function AdminTeam() {
                         </button>
                       )
                     ) : (
-                      <button
-                        type="button"
-                        disabled={busy || atLimit}
-                        onClick={() => setActive(partner, true)}
-                        className="rounded-md border border-pine px-3 py-1.5 text-pine transition hover:bg-pine hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        Reactivate
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          disabled={busy || atLimit}
+                          onClick={() => setActive(partner, true)}
+                          className="rounded-md border border-pine px-3 py-1.5 text-pine transition hover:bg-pine hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          Reactivate
+                        </button>
+                        {confirmPurge === partner._id ? (
+                          <span className="flex items-center gap-2.5 rounded-md bg-danger-soft px-3 py-1.5 font-normal text-danger">
+                            Delete account and free the email?
+                            <button type="button" disabled={busy} onClick={() => purgePartner(partner)} className="font-semibold hover:underline">
+                              Yes
+                            </button>
+                            <button type="button" onClick={() => setConfirmPurge(null)} className="text-muted hover:text-ink">
+                              No
+                            </button>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmPurge(partner._id)}
+                            className="rounded-md border border-danger/40 px-3 py-1.5 text-danger transition hover:border-danger"
+                          >
+                            Delete account
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>

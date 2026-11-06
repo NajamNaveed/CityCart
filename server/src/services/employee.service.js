@@ -1,13 +1,20 @@
 const User = require('../models/user.model');
 const Employee = require('../models/employee.model');
 const Brand = require('../models/brand.model');
+const Order = require('../models/order.model');
 const { hashPassword } = require('../utils/password');
 const { runInTransaction } = require('../utils/transaction');
 const { ROLES } = require('../config/roles');
 const { ALL_PERMISSIONS } = require('../config/permissions');
 const { notifyEmployeeCreated, notifyEmployeePermissionsChanged } = require('./notification.service');
+const { anonymizeUser } = require('./accountAnonymization.service');
+const { revokeUserDelivery } = require('./revocation.service');
 
 const DEFAULT_LIMIT = 20;
+// Orders the picker still has to finish: claiming one moves it to PROCESSING,
+// and packing it moves it out of this set. Historical pickerId values remain on
+// delivered orders and must not block a later removal.
+const PICKER_OPEN_STATUSES = ['CONFIRMED', 'PROCESSING'];
 
 class EmployeeError extends Error {
   constructor(status, message, extra = {}) {
@@ -43,13 +50,32 @@ function assertCanManage(actorPermissions, permissions) {
   }
 }
 
+// A picker holding unfinished work cannot be removed (docs/24 §3.7): the
+// brand must reassign or unassign those orders first so nothing is stranded.
+async function assertPickerHasNoOpenOrders({ brandId, userId, session }) {
+  const openOrders = await Order.countDocuments({
+    brandId,
+    pickerId: userId,
+    orderStatus: { $in: PICKER_OPEN_STATUSES },
+  }).session(session);
+  if (openOrders > 0) {
+    throw new EmployeeError(
+      409,
+      `This picker still has ${openOrders} order${openOrders === 1 ? '' : 's'} to finish. Reassign or unassign ${openOrders === 1 ? 'it' : 'them'} first.`,
+      { code: 'PICKER_HAS_OPEN_ORDERS', openOrders }
+    );
+  }
+}
+
 function serialize(employee, user) {
   return {
     _id: employee._id,
     brandId: employee.brandId,
+    role: employee.role,
     jobTitle: employee.jobTitle,
     permissions: employee.permissions,
     isActive: employee.isActive,
+    removedAt: employee.removedAt || null,
     createdAt: employee.createdAt,
     user: user
       ? { _id: user._id, name: user.name, email: user.email, phone: user.phone, role: user.role, isActive: user.isActive }
@@ -117,19 +143,73 @@ async function createEmployee({ brandId, actorPermissions, actorRole, data }) {
   if (brand.status === 'TERMINATED') {
     throw new EmployeeError(409, 'A terminated brand cannot add employees.', { code: 'BRAND_TERMINATED' });
   }
-  const passwordHash = await hashPassword(data.password); // slow: outside the transaction
+  // bcrypt is slow: do it before the transaction and only when a new
+  // account is actually needed (a reused account keeps its own password).
+  const passwordHash = await hashPassword(data.password);
 
   try {
     const created = await runInTransaction(async (session) => {
-      if (await User.findOne({ email: data.email, accountType: 'BRAND' }).session(session)) {
-        throw new EmployeeError(409, 'Email is already registered.');
+      const existing = await User.findOne({ email: data.email, accountType: 'BRAND' }).session(session);
+
+      if (existing) {
+        // Only a plain team member can join another brand (docs/24 §3.5).
+        // Admins, pickers and riders stay single-brand until that policy is
+        // approved; other account types never appear in this query.
+        if (existing.role !== ROLES.BRAND_EMPLOYEE || role !== ROLES.BRAND_EMPLOYEE) {
+          throw new EmployeeError(409, 'This email already belongs to a different kind of brand account.', {
+            code: 'ACCOUNT_ROLE_CONFLICT',
+          });
+        }
+
+        const previous = await Employee.findOne({ userId: existing._id, brandId }).session(session);
+        if (previous && previous.isActive) {
+          throw new EmployeeError(409, 'This person is already a member of your brand.', { code: 'ALREADY_MEMBER' });
+        }
+
+        let employee;
+        if (previous) {
+          // Re-adding after a removal reactivates the same membership and
+          // resets its access (docs/24 §3.5-3.6).
+          employee = await Employee.findOneAndUpdate(
+            { _id: previous._id },
+            {
+              $set: {
+                role,
+                permissions,
+                jobTitle: data.jobTitle,
+                isActive: true,
+                removedAt: null,
+                removedBy: null,
+                removalReason: null,
+              },
+            },
+            { new: true, session }
+          );
+        } else {
+          [employee] = await Employee.create(
+            [{ userId: existing._id, brandId, role, permissions, jobTitle: data.jobTitle }],
+            { session }
+          );
+        }
+
+        // An account left inactive by an earlier removal becomes usable
+        // again; its other memberships were never touched.
+        const user = existing.isActive
+          ? existing
+          : await User.findOneAndUpdate(
+              { _id: existing._id, role: ROLES.BRAND_EMPLOYEE },
+              { $set: { isActive: true } },
+              { new: true, session }
+            );
+        return serialize(employee, user);
       }
+
       const [user] = await User.create(
         [{ name: data.name, email: data.email, passwordHash, role, accountType: 'BRAND', brandId, phone: data.phone }],
         { session }
       );
       const [employee] = await Employee.create(
-        [{ userId: user._id, brandId, permissions, jobTitle: data.jobTitle }],
+        [{ userId: user._id, brandId, role, permissions, jobTitle: data.jobTitle }],
         { session }
       );
       return serialize(employee, user);
@@ -152,41 +232,164 @@ async function createEmployee({ brandId, actorPermissions, actorRole, data }) {
 }
 
 /**
- * Updates profile fields and/or activates/deactivates. Activation is kept on
- * BOTH the Employee and the User so a deactivated employee can no longer
- * authenticate at all. Acting on yourself is refused (docs/02 §18), and the
- * User update is guarded by role + brand so it can never touch an admin.
+ * Updates profile fields and/or activates/deactivates one membership.
+ *
+ * Deactivation applies to the Employee row only: the person may still work
+ * for another brand, so the account itself stays active (docs/24 §3.6).
+ * The profile fields live on the shared User, so those keep a role guard but
+ * no brand guard (a membership's brand is not the account's owner). Acting on
+ * yourself is refused (docs/02 §18).
  */
 async function updateEmployee({ brandId, id, actorUserId, data }) {
-  return runInTransaction(async (session) => {
+  const result = await runInTransaction(async (session) => {
+    const current = await Employee.findOne(scoped(brandId, id)).session(session);
+    if (!current) {
+      throw new EmployeeError(404, 'Employee not found.');
+    }
+    if (String(current.userId) === String(actorUserId)) {
+      throw new EmployeeError(403, 'You cannot modify your own employee account.', { code: 'SELF_MODIFICATION' });
+    }
+
     const employeeFields = {};
     if (data.jobTitle !== undefined) employeeFields.jobTitle = data.jobTitle;
-    if (data.isActive !== undefined) employeeFields.isActive = data.isActive;
+    if (data.isActive !== undefined) {
+      employeeFields.isActive = data.isActive;
+      if (data.isActive) {
+        // Re-activation clears the removal trail.
+        employeeFields.removedAt = null;
+        employeeFields.removedBy = null;
+        employeeFields.removalReason = null;
+      } else {
+        employeeFields.removedAt = new Date();
+        employeeFields.removedBy = actorUserId || null;
+        employeeFields.removalReason = data.removalReason || null;
+      }
+    }
+    // A picker is a single-brand account: removing the membership must stop
+    // the login too, otherwise the removed picker could keep using the Staff
+    // app. Unfinished picking blocks the removal first (docs/24 §3.7).
+    if (data.isActive === false && current.role === ROLES.PICKER) {
+      await assertPickerHasNoOpenOrders({ brandId: current.brandId, userId: current.userId, session });
+    }
+
     const userFields = {};
     if (data.name !== undefined) userFields.name = data.name;
     if (data.phone !== undefined) userFields.phone = data.phone;
-    if (data.isActive !== undefined) userFields.isActive = data.isActive;
+    if (data.isActive === true) userFields.isActive = true;
+    if (data.isActive === false && current.role === ROLES.PICKER) userFields.isActive = false;
 
     const employee = await Employee.findOneAndUpdate(
-      { ...scoped(brandId, id), userId: { $ne: actorUserId } },
+      { _id: current._id, userId: { $ne: actorUserId } },
       { $set: employeeFields },
       { new: true, session }
     );
     if (!employee) {
-      const existing = await Employee.findOne(scoped(brandId, id)).session(session);
-      if (!existing) {
-        throw new EmployeeError(404, 'Employee not found.');
-      }
-      throw new EmployeeError(403, 'You cannot modify your own employee account.', { code: 'SELF_MODIFICATION' });
+      throw new EmployeeError(409, 'The employee was changed by another request. Please reload and retry.', {
+        code: 'EMPLOYEE_CHANGED',
+      });
     }
 
-    const user = await User.findOneAndUpdate(
-      { _id: employee.userId, role: { $in: [ROLES.BRAND_EMPLOYEE, ROLES.PICKER] }, brandId: employee.brandId },
-      { $set: userFields },
-      { new: true, session }
-    );
-    return serialize(employee, user);
+    const user = Object.keys(userFields).length
+      ? await User.findOneAndUpdate(
+          { _id: employee.userId, role: { $in: [ROLES.BRAND_EMPLOYEE, ROLES.PICKER] } },
+          { $set: userFields },
+          { new: true, session }
+        )
+      : await User.findById(employee.userId).session(session);
+
+    // Deactivation means this person loses the brand. When no membership is
+    // left at all, their phones must stop receiving that brand's work.
+    const lastMembership =
+      data.isActive === false &&
+      (await Employee.countDocuments({ userId: current.userId, isActive: true }).session(session)) === 0;
+
+    return { employee: serialize(employee, user), revokedLogin: lastMembership };
   });
+
+  if (result.revokedLogin) {
+    await revokeUserDelivery(result.employee.user._id, { notifications: false });
+  }
+  return result.employee;
+}
+
+/**
+ * Removes one membership (docs/24 §3.6). The Employee row is deactivated,
+ * never deleted, so the audit trail survives; other memberships keep the
+ * account and the email in use.
+ *
+ * `purge` additionally anonymizes the User. It is only allowed when this was
+ * the person's last active membership, because the anonymized account can no
+ * longer sign in to any brand. The original email becomes free at once.
+ */
+async function removeEmployee({ brandId, id, actorUserId, removalReason = null, purge = false }) {
+  const result = await runInTransaction(async (session) => {
+    const employee = await Employee.findOne(scoped(brandId, id)).session(session);
+    if (!employee) {
+      throw new EmployeeError(404, 'Employee not found.');
+    }
+    if (String(employee.userId) === String(actorUserId)) {
+      throw new EmployeeError(403, 'You cannot remove your own employee account.', { code: 'SELF_MODIFICATION' });
+    }
+
+    if (employee.isActive && employee.role === ROLES.PICKER) {
+      await assertPickerHasNoOpenOrders({ brandId: employee.brandId, userId: employee.userId, session });
+    }
+
+    const updated = employee.isActive
+      ? await Employee.findOneAndUpdate(
+          { _id: employee._id },
+          {
+            $set: {
+              isActive: false,
+              removedAt: new Date(),
+              removedBy: actorUserId || null,
+              removalReason: removalReason || null,
+            },
+          },
+          { new: true, session }
+        )
+      : employee;
+
+    const otherActive = await Employee.countDocuments({ userId: employee.userId, isActive: true }).session(session);
+    if (purge && otherActive > 0) {
+      throw new EmployeeError(
+        409,
+        'This person still works for another brand. Remove those memberships before deleting the account.',
+        { code: 'ACCOUNT_HAS_OTHER_MEMBERSHIPS' }
+      );
+    }
+
+    // A picker has a single-brand account with no membership check in
+    // authenticate, so the login itself has to stop.
+    if (employee.role === ROLES.PICKER) {
+      await User.findOneAndUpdate(
+        { _id: employee.userId, role: ROLES.PICKER },
+        { $set: { isActive: false } },
+        { session }
+      );
+    }
+
+    const user = purge
+      ? await anonymizeUser({
+          userId: employee.userId,
+          role: { $in: [ROLES.BRAND_EMPLOYEE, ROLES.PICKER] },
+          session,
+        })
+      : await User.findById(employee.userId).session(session);
+
+    return {
+      employee: serialize(updated, user),
+      lastMembership: otherActive === 0,
+      purged: purge,
+    };
+  });
+
+  // Delivery state follows the account: a person with another active
+  // membership keeps their phones, notifications and sockets.
+  if (result.lastMembership) {
+    await revokeUserDelivery(result.employee.user._id, { notifications: result.purged });
+  }
+  return result;
 }
 
 /**
@@ -206,7 +409,7 @@ async function setEmployeePermissions({ brandId, id, actorUserId, actorPermissio
     throw new EmployeeError(403, 'You cannot change your own permissions.', { code: 'SELF_MODIFICATION' });
   }
   const target = await User.findById(employee.userId);
-  if (target && target.role === ROLES.PICKER) {
+  if (employee.role === ROLES.PICKER || (target && target.role === ROLES.PICKER)) {
     throw new EmployeeError(400, 'A picker does not have brand-team permissions.', {
       code: 'PICKER_NO_PERMISSIONS',
     });
@@ -239,6 +442,7 @@ module.exports = {
   getEmployee,
   createEmployee,
   updateEmployee,
+  removeEmployee,
   setEmployeePermissions,
   actorPermissionsFor,
   EmployeeError,

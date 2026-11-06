@@ -3,6 +3,8 @@ const {
   updateEmployeeSchema,
   updatePermissionsSchema,
   listEmployeesQuerySchema,
+  removeEmployeeQuerySchema,
+  removeEmployeeSchema,
 } = require('../validators/employee.validator');
 const { objectIdParamSchema } = require('../validators/common.validator');
 const {
@@ -10,6 +12,7 @@ const {
   getEmployee,
   createEmployee,
   updateEmployee,
+  removeEmployee,
   setEmployeePermissions,
   actorPermissionsFor,
   EmployeeError,
@@ -103,18 +106,29 @@ async function update(req, res, next) {
   }
 }
 
-// Soft deactivation only (docs/04 §36) — employees are never hard-deleted.
+// Removes a membership; ?purge=account anonymizes the account after the last
+// one (docs/24 §3.6). The Employee row is never hard-deleted.
 async function remove(req, res, next) {
   const params = objectIdParamSchema.safeParse(req.params);
   if (!params.success) return invalid(res, params.error);
+  const query = removeEmployeeQuerySchema.safeParse(req.query);
+  if (!query.success) return invalid(res, query.error);
+  const body = removeEmployeeSchema.safeParse(req.body || {});
+  if (!body.success) return invalid(res, body.error);
+  const purge = query.data.purge === 'account';
   try {
-    const employee = await updateEmployee({
+    const { employee } = await removeEmployee({
       brandId: resolveBrandId(req),
       id: params.data.id,
       actorUserId: req.user._id,
-      data: { isActive: false },
+      removalReason: body.data.removalReason,
+      purge,
     });
-    return res.status(200).json({ success: true, message: 'Employee deactivated', employee });
+    return res.status(200).json({
+      success: true,
+      message: purge ? 'Employee account deleted' : 'Employee removed',
+      employee,
+    });
   } catch (err) {
     return handleError(err, res, next);
   }

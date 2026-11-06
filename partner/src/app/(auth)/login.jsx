@@ -11,13 +11,14 @@ import { sentenceAll, validateLogin } from '../../utils/validation'
 import { colors, radius, spacing } from '../../theme'
 
 export default function Login() {
-  const { status, offline, login } = useAuth()
+  const { status, offline, login, chooseWorkspace } = useAuth()
 
   const passwordRef = useRef(null)
   const [form, setForm] = useState({ email: '', password: '' })
   const [fieldErrors, setFieldErrors] = useState({})
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [workspace, setWorkspace] = useState(null)
 
   // Signing in flips `status`; this one redirect then sends each person to their own screens.
   if (status === 'signedIn') return <Redirect href="/" />
@@ -35,13 +36,76 @@ export default function Login() {
     try {
       await login({ email: form.email.trim().toLowerCase(), password: form.password })
     } catch (err) {
-      setFieldErrors(sentenceAll(getFieldErrors(err)))
+      if (err.workspace) {
+        setWorkspace(err.workspace)
+      } else {
+        setFieldErrors(sentenceAll(getFieldErrors(err)))
+        setError(getErrorMessage(err))
+      }
+      setSubmitting(false)
+    }
+  }
+
+  async function pickWorkspace(membership) {
+    setError('')
+    setSubmitting(true)
+    try {
+      await chooseWorkspace({ workspaceToken: workspace.workspaceToken, brandId: membership.brandId })
+    } catch (err) {
       setError(getErrorMessage(err))
       setSubmitting(false)
     }
   }
 
   const banner = error || (offline ? 'Cannot reach the server. Check your connection.' : '')
+
+  if (workspace) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.paper }}>
+        <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxl }}>
+          <View style={{ marginTop: spacing.xxl, marginBottom: spacing.xl }}>
+            <AppText variant="title" accessibilityRole="header">
+              Choose a workspace
+            </AppText>
+            <AppText variant="small" style={{ marginTop: spacing.xs }}>
+              {form.email.trim()} is a team member at more than one brand.
+            </AppText>
+          </View>
+
+          {banner ? (
+            <View
+              accessibilityRole="alert"
+              style={{ backgroundColor: colors.dangerSoft, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.lg }}
+            >
+              <AppText variant="small" style={{ color: colors.danger }}>
+                {banner}
+              </AppText>
+            </View>
+          ) : null}
+
+          {workspace.memberships.map((m) => (
+            <View key={m.brandId} style={{ marginBottom: spacing.md }}>
+              <Button
+                title={`${m.brandName}${m.role === 'PICKER' ? ' · Picker' : ''}`}
+                variant="outline"
+                onPress={() => pickWorkspace(m)}
+                loading={submitting}
+              />
+            </View>
+          ))}
+
+          <Button
+            title="Use a different account"
+            variant="outline"
+            onPress={() => {
+              setWorkspace(null)
+              setError('')
+            }}
+          />
+        </ScrollView>
+      </SafeAreaView>
+    )
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.paper }}>

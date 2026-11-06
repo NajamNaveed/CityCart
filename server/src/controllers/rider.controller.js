@@ -3,9 +3,17 @@ const {
   updateRiderSchema,
   resetRiderPasswordSchema,
   listRidersQuerySchema,
+  removeRiderQuerySchema,
 } = require('../validators/rider.validator');
 const { objectIdParamSchema } = require('../validators/common.validator');
-const { listRiders, createRider, updateRider, resetRiderPassword, RiderError } = require('../services/rider.service');
+const {
+  listRiders,
+  createRider,
+  updateRider,
+  removeRider,
+  resetRiderPassword,
+  RiderError,
+} = require('../services/rider.service');
 const { formatZodError } = require('../utils/formatZodError');
 
 function invalid(res, error) {
@@ -56,6 +64,24 @@ async function update(req, res, next) {
   }
 }
 
+async function remove(req, res, next) {
+  const params = objectIdParamSchema.safeParse(req.params);
+  if (!params.success) return invalid(res, params.error);
+  const query = removeRiderQuerySchema.safeParse(req.query);
+  if (!query.success) return invalid(res, query.error);
+  const purge = query.data.purge === 'account';
+  try {
+    const rider = await removeRider({ brandId: req.tenantBrandId, id: params.data.id, purge });
+    return res.status(200).json({
+      success: true,
+      message: purge ? 'Rider account deleted' : 'Rider removed',
+      rider,
+    });
+  } catch (err) {
+    return handleError(err, res, next);
+  }
+}
+
 async function resetPassword(req, res, next) {
   const params = objectIdParamSchema.safeParse(req.params);
   if (!params.success) return invalid(res, params.error);
@@ -69,4 +95,4 @@ async function resetPassword(req, res, next) {
   }
 }
 
-module.exports = { list, create, update, resetPassword };
+module.exports = { list, create, update, remove, resetPassword };

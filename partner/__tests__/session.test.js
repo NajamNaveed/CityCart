@@ -8,12 +8,26 @@ jest.mock('../src/services/api', () => ({ __esModule: true, default: { get: jest
 
 import * as SecureStore from 'expo-secure-store'
 import api from '../src/services/api'
-import { isStaffRole, restoreSession, signIn, signOut, STAFF_ROLES } from '../src/services/session'
+import { chooseWorkspace, isStaffRole, restoreSession, signIn, signOut, STAFF_ROLES } from '../src/services/session'
 import { tokenStore } from '../src/services/storage'
 
 const httpError = (status) => Object.assign(new Error('http'), { response: { status, data: {} } })
 const EMPLOYEE = { name: 'Maryam', role: 'BRAND_EMPLOYEE', permissions: ['orders.view'] }
 const PICKER = { name: 'Ali', role: 'PICKER' }
+const workspaceReply = {
+  response: {
+    status: 409,
+    data: {
+      code: 'WORKSPACE_REQUIRED',
+      message: 'Choose a workspace.',
+      workspaceToken: 'workspace.token',
+      memberships: [
+        { brandId: 'a'.repeat(24), brandName: 'Acme', role: 'BRAND_EMPLOYEE' },
+        { brandId: 'b'.repeat(24), brandName: 'Bravo', role: 'BRAND_EMPLOYEE' },
+      ],
+    },
+  },
+}
 
 beforeEach(async () => {
   jest.clearAllMocks()
@@ -120,6 +134,39 @@ describe('signIn', () => {
   it('passes a failed sign-in (wrong password) to the screen', async () => {
     api.post.mockRejectedValue(httpError(401))
     await expect(signIn({ email: 'a@b.co', password: 'x' })).rejects.toMatchObject({ response: { status: 401 } })
+  })
+})
+
+describe('workspace sign-in', () => {
+  it('holds the sign-in with the workspace choices and stores no token yet', async () => {
+    api.post.mockRejectedValue(workspaceReply)
+    await expect(signIn({ email: 'm@example.com', password: 'x' })).rejects.toMatchObject({
+      workspace: {
+        workspaceToken: 'workspace.token',
+        memberships: expect.arrayContaining([expect.objectContaining({ brandName: 'Acme' })]),
+      },
+    })
+    expect(tokenStore.get()).toBeNull()
+    expect(api.get).not.toHaveBeenCalled()
+  })
+
+  it('exchanges the choice for a staff session and loads the permissions', async () => {
+    api.post.mockResolvedValue({ data: { user: { role: 'BRAND_EMPLOYEE' }, token: 'staff.token' } })
+    api.get.mockResolvedValue({ data: { user: EMPLOYEE } })
+
+    const user = await chooseWorkspace({ workspaceToken: 'workspace.token', brandId: 'b'.repeat(24) })
+
+    expect(api.post).toHaveBeenCalledWith('/auth/workspace', { workspaceToken: 'workspace.token', brandId: 'b'.repeat(24) })
+    expect(user).toEqual(EMPLOYEE)
+    expect(tokenStore.get()).toBe('staff.token')
+  })
+
+  it('stores nothing when the chosen workspace was revoked meanwhile', async () => {
+    api.post.mockRejectedValue(
+      Object.assign(new Error('gone'), { response: { status: 403, data: { code: 'WORKSPACE_UNAVAILABLE' } } }),
+    )
+    await expect(chooseWorkspace({ workspaceToken: 'workspace.token', brandId: 'b'.repeat(24) })).rejects.toBeDefined()
+    expect(tokenStore.get()).toBeNull()
   })
 })
 

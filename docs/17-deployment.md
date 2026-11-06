@@ -205,19 +205,13 @@ send is reported as unavailable (the user can request a new link). Links are
 stored hashed in MongoDB with a TTL index, so expiry needs no worker and no
 paid Render plan.
 
-Online payments (docs/10 §29), all optional; without them customers can only pay cash on delivery:
-
-```text
-PAYMENT_PROVIDER            none | mock (TEST gateway, refused in production) | a real provider
-PAYMENT_WEBHOOK_SECRET      16+ random characters; signs and verifies gateway notifications
-PUBLIC_API_URL              the server's public address (used to build the test gateway's page)
-ONLINE_PAYMENT_HOLD_MINUTES minutes an unpaid online order keeps its stock (5-240, default 30)
-```
+The online payment gateway was removed in v3 (docs/10 §29, docs/24 §5.7).
+There are no payment-provider variables to configure; customers pay at the door
+and the rider records the collection.
 
 Future:
 
 ```text
-PAYMENT_GATEWAY_SECRET
 EMAIL_API_KEY
 SMS_API_KEY
 SENTRY_DSN
@@ -784,7 +778,6 @@ Phase 7 ships the three-app marketplace: the website, the shopper app, the Staff
 | Render | `MONGODB_URI` | the **new** Atlas cluster (fresh v2 database) |
 | Render | `JWT_SECRET` | long random string; never reused from development |
 | Render | `CLIENT_URL` | the Vercel production URL |
-| Render | `PAYMENT_PROVIDER` | `none` (the test gateway is refused in production) |
 | Render | `CLOUDINARY_*` | optional; private proof/return photos need all three |
 | Render | `PUSH_ENABLED`, `EXPO_ACCESS_TOKEN` | optional; push is off without them |
 | Vercel | `VITE_API_URL` | **empty** — the client calls `/api/v1` same-origin |

@@ -368,11 +368,13 @@ describe('POST /api/v1/admin/brands/:id/terminate', () => {
     request(app).post(`/api/v1/admin/brands/${brandId}/terminate`).set(...cookie).send(body);
 
   function terminateWorld({ orders = [], inTransit = 0, alreadyTerminated = false } = {}) {
-    Brand.findOneAndUpdate.mockResolvedValue(alreadyTerminated ? null : { _id: brandId, status: 'TERMINATED' });
-    Brand.findById.mockReturnValue(q({ _id: brandId, status: 'TERMINATED' }));
+    Brand.findOne.mockReturnValue(q(alreadyTerminated ? null : { _id: brandId, slug: 'fresh-kicks', status: 'ACTIVE' }));
+    Brand.updateOne.mockResolvedValue({});
+    Brand.findById.mockReturnValue(q({ _id: brandId, slug: 'fresh-kicks~terminated', status: 'TERMINATED' }));
     Store.updateMany.mockResolvedValue({});
     User.updateMany.mockResolvedValue({});
     Employee.updateMany.mockResolvedValue({});
+    Employee.find.mockReturnValue({ select: () => q([]) });
     Order.find.mockReturnValue({ select: () => Promise.resolve(orders.map((o) => ({ _id: o._id }))) });
     Order.countDocuments.mockResolvedValue(inTransit);
     Order.findOneAndUpdate.mockImplementation(async (f) => orders.find((o) => String(o._id) === String(f._id)) || null);
@@ -384,7 +386,7 @@ describe('POST /api/v1/admin/brands/:id/terminate', () => {
   it.each([[{}], [{ reason: 'short' }]])('400 for reason %j', async (body) => {
     const { cookie } = asRole(ROLES.SUPER_ADMIN);
     expect((await term(cookie, body)).status).toBe(400);
-    expect(Brand.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(Brand.updateOne).not.toHaveBeenCalled();
   });
 
   it('takes the brand offline atomically: status, store, every brand login and employee', async () => {
@@ -394,19 +396,51 @@ describe('POST /api/v1/admin/brands/:id/terminate', () => {
     const res = await term(cookie);
 
     expect(res.status).toBe(200);
-    expect(Brand.findOneAndUpdate).toHaveBeenCalledWith(
-      { _id: brandId.toString(), status: { $ne: 'TERMINATED' } },
-      { $set: { status: 'TERMINATED', terminationReason: 'Selling counterfeit goods', terminatedAt: expect.any(Date), terminatedBy: user._id, accessEndsAt: expect.any(Date) } },
-      { new: true, session: 'SESSION' }
+    expect(Brand.updateOne).toHaveBeenCalledWith(
+      { _id: brandId },
+      {
+        $set: {
+          status: 'TERMINATED',
+          terminationReason: 'Selling counterfeit goods',
+          terminatedAt: expect.any(Date),
+          terminatedBy: user._id,
+          accessEndsAt: expect.any(Date),
+          // archived brands keep their row but release the name/slug
+          slug: `fresh-kicks~terminated~${brandId}`,
+        },
+      },
+      { session: 'SESSION' }
     );
     expect(Store.updateMany).toHaveBeenCalledWith({ brandId: brandId.toString() }, { $set: { isActive: false } }, { session: 'SESSION' });
     expect(User.updateMany).toHaveBeenCalledWith(
-      { brandId: brandId.toString(), role: { $in: [ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE, ROLES.RIDER] } },
+      { brandId: brandId.toString(), role: { $in: [ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE, ROLES.PICKER, ROLES.RIDER] } },
       // staff are NOT deactivated: time-limited, read-only access instead
       { $set: { accessExpiresAt: expect.any(Date), accessRestricted: true } },
       { session: 'SESSION' }
     );
     expect(Employee.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('does not restrict a multi-brand employee who still works elsewhere', async () => {
+    const { cookie } = asRole(ROLES.SUPER_ADMIN);
+    terminateWorld();
+    const keep = oid();
+    const members = { select: () => q([{ userId: keep }]) };
+    // Both queries see the shared employee; the second proves another brand
+    // still employs them.
+    Employee.find.mockReturnValueOnce(members).mockReturnValueOnce(members);
+
+    await term(cookie);
+
+    expect(User.updateMany).toHaveBeenCalledWith(
+      {
+        brandId: brandId.toString(),
+        role: { $in: [ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE, ROLES.PICKER, ROLES.RIDER] },
+        _id: { $nin: [keep] },
+      },
+      { $set: { accessExpiresAt: expect.any(Date), accessRestricted: true } },
+      { session: 'SESSION' }
+    );
   });
 
   it('staff access ends after the grace period: default 24h, or graceHours (0 = immediately)', async () => {
@@ -430,7 +464,7 @@ describe('POST /api/v1/admin/brands/:id/terminate', () => {
   it.each([[-1], [169], [1.5], ['24']])('400 for graceHours %j', async (graceHours) => {
     const { cookie } = asRole(ROLES.SUPER_ADMIN);
     expect((await term(cookie, { reason: 'Selling counterfeit goods', graceHours })).status).toBe(400);
-    expect(Brand.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(Brand.updateOne).not.toHaveBeenCalled();
   });
 
   it('rejects every unshipped order: restock, payment cancelled, delivery cancelled; reports in-transit orders', async () => {
@@ -478,6 +512,7 @@ describe('POST /api/v1/admin/brands/:id/terminate', () => {
     const res = await term(cookie);
 
     expect(res.status).toBe(200);
+    expect(Brand.updateOne).not.toHaveBeenCalled();
     expect(Store.updateMany).not.toHaveBeenCalled();
     expect(User.updateMany).not.toHaveBeenCalled();
     expect(res.body.rejectedOrders).toBe(1);
@@ -485,7 +520,7 @@ describe('POST /api/v1/admin/brands/:id/terminate', () => {
 
   it('404 for an unknown brand', async () => {
     const { cookie } = asRole(ROLES.SUPER_ADMIN);
-    Brand.findOneAndUpdate.mockResolvedValue(null);
+    Brand.findOne.mockReturnValue(q(null));
     Brand.findById.mockReturnValue(q(null));
     expect((await term(cookie)).status).toBe(404);
   });

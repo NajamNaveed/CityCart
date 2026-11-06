@@ -2,6 +2,7 @@ const {
   listPartners,
   createPartner,
   updatePartner,
+  purgePartner,
   resetPartnerPassword,
   AdminPartnerError,
 } = require('../services/adminPartner.service');
@@ -10,6 +11,7 @@ const {
   updatePartnerSchema,
   resetPartnerPasswordSchema,
   listPartnersQuerySchema,
+  removePartnerQuerySchema,
 } = require('../validators/adminPartner.validator');
 const { formatZodError } = require('../utils/formatZodError');
 
@@ -57,9 +59,18 @@ async function update(req, res, next) {
 }
 
 async function deactivate(req, res, next) {
+  const query = removePartnerQuerySchema.safeParse(req.query);
+  if (!query.success) return invalid(res, query.error);
+  const purge = query.data.purge === 'account';
   try {
-    const partner = await updatePartner({ actor: req.user, id: req.params.id, data: { isActive: false } });
-    return res.status(200).json({ success: true, message: 'Partner deactivated.', partner });
+    const partner = purge
+      ? await purgePartner({ actor: req.user, id: req.params.id })
+      : await updatePartner({ actor: req.user, id: req.params.id, data: { isActive: false } });
+    return res.status(200).json({
+      success: true,
+      message: purge ? 'Partner account deleted.' : 'Partner deactivated.',
+      partner,
+    });
   } catch (err) {
     return fail(res, err, next);
   }

@@ -9,7 +9,7 @@ const { COLLECTION_METHODS, COLLECTION_WALLETS } = require('../config/paymentCol
  * a snapshot, so later changes to a product, a brand name or an address can never
  * alter a receipt that was already issued.
  */
-const PAYMENT_METHODS = ['COD', 'CARD', 'BANK_TRANSFER', 'WALLET', 'ONLINE_GATEWAY'];
+const PAYMENT_METHODS = ['COD', 'CARD', 'BANK_TRANSFER', 'WALLET'];
 
 const receiptItemSchema = new mongoose.Schema(
   {

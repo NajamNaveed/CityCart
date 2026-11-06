@@ -29,6 +29,7 @@ export default function Team() {
   // Edit access
   const [editing, setEditing] = useState(null) // { id, permissions }
   const [confirmOff, setConfirmOff] = useState(null) // member id
+  const [confirmPurge, setConfirmPurge] = useState(null) // member id
 
   useEffect(() => {
     let active = true
@@ -101,8 +102,20 @@ export default function Team() {
   const setActive = (member, isActive) =>
     run(
       () => api.patch(`/employees/${member._id}`, { isActive }),
-      isActive ? 'Team member reactivated.' : 'Team member deactivated. They can no longer sign in.',
+      'Team member reactivated.',
     ).then(() => setConfirmOff(null))
+
+  const removeMember = (member) =>
+    run(
+      () => api.delete(`/employees/${member._id}`),
+      'Removed from your team. They can no longer sign in to this brand.',
+    ).then(() => setConfirmOff(null))
+
+  const purgeMember = (member) =>
+    run(
+      () => api.delete(`/employees/${member._id}?purge=account`),
+      'Account deleted and the email freed. Past orders and records are kept.',
+    ).then(() => setConfirmPurge(null))
 
   return (
     <>
@@ -220,11 +233,11 @@ export default function Team() {
                   {m.isActive && can('employees.delete') && (
                     confirmOff === m._id ? (
                       <span className="flex items-center gap-2.5 rounded-md bg-danger-soft px-3 py-1.5 font-normal text-danger">
-                        Deactivate?
+                        Remove?
                         <button
                           type="button"
                           disabled={busy}
-                          onClick={() => setActive(m, false)}
+                          onClick={() => removeMember(m)}
                           className="font-semibold hover:underline"
                         >
                           Yes
@@ -239,7 +252,7 @@ export default function Team() {
                         onClick={() => setConfirmOff(m._id)}
                         className="rounded-md border border-danger/40 px-3 py-1.5 text-danger transition hover:border-danger"
                       >
-                        Deactivate
+                        Remove
                       </button>
                     )
                   )}
@@ -252,6 +265,32 @@ export default function Team() {
                     >
                       Reactivate
                     </button>
+                  )}
+                  {!m.isActive && can('employees.delete') && (
+                    confirmPurge === m._id ? (
+                      <span className="flex items-center gap-2.5 rounded-md bg-danger-soft px-3 py-1.5 font-normal text-danger">
+                        Delete account and free the email?
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => purgeMember(m)}
+                          className="font-semibold hover:underline"
+                        >
+                          Yes
+                        </button>
+                        <button type="button" onClick={() => setConfirmPurge(null)} className="text-muted hover:text-ink">
+                          No
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmPurge(m._id)}
+                        className="rounded-md border border-danger/40 px-3 py-1.5 text-danger transition hover:border-danger"
+                      >
+                        Delete account
+                      </button>
+                    )
                   )}
                 </div>
               </div>

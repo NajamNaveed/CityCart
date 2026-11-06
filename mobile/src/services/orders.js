@@ -72,24 +72,6 @@ export async function placeOrder(form, paymentMethod = 'COD', delivery = {}) {
   return res.data.orders
 }
 
-// What the customer can pay with. Cash is always possible; paying online appears only while the
-// server has a payment gateway switched on (docs/10 §29).
-export async function fetchPaymentMethods() {
-  const res = await api.get('/payments/methods')
-  return res.data.methods
-}
-
-// The gateway page where one online order is paid. The server checks the order is the caller's
-// and still waiting for payment; nothing is marked paid by the app (only the gateway's
-// confirmation does that).
-export async function startOnlinePayment(orderId) {
-  const res = await api.post(`/payments/order/${orderId}/checkout`)
-  return res.data
-}
-
-export const isOnline = (order) => order?.paymentMethod === 'ONLINE_GATEWAY'
-export const awaitingPayment = ({ order, payment }) => isOnline(order) && payment?.status === 'PENDING' && order?.orderStatus === 'PENDING'
-
 export async function fetchMyOrders(page = 1, limit = 10) {
   const res = await api.get('/orders/my', { params: { page, limit } })
   return { items: res.data.orders || [], pagination: res.data.pagination }

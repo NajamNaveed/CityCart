@@ -36,7 +36,9 @@ async function chatAccess(req, res, next) {
 
       case ROLES.BRAND_EMPLOYEE: {
         if (!req.user.brandId) return deny('NO_BRAND');
-        const employee = await Employee.findOne({ userId: req.user._id });
+        const employee =
+          req.membership ||
+          (await Employee.findOne({ userId: req.user._id, brandId: req.user.brandId, isActive: true }));
         if (!employee || !employee.isActive) return deny('EMPLOYEE_INACTIVE');
         const canReply = employee.permissions.includes(PERMISSIONS.MESSAGES_MANAGE);
         const canRead = canReply || employee.permissions.includes(PERMISSIONS.MESSAGES_VIEW);

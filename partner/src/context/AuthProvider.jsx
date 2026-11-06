@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { setUnauthorizedHandler } from '../services/api'
 import { unregisterPush } from '../services/push'
-import { restoreSession, signIn, signOut } from '../services/session'
+import { restoreSession, signIn, signOut, chooseWorkspace as joinWorkspace } from '../services/session'
 import { AuthContext } from './contexts'
 
 // status: 'loading' (checking the stored token) | 'signedIn' | 'signedOut'
@@ -49,9 +49,16 @@ export function AuthProvider({ children }) {
     return user
   }, [])
 
+  // A team member of several brands finishes signing in by picking one.
+  const chooseWorkspace = useCallback(async (choice) => {
+    const user = await joinWorkspace(choice)
+    setState({ status: 'signedIn', user, offline: false })
+    return user
+  }, [])
+
   const value = useMemo(
-    () => ({ ...state, isReady: state.status !== 'loading', login, logout, retry: restore }),
-    [state, login, logout, restore],
+    () => ({ ...state, isReady: state.status !== 'loading', login, chooseWorkspace, logout, retry: restore }),
+    [state, login, chooseWorkspace, logout, restore],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

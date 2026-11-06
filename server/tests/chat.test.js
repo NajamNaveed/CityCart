@@ -118,7 +118,9 @@ describe('who may use chat at all', () => {
   it('refuses an inactive team member', async () => {
     const user = employee([PERMISSIONS.MESSAGES_MANAGE]);
     Employee.findOne.mockResolvedValue({ userId: user._id, brandId, isActive: false, permissions: [PERMISSIONS.MESSAGES_MANAGE] });
-    expect((await request(app).get('/api/v1/chats/unread-count').set(...login(user))).status).toBe(403);
+    const res = await request(app).get('/api/v1/chats/unread-count').set(...login(user));
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe('MEMBERSHIP_INACTIVE');
   });
 
   it('only customers can start a chat or use the product context', async () => {

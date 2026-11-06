@@ -5,6 +5,7 @@ jest.mock('../src/models/user.model');
 jest.mock('../src/models/employee.model');
 
 const User = require('../src/models/user.model');
+const Employee = require('../src/models/employee.model');
 const app = require('../src/app');
 const { ROLES } = require('../src/config/roles');
 const { hashPassword, comparePassword } = require('../src/utils/password');
@@ -44,6 +45,7 @@ describe('PATCH /api/v1/auth/password', () => {
 
     const employee = makeUser(ROLES.BRAND_EMPLOYEE);
     User.findById.mockResolvedValue(employee);
+    Employee.findOne.mockResolvedValue({ _id: new mongoose.Types.ObjectId(), userId: employee._id, brandId: employee.brandId, role: employee.role, isActive: true, permissions: [] });
     const denied = await request(app)
       .patch('/api/v1/auth/password')
       .set('Cookie', getAuthCookie(employee))

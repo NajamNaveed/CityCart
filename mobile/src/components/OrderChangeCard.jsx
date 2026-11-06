@@ -101,9 +101,6 @@ export default function OrderChangeCard({ order, adjustment, onDone }) {
 
       <AppText variant="small" style={{ fontSize: 12 }}>
         Delivery and discounts stay the same.
-        {order.paymentMethod === 'ONLINE_GATEWAY' && order.paymentStatus === 'PAID'
-          ? ' If the new total is lower, the difference goes back to your payment method.'
-          : ''}
       </AppText>
 
       {error ? (

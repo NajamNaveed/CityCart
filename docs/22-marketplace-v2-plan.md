@@ -2,6 +2,12 @@
 
 Status: **in progress.** Written after the project review with the head.
 
+> **v3 notice (2026-11-06):** the v2 plan is complete through Phase 7 except
+> the owner-credential release steps. The next programme is in
+> `24-marketplace-v3-plan.md`. It supersedes v2 decision 1 (Flutter) and
+> decision 7 (deferred security), and removes the test online gateway that v2
+> kept.
+
 | Phase | State |
 |---|---|
 | 0 Preparation | done (see Phase 0) |
@@ -24,13 +30,13 @@ with the three Android APKs.
 
 | # | Decision |
 |---|---|
-| 1 | **No Flutter.** The apps stay React Native with Expo. |
+| 1 | **No Flutter.** The apps stay React Native with Expo. **Superseded by docs/24 (v3, 2026-11-06): the apps move to Flutter, Android first.** |
 | 2 | **Fresh database.** A new Atlas cluster is seeded with new demo data. There is **no migration** of old data, so models can change shape freely. |
 | 3 | **Seeding.** We edit the existing seed scripts (see §5), not write a parallel set. |
 | 4 | **Radius stays.** The customer still sets a range around himself (for example 2 km, 5 km, 10 km), now applied *inside* the chosen block(s). |
 | 5 | **Overlapping blocks:** the customer may select **one or several** blocks. He is never forced to pick only one. |
 | 6 | **APKs come last.** All three apps are built only after every phase below is done. |
-| 7 | **Security hardening is deferred.** It is not part of this plan. |
+| 7 | **Security hardening is deferred.** It is not part of this plan. **Superseded by docs/24: security baseline in Phase 1, independent audit in Phase 9.** |
 | 8 | **New packages:** none beyond what the apps already install. The website draws polygons and drops pins with its existing Leaflet map; the customer app draws them with a self-contained OpenStreetMap viewer inside `react-native-webview` (`src/components/map/`). (It first used `react-native-maps`; that was replaced by the WebView so the app needs no Google Maps key or native map SDK.) |
 | 9 | **No customer return request after delivery, for now.** Only the **door case** stays: the rider records accepted and rejected items while delivering, whether the order is half or full. A customer coming back later to return something is **not** handled in v2. |
 | 10 | **Development database:** a new database name (for example `citycart_v2`) on the same Atlas cluster, set in the local `server/.env`. The live Render site keeps the old database until the release phase. |
@@ -434,8 +440,8 @@ Run this against a **freshly seeded** database (`npm run seed:demo`), with the A
 ## 9. Not in this plan
 
 - A customer return request after delivery (decision 9).
-- Security hardening (deferred by request; revisit before a public launch).
-- A real payment gateway (the test gateway stays).
+- Security hardening (deferred for v2 only; v3 runs it in `24-marketplace-v3-plan.md`).
+- A customer payment gateway (v3 removes the test gateway and takes no customer online payment; sellers are billed monthly under `15-commission-and-payouts.md`).
 - A platform-wide rider fleet.
 - Address search (geocoding).
 - iPhone builds.

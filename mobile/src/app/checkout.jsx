@@ -21,7 +21,7 @@ import { getErrorMessage, getFieldErrors } from '../services/api'
 import { fetchAddresses } from '../services/addresses'
 import { cartHasIssues, cartIsEmpty, fetchCart } from '../services/cart'
 import { resolvePoint } from '../services/nearby'
-import { checkoutFieldErrors, countWords, fetchPaymentMethods, MAX_NOTE_WORDS, placeOrder, rememberPlacedOrders, validateCheckout } from '../services/orders'
+import { checkoutFieldErrors, countWords, MAX_NOTE_WORDS, placeOrder, rememberPlacedOrders, validateCheckout } from '../services/orders'
 import { sentenceAll } from '../utils/validation'
 import { formatPrice } from '../utils/format'
 import { colors, fonts, minTouch, radius, spacing } from '../theme'
@@ -81,11 +81,6 @@ function CheckoutForm({ cart }) {
   const [errors, setErrors] = useState({})
   const [banner, setBanner] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  // Cash is always offered; paying online appears only while the server has a gateway on.
-  const offered = useRemote('payment-methods', fetchPaymentMethods)
-  const methods = offered.status === 'ready' && Array.isArray(offered.data) && offered.data.length ? offered.data : [{ method: 'COD', label: 'Cash on delivery' }]
-  const [chosen, setChosen] = useState('COD')
-  const method = methods.some((m) => m.method === chosen) ? chosen : 'COD'
 
   // Saved addresses. `selectedId`: null = the default one, '' = a new address, else a saved id.
   const addresses = useRemote(`checkout-addresses:${user?.id}`, fetchAddresses)
@@ -152,7 +147,7 @@ function CheckoutForm({ cart }) {
     placing.current = true
     setSubmitting(true)
     try {
-      const orders = await placeOrder(shippingForm, method, {
+      const orders = await placeOrder(shippingForm, 'COD', {
         pin: deliveryPin,
         ...(useSaved ? { addressId: picked._id } : saveIt && { saveLabel: label.trim() || 'Home' }),
       })
@@ -381,33 +376,17 @@ function CheckoutForm({ cart }) {
         <AppText variant="heading" accessibilityRole="header" style={{ marginBottom: spacing.md }}>
           Payment
         </AppText>
-        <View style={{ marginBottom: spacing.xl, gap: spacing.md }}>
-          {methods.map((m) => {
-            const online = m.method === 'ONLINE_GATEWAY'
-            const selected = method === m.method
-            return (
-              <Pressable
-                key={m.method}
-                onPress={() => setChosen(m.method)}
-                accessibilityRole="radio"
-                accessibilityState={{ selected }}
-                accessibilityLabel={online ? m.label : 'Cash on delivery'}
-              >
-                <Card style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, borderColor: selected ? colors.ink : colors.line }}>
-                  <Feather name={online ? 'credit-card' : 'dollar-sign'} size={20} color={colors.clay} />
-                  <View style={{ flex: 1 }}>
-                    <AppText variant="strong">{online ? m.label : 'Cash on delivery'}</AppText>
-                    <AppText variant="small">
-                      {online
-                        ? `Pay now. Your order is held for ${m.holdMinutes} minutes while you pay; if it is not paid by then it is cancelled.`
-                        : 'Pay the courier when your order arrives.'}
-                    </AppText>
-                  </View>
-                  <Feather name={selected ? 'check-circle' : 'circle'} size={20} color={selected ? colors.success : colors.muted} />
-                </Card>
-              </Pressable>
-            )
-          })}
+        <View style={{ marginBottom: spacing.xl }}>
+          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, borderColor: colors.ink }}>
+            <Feather name="dollar-sign" size={20} color={colors.clay} />
+            <View style={{ flex: 1 }}>
+              <AppText variant="strong">Cash on delivery</AppText>
+              <AppText variant="small">
+                Pay the courier when your order arrives. They can also show the store&apos;s bank, wallet or card machine on request.
+              </AppText>
+            </View>
+            <Feather name="check-circle" size={20} color={colors.success} />
+          </Card>
         </View>
 
         <AppText variant="heading" accessibilityRole="header" style={{ marginBottom: spacing.md }}>

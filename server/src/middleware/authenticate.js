@@ -1,4 +1,5 @@
 const User = require('../models/user.model');
+const Employee = require('../models/employee.model');
 const { signToken, verifyToken } = require('../utils/jwt');
 const { AUTH_COOKIE_NAME, staffAuthCookieOptions } = require('../config/cookie');
 const { ROLES, STAFF_ROLES, STAFF_APP_ROLES, DELIVERY_APP_ROLES } = require('../config/roles');
@@ -47,6 +48,12 @@ async function authenticate(req, res, next) {
       return res.status(401).json({ success: false, message: 'Invalid or expired session.' });
     }
 
+    // A workspace token only chooses a membership; it is never a session
+    // (docs/06 §9, docs/24 §3.3).
+    if (payload.purpose === 'workspace') {
+      return res.status(401).json({ success: false, message: 'Invalid or expired session.' });
+    }
+
     // Loaded fresh from the database on every request (rather than
     // trusting the JWT payload alone) so a deactivated account cannot
     // keep using an already-issued token — the JWT itself has no
@@ -86,6 +93,37 @@ async function authenticate(req, res, next) {
       }
     }
 
+    // Resolve the active membership for a brand employee (docs/24 §3.3,
+    // docs/06 §11): the tenant is the membership named by the session, never
+    // the account's home brand. A token for a removed/inactive membership is
+    // refused; it is never downgraded to the home brand. Brand owners,
+    // pickers and riders keep their single-brand check.
+    if (user.role === ROLES.BRAND_EMPLOYEE) {
+      const activeBrandId = payload.brandId || user.brandId;
+      if (!activeBrandId) {
+        return res.status(401).json({ success: false, message: 'Invalid or expired session.', code: 'MEMBERSHIP_REQUIRED' });
+      }
+      const membership = await Employee.findOne({
+        userId: user._id,
+        brandId: activeBrandId,
+        isActive: true,
+        ...(payload.membershipId && { _id: payload.membershipId }),
+      });
+      // The query already filters on isActive; the explicit check is a
+      // guard against a database row that changed between the read and here.
+      if (!membership || !membership.isActive) {
+        return res.status(401).json({
+          success: false,
+          message: 'Your access to this workspace has ended.',
+          code: 'MEMBERSHIP_INACTIVE',
+        });
+      }
+      req.membership = membership;
+      // Mutated in memory only: the rest of the chain sees the validated
+      // active tenant.
+      if (membership.brandId) user.brandId = membership.brandId;
+    }
+
     // Conceptual shape from §11 (req.user = { id, role, brandId }),
     // extended with the full user document so downstream handlers (e.g.
     // GET /auth/me) can read safe profile fields without a second query.
@@ -109,6 +147,9 @@ async function authenticate(req, res, next) {
     }
 
     req.user = user;
+    // Kept so /auth/workspace/switch can answer in the same form as the
+    // session it was called with (bearer token vs cookie).
+    req.sessionClient = payload.client;
 
     // A partner created (or reset) by the super admin must choose their own
     // password before the dashboard works (docs/21 §G.2). Only the three
@@ -135,6 +176,7 @@ async function authenticate(req, res, next) {
           role: user.role,
           brandId: user.brandId,
           passwordVersion: user.passwordVersion,
+          ...(req.membership && { membershipId: req.membership._id }),
         },
         { expiresIn: `${require('../config/env').staffSessionHours}h` },
       );

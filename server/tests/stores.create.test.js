@@ -7,6 +7,7 @@ jest.mock('../src/models/brand.model');
 jest.mock('../src/models/store.model');
 
 const User = require('../src/models/user.model');
+const Employee = require('../src/models/employee.model');
 const Brand = require('../src/models/brand.model');
 const Store = require('../src/models/store.model');
 const app = require('../src/app');
@@ -17,6 +18,9 @@ const oid = () => new mongoose.Types.ObjectId();
 function asUser(overrides) {
   const user = { _id: oid(), isActive: true, ...overrides };
   User.findById.mockResolvedValue(user);
+  if (user.role === ROLES.BRAND_EMPLOYEE) {
+    Employee.findOne.mockResolvedValue({ _id: oid(), userId: user._id, brandId: user.brandId, role: user.role, isActive: true, permissions: [] });
+  }
   return ['Cookie', getAuthCookie(user)];
 }
 

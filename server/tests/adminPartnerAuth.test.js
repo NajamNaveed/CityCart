@@ -2,12 +2,14 @@ const request = require('supertest');
 const mongoose = require('mongoose');
 
 jest.mock('../src/models/user.model');
+jest.mock('../src/models/employee.model');
 jest.mock('../src/models/adminPartner.model');
 jest.mock('../src/models/adminAction.model');
 jest.mock('../src/services/adminSettings.service');
 jest.mock('../src/services/password.service');
 
 const User = require('../src/models/user.model');
+const Employee = require('../src/models/employee.model');
 const AdminPartner = require('../src/models/adminPartner.model');
 const { getPlatformSettings, updatePlatformSettings } = require('../src/services/adminSettings.service');
 const { changePassword } = require('../src/services/password.service');
@@ -30,6 +32,10 @@ function recordOf(user, permissions, over = {}) {
 function asUser(user, partner = null) {
   User.findById.mockResolvedValue(user);
   AdminPartner.findOne.mockResolvedValue(partner);
+  if (user.role === 'BRAND_EMPLOYEE') {
+    if (!user.brandId) user.brandId = oid();
+    Employee.findOne.mockResolvedValue({ _id: oid(), userId: user._id, brandId: user.brandId, role: user.role, isActive: true, permissions: [] });
+  }
   return ['Cookie', getAuthCookie(user)];
 }
 
@@ -71,7 +77,6 @@ describe('admin area permissions (docs/21 §G)', () => {
     ['GET', '/api/v1/admin/settings', ADMIN_PERMISSIONS.SETTINGS],
     ['GET', '/api/v1/admin/users', ADMIN_PERMISSIONS.USERS],
     ['GET', '/api/v1/admin/analytics', ADMIN_PERMISSIONS.ANALYTICS],
-    ['GET', '/api/v1/payments/events', ADMIN_PERMISSIONS.PAYMENTS],
     ['POST', '/api/v1/blocks', ADMIN_PERMISSIONS.LOCATIONS],
     ['POST', '/api/v1/cities', ADMIN_PERMISSIONS.LOCATIONS],
   ])('refuses %s %s to a partner without that area', async (method, path, permission) => {

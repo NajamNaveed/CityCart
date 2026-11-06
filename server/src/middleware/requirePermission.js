@@ -65,8 +65,13 @@ function requirePermission(...permissions) {
           return next();
 
         case ROLES.BRAND_EMPLOYEE: {
-          const employee = await Employee.findOne({ userId: req.user._id });
-                    if (!employee || !employee.isActive) {
+          // authenticate already resolved the active membership for the
+          // session's brand; the fallback keeps this middleware usable on its
+          // own (tests and any future route that skips authenticate).
+          const employee =
+            req.membership ||
+            (await Employee.findOne({ userId: req.user._id, brandId: req.user.brandId, isActive: true }));
+          if (!employee || !employee.isActive) {
             return deny('EMPLOYEE_INACTIVE');
           }
           if (!permissions.some((permission) => employee.permissions.includes(permission))) {

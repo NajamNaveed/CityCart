@@ -4,8 +4,11 @@ const jwt = require('jsonwebtoken');
 
 jest.mock('../src/models/user.model');
 jest.mock('../src/models/employee.model');
+jest.mock('../src/models/brand.model');
 
 const User = require('../src/models/user.model');
+const Employee = require('../src/models/employee.model');
+const Brand = require('../src/models/brand.model');
 const app = require('../src/app');
 const env = require('../src/config/env');
 const { signToken } = require('../src/utils/jwt');
@@ -44,6 +47,14 @@ describe('POST /api/v1/auth/staff/login', () => {
   async function accountExists(role) {
     const user = fakeUser(role, { passwordHash: await hashPassword(PASSWORD) });
     User.findOne.mockReturnValue({ select: jest.fn().mockResolvedValue(user) });
+    if (role === 'BRAND_EMPLOYEE') {
+      // A single membership signs in directly; multi-brand is covered by
+      // workspace.test.js.
+      Employee.find.mockResolvedValue([
+        { _id: oid(), userId: user._id, brandId, role, isActive: true },
+      ]);
+      Brand.find.mockResolvedValue([{ _id: brandId, name: 'Acme' }]);
+    }
     return user;
   }
 

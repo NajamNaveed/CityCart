@@ -15,13 +15,11 @@ import ProductImage from '../../components/ProductImage'
 import RequireCustomer from '../../components/RequireCustomer'
 import StatusPill from '../../components/StatusPill'
 import { useAuth } from '../../hooks/useAuth'
-import { useRefreshOnForeground } from '../../hooks/useRefreshOnForeground'
 import { useRemote } from '../../hooks/useRemote'
 import { useRiderLocation } from '../../hooks/useRiderLocation'
-import PayNowButton from '../../components/PayNowButton'
 import OrderChangeCard from '../../components/OrderChangeCard'
 import { getErrorMessage } from '../../services/api'
-import { awaitingPayment, canCancel, cancelOrder, CODE_VISIBLE_STATUSES, fetchDeliveryCode, fetchOrder, fetchReceipt, isOnline, TERMINAL_PROBLEMS } from '../../services/orders'
+import { canCancel, cancelOrder, CODE_VISIBLE_STATUSES, fetchDeliveryCode, fetchOrder, fetchReceipt, TERMINAL_PROBLEMS } from '../../services/orders'
 import { formatDateTime, formatPrice, humanize, timeAgo } from '../../utils/format'
 import { latLngOfGeoPoint } from '../../utils/geo'
 import { isObjectId } from '../../utils/ids'
@@ -106,7 +104,7 @@ function RiderLocationCard({ deliveryId, destination }) {
 }
 
 // The receipt of a paid order; nothing is shown until one exists.
-const PAID_BY = { CASH: 'cash', CARD: 'card machine', BANK_TRANSFER: 'bank transfer', WALLET: 'wallet', ONLINE_GATEWAY: 'online payment' }
+const PAID_BY = { CASH: 'cash', CARD: 'card machine', BANK_TRANSFER: 'bank transfer', WALLET: 'wallet' }
 const WALLETS = { JAZZCASH: 'JazzCash', EASYPAISA: 'Easypaisa', OTHER: 'other wallet' }
 // How a COD order was paid at the door (docs/21 §I.5); absent on older receipts.
 function paidBy(receipt) {
@@ -245,18 +243,6 @@ function OrderView({ data, refreshing, onRefresh, onChanged }) {
         </Section>
       ) : null}
 
-      {awaitingPayment({ order, payment }) ? (
-        <Section title="Waiting for your payment">
-          <Card style={{ gap: spacing.md }}>
-            <AppText variant="small">
-              {payment.expiresAt ? `Pay before ${new Date(payment.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, or this order is cancelled and its items go back on sale. ` : ''}
-              The brand starts on your order once the payment is confirmed.
-            </AppText>
-            <PayNowButton orderId={order._id} />
-          </Card>
-        </Section>
-      ) : null}
-
       {delivery?.status === 'OUT_FOR_DELIVERY' ? (
         <RiderLocationCard deliveryId={delivery._id} destination={latLngOfGeoPoint(order.deliveryLocation)} />
       ) : null}
@@ -316,10 +302,10 @@ function OrderView({ data, refreshing, onRefresh, onChanged }) {
           </View>
           <AppText variant="small" style={{ fontSize: 12 }}>
             {payment?.status === 'PAID'
-              ? isOnline(order) ? 'Paid online.' : 'Paid in cash on delivery.'
+              ? 'Paid in cash on delivery.'
               : delivery?.paymentPending
                 ? 'Paid to the rider; the brand is checking the payment.'
-                : isOnline(order) ? 'To be paid online.' : 'Pay in cash when your order arrives.'}
+                : 'Pay in cash when your order arrives.'}
           </AppText>
           {returnDoc?.refundAmount > 0 ? (
             <AppText variant="small" style={{ fontSize: 12 }}>
@@ -385,10 +371,6 @@ export default function OrderScreen() {
     setChanged(null)
     remote.reload()
   }
-  // Back from paying in the browser: look again, so a payment that went through shows at once.
-  useRefreshOnForeground(() => {
-    if (data && awaitingPayment(data)) refresh()
-  })
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: colors.paper }}>

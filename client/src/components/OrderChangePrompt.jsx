@@ -83,12 +83,7 @@ export default function OrderChangePrompt({ order, adjustment, onChanged, onMess
           <dd className="mt-0.5 font-semibold text-ink">{formatPrice(adjustment.totalsAfterRemoval.total)}</dd>
         </div>
       </dl>
-      <p className="mt-2 text-[12.5px] text-muted">
-        Delivery and discounts stay the same.
-        {order.paymentMethod === 'ONLINE_GATEWAY' &&
-          order.paymentStatus === 'PAID' &&
-          ' If the new total is lower, the difference goes back to your payment method.'}
-      </p>
+      <p className="mt-2 text-[12.5px] text-muted">Delivery and discounts stay the same.</p>
 
       {error && (
         <p className="mt-4 flex items-start gap-2 rounded-md bg-white px-3.5 py-2.5 text-sm text-clay">

@@ -1,6 +1,6 @@
 const express = require('express');
 
-const { list, create, update, resetPassword } = require('../controllers/rider.controller');
+const { list, create, update, remove, resetPassword } = require('../controllers/rider.controller');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
 const requirePermission = require('../middleware/requirePermission');
@@ -19,5 +19,6 @@ router.get('/', ...brandUser, requirePermission(PERMISSIONS.RIDERS_VIEW), requir
 router.post('/', ...brandUser, requirePermission(PERMISSIONS.RIDERS_CREATE), requireTenant, create);
 router.patch('/:id/password', ...brandUser, requirePermission(PERMISSIONS.RIDERS_UPDATE), requireTenant, resetPassword);
 router.patch('/:id', ...brandUser, requirePermission(PERMISSIONS.RIDERS_UPDATE), requireTenant, update);
+router.delete('/:id', ...brandUser, requirePermission(PERMISSIONS.RIDERS_UPDATE), requireTenant, remove);
 
 module.exports = router;

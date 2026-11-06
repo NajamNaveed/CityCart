@@ -1,7 +1,9 @@
 const User = require('../models/user.model');
+const Employee = require('../models/employee.model');
+const Brand = require('../models/brand.model');
 const AdminPartner = require('../models/adminPartner.model');
 const { hashPassword, comparePassword } = require('../utils/password');
-const { signToken } = require('../utils/jwt');
+const { signToken, verifyToken } = require('../utils/jwt');
 const { ROLES, STAFF_ROLES, STAFF_APP_ROLES, DELIVERY_APP_ROLES } = require('../config/roles');
 const env = require('../config/env');
 const { sendVerificationEmail } = require('./emailAuth.service');
@@ -17,10 +19,11 @@ const { sendVerificationEmail } = require('./emailAuth.service');
  */
 
 class AuthError extends Error {
-  constructor(status, message, code) {
+  constructor(status, message, code, extra) {
     super(message);
     this.status = status;
     this.code = code;
+    this.extra = extra;
   }
 }
 
@@ -98,8 +101,70 @@ const PORTAL_ACCOUNT_TYPES = Object.freeze({
   admin: 'PLATFORM_ADMIN',
 });
 
+// A workspace token only chooses a membership; it is never a session
+// (docs/06 §9, docs/24 §3.3).
+const WORKSPACE_TOKEN_TTL = '5m';
+
+/**
+ * The person's active memberships, with the brand name the workspace picker
+ * shows. Only called after the password has been proven, so the result can
+ * never be used to discover accounts.
+ */
+async function activeMemberships(userId) {
+  const memberships = await Employee.find({ userId, isActive: true });
+  if (!memberships || memberships.length === 0) return [];
+  const brands = await Brand.find({ _id: { $in: memberships.map((m) => m.brandId) } });
+  const brandById = new Map((brands || []).map((b) => [String(b._id), b]));
+  return memberships.map((membership) => ({
+    membership,
+    brand: brandById.get(String(membership.brandId)) || null,
+  }));
+}
+
+function membershipRole(membership, user) {
+  // Membership rows created before v3 have no stored role; they are plain
+  // team members (docs/24 §3.2).
+  return membership.role || (user && user.role) || ROLES.BRAND_EMPLOYEE;
+}
+
+function membershipSummary({ membership, brand }) {
+  return {
+    brandId: String(membership.brandId),
+    brandName: brand ? brand.name : 'Brand',
+    role: membershipRole(membership),
+    membershipId: String(membership._id),
+  };
+}
+
+/**
+ * Issues a session token. An employee session names the membership (the
+ * tenant and the role) rather than the account's home brand, per docs/24 §3.3.
+ */
+function issueSessionToken(user, { portal, membership } = {}) {
+  const role = membership ? membershipRole(membership, user) : user.role;
+  const brandId = membership ? membership.brandId : user.brandId;
+  return signToken(
+    {
+      userId: user._id,
+      role,
+      brandId,
+      passwordVersion: user.passwordVersion,
+      ...(membership && { membershipId: membership._id }),
+      // Marks an app token with the app it was issued to, so each app can
+      // only ever use its own token (see middleware/authenticate.js).
+      ...((portal === 'staff' || portal === 'delivery') && { client: portal }),
+    },
+    STAFF_ROLES.includes(role) ? { expiresIn: `${env.staffSessionHours}h` } : undefined,
+  );
+}
+
 /**
  * Authenticates a user by email/password for one portal (see PORTAL_ROLES).
+ *
+ * A brand employee may belong to several brands (docs/24 §3.2-3.3): one
+ * membership signs in directly, several answer 409 WORKSPACE_REQUIRED with a
+ * short-lived token that only selects a workspace. Brand owners, pickers and
+ * riders keep their single-brand session.
  */
 async function loginUser({ email, password }, portal = 'customer') {
   const allowedRoles = PORTAL_ROLES[portal];
@@ -156,23 +221,90 @@ async function loginUser({ email, password }, portal = 'customer') {
     }
   }
 
-  // Staff sessions are short-lived (docs/06 §9 — staff session security):
-  // the token expires with the short staff cookie and is re-issued on every
-  // authenticated staff request, so an active staff member never notices.
-  const token = signToken(
-    {
-      userId: user._id,
-      role: user.role,
-      brandId: user.brandId,
-      passwordVersion: user.passwordVersion,
-      // Marks an app token with the app it was issued to, so each app can
-      // only ever use its own token (see middleware/authenticate.js).
-      ...((portal === 'staff' || portal === 'delivery') && { client: portal }),
-    },
-    STAFF_ROLES.includes(user.role) ? { expiresIn: `${env.staffSessionHours}h` } : undefined,
-  );
+  let membership = null;
+  if (user.role === ROLES.BRAND_EMPLOYEE) {
+    const memberships = await activeMemberships(user._id);
+    // No active membership means the person was removed from every brand.
+    // The generic error keeps a removed account indistinguishable from a
+    // wrong password.
+    if (memberships.length === 0) {
+      throw new AuthError(401, GENERIC_LOGIN_ERROR);
+    }
+    if (memberships.length > 1) {
+      const workspaceToken = signToken(
+        {
+          userId: user._id,
+          role: user.role,
+          purpose: 'workspace',
+          portal,
+          passwordVersion: user.passwordVersion,
+        },
+        { expiresIn: WORKSPACE_TOKEN_TTL }
+      );
+      throw new AuthError(409, 'Choose a workspace.', 'WORKSPACE_REQUIRED', {
+        workspaceToken,
+        memberships: memberships.map(membershipSummary),
+      });
+    }
+    membership = memberships[0].membership;
+  }
 
-  return { user: toSafeUser(user), token };
+  const token = issueSessionToken(user, { portal, membership });
+  return { user: toSafeUser(user, membership), token };
+}
+
+/**
+ * Exchanges a workspace token and a chosen brand for a normal session
+ * (docs/05 §6, docs/06 §9). The membership is re-checked here, not trusted
+ * from the token.
+ */
+async function completeWorkspaceLogin({ workspaceToken, brandId }) {
+  let payload;
+  try {
+    payload = verifyToken(workspaceToken);
+  } catch {
+    throw new AuthError(401, 'This sign-in has expired. Please sign in again.', 'WORKSPACE_EXPIRED');
+  }
+  if (payload.purpose !== 'workspace') {
+    throw new AuthError(401, 'This sign-in has expired. Please sign in again.', 'WORKSPACE_EXPIRED');
+  }
+
+  const user = await User.findById(payload.userId);
+  if (!user || !user.isActive) {
+    throw new AuthError(401, 'This sign-in has expired. Please sign in again.', 'WORKSPACE_EXPIRED');
+  }
+  if ((payload.passwordVersion || 0) !== (user.passwordVersion || 0)) {
+    throw new AuthError(401, 'This sign-in has expired. Please sign in again.', 'WORKSPACE_EXPIRED');
+  }
+  if (user.role !== ROLES.BRAND_EMPLOYEE) {
+    throw new AuthError(401, 'This sign-in has expired. Please sign in again.', 'WORKSPACE_EXPIRED');
+  }
+
+  const membership = await Employee.findOne({ userId: user._id, brandId, isActive: true });
+  if (!membership) {
+    throw new AuthError(403, 'You no longer have access to that workspace.', 'WORKSPACE_UNAVAILABLE');
+  }
+
+  const token = issueSessionToken(user, { portal: payload.portal, membership });
+  return { user: toSafeUser(user, membership), token, portal: payload.portal, membership };
+}
+
+/**
+ * Issues a fresh session for another active membership without asking for
+ * the password again (docs/24 §3.3). Only employees with more than one
+ * membership reach this; the target is always re-checked.
+ */
+async function switchWorkspace({ user, brandId, client }) {
+  if (user.role !== ROLES.BRAND_EMPLOYEE) {
+    throw new AuthError(403, 'Only team members can switch workspaces.', 'WORKSPACE_SWITCH_FORBIDDEN');
+  }
+  const membership = await Employee.findOne({ userId: user._id, brandId, isActive: true });
+  if (!membership) {
+    throw new AuthError(403, 'You no longer have access to that workspace.', 'WORKSPACE_UNAVAILABLE');
+  }
+  // Keep the app mark so a staff-app token stays usable in that app only.
+  const token = issueSessionToken(user, { membership, portal: client });
+  return { user: toSafeUser(user, membership), token, membership };
 }
 
 /**
@@ -181,18 +313,24 @@ async function loginUser({ email, password }, portal = 'customer') {
  * Deliberately not just spreading the Mongoose document — an allow-list
  * is defense-in-depth on top of the User schema's own toJSON transform.
  */
-function toSafeUser(user) {
+function toSafeUser(user, membership) {
+  // On an employee session the active membership (not the account's home
+  // brand) decides the role and tenant the dashboard works in.
+  const role = membership ? membershipRole(membership, user) : user.role;
+  const brandId = membership ? membership.brandId : user.brandId;
   return {
     id: user._id,
     name: user.name,
     email: user.email,
-    role: user.role,
+    role,
     // false only for a self-registered account that has not confirmed its
     // inbox yet (such accounts cannot sign in, but the flag keeps clients
     // honest if that rule ever loosens).
     emailVerified: user.emailVerifiedAt !== null && user.emailVerifiedAt !== undefined,
     // A brand account's own brand id (the dashboard needs it to load its categories).
-    ...(user.brandId && { brandId: user.brandId }),
+    ...(brandId && { brandId }),
+    // The Employee row backing an employee session (one per brand).
+    ...(membership && { membershipId: membership._id }),
     // Only present for staff of a terminated brand, so the UI can show a banner.
     ...(user.accessRestricted && {
       access: { restricted: true, expiresAt: user.accessExpiresAt },
@@ -203,4 +341,13 @@ function toSafeUser(user) {
   };
 }
 
-module.exports = { registerUser, loginUser, toSafeUser, AuthError, PORTAL_ROLES, PORTAL_ACCOUNT_TYPES };
+module.exports = {
+  registerUser,
+  loginUser,
+  completeWorkspaceLogin,
+  switchWorkspace,
+  toSafeUser,
+  AuthError,
+  PORTAL_ROLES,
+  PORTAL_ACCOUNT_TYPES,
+};

@@ -13,7 +13,6 @@ const OrderAdjustment = require('../../src/models/orderAdjustment.model');
 const InventoryMovement = require('../../src/models/inventoryMovement.model');
 const Notification = require('../../src/models/notification.model');
 const User = require('../../src/models/user.model');
-const env = require('../../src/config/env');
 const { checkout } = require('../../src/services/order.service');
 const { updateBrandOrderStatus } = require('../../src/services/brandOrder.service');
 const {
@@ -191,18 +190,14 @@ describe('proposing a change (docs/21 §H.2/H.4)', () => {
     ).rejects.toMatchObject({ status: 409, extra: { code: 'SUBSTITUTE_UNAVAILABLE' } });
   });
 
-  it('an unpaid online order cannot be adjusted', async () => {
-    const previous = { ...env.payments };
-    Object.assign(env.payments, { provider: 'mock', webhookSecret: 'a-long-test-webhook-secret-123' });
-    try {
-      const ctx = await placeOrder({ method: 'ONLINE_GATEWAY' });
-      await expect(propose(ctx)).rejects.toMatchObject({
-        status: 409,
-        extra: { code: 'ONLINE_PAYMENT_NOT_COMPLETED' },
-      });
-    } finally {
-      Object.assign(env.payments, previous);
-    }
+  it('a legacy online order cannot be adjusted', async () => {
+    const ctx = await placeOrder();
+    await Order.updateOne({ _id: ctx.order._id }, { $set: { paymentMethod: 'ONLINE_GATEWAY', paymentStatus: 'PAID' } });
+    await Payment.updateOne({ orderId: ctx.order._id }, { $set: { method: 'ONLINE_GATEWAY', status: 'PAID' } });
+    await expect(propose(ctx)).rejects.toMatchObject({
+      status: 409,
+      extra: { code: 'LEGACY_ONLINE_ORDER' },
+    });
   });
 });
 
@@ -395,54 +390,20 @@ describe('the shipping gate and order closure', () => {
   });
 });
 
-describe('paid online orders (docs/21 §H.4)', () => {
-  const previous = { ...env.payments };
-  beforeEach(() => Object.assign(env.payments, { provider: 'mock', webhookSecret: 'a-long-test-webhook-secret-123' }));
-  afterAll(() => Object.assign(env.payments, previous));
-
-  async function paidOnlineOrder(options = {}) {
-    const ctx = await placeOrder({ ...options, method: 'ONLINE_GATEWAY' });
-    await Payment.updateOne(
-      { orderId: ctx.order._id },
-      { $set: { status: 'PAID', paidAt: new Date() } }
-    );
-    await Order.updateOne({ _id: ctx.order._id }, { $set: { paymentStatus: 'PAID' } });
-    ctx.order = await Order.findById(ctx.order._id);
-    return ctx;
-  }
-
-  it('a lower total is recorded as a refund; the order stays paid', async () => {
-    const ctx = await paidOnlineOrder();
+describe('a legacy online order is read-only (docs/10 §29)', () => {
+  it('answering one is refused too, and nothing changes', async () => {
+    const ctx = await placeOrder();
     const adjustment = await propose(ctx);
+    await Order.updateOne({ _id: ctx.order._id }, { $set: { paymentMethod: 'ONLINE_GATEWAY', paymentStatus: 'PAID' } });
+    await Payment.updateOne({ orderId: ctx.order._id }, { $set: { method: 'ONLINE_GATEWAY', status: 'PAID' } });
 
-    const result = await respond(ctx, adjustment, 'REMOVE');
-
-    expect(result.refund).toBe(20);
-    expect(result.order.total).toBe(10);
-    expect(result.order.paymentStatus).toBe('PAID'); // still paid for the final total
-    const payment = await Payment.findOne({ orderId: ctx.order._id });
-    expect(payment.amount).toBe(30); // what was actually charged stays the record
-    expect(payment.refundedAmount).toBe(20);
-    expect(payment.status).toBe('PARTIALLY_REFUNDED');
-    expect(payment.refunds.map((r) => r.amount)).toEqual([20]);
-    expect(await Notification.countDocuments({ userId: ctx.user, type: 'REFUND_ISSUED' })).toBe(1);
-  });
-
-  it('a higher total is refused and changes nothing', async () => {
-    const ctx = await paidOnlineOrder({ qty: 1, price: 10, stock: 2 });
-    const expensive = await makeProduct({ brand: ctx.brand, stock: 10, price: 50 });
-    const adjustment = await propose(ctx, {
-      lines: [lineFor(ctx.order, 0, { productId: expensive._id, quantity: 1 })],
-    });
-
-    await expect(respond(ctx, adjustment, 'ACCEPT')).rejects.toMatchObject({
+    await expect(respond(ctx, adjustment, 'REMOVE')).rejects.toMatchObject({
       status: 409,
-      extra: { code: 'ADJUSTMENT_INCREASES_TOTAL' },
+      extra: { code: 'LEGACY_ONLINE_ORDER' },
     });
 
     expect((await OrderAdjustment.findById(adjustment._id)).status).toBe('PROPOSED');
     expect((await Payment.findOne({ orderId: ctx.order._id })).refundedAmount).toBe(0);
-    expect(await stock(expensive)).toEqual({ quantity: 10, reserved: 1 });
     expect((await reload(ctx)).activeAdjustmentId).toEqual(adjustment._id);
   });
 });

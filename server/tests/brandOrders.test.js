@@ -265,8 +265,8 @@ describe('PATCH /api/v1/brand/orders/:id/status', () => {
     expect(Delivery.create).not.toHaveBeenCalled();
   });
 
-  describe('an order paid online is not processed until the gateway confirms the money', () => {
-    it('409 PAYMENT_PENDING when confirming an online order that is not paid yet', async () => {
+  describe('a legacy online order is not processed until its payment is confirmed', () => {
+    it('409 PAYMENT_PENDING when confirming a legacy online order that is not paid yet', async () => {
       const { cookie } = asRole(ROLES.BRAND_ADMIN);
       Order.findOneAndUpdate.mockResolvedValue(null);
       Order.findOne.mockReturnValue({ session: () => Promise.resolve({ orderStatus: 'PENDING', paymentMethod: 'ONLINE_GATEWAY', paymentStatus: 'PENDING' }) });
@@ -277,14 +277,14 @@ describe('PATCH /api/v1/brand/orders/:id/status', () => {
       expect(res.body.code).toBe('PAYMENT_PENDING');
     });
 
-    it('the confirm filter lets cash orders and PAID online orders through, and nothing else', async () => {
+    it('the confirm filter lets cash orders and PAID legacy online orders through, and nothing else', async () => {
       const { cookie } = asRole(ROLES.BRAND_ADMIN);
       Order.findOneAndUpdate.mockResolvedValue({ _id: oid(), items: [] });
       await patch(cookie, oid(), 'CONFIRMED');
       expect(Order.findOneAndUpdate.mock.calls[0][0].$or).toEqual([{ paymentMethod: 'COD' }, { paymentStatus: 'PAID' }]);
     });
 
-    it('rejecting an unpaid online order is still allowed (it restocks), and no payment gate applies to other steps', async () => {
+    it('rejecting an unpaid legacy online order is still allowed (it restocks), and no payment gate applies to other steps', async () => {
       const { cookie } = asRole(ROLES.BRAND_ADMIN);
       Order.findOneAndUpdate.mockResolvedValue({ _id: oid(), items: [] });
       await patch(cookie, oid(), 'REJECTED');

@@ -266,6 +266,40 @@ a delivery token is refused for staff or shoppers, and any app token is refused
 for a brand owner, the super admin or a shopper (`403 WRONG_APP`). See
 `20-partner-app.md` (Staff) and `23-delivery-app.md` (Delivery).
 
+### Workspace selection (v3, Phase 1)
+
+An employee with several active brand memberships chooses one after the
+password is proven (docs/24 §3.3, docs/06 §9).
+
+```text
+POST /api/v1/auth/workspace          { workspaceToken, brandId }
+POST /api/v1/auth/workspace/switch   { brandId }        authenticated staff session
+```
+
+When `/auth/brand/login` or `/auth/staff/login` finds several memberships it
+answers:
+
+```json
+{
+  "success": false,
+  "message": "Choose a workspace.",
+  "code": "WORKSPACE_REQUIRED",
+  "workspaceToken": "<signed, 5 minutes>",
+  "memberships": [{ "brandId": "...", "brandName": "...", "role": "BRAND_EMPLOYEE" }]
+}
+```
+
+`POST /auth/workspace` exchanges the token and a chosen brand for the normal
+staff cookie; the membership must still be active. Switching issues a fresh
+staff cookie for another active membership without re-entering the password.
+The session carries `brandId`, `membershipId` and `role`, and every request
+re-checks the membership. A brand token whose membership is inactive is
+refused, never downgraded to the home brand.
+
+The seller portal sign-in for `SERVICE_PROVIDER`
+(`POST /api/v1/auth/service/login`, Phase 2) follows the same staff cookie
+rules but scopes the session to the provider, never to a brand.
+
 ---
 
 ## Logout
@@ -1246,7 +1280,7 @@ Response:
 }
 ```
 
-`refundAmount` is the part of an online payment returned because the new total is lower (docs/10 §30). It is `0` for cash on delivery.
+`refundAmount` is always `0` in v3: the customer pays the final total at the door (docs/10 §30).
 
 Errors:
 
@@ -1254,9 +1288,7 @@ Errors:
 404  proposal not found (or not this customer's)
 409  ADJUSTMENT_NOT_PENDING   already answered, withdrawn or closed
 409  ADJUSTMENT_EXPIRED       the 24-hour window passed (nothing changes)
-409  ADJUSTMENT_INCREASES_TOTAL  online order would cost more
-409  ONLINE_PAYMENT_NOT_COMPLETED  the online payment is not paid yet
-409  REFUND_EXCEEDS_PAID      the refund would exceed what was paid
+409  LEGACY_ONLINE_ORDER      the order belongs to the removed gateway and is read-only
 409  ORDER_CHANGED            a concurrent request changed the order
 400  validation failed (unknown action, malformed ids)
 ```
@@ -1396,7 +1428,7 @@ Errors:
 403  PERMISSION_DENIED (no orders.adjust)
 409  NOT_ADJUSTABLE            the order is past processing or already ended
 409  ADJUSTMENT_PENDING        another proposal is waiting
-409  ONLINE_PAYMENT_NOT_COMPLETED  an online order is not paid yet
+409  LEGACY_ONLINE_ORDER       the order belongs to the removed gateway and is read-only
 400  DUPLICATE_ORDER_ITEM / ORDER_ITEM_NOT_FOUND / NO_CHANGE
 400  SUBSTITUTE_WITHOUT_SHORTAGE / SUBSTITUTE_TOO_MANY / SUBSTITUTE_SAME_PRODUCT
 409  SUBSTITUTE_UNAVAILABLE    inactive/foreign product or not enough stock
@@ -1453,6 +1485,7 @@ GET    /api/v1/admin/partners             list the team (page, limit)
 POST   /api/v1/admin/partners             add a partner
 PATCH  /api/v1/admin/partners/:id         name, phone, permissions, readOnly, isActive
 DELETE /api/v1/admin/partners/:id         deactivate (the seat is freed)
+DELETE /api/v1/admin/partners/:id?purge=account  deactivate and anonymize, freeing the email
 PATCH  /api/v1/admin/partners/:id/password  set a new temporary password
 ```
 
@@ -1530,7 +1563,7 @@ Every endpoint below that says "Super Admin only" (or "Super Admin") is now
 | `admin.catalog`     | category writes (and, later, the shared catalogue) |
 | `admin.settings`    | `/admin/settings` |
 | `admin.analytics`   | `/admin/analytics` |
-| `admin.payments`    | `/payments/events` and receipt readers for platform admins |
+| `admin.payments`    | payment records and receipt readers for platform admins |
 
 A partner with `readOnly: true` is refused on every non-GET admin request with
 `403 READ_ONLY`; a missing area answers `403 PERMISSION_DENIED` plus the
@@ -1596,12 +1629,32 @@ employees.update
 
 ```text
 DELETE /api/v1/employees/:id
+DELETE /api/v1/employees/:id?purge=account
 ```
 
 Required:
 
 ```text
 employees.delete
+```
+
+Removes one brand membership (`isActive = false`, `removedAt`, `removedBy`,
+optional `removalReason` in the body). The login and its other memberships are
+untouched, and re-adding the same email later revives this membership.
+
+With `?purge=account` the account is also anonymized, which frees the original
+email. That is refused with `409 ACCOUNT_HAS_OTHER_MEMBERSHIPS` while the
+person still has an active membership in another brand.
+
+Both forms refuse the caller's own account (`403 SELF_MODIFICATION`) and a
+picker who still has orders to finish (`409 PICKER_HAS_OPEN_ORDERS`).
+
+```json
+{
+  "success": true,
+  "message": "Employee removed",
+  "employee": { "_id": "...", "isActive": false, "removedAt": "..." }
+}
 ```
 
 ---
@@ -1775,7 +1828,7 @@ payments.manage
 
 This endpoint must be heavily protected.
 
-For future online gateways, payment status should preferably be updated through verified provider callbacks/webhooks rather than trusting arbitrary client requests.
+Payment status changes must stay brand-scoped and permission-checked; no client may mark an order paid without the matching collection or verification record.
 
 ---
 
@@ -1862,24 +1915,18 @@ Errors: `409 NO_ACTIVE_DELIVERY` (the rider has nothing out for delivery), `429`
 
 ---
 
-# 22d. Online Payment Endpoints
+# 22d. Payment Methods at Checkout
 
-Details and rules: `10-payment-system.md` §29.
+Checkout (`POST /orders`) accepts only `paymentMethod: "COD"`. Any other value is
+rejected with `400`. The customer pays at the door; the rider records the actual
+collection method (`CASH`, `BANK_TRANSFER`, `WALLET`, `CARD_MACHINE`) in the
+delivery app and, where required, uploads proof for the brand to verify
+(docs/10 §4, docs/21 §I).
 
-```text
-GET  /api/v1/payments/methods                          customer: [{ method, label, holdMinutes? }]
-POST /api/v1/payments/order/:orderId/checkout          customer, own order: { checkoutUrl, expiresAt, provider }
-POST /api/v1/payments/webhooks/:provider               the gateway (signature over the raw body, no login)
-GET  /api/v1/payments/mock-checkout/:reference         TEST gateway page (404 unless the test gateway is on)
-POST /api/v1/payments/mock-checkout/:reference/:choice TEST gateway: choice is pay or fail
-GET  /api/v1/payments/events?outcome=&page=&limit=     super admin: what the gateway told us
-```
-
-Checkout (`POST /orders`) now accepts `paymentMethod` `COD` or `ONLINE_GATEWAY` (the latter
-only while a provider is on, else `400 ONLINE_PAYMENTS_UNAVAILABLE`). Related errors:
-`409 PAYMENT_PENDING` (confirming an unpaid online order), `409 PAID_ORDER_NOT_CANCELLABLE`,
-`409 PAYMENT_EXPIRED`, `409 ALREADY_PAID`, `409 NOT_PAYABLE`, `409 NOT_ONLINE`,
-`503 ONLINE_PAYMENTS_UNAVAILABLE`, and for the webhook `401` (bad signature) and `400` (malformed).
+Legacy `ONLINE_GATEWAY` orders and payments remain readable but read-only. A brand
+cannot confirm, adjust or cancel them until their recorded payment is `PAID`
+(`409 PAYMENT_PENDING`, `409 PAID_ORDER_NOT_CANCELLABLE`); adjusting one returns
+`409 LEGACY_ONLINE_ORDER` (docs/10 §29).
 
 ---
 
@@ -2028,7 +2075,14 @@ GET    /riders                 list the brand's riders (?isActive, page, limit)
 POST   /riders                 { name, email, password, phone }  -> role RIDER, brand from the signed-in user
 PATCH  /riders/:id             { name?, phone?, isActive? }
 PATCH  /riders/:id/password    { password }  resets it and signs the rider out everywhere
+DELETE /riders/:id             remove; ?purge=account anonymizes and frees the email
 ```
+
+`DELETE` deactivates the rider (device tokens revoked, shared position cleared)
+and refuses with `409 RIDER_HAS_OPEN_DELIVERIES` while deliveries are still
+open. `?purge=account` also anonymizes the account, freeing its email; the
+rider's historical deliveries keep working through the surviving `_id`. Re-adding
+a removed rider's email reactivates the same account.
 
 Base `/api/v1/rider/deliveries` (role `RIDER` only; brand and rider come from the
 account, every query is pinned to both, anything else is `404`):

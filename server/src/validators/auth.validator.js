@@ -44,4 +44,24 @@ const resetPasswordSchema = tokenSchema.extend({
     .max(128, 'newPassword must be at most 128 characters'),
 });
 
-module.exports = { registerSchema, loginSchema, emailRequestSchema, tokenSchema, resetPasswordSchema };
+// A multi-brand employee's workspace step (docs/24 §3.3). The token is the
+// signed proof that the password was already accepted; the brand is only a
+// choice, and the server re-checks the membership.
+const workspaceTokenSchema = z.object({
+  workspaceToken: z.string().trim().min(1, 'workspaceToken is required'),
+  brandId: z.string().trim().regex(/^[a-f0-9]{24}$/i, 'invalid brandId'),
+});
+
+const workspaceSwitchSchema = z.object({
+  brandId: z.string().trim().regex(/^[a-f0-9]{24}$/i, 'invalid brandId'),
+});
+
+module.exports = {
+  registerSchema,
+  loginSchema,
+  emailRequestSchema,
+  tokenSchema,
+  resetPasswordSchema,
+  workspaceTokenSchema,
+  workspaceSwitchSchema,
+};

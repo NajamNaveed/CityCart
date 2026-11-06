@@ -38,6 +38,8 @@ const resetPartnerPasswordSchema = z.object({
   password: z.string().min(MIN_PASSWORD_LENGTH, `password must be at least ${MIN_PASSWORD_LENGTH} characters`),
 });
 
+const removePartnerQuerySchema = z.object({ purge: z.enum(['account']).optional() });
+
 const listPartnersQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(50).optional(),
@@ -56,4 +58,5 @@ module.exports = {
   resetPartnerPasswordSchema,
   listPartnersQuerySchema,
   listActivityQuerySchema,
+  removePartnerQuerySchema,
 };

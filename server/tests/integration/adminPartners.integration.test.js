@@ -8,6 +8,7 @@ const AdminAction = require('../../src/models/adminAction.model');
 const {
   createPartner,
   updatePartner,
+  purgePartner,
   resetPartnerPassword,
   AdminPartnerError,
   MAX_ACTIVE_PARTNERS,
@@ -127,6 +128,33 @@ describe('updatePartner (real MongoDB)', () => {
 
     expect(updated).toMatchObject({ permissions: [ADMIN_PERMISSIONS.REVIEWS], readOnly: true, user: { name: 'Renamed' } });
     expect(await AdminAction.countDocuments({ action: 'admin.partner.update' })).toBe(1);
+  });
+});
+
+describe('purgePartner (real MongoDB)', () => {
+  it('anonymizes the login, frees the email and keeps the record and audit history', async () => {
+    const owner = await actor();
+    const created = await createPartner({ actor: owner, data: partnerData() });
+
+    const purged = await purgePartner({ actor: owner, id: created._id });
+
+    expect(purged.isActive).toBe(false);
+    expect(purged.user.email).toBe(`deleted+${created.user._id}@deleted.invalid`);
+    const stored = await User.findById(created.user._id);
+    expect(stored).toMatchObject({ name: 'Deleted user', isActive: false });
+    expect(stored.deletedAt).toBeInstanceOf(Date);
+
+    await expect(loginUser({ email: 'pat@citycart.test', password: TEMP }, 'admin')).rejects.toMatchObject({
+      status: 401,
+    });
+    expect(await AdminPartner.countDocuments()).toBe(1);
+    expect(await AdminAction.countDocuments({ action: 'admin.partner.purge' })).toBe(1);
+
+    // the freed email can be used by a different person
+    const replacement = await createPartner({ actor: owner, data: partnerData({ name: 'New Pat' }) });
+    expect(String(replacement.user._id)).not.toBe(String(created.user._id));
+    expect(replacement.user.email).toBe('pat@citycart.test');
+    expect(await AdminPartner.countDocuments({ isActive: true })).toBe(1);
   });
 });
 

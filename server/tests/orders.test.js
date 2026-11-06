@@ -39,6 +39,7 @@ jest.mock('../src/utils/transaction', () => ({
 jest.mock('../src/services/notification.service');
 
 const User = require('../src/models/user.model');
+const Employee = require('../src/models/employee.model');
 const Brand = require('../src/models/brand.model');
 const Cart = require('../src/models/cart.model');
 const Order = require('../src/models/order.model');
@@ -55,7 +56,6 @@ const Address = require('../src/models/address.model');
 const notifications = require('../src/services/notification.service');
 const app = require('../src/app');
 const { ROLES } = require('../src/config/roles');
-const env = require('../src/config/env');
 const { getAuthCookie } = require('./helpers/testAuth');
 
 const oid = () => new mongoose.Types.ObjectId();
@@ -79,6 +79,9 @@ const zone = { _id: oid(), cityId: oid() };
 function asRole(role = ROLES.CUSTOMER) {
   const user = { _id: oid(), role, isActive: true, ...(role.includes('BRAND') && { brandId: oid() }) };
   User.findById.mockResolvedValue(user);
+  if (role === ROLES.BRAND_EMPLOYEE) {
+    Employee.findOne.mockResolvedValue({ _id: oid(), userId: user._id, brandId: user.brandId, role, isActive: true, permissions: [] });
+  }
   return { cookie: ['Cookie', getAuthCookie(user)], user };
 }
 
@@ -381,51 +384,16 @@ describe('POST /api/v1/orders (checkout)', () => {
     expect(Cart.updateOne).toHaveBeenCalledWith(expect.anything(), { $set: { items: [] } }, { session: 'SESSION' });
   });
 
-  describe('paying online', () => {
-    const online = { ...body, paymentMethod: 'ONLINE_GATEWAY' };
-    const saved = { ...env.payments };
-    afterEach(() => Object.assign(env.payments, saved));
-    const gatewayOn = () => Object.assign(env.payments, { provider: 'mock', webhookSecret: 'a-long-test-webhook-secret-123', holdMinutes: 30 });
+  it('only accepts cash on delivery at checkout', async () => {
+    const p1 = mkProduct(brandA, { price: 10 });
+    checkoutWorld({ lines: [[p1, 1]], products: [p1] });
+    await post();
+    expect(Payment.create.mock.calls[0][0][0]).not.toHaveProperty('expiresAt');
+  });
 
-    it('is refused, before the cart is even read, while no gateway is switched on', async () => {
-      Object.assign(env.payments, { provider: 'none', webhookSecret: '' });
-      const res = await post(online);
-      expect(res.status).toBe(400);
-      expect(res.body.code).toBe('ONLINE_PAYMENTS_UNAVAILABLE');
-      expect(Cart.findOne).not.toHaveBeenCalled();
-    });
-
-    it('keeps the stock for the hold time, with a PENDING online payment per order', async () => {
-      gatewayOn();
-      const p1 = mkProduct(brandA, { price: 10 });
-      checkoutWorld({ lines: [[p1, 2]], products: [p1] });
-      const before = Date.now();
-
-      const res = await post(online);
-
-      expect(res.status).toBe(201);
-      const [orderA] = Order.create.mock.calls[0][0];
-      expect(orderA).toMatchObject({ paymentMethod: 'ONLINE_GATEWAY', paymentStatus: 'PENDING', orderStatus: 'PENDING' });
-      const [payment] = Payment.create.mock.calls[0][0];
-      expect(payment).toMatchObject({ method: 'ONLINE_GATEWAY', status: 'PENDING', amount: 20 });
-      // 30 minutes from now (give or take the test's own runtime)
-      expect(payment.expiresAt.getTime()).toBeGreaterThanOrEqual(before + 30 * 60 * 1000);
-      expect(payment.expiresAt.getTime()).toBeLessThan(before + 31 * 60 * 1000);
-    });
-
-    it('cash on delivery never gets a stock-hold deadline, and works with or without a gateway', async () => {
-      gatewayOn();
-      const p1 = mkProduct(brandA, { price: 10 });
-      checkoutWorld({ lines: [[p1, 1]], products: [p1] });
-      await post();
-      expect(Payment.create.mock.calls[0][0][0]).not.toHaveProperty('expiresAt');
-    });
-
-    it.each(['CARD', 'BANK_TRANSFER', 'WALLET', 'CASH'])('%s is still not accepted at checkout', async (method) => {
-      gatewayOn();
-      expect((await post({ ...body, paymentMethod: method })).status).toBe(400);
-      expect(Cart.findOne).not.toHaveBeenCalled();
-    });
+  it.each(['ONLINE_GATEWAY', 'CARD', 'BANK_TRANSFER', 'WALLET', 'CASH'])('%s is refused before the cart is read', async (method) => {
+    expect((await post({ ...body, paymentMethod: method })).status).toBe(400);
+    expect(Cart.findOne).not.toHaveBeenCalled();
   });
 
   it('409 reports ALL problem lines together and creates nothing', async () => {

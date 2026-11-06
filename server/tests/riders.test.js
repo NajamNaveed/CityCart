@@ -5,11 +5,20 @@ jest.mock('../src/models/user.model');
 jest.mock('../src/models/employee.model');
 jest.mock('../src/models/brand.model');
 jest.mock('../src/models/delivery.model');
+jest.mock('../src/services/revocation.service', () => ({
+  revokeUserDelivery: jest.fn(),
+  clearRiderLocation: jest.fn(),
+}));
+jest.mock('../src/services/accountAnonymization.service', () => ({
+  anonymizeUser: jest.fn(),
+}));
 
 const User = require('../src/models/user.model');
 const Employee = require('../src/models/employee.model');
 const Brand = require('../src/models/brand.model');
 const Delivery = require('../src/models/delivery.model');
+const revocation = require('../src/services/revocation.service');
+const { anonymizeUser } = require('../src/services/accountAnonymization.service');
 const app = require('../src/app');
 const { ROLES } = require('../src/config/roles');
 const { PERMISSIONS } = require('../src/config/permissions');
@@ -148,6 +157,67 @@ describe('POST /api/v1/riders', () => {
     User.findOne.mockResolvedValue(null);
     User.create.mockRejectedValue(Object.assign(new Error('dup'), { code: 11000 }));
     expect((await post(cookie, NEW_RIDER)).status).toBe(409);
+  });
+
+  it('re-adds a removed rider with the same email by reactivating the same account', async () => {
+    const { cookie } = asRole(ROLES.BRAND_ADMIN);
+    Brand.findById.mockResolvedValue({ status: 'ACTIVE' });
+    const id = oid();
+    User.findOne.mockResolvedValue(riderDoc({ _id: id, role: 'RIDER', brandId, isActive: false }));
+    User.findOneAndUpdate.mockResolvedValue(riderDoc({ _id: id, brandId, isActive: true }));
+
+    const res = await post(cookie, NEW_RIDER);
+
+    expect(res.status).toBe(201);
+    expect(User.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: id, role: 'RIDER', brandId: brandId.toString() },
+      { $set: { name: 'Bilal', phone: '+92 300 1234567', passwordHash: expect.any(String), isActive: true, deletedAt: null } },
+      { new: true }
+    );
+    expect(User.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('DELETE /api/v1/riders/:id', () => {
+  it('removes a rider without deliveries, revoking tokens and clearing the location', async () => {
+    const { cookie } = asRole(ROLES.BRAND_ADMIN);
+    const id = oid();
+    Delivery.countDocuments.mockResolvedValue(0);
+    User.findOne.mockResolvedValue(riderDoc({ _id: id, role: 'RIDER', brandId }));
+    User.findOneAndUpdate.mockResolvedValue(riderDoc({ _id: id, brandId, isActive: false }));
+
+    const res = await request(app).delete(`/api/v1/riders/${id}`).set(...cookie);
+
+    expect(res.status).toBe(200);
+    expect(revocation.revokeUserDelivery).toHaveBeenCalledWith(id.toString());
+    expect(revocation.clearRiderLocation).toHaveBeenCalledWith(id.toString());
+  });
+
+  it('?purge=account anonymizes the rider and frees the email', async () => {
+    const { cookie } = asRole(ROLES.BRAND_ADMIN);
+    const id = oid();
+    Delivery.countDocuments.mockResolvedValue(0);
+    User.findOne.mockResolvedValue(riderDoc({ _id: id, role: 'RIDER', brandId }));
+    anonymizeUser.mockResolvedValue(riderDoc({ _id: id, brandId, isActive: false, email: `deleted+${id}@deleted.invalid` }));
+
+    const res = await request(app).delete(`/api/v1/riders/${id}?purge=account`).set(...cookie);
+
+    expect(res.status).toBe(200);
+    expect(anonymizeUser).toHaveBeenCalledWith({ userId: id.toString(), role: 'RIDER' });
+    expect(User.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('refuses while the rider still has open deliveries', async () => {
+    const { cookie } = asRole(ROLES.BRAND_ADMIN);
+    const id = oid();
+    User.findOne.mockResolvedValue(riderDoc({ _id: id, role: 'RIDER', brandId }));
+    Delivery.countDocuments.mockResolvedValue(1);
+
+    const res = await request(app).delete(`/api/v1/riders/${id}`).set(...cookie);
+
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('RIDER_HAS_OPEN_DELIVERIES');
+    expect(User.findOneAndUpdate).not.toHaveBeenCalled();
   });
 });
 

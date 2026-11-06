@@ -33,8 +33,7 @@ export default function AdjustmentPanel({ order, adjustments = [], adjustment, c
 
   const active = adjustment?.status === 'PROPOSED' ? adjustment : null
   const history = adjustments.filter((a) => a.status !== 'PROPOSED')
-  const onlineUnpaid = order.paymentMethod === 'ONLINE_GATEWAY' && order.paymentStatus !== 'PAID'
-  const canPropose = canAdjust && !active && ADJUSTABLE.includes(order.orderStatus) && !onlineUnpaid
+  const canPropose = canAdjust && !active && ADJUSTABLE.includes(order.orderStatus)
 
   async function loadProducts() {
     setLoading(true)
@@ -253,12 +252,6 @@ export default function AdjustmentPanel({ order, adjustments = [], adjustment, c
             Propose a change
           </button>
         </section>
-      )}
-
-      {canAdjust && !active && ADJUSTABLE.includes(order.orderStatus) && onlineUnpaid && (
-        <p className="mb-8 rounded-md bg-warning-soft px-3.5 py-2.5 text-sm text-warning">
-          This order has not been paid online yet, so it cannot be changed. Wait for the payment to be confirmed.
-        </p>
       )}
 
       {history.length > 0 && (

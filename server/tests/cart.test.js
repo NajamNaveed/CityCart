@@ -21,6 +21,7 @@ jest.mock('../src/models/product.model', () => {
 });
 
 const User = require('../src/models/user.model');
+const Employee = require('../src/models/employee.model');
 const Brand = require('../src/models/brand.model');
 const Cart = require('../src/models/cart.model');
 const Product = require('../src/models/product.model');
@@ -50,6 +51,9 @@ const makeInv = (o = {}) => ({ productId, availableQuantity: 10, trackInventory:
 function asRole(role = ROLES.CUSTOMER) {
   const user = { _id: oid(), role, isActive: true, ...(role.includes('BRAND') && { brandId }) };
   User.findById.mockResolvedValue(user);
+  if (role === ROLES.BRAND_EMPLOYEE) {
+    Employee.findOne.mockResolvedValue({ _id: oid(), userId: user._id, brandId, role, isActive: true, permissions: [] });
+  }
   return ['Cookie', getAuthCookie(user)];
 }
 

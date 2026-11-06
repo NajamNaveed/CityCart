@@ -651,7 +651,7 @@ The MVP initially supports:
 Cash on Delivery
 ```
 
-(Online payment was added in October 2026: `paymentMethod: ONLINE_GATEWAY`, see `10-payment-system.md` §29. An online order is created `PENDING` like any other, but the brand cannot confirm it until the payment is `PAID`, an unpaid one is cancelled automatically when its stock hold ends, and a customer cannot cancel one that is already paid.)
+v3 removed the online gateway (docs/10 §29, docs/24 §5.7). A checkout can only be `COD`; the door collection methods in docs/10 §4 are recorded by the rider, not at checkout. Legacy `ONLINE_GATEWAY` orders and payments remain readable but read-only: no new ones are created.
 
 The order should still have a payment reference/status.
 
@@ -668,7 +668,9 @@ The payment system is defined in:
 10-payment-system.md
 ```
 
-The architecture must allow future online payment gateways without redesigning the order model.
+Payment records stay separable from order records. v3 adds no customer online
+payment gateway; payment at the door and seller billing are separate concerns
+(docs/10, docs/15).
 
 ---
 
@@ -1038,7 +1040,7 @@ READY_FOR_SHIPMENT and later   refused (409 NOT_ADJUSTABLE)
 
 * One proposal may wait per order at a time. `Order.activeAdjustmentId` is the gate and a partial unique index on `OrderAdjustment { orderId, status: 'PROPOSED' }` is the database backstop.
 * Resolved proposals stay as history; the brand may propose again later while the order is still in an adjustable status.
-* An online order must already be `PAID`; an unpaid online order is still on its payment hold and cannot be adjusted.
+* A legacy order recorded against the removed online gateway is read-only and cannot be adjusted (`409 LEGACY_ONLINE_ORDER`).
 * Only the brand (or its picker, through the pick flow) can propose, and only the brand can withdraw. Only the customer who owns the order can answer. Brand employees need `orders.adjust` (separate from `orders.manage`).
 
 ## 41.2 The proposal
@@ -1076,7 +1078,7 @@ The customer sees the note, the affected lines, both possible totals and the dea
 | ------ | ------------ |
 | **Accept the change** | The order keeps the supplied units and adds the substitutes. Reserved substitute stock becomes sold stock. |
 | **Keep the rest / remove those items** | The order keeps only the supplied units; missing units are removed. Substitute stock is released. |
-| **Cancel the whole order** | The order becomes `CANCELLED`; all of its stock returns and any online payment is refunded. |
+| **Cancel the whole order** | The order becomes `CANCELLED` and all of its stock returns; the customer has not paid yet, so there is nothing to refund. |
 
 The brand may withdraw the proposal while it waits. After **24 hours** the proposal expires: **nothing about the order changes**, reserved substitute stock is released, and the brand decides what to do next (usually reject or try another proposal).
 
@@ -1090,7 +1092,7 @@ On acceptance or removal the backend, in one transaction:
 2. Recomputes `subtotal` and `total`; delivery fee, discount and tax stay as they were.
 3. Applies the money rules (see §41.5).
 4. Releases or converts the reserved substitute stock and, only when `restockRemoved` was ticked, returns the missing units to stock.
-5. Clears `activeAdjustmentId` and updates an already-issued online receipt to the final lines (docs/10 §30).
+5. Clears `activeAdjustmentId`.
 6. Resolves the proposal and notifies both sides.
 
 The proposal keeps the before/after totals, so the original order value is never lost; the order's `statusHistory` is untouched by an adjustment.
@@ -1102,16 +1104,11 @@ Delivery, rider assignment and the COD receipt are created **after** the final l
 ## 41.5 Payment effects
 
 ```text
-COD                 Payment.amount becomes the new order total; the rider collects it.
-Online, paid        allowed only when the new total is NOT higher.
-                    An equal total changes nothing; a lower total records the
-                    difference in Payment.refundedAmount/refunds[] and sets
-                    PARTIALLY_REFUNDED (or REFUNDED). Order.paymentStatus stays PAID.
-Online, paid, higher total   refused (409 ADJUSTMENT_INCREASES_TOTAL)
-Online, not paid    proposal refused (409 ONLINE_PAYMENT_NOT_COMPLETED)
+COD              Payment.amount becomes the new order total; the rider collects it at the door.
+Legacy online    refused (409 LEGACY_ONLINE_ORDER): the removed gateway's money flow is read-only.
 ```
 
-A customer who cancels the whole order gets the remaining paid amount refunded and the payment becomes `REFUNDED`. Payment rules are detailed in `10-payment-system.md` §30.
+Because the customer pays at the door, an adjustment or cancellation before delivery only changes the amount to collect; no prepaid refund is created. Payment rules are detailed in `10-payment-system.md` §30.
 
 ## 41.6 Gates and edge cases
 
@@ -1120,7 +1117,7 @@ A customer who cancels the whole order gets the remaining paid amount refunded a
 * A brand rejection also closes the waiting proposal and releases its reservation.
 * Two answers, an answer racing a withdrawal, or an answer racing the expiry sweep: exactly one wins, the others receive `409 ADJUSTMENT_NOT_PENDING` / `ADJUSTMENT_EXPIRED`.
 * A second proposal racing the first is refused (`409 ADJUSTMENT_PENDING`) by the atomic claim and the unique index.
-* An order that was already paid online cannot be adjusted to a higher total, even after the customer accepted; the whole acceptance is refused atomically.
+* A legacy online order cannot be proposed, answered or withdrawn; the whole request is refused atomically (`409 LEGACY_ONLINE_ORDER`).
 
 ## 41.7 Visibility and notifications
 
@@ -1141,7 +1138,7 @@ ADJUSTMENT_ANSWERED   to the brand's staff with orders.view, when the customer a
 ADJUSTMENT_EXPIRED    to the brand's staff with orders.view, when 24 hours pass unanswered
 ```
 
-A refund also sends the standard refund notification. Notifications carry `orderId` and `adjustmentId`, so the apps open the order.
+Notifications carry `orderId` and `adjustmentId`, so the apps open the order.
 
 ## 41.8 Tests
 
@@ -1152,8 +1149,8 @@ propose / accept / remove / cancel / withdraw / expiry
 atomic stock reservation and conversion (no overselling)
 one proposal at a time (including races)
 READY_FOR_SHIPMENT gate
-COD and paid-online totals, lower-total refund, higher-total refusal
-unpaid online refusal
+COD totals follow the final lines
+legacy online orders are read-only
 tenant isolation (brand A cannot touch brand B's order)
 orders.adjust permission
 no double processing of an answer
@@ -1217,9 +1214,9 @@ number and ignores any client total.
 
 **Money rules.** The customer pays for accepted units only (decision D7).
 Cash on delivery collects `netTotal`; a fully rejected cash order has nothing to
-collect, so its payment becomes `CANCELLED` and no receipt is issued. A prepaid
-order keeps its original payment amount and refunds the refused goods into the
-existing `Payment.refunds[]`; the payment becomes `PARTIALLY_REFUNDED` (or
+collect, so its payment becomes `CANCELLED` and no receipt is issued. A legacy
+online order keeps its original payment amount and refunds the refused goods into
+the existing `Payment.refunds[]`; the payment becomes `PARTIALLY_REFUNDED` (or
 `REFUNDED` when everything came back). The delivery fee is refunded only when
 every line was refused and at least one reason is the store's fault (D6).
 
@@ -1228,15 +1225,16 @@ return records a per-line decision; only `restock: true` adds the units back
 (`RETURN_RESTOCKED` inventory movement). Write-off is the default, so damaged or
 missing goods never re-enter stock by accident.
 
-**Commission and payouts.** There is no payout ledger yet (docs/15 is still a
-design). Revenue in analytics already uses `netTotal` for delivered orders and
-excludes `RETURNED` orders, so a later payout calculation subtracts refused goods
-without a second adjustment.
+**Commission and payouts.** There is no payout ledger: in v3 the platform is
+the payee, not the payer. Delivered orders generate a 1% commission entry and
+are billed to the seller monthly (docs/15). Revenue in analytics uses
+`netTotal` for delivered orders and excludes `RETURNED` orders, so refused
+goods reduce the commission base without a second adjustment.
 
 **Notifications.** The brand's order/delivery staff get `RETURN_IN_TRANSIT` when
 the goods are on their way; receiving them is the brand's own action and sends
 nothing further. The customer gets the normal delivery notification, a
-`REFUND_ISSUED` notification for prepaid money, and the order screen shows what
+`REFUND_ISSUED` notification for legacy prepaid money, and the order screen shows what
 arrived, what came back and the final total.
 
 Tests: `server/tests/returns.test.js` (pure quantity and money rules),

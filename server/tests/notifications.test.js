@@ -24,6 +24,9 @@ const oid = () => new mongoose.Types.ObjectId();
 function asRole(role = ROLES.CUSTOMER) {
   const user = { _id: oid(), role, isActive: true, ...(role.includes('BRAND') && { brandId: oid() }) };
   User.findById.mockResolvedValue(user);
+  if (role === ROLES.BRAND_EMPLOYEE) {
+    Employee.findOne.mockResolvedValue({ _id: oid(), userId: user._id, brandId: user.brandId, role, isActive: true, permissions: [] });
+  }
   return { cookie: ['Cookie', getAuthCookie(user)], user };
 }
 

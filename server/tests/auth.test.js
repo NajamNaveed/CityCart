@@ -11,6 +11,7 @@ const mongoose = require('mongoose');
 // real bcrypt hashing and real JWT signing/verification.
 jest.mock('../src/models/user.model');
 jest.mock('../src/models/employee.model');
+jest.mock('../src/models/brand.model');
 
 jest.mock('../src/services/emailAuth.service', () => {
   class EmailAuthError extends Error {}
@@ -26,6 +27,7 @@ jest.mock('../src/services/emailAuth.service', () => {
 
 const User = require('../src/models/user.model');
 const Employee = require('../src/models/employee.model');
+const Brand = require('../src/models/brand.model');
 const app = require('../src/app');
 const { hashPassword, comparePassword } = require('../src/utils/password');
 const { AUTH_COOKIE_NAME } = require('../src/config/cookie');
@@ -286,6 +288,14 @@ describe('login portals: each role can only use its own door', () => {
     const brandId = role.startsWith('BRAND') ? new mongoose.Types.ObjectId() : undefined;
     const fakeUser = makeFakeUser({ role, brandId, passwordHash });
     User.findOne.mockReturnValue({ select: jest.fn().mockResolvedValue(fakeUser) });
+    if (role === 'BRAND_EMPLOYEE') {
+      // One active membership signs in directly (multi-brand goes through
+      // the workspace step, covered by workspace.test.js).
+      Employee.find.mockResolvedValue([
+        { _id: new mongoose.Types.ObjectId(), userId: fakeUser._id, brandId, role, isActive: true },
+      ]);
+      Brand.find.mockResolvedValue([{ _id: brandId, name: 'Acme' }]);
+    }
     return request(app).post(path).send({ email: fakeUser.email, password: 'correct-password' });
   }
 
@@ -320,8 +330,15 @@ describe('GET /api/v1/auth/me: team members get their permissions', () => {
   // Logs the fake user in through the brand portal, then calls /me with that session.
   async function meAs(role, employeeRecord) {
     const passwordHash = await hashPassword('correct-password');
-    const user = makeFakeUser({ role, brandId: new mongoose.Types.ObjectId(), passwordHash });
+    const brandId = new mongoose.Types.ObjectId();
+    const user = makeFakeUser({ role, brandId, passwordHash });
     User.findOne.mockReturnValue({ select: jest.fn().mockResolvedValue(user) });
+    if (role === 'BRAND_EMPLOYEE') {
+      Employee.find.mockResolvedValue([
+        { _id: new mongoose.Types.ObjectId(), userId: user._id, brandId, role, isActive: true },
+      ]);
+      Brand.find.mockResolvedValue([{ _id: brandId, name: 'Acme' }]);
+    }
     const agent = request.agent(app);
     await agent.post('/api/v1/auth/brand/login').send({ email: user.email, password: 'correct-password' });
     User.findById.mockResolvedValue(user);
@@ -335,9 +352,10 @@ describe('GET /api/v1/auth/me: team members get their permissions', () => {
     expect(res.body.user.permissions).toEqual(['orders.view', 'orders.manage']);
   });
 
-  it('gives a deactivated employee record an empty list', async () => {
+  it('refuses a session whose membership was deactivated after issue', async () => {
     const res = await meAs('BRAND_EMPLOYEE', { isActive: false, permissions: ['orders.view'] });
-    expect(res.body.user.permissions).toEqual([]);
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe('MEMBERSHIP_INACTIVE');
   });
 
   it('adds no permission list for a brand owner (who has full access)', async () => {

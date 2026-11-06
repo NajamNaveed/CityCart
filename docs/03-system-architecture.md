@@ -757,7 +757,9 @@ Payment Service
 Payment Provider
 ```
 
-This allows future integration with online payment gateways without redesigning the order system.
+This keeps payment records separable from orders. v3 adds no customer online
+payment gateway: the customer pays the seller at the door, and the platform
+bills sellers separately (docs/15).
 
 ---
 

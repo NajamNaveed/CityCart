@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 jest.mock('../src/models/user.model');
 jest.mock('../src/models/employee.model');
 jest.mock('../src/models/brand.model');
+jest.mock('../src/models/order.model');
 jest.mock('../src/utils/password', () => ({
   hashPassword: jest.fn(async () => 'HASHED'),
   comparePassword: jest.fn(),
@@ -12,11 +13,21 @@ jest.mock('../src/utils/transaction', () => ({
   runInTransaction: (work) => work('SESSION'),
 }));
 jest.mock('../src/services/notification.service');
+jest.mock('../src/services/revocation.service', () => ({
+  revokeUserDelivery: jest.fn(),
+  clearRiderLocation: jest.fn(),
+}));
+jest.mock('../src/services/accountAnonymization.service', () => ({
+  anonymizeUser: jest.fn(),
+}));
 
 const User = require('../src/models/user.model');
 const Employee = require('../src/models/employee.model');
 const Brand = require('../src/models/brand.model');
+const Order = require('../src/models/order.model');
 const notifications = require('../src/services/notification.service');
+const revocation = require('../src/services/revocation.service');
+const { anonymizeUser } = require('../src/services/accountAnonymization.service');
 const app = require('../src/app');
 const { ROLES } = require('../src/config/roles');
 const { PERMISSIONS, ALL_PERMISSIONS } = require('../src/config/permissions');
@@ -35,21 +46,23 @@ const q = (v) => Object.assign(Promise.resolve(v), { session: () => Promise.reso
 function actAs(role, { perms = [], target } = {}) {
   const user = { _id: oid(), role, isActive: true, ...(role.includes('BRAND') && { brandId }) };
   // The logged-in user for authenticate; any other id (e.g. the employee's
-  // login looked up while serializing) gets a generic user.
-  User.findById.mockImplementation(async (id) => (String(id) === String(user._id) ? user : mkUser({ _id: id })));
-  const actor = { isActive: true, permissions: perms, userId: user._id };
+  // login looked up while serializing) gets a generic user. Queries support
+  // .session() like a real Mongoose query.
+  User.findById.mockImplementation((id) => q(String(id) === String(user._id) ? user : mkUser({ _id: id })));
+  const actor = { _id: oid(), isActive: true, permissions: perms, userId: user._id, brandId, role: ROLES.BRAND_EMPLOYEE };
   Employee.findOne.mockImplementation((filter) => q(filter && filter.userId && !filter.userId.$ne ? actor : target));
   return { cookie: ['Cookie', getAuthCookie(user)], user };
 }
 
 const mkEmployee = (o = {}) => ({
-  _id: oid(), userId: oid(), brandId, permissions: [], isActive: true, jobTitle: 'Clerk', ...o,
+  _id: oid(), userId: oid(), brandId, role: ROLES.BRAND_EMPLOYEE, permissions: [], isActive: true, jobTitle: 'Clerk', ...o,
 });
 const mkUser = (o = {}) => ({ _id: oid(), name: 'Sam', email: 'sam@x.com', isActive: true, ...o });
 
 beforeEach(() => {
   jest.resetAllMocks();
   require('../src/utils/password').hashPassword.mockResolvedValue('HASHED');
+  Order.countDocuments.mockReturnValue(q(0));
 });
 
 describe('access control', () => {
@@ -229,8 +242,10 @@ describe('POST /api/v1/employees', () => {
 
 describe('PATCH /api/v1/employees/:id and DELETE', () => {
   function updateWorld(employee = mkEmployee()) {
+    Employee.findOne.mockReturnValue(q(employee)); // the scoped current row
     Employee.findOneAndUpdate.mockResolvedValue(employee);
     User.findOneAndUpdate.mockResolvedValue(mkUser({ _id: employee.userId }));
+    Employee.countDocuments.mockReturnValue(q(0)); // last membership by default
     return employee;
   }
 
@@ -248,21 +263,42 @@ describe('PATCH /api/v1/employees/:id and DELETE', () => {
 
     expect(res.status).toBe(200);
     expect(Employee.findOneAndUpdate).toHaveBeenCalledWith(
-      { _id: employee._id.toString(), brandId: brandId.toString(), userId: { $ne: user._id } },
-      { $set: { jobTitle: 'Lead', isActive: false } },
+      { _id: employee._id, userId: { $ne: user._id } },
+      {
+        $set: {
+          jobTitle: 'Lead',
+          isActive: false,
+          removedAt: expect.any(Date),
+          removedBy: user._id,
+          removalReason: null,
+        },
+      },
       { new: true, session: 'SESSION' }
     );
     expect(User.findOneAndUpdate).toHaveBeenCalledWith(
-      { _id: employee.userId, role: { $in: [ROLES.BRAND_EMPLOYEE, ROLES.PICKER] }, brandId },
-      { $set: { name: 'New Name', isActive: false } }, // only profile/active fields
+      { _id: employee.userId, role: { $in: [ROLES.BRAND_EMPLOYEE, ROLES.PICKER] } },
+      { $set: { name: 'New Name' } }, // profile only: the account is not deactivated
       { new: true, session: 'SESSION' }
     );
   });
 
-  it('403 when acting on yourself, 404 for another brand\'s employee', async () => {
+  it('deactivating the last membership revokes delivery state; another membership keeps it', async () => {
     const { cookie } = actAs(ROLES.BRAND_ADMIN);
-    Employee.findOneAndUpdate.mockResolvedValue(null);
-    Employee.findOne.mockReturnValue(q(mkEmployee())); // exists in this brand => self
+    const employee = updateWorld();
+
+    await request(app).patch(`/api/v1/employees/${employee._id}`).set(...cookie).send({ isActive: false });
+    expect(revocation.revokeUserDelivery).toHaveBeenCalledWith(expect.anything(), { notifications: false });
+
+    jest.clearAllMocks();
+    updateWorld(employee);
+    Employee.countDocuments.mockReturnValue(q(1)); // still employed elsewhere
+    await request(app).patch(`/api/v1/employees/${employee._id}`).set(...cookie).send({ isActive: false });
+    expect(revocation.revokeUserDelivery).not.toHaveBeenCalled();
+  });
+
+  it("403 when acting on yourself, 404 for another brand's employee", async () => {
+    const { cookie, user } = actAs(ROLES.BRAND_ADMIN);
+    Employee.findOne.mockReturnValue(q(mkEmployee({ userId: user._id }))); // exists in this brand => self
     let res = await request(app).patch(`/api/v1/employees/${oid()}`).set(...cookie).send({ name: 'x' });
     expect(res.status).toBe(403);
     expect(res.body.code).toBe('SELF_MODIFICATION');
@@ -272,16 +308,81 @@ describe('PATCH /api/v1/employees/:id and DELETE', () => {
     expect(res.status).toBe(404);
   });
 
-  it('DELETE only deactivates (employee AND user); nothing is hard-deleted', async () => {
-    const { cookie } = actAs(ROLES.BRAND_ADMIN);
+  it('DELETE removes only this brand membership; the shared account stays active and nothing is hard-deleted', async () => {
+    const { cookie, user } = actAs(ROLES.BRAND_ADMIN);
     const employee = updateWorld();
+    Employee.countDocuments.mockReturnValue(q(1)); // still in another brand
 
     const res = await request(app).delete(`/api/v1/employees/${employee._id}`).set(...cookie);
 
     expect(res.status).toBe(200);
-    expect(Employee.findOneAndUpdate.mock.calls[0][1]).toEqual({ $set: { isActive: false } });
-    expect(User.findOneAndUpdate.mock.calls[0][1]).toEqual({ $set: { isActive: false } });
+    expect(Employee.findOneAndUpdate.mock.calls[0][1]).toEqual({
+      $set: {
+        isActive: false,
+        removedAt: expect.any(Date),
+        removedBy: user._id,
+        removalReason: null,
+      },
+    });
+    // The person may still work for another brand, so the login and delivery
+    // state are untouched.
+    expect(User.findOneAndUpdate).not.toHaveBeenCalled();
     expect(Employee.deleteOne).not.toHaveBeenCalled();
+    expect(revocation.revokeUserDelivery).not.toHaveBeenCalled();
+  });
+
+  it('DELETE of the last membership revokes that person\'s delivery state', async () => {
+    const { cookie, user } = actAs(ROLES.BRAND_ADMIN);
+    const employee = updateWorld();
+    Employee.countDocuments.mockReturnValue(q(0));
+
+    const res = await request(app).delete(`/api/v1/employees/${employee._id}`).set(...cookie);
+
+    expect(res.status).toBe(200);
+    expect(String(revocation.revokeUserDelivery.mock.calls[0][0])).toBe(String(employee.userId));
+    expect(revocation.revokeUserDelivery).toHaveBeenCalledWith(expect.anything(), { notifications: false });
+    expect(user._id).toBeTruthy();
+  });
+
+  it('?purge=account anonymizes the account and frees the email', async () => {
+    const { cookie } = actAs(ROLES.BRAND_ADMIN);
+    const employee = updateWorld();
+    Employee.countDocuments.mockReturnValue(q(0));
+    anonymizeUser.mockResolvedValue(mkUser({ _id: employee.userId, name: 'Deleted user' }));
+
+    const res = await request(app).delete(`/api/v1/employees/${employee._id}?purge=account`).set(...cookie);
+
+    expect(res.status).toBe(200);
+    expect(res.body.message).toBe('Employee account deleted');
+    expect(anonymizeUser).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: employee.userId, session: 'SESSION' })
+    );
+    expect(String(revocation.revokeUserDelivery.mock.calls[0][0])).toBe(String(employee.userId));
+    expect(revocation.revokeUserDelivery).toHaveBeenCalledWith(expect.anything(), { notifications: true });
+  });
+
+  it('refuses to purge while the person still works for another brand', async () => {
+    const { cookie } = actAs(ROLES.BRAND_ADMIN);
+    const employee = updateWorld();
+    Employee.countDocuments.mockReturnValue(q(1));
+
+    const res = await request(app).delete(`/api/v1/employees/${employee._id}?purge=account`).set(...cookie);
+
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('ACCOUNT_HAS_OTHER_MEMBERSHIPS');
+    expect(anonymizeUser).not.toHaveBeenCalled();
+  });
+
+  it('refuses to remove a picker who still has orders to finish', async () => {
+    const { cookie } = actAs(ROLES.BRAND_ADMIN);
+    const employee = updateWorld(mkEmployee({ role: ROLES.PICKER }));
+    Order.countDocuments.mockReturnValue(q(2));
+
+    const res = await request(app).delete(`/api/v1/employees/${employee._id}`).set(...cookie);
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual(expect.objectContaining({ code: 'PICKER_HAS_OPEN_ORDERS', openOrders: 2 }));
+    expect(Employee.findOneAndUpdate).not.toHaveBeenCalled();
   });
 });
 

@@ -111,6 +111,15 @@ function emitChat(userId, payload) {
   io.to(`user:${String(userId)}`).emit('chat:message', payload);
 }
 
+// Cuts every live connection of one account (docs/24 §3.7). Removal does not
+// need to know which socket belongs to which brand: a removed membership is
+// enforced on the next HTTP request, and a fully removed account should not
+// keep receiving pushes either.
+function disconnectUserSockets(userId) {
+  if (!io) return;
+  io.in(`user:${String(userId)}`).disconnectSockets(true);
+}
+
 function closeSockets() {
   if (!io) return Promise.resolve();
   const closing = io;
@@ -120,4 +129,11 @@ function closeSockets() {
   return new Promise((resolve) => closing.close(() => resolve()));
 }
 
-module.exports = { initSockets, emitToUser, emitChat, closeSockets, authenticateHandshake };
+module.exports = {
+  initSockets,
+  emitToUser,
+  emitChat,
+  closeSockets,
+  authenticateHandshake,
+  disconnectUserSockets,
+};

@@ -205,11 +205,11 @@ async function proposeAdjustment({ brandId, orderId, userId, userRole, note, res
           code: 'ADJUSTMENT_PENDING',
         });
       }
-      // An online order must have been paid before its contents can change
-      // (docs/21 §H.4): an unpaid one is on a stock hold and will expire.
-      if (order.paymentMethod === 'ONLINE_GATEWAY' && order.paymentStatus !== 'PAID') {
-        throw new OrderError(409, 'An online order can only be adjusted after it is paid.', {
-          code: 'ONLINE_PAYMENT_NOT_COMPLETED',
+      // An order recorded against the removed online gateway is read-only
+      // (docs/10 §29): its money side belongs to the retired gateway flow.
+      if (order.paymentMethod === 'ONLINE_GATEWAY') {
+        throw new OrderError(409, 'This order was placed through the removed online gateway and can no longer be changed.', {
+          code: 'LEGACY_ONLINE_ORDER',
         });
       }
 
@@ -362,79 +362,28 @@ function rewriteItems(order, adjustment, { accept }) {
 }
 
 /**
- * Applies the money side of an accepted/removed change:
- *  - COD: the rider collects the new total.
- *  - paid online: the total may not go up; a reduction is recorded as a refund
- *    against the original payment. An unpaid online order can never get here
- *    (proposals on those are refused).
+ * Applies the money side of an accepted/removed change: the rider collects the
+ * new total at the door (docs/10 §30.1).
  */
-async function applyPaymentChange({ order, newTotal, userId, session, now }) {
+async function applyPaymentChange({ order, newTotal, session }) {
   const payment = await Payment.findOne({ orderId: order._id }).session(session);
   if (!payment) {
     throw new OrderError(409, 'This order has no payment record.', { code: 'PAYMENT_NOT_FOUND' });
   }
-
-  let refund = 0;
+  // A change proposed before the gateway was removed may still be answered
+  // afterwards; its retired money flow must not be used (docs/10 §29).
   if (payment.method === 'ONLINE_GATEWAY') {
-    if (!['PAID', 'PARTIALLY_REFUNDED'].includes(payment.status)) {
-      throw new OrderError(409, 'An online order can only be adjusted after it is paid.', {
-        code: 'ONLINE_PAYMENT_NOT_COMPLETED',
-      });
-    }
-    const beforeCents = toCents(order.total);
-    const newCents = toCents(newTotal);
-    if (newCents > beforeCents) {
-      throw new OrderError(409, 'An online order cannot be adjusted to a higher total.', {
-        code: 'ADJUSTMENT_INCREASES_TOTAL',
-      });
-    }
-
-    const difference = beforeCents - newCents;
-    if (difference > 0) {
-      const refundedCents = toCents(payment.refundedAmount);
-      const remainingCents = toCents(payment.amount) - refundedCents;
-      if (difference > remainingCents) {
-        throw new OrderError(409, 'The refund for this change exceeds the amount paid.', {
-          code: 'REFUND_EXCEEDS_PAID',
-        });
-      }
-      const nextRefunded = refundedCents + difference;
-      const finalStatus = nextRefunded >= toCents(payment.amount) ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
-      const updated = await Payment.findOneAndUpdate(
-        {
-          _id: payment._id,
-          status: payment.status,
-          refundedAmount: refundedCents === 0 ? { $in: [0, null] } : payment.refundedAmount,
-        },
-        {
-          $set: { refundedAmount: fromCents(nextRefunded), status: finalStatus },
-          $push: {
-            refunds: {
-              amount: fromCents(difference),
-              reason: 'Order adjusted: items could not be supplied',
-              by: userId,
-              at: now,
-            },
-          },
-        },
-        { new: true, session }
-      );
-      if (!updated) {
-        throw new OrderError(409, 'The payment was changed by another request. Please reload and retry.', {
-          code: 'PAYMENT_CHANGED',
-        });
-      }
-      refund = fromCents(difference);
-    }
-  } else {
-    await Payment.updateOne({ _id: payment._id }, { $set: { amount: newTotal } }, { session });
+    throw new OrderError(409, 'This order was placed through the removed online gateway and can no longer be changed.', {
+      code: 'LEGACY_ONLINE_ORDER',
+    });
   }
 
-  return refund;
+  await Payment.updateOne({ _id: payment._id }, { $set: { amount: newTotal } }, { session });
+  return 0;
 }
 
-// Keeps an already-issued online receipt describing the final order. For COD
-// the receipt is issued at delivery, after any adjustment.
+// Keeps an already-issued receipt describing the final order. For COD the
+// receipt is issued at delivery, after any adjustment.
 async function syncReceipt({ order, items, subtotal, total, session }) {
   await Receipt.updateOne(
     { orderId: order._id },
@@ -601,9 +550,7 @@ async function respondToAdjustment({ customerId, orderId, adjustmentId, action, 
     const refund = await applyPaymentChange({
       order,
       newTotal: total,
-      userId,
       session,
-      now,
     });
 
     const updatedOrder = await Order.findOneAndUpdate(

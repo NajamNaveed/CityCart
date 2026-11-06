@@ -2,11 +2,13 @@ const request = require('supertest');
 const mongoose = require('mongoose');
 
 jest.mock('../src/models/user.model');
+jest.mock('../src/models/employee.model');
 jest.mock('../src/models/brand.model');
 jest.mock('../src/models/city.model');
 jest.mock('../src/services/notification.service');
 
 const User = require('../src/models/user.model');
+const Employee = require('../src/models/employee.model');
 const Brand = require('../src/models/brand.model');
 const City = require('../src/models/city.model');
 const notifications = require('../src/services/notification.service');
@@ -26,6 +28,9 @@ function makeFakeUser(overrides = {}) {
 
 function asUser(user) {
   User.findById.mockResolvedValue(user);
+  if (user.role === ROLES.BRAND_EMPLOYEE) {
+    Employee.findOne.mockResolvedValue({ _id: new mongoose.Types.ObjectId(), userId: user._id, brandId: user.brandId, role: user.role, isActive: true, permissions: [] });
+  }
   return ['Cookie', getAuthCookie(user)];
 }
 

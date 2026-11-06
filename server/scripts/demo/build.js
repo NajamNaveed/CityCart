@@ -292,9 +292,15 @@ function buildDataset({ now = new Date(), hashes }) {
             { by: owner._id, at: joined, added: [...final, 'customers.view'], removed: [] },
             { by: owner._id, at: new Date(joined.getTime() + 9 * DAY), added: [], removed: ['customers.view'] },
           ];
+      const active = s.isActive !== false;
       const employee = {
-        _id: new ObjectId(), userId: user._id, brandId, permissions: final, permissionHistory: history,
-        jobTitle: s.jobTitle, isActive: s.isActive !== false, createdAt: joined, updatedAt: joined,
+        _id: new ObjectId(), userId: user._id, brandId, role: 'BRAND_EMPLOYEE', permissions: final, permissionHistory: history,
+        jobTitle: s.jobTitle, isActive: active, createdAt: joined, updatedAt: joined,
+        ...(!active && {
+          removedAt: new Date(joined.getTime() + 30 * DAY),
+          removedBy: owner._id,
+          removalReason: 'Left the company',
+        }),
       };
       ds.employees.push(employee);
       return { user, employee, joined, changed: history.length > 1 };
@@ -320,7 +326,7 @@ function buildDataset({ now = new Date(), hashes }) {
       });
       ds.users.push(user);
       ds.employees.push({
-        _id: new ObjectId(), userId: user._id, brandId, permissions: [],
+        _id: new ObjectId(), userId: user._id, brandId, role: 'PICKER', permissions: [],
         permissionHistory: [{ by: owner._id, at: joined, added: [], removed: [] }],
         jobTitle: 'Picker', isActive: true, createdAt: joined, updatedAt: joined,
       });
@@ -496,9 +502,6 @@ function buildDataset({ now = new Date(), hashes }) {
         inTransit: brandKey === 'mehr' && status === 'SHIPPED',
       };
 
-      // Some delivered orders were paid online, up front, through the (test) gateway: no cash for the rider to collect.
-      const paidOnline = status === 'DELIVERED' && !flags.fullRefund && !flags.partRefund && ds.orders.length % 4 === 0;
-
       // Delivered to the customer's pin when one of the store's shops serves that block;
       // otherwise to a spot in the store's own block (an office or a friend's place).
       const brandShops = ds.branches.filter((br) => String(br.brandId) === String(brand.doc._id) && br.isActive);
@@ -514,7 +517,7 @@ function buildDataset({ now = new Date(), hashes }) {
           name: customer.name, phone: customer.phone, address: customer.address, city: customer.city, state: customer.state,
           country: 'Pakistan', postalCode: customer.postalCode, ...(customer.note && { additionalInstructions: customer.note }),
         },
-        subtotal, deliveryFee, discount, tax, total, paymentMethod: paidOnline ? 'ONLINE_GATEWAY' : 'COD',
+        subtotal, deliveryFee, discount, tax, total, paymentMethod: 'COD',
         paymentStatus: status === 'CANCELLED' || status === 'REJECTED' ? 'CANCELLED' : status === 'DELIVERED' ? 'PAID' : 'PENDING',
         currency: 'PKR', orderStatus: status, statusHistory, ...(notes && { notes }),
         ...(packedEvent && { packedAt: packedEvent.at }), createdAt, updatedAt: finishedAt,
@@ -527,18 +530,9 @@ function buildDataset({ now = new Date(), hashes }) {
       const payment = {
         _id: new ObjectId(), orderId: order._id, customerId: customer.doc._id, amount: total, method: order.paymentMethod, status: order.paymentStatus,
         currency: 'PKR', createdAt, updatedAt: finishedAt, refundedAmount: 0, refunds: [],
-        // Online payments keep the end of their stock hold (settled long ago for these).
-        ...(paidOnline && { expiresAt: new Date(createdAt.getTime() + 30 * 60 * 1000) }),
       };
       let collector = null;
-      if (paidOnline) {
-        // Paid through the gateway a few minutes after ordering. Nobody collected cash, so there is no
-        // collector and nothing to settle; the gateway reference stands in for the cash receipt reference.
-        Object.assign(payment, {
-          paidAt: new Date(createdAt.getTime() + 10 * 60 * 1000), provider: 'mock', transactionReference: `mock_${new ObjectId().toHexString()}`,
-        });
-        receiptJobs.push({ order, payment, brand, collector: null });
-      } else if (status === 'DELIVERED') {
+      if (status === 'DELIVERED') {
         // Whoever completes the delivery takes the cash: the rider when the brand has riders (the same one
         // the delivery below is given to), otherwise the team member. Older cash has been handed over.
         collector = brand.riders.length ? brand.riders[ds.deliveries.length % brand.riders.length] : deliveryHandler;
@@ -600,9 +594,9 @@ function buildDataset({ now = new Date(), hashes }) {
 
   // ── door returns (docs/22 §F): what the rider brought back ──
   // Three stories, so every screen has something to show: a damaged suit refused at
-  // the door and still travelling back with the rider; half a prepaid order refused,
-  // refunded and already taken in (the sellable piece went back on the shelf); and a
-  // whole cash order refused for damage, which ends RETURNED with nothing to collect.
+  // the door and still travelling back with the rider; half an order refused and
+  // already taken in (the sellable piece went back on the shelf); and a whole cash
+  // order refused for damage, which ends RETURNED with nothing to collect.
   const deliveryOf = (order) => ds.deliveries.find((d) => String(d.orderId) === String(order._id));
   const completedAtOf = ({ events }) => events[events.length - 1].at;
   // The line a partial refusal can take a unit from: one order line with several
@@ -647,36 +641,20 @@ function buildDataset({ now = new Date(), hashes }) {
     order.feeRefunded = feeRefunded;
     order.netTotal = netTotal;
 
-    let refundAmount = 0;
-    if (order.paymentMethod === 'COD') {
-      if (netTotal > 0) {
-        // The rider collected for the accepted units only.
-        payment.amount = netTotal;
-        payment.updatedAt = completedAt;
-      } else {
-        // Nothing was accepted, so nothing was collected and the payment never happened.
-        payment.status = 'CANCELLED';
-        ['paidAt', 'confirmedBy', 'brandId', 'collectedBy', 'collectedAt', 'settledAt', 'settledBy', 'transactionReference', 'provider', 'collection']
-          .forEach((field) => delete payment[field]);
-        payment.updatedAt = completedAt;
-        order.paymentStatus = 'CANCELLED';
-        const job = receiptJobs.findIndex((r) => r.payment === payment);
-        if (job !== -1) receiptJobs.splice(job, 1);
-      }
+    const refundAmount = 0;
+    if (netTotal > 0) {
+      // The rider collected for the accepted units only.
+      payment.amount = netTotal;
+      payment.updatedAt = completedAt;
     } else {
-      // Prepaid money comes back for the refused goods (and the fee under the store-fault rule).
-      const due = returnedSubtotal + (feeRefunded ? order.deliveryFee : 0);
-      refundAmount = Math.min(due, order.total - payment.refundedAmount);
-      if (refundAmount > 0) {
-        payment.refundedAmount += refundAmount;
-        payment.refunds.push({
-          amount: refundAmount, by: delivery.riderId || deliveryHandler._id, at: completedAt,
-          reason: 'Items refused at the door were refunded.',
-        });
-        payment.status = payment.refundedAmount >= order.total ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
-        order.paymentStatus = payment.status;
-        payment.updatedAt = completedAt;
-      }
+      // Nothing was accepted, so nothing was collected and the payment never happened.
+      payment.status = 'CANCELLED';
+      ['paidAt', 'confirmedBy', 'brandId', 'collectedBy', 'collectedAt', 'settledAt', 'settledBy', 'transactionReference', 'provider', 'collection']
+        .forEach((field) => delete payment[field]);
+      payment.updatedAt = completedAt;
+      order.paymentStatus = 'CANCELLED';
+      const job = receiptJobs.findIndex((r) => r.payment === payment);
+      if (job !== -1) receiptJobs.splice(job, 1);
     }
 
     if (everythingRejected) {
@@ -734,7 +712,7 @@ function buildDataset({ now = new Date(), hashes }) {
     });
   }
 
-  const received = returnOrder({ paymentMethod: 'ONLINE_GATEWAY', partial: true });
+  const received = returnOrder({ paymentMethod: 'COD', partial: true });
   if (received) {
     const item = partialLine(received.order);
     // The store takes the goods in the next day (never in the future).

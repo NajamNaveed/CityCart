@@ -22,7 +22,7 @@ export const ADMIN_PERMISSION_OPTIONS = [
   { key: ADMIN_PERMISSIONS.CATALOG, label: 'Catalogue', hint: 'Manage the global categories and the shared product catalogue' },
   { key: ADMIN_PERMISSIONS.ANALYTICS, label: 'Analytics', hint: 'See platform-wide analytics' },
   { key: ADMIN_PERMISSIONS.SETTINGS, label: 'Settings', hint: 'Change platform commission and settings' },
-  { key: ADMIN_PERMISSIONS.PAYMENTS, label: 'Payments', hint: 'Review payment events across the platform' },
+  { key: ADMIN_PERMISSIONS.PAYMENTS, label: 'Payments', hint: 'See payment records and receipts across the platform' },
 ]
 
 export const ALL_ADMIN_PERMISSIONS = ADMIN_PERMISSION_OPTIONS.map((item) => item.key)

@@ -118,6 +118,13 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    // Set when the account is anonymized (docs/24 §3.6, docs/04 §36). The row
+    // and its _id survive so historical orders, payments and audit records
+    // still resolve; only the personal data is replaced.
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
     // Time-limited access after a brand is terminated: until accessExpiresAt
     // the account works in read-only mode (accessRestricted); afterwards
     // every request is rejected (see middleware/authenticate.js).

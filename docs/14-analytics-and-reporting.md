@@ -129,7 +129,9 @@ COD orders
 Online payment orders
 ```
 
-MVP uses COD, but the analytics architecture should not prevent future payment gateways.
+MVP uses COD; v3 adds no customer online payment, so "Online payment orders"
+only reflects legacy rows if any exist. Seller billing (docs/15) is a separate
+ledger and must not be mixed into customer payment analytics.
 
 Payment analytics must use authoritative Payment and Order records rather than client-submitted values.
 

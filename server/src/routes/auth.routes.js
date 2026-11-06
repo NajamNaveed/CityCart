@@ -7,6 +7,8 @@ const {
   staffLogin,
   deliveryLogin,
   adminLogin,
+  workspaceLogin,
+  switchWorkspaceHandler,
   logout,
   me,
   changePassword,
@@ -28,6 +30,10 @@ router.post('/brand/login', authLimiter, brandLogin); // BRAND_ADMIN / BRAND_EMP
 router.post('/staff/login', authLimiter, staffLogin); // BRAND_EMPLOYEE / PICKER, staff app only
 router.post('/delivery/login', authLimiter, deliveryLogin); // RIDER, delivery app only
 router.post('/admin/login', authLimiter, adminLogin); // SUPER_ADMIN / ADMIN_PARTNER only
+// Second step for a multi-brand employee whose login answered 409
+// WORKSPACE_REQUIRED (docs/05 §6, docs/24 §3.3).
+router.post('/workspace', authLimiter, workspaceLogin);
+router.post('/workspace/switch', authLimiter, authenticate, requireRole(ROLES.BRAND_EMPLOYEE), switchWorkspaceHandler);
 // Email verification and password recovery. Rate-limited with the same
 // strict limiter as the credential endpoints so links cannot be brute-forced
 // or inboxes spammed.

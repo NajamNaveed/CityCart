@@ -25,10 +25,18 @@ const updateRiderSchema = z
 
 const resetRiderPasswordSchema = z.object({ password });
 
+const removeRiderQuerySchema = z.object({ purge: z.enum(['account']).optional() });
+
 const listRidersQuerySchema = z.object({
   isActive: z.enum(['true', 'false']).optional().transform((v) => (v === undefined ? undefined : v === 'true')),
   page: z.coerce.number().int().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(50).optional(),
 });
 
-module.exports = { createRiderSchema, updateRiderSchema, resetRiderPasswordSchema, listRidersQuerySchema };
+module.exports = {
+  createRiderSchema,
+  updateRiderSchema,
+  resetRiderPasswordSchema,
+  listRidersQuerySchema,
+  removeRiderQuerySchema,
+};

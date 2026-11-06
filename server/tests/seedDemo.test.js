@@ -46,10 +46,15 @@ function valuesAt(value, parts) {
   return valuesAt(value[parts[0]], parts.slice(1));
 }
 
+// Lifecycle markers only exist after an account is removed, so no demo row
+// sets them; they are exercised by the removal tests instead. `expiresAt` is a
+// legacy online-gateway field: v3 creates no online payment (docs/10 §29).
+const LIFECYCLE_ONLY = new Set(['deletedAt', 'expiresAt']);
+
 function schemaPaths(schema, prefix = '') {
   const out = [];
   for (const [path, type] of Object.entries(schema.paths)) {
-    if (path === '_id' || path === '__v') continue;
+    if (path === '_id' || path === '__v' || LIFECYCLE_ONLY.has(path)) continue;
     if (type.schema) out.push(...schemaPaths(type.schema, `${prefix}${path}.`));
     else out.push(`${prefix}${path}`);
   }
@@ -546,22 +551,11 @@ describe('demo dataset', () => {
     expect(ds.notifications.some((n) => n.type === 'PAYMENT_PROOF_REJECTED')).toBe(true);
   });
 
-  it('has orders paid online through the gateway, with their payment reference and stock-hold end', () => {
-    const online = ds.payments.filter((p) => p.method === 'ONLINE_GATEWAY');
-    expect(online.length).toBeGreaterThan(0);
-    online.forEach((p) => {
-      // A prepaid order whose goods were partly refused keeps its original amount
-      // and moves to PARTIALLY_REFUNDED (or REFUNDED when everything came back).
-      expect(['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED']).toContain(p.status);
-      expect(p.provider).toBe('mock');
-      expect(p.transactionReference).toMatch(/^mock_[0-9a-f]{24}$/);
-      expect(p.expiresAt).toBeInstanceOf(Date);
-      expect(p.paidAt >= p.createdAt).toBe(true);
-      const order = ds.orders.find((o) => id(o._id) === id(p.orderId));
-      expect(order.paymentMethod).toBe('ONLINE_GATEWAY');
-      expect(order.paymentStatus).toBe(p.status);
-      expect(p.refundedAmount).toBe(p.refunds.reduce((sum, r) => sum + r.amount, 0));
-    });
+  it('checks out as cash on delivery, with no online gateway records', () => {
+    expect(ds.orders.every((o) => o.paymentMethod === 'COD')).toBe(true);
+    // A door collection may be cash, a bank transfer, a wallet or a card machine.
+    expect(ds.payments.every((p) => ['COD', 'CARD', 'BANK_TRANSFER', 'WALLET'].includes(p.method))).toBe(true);
+    expect(ds.payments.some((p) => p.provider === 'mock' || p.expiresAt)).toBe(false);
   });
 
   it('counts orders per year the way the app does', () => {

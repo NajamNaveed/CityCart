@@ -37,8 +37,31 @@ export async function restoreSession() {
 }
 
 export async function signIn({ email, password }) {
-  const res = await api.post('/auth/staff/login', { email, password })
-  const { user, token } = res.data
+  let res
+  try {
+    res = await api.post('/auth/staff/login', { email, password })
+  } catch (err) {
+    // A team member of several brands proves the password first, then picks
+    // the brand to work in (docs/06 §9). No session exists yet.
+    const data = err.response?.data
+    if (data?.code === 'WORKSPACE_REQUIRED') {
+      throw Object.assign(new Error(data.message || 'Choose a workspace.'), {
+        workspace: { workspaceToken: data.workspaceToken, memberships: data.memberships || [] },
+      })
+    }
+    throw err
+  }
+  return acceptSession(res.data)
+}
+
+// Exchanges the workspace token and the chosen brand for a staff session,
+// keeping the same `client: staff` mark the server put on the token.
+export async function chooseWorkspace({ workspaceToken, brandId }) {
+  const res = await api.post('/auth/workspace', { workspaceToken, brandId })
+  return acceptSession(res.data)
+}
+
+async function acceptSession({ user, token }) {
   if (!token || !isStaffRole(user?.role)) throw new Error('The server did not return a session. Please try again.')
   await tokenStore.set(token)
   // The sign-in answer does not list a team member's permissions; `/auth/me` does.

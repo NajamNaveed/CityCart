@@ -66,6 +66,19 @@ export function AuthProvider({ children }) {
     return me.data.user
   }, [])
 
+  // A team member who belongs to several brands signs in with one password,
+  // then picks the workspace (docs/06 §9). The server re-checks the chosen
+  // membership; the token only selects it.
+  const chooseWorkspace = useCallback(async (workspaceToken, brandId) => {
+    await api.post('/auth/workspace', { workspaceToken, brandId })
+    const me = await api.get('/auth/me')
+    if (isStaff(me.data.user.role)) {
+      sessionStorage.setItem(STAFF_TAB_KEY, '1')
+    }
+    setUser(me.data.user)
+    return me.data.user
+  }, [])
+
   // Registration does not sign the shopper in: the account is unusable
   // until the emailed link is opened (server-provided message).
   const register = useCallback(async (name, email, password) => {
@@ -100,8 +113,8 @@ export function AuthProvider({ children }) {
   }, [])
 
   const value = useMemo(
-    () => ({ user, loading, login, register, applyForBrand, logout, refresh }),
-    [user, loading, login, register, applyForBrand, logout, refresh],
+    () => ({ user, loading, login, chooseWorkspace, register, applyForBrand, logout, refresh }),
+    [user, loading, login, chooseWorkspace, register, applyForBrand, logout, refresh],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

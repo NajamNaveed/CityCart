@@ -14,7 +14,6 @@ import {
 import api, { getErrorMessage } from '../services/api'
 import StatusPill from '../components/StatusPill'
 import OrderItemReview from '../components/OrderItemReview'
-import PayNow from '../components/PayNow'
 import OrderChangePrompt from '../components/OrderChangePrompt'
 import ProductImage from '../components/ProductImage'
 import DeliveryMap from '../components/DeliveryMap'
@@ -55,7 +54,7 @@ function DeliveryCode({ deliveryId }) {
 }
 
 // The receipt of a paid order; nothing is shown until one exists.
-const PAID_BY = { CASH: 'cash', CARD: 'card machine', BANK_TRANSFER: 'bank transfer', WALLET: 'wallet', ONLINE_GATEWAY: 'online payment' }
+const PAID_BY = { CASH: 'cash', CARD: 'card machine', BANK_TRANSFER: 'bank transfer', WALLET: 'wallet' }
 const WALLETS = { JAZZCASH: 'JazzCash', EASYPAISA: 'Easypaisa', OTHER: 'other wallet' }
 // How a COD order was paid at the door (docs/21 §I.5); absent on older receipts.
 function paidBy(receipt) {
@@ -531,13 +530,7 @@ export default function MyOrderDetail() {
               </div>
             )}
             <div className="flex justify-between text-base font-semibold">
-              <dt className="text-ink">
-                {order.fulfilment
-                  ? 'Final total'
-                  : order.paymentMethod === 'ONLINE_GATEWAY'
-                    ? 'Total'
-                    : 'Total (cash on delivery)'}
-              </dt>
+              <dt className="text-ink">{order.fulfilment ? 'Final total' : 'Total (cash on delivery)'}</dt>
               <dd className="text-ink">{formatPrice(order.fulfilment ? finalTotal : order.total)}</dd>
             </div>
           </dl>
@@ -545,19 +538,6 @@ export default function MyOrderDetail() {
             <p className="mt-2 text-[12.5px] text-muted">Refunded to your payment method: {formatPrice(returnDoc.refundAmount)}.</p>
           )}
           {payment?.status === 'PAID' && <ReceiptNote orderId={order._id} />}
-
-          {order.paymentMethod === 'ONLINE_GATEWAY' && payment?.status === 'PENDING' && order.orderStatus === 'PENDING' && (
-            <div className="mt-6 rounded-lg border border-warning/30 bg-warning-soft p-4 sm:p-5">
-              <p className="text-sm font-semibold text-ink">Waiting for your payment</p>
-              <p className="mt-1 text-[13px] leading-relaxed text-muted">
-                {payment.expiresAt
-                  ? `Pay before ${new Date(payment.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, or this order is cancelled and its items go back on sale. `
-                  : ''}
-                The brand starts on your order once the payment is confirmed.
-              </p>
-              <PayNow orderId={order._id} className="mt-3" />
-            </div>
-          )}
 
           {delivery?.paymentPending && (
             <div className="mt-6 rounded-lg border border-line bg-surface p-4 sm:p-5">

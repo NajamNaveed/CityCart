@@ -4,6 +4,8 @@ const { hashPassword } = require('../utils/password');
 const { runInTransaction } = require('../utils/transaction');
 const { ROLES } = require('../config/roles');
 const { recordAdminAction } = require('./adminAction.service');
+const { anonymizeUser } = require('./accountAnonymization.service');
+const { revokeUserDelivery } = require('./revocation.service');
 
 const DEFAULT_LIMIT = 20;
 // docs/21 §G.5 decision 1 ("Up to 5 partners"): active partner records only,
@@ -183,7 +185,38 @@ async function updatePartner({ actor, id, data }) {
     target: { type: 'AdminPartner', id: updated.savedPartner._id, label: updated.user.email },
     details: updated.user.name,
   });
+  if (data.isActive === false) {
+    await revokeUserDelivery(updated.user._id);
+  }
   return serialize(updated.savedPartner, updated.user);
+}
+
+/**
+ * Anonymizes a deactivated partner's login and frees the email (docs/24
+ * §3.7). The AdminPartner row and the AdminAction trail stay for history; the
+ * `_id` survives so past actions still resolve.
+ */
+async function purgePartner({ actor, id }) {
+  const partner = await AdminPartner.findById(id);
+  if (!partner) {
+    throw new AdminPartnerError(404, 'Partner not found.');
+  }
+  const user = await User.findById(partner.userId);
+  if (!user) {
+    throw new AdminPartnerError(404, 'Partner account not found.');
+  }
+
+  await AdminPartner.findByIdAndUpdate(id, { $set: { isActive: false } });
+  const anonymized = await anonymizeUser({ userId: partner.userId, role: ROLES.ADMIN_PARTNER });
+  await revokeUserDelivery(partner.userId);
+
+  await recordAdminAction({
+    actor,
+    action: 'admin.partner.purge',
+    target: { type: 'AdminPartner', id: partner._id, label: user.email },
+    details: `Deleted the account of ${user.name} and freed ${user.email}.`,
+  });
+  return serialize({ ...(partner.toObject ? partner.toObject() : partner), isActive: false }, anonymized);
 }
 
 /**
@@ -219,6 +252,7 @@ module.exports = {
   getPartner,
   createPartner,
   updatePartner,
+  purgePartner,
   resetPartnerPassword,
   AdminPartnerError,
   MAX_ACTIVE_PARTNERS,

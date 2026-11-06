@@ -1,547 +1,499 @@
-# 15. Commission & Payouts
+# 15. Commission and Seller Billing
 
 ## 1. Purpose
 
-The Commission & Payout System defines how CityCart can calculate platform commissions on brand sales and track money owed to brands.
+This document defines how CityCart charges **sellers** — brands and service
+providers — the platform fee on completed sales.
 
-This system is **not required for the initial MVP checkout flow**. The architecture should remain ready for it without introducing unnecessary financial complexity early.
+It replaces the earlier conceptual "commission and payouts" model. In v3:
 
-The system must support:
+* the customer pays the seller directly (cash or a door method);
+* the seller pays CityCart **1% of each completed order or booking**;
+* billing is **monthly**;
+* unpaid bills move the seller through warning, restriction and freeze;
+* CityCart does **not** pay sellers, hold customer money, or run an escrow.
 
-* Platform commission calculation.
-* Brand earnings calculation.
-* Commission records.
-* Payout tracking.
-* Refund/cancellation adjustments.
-* Brand-level financial reporting.
-* Super Admin financial management.
-* Strict tenant and financial data isolation.
+The backend is authoritative for every amount and state in this document.
+
+Related documents:
+
+```text
+24-marketplace-v3-plan.md   programme and locked defaults
+10-payment-system.md        customer payment at the door
+08-order-management.md      order lifecycle
+```
 
 ---
 
-## 2. Financial Model
-
-A completed order may conceptually produce:
+## 2. Money model
 
 ```text
-Customer Payment
-       ↓
-Gross Order Amount
-       ↓
-Platform Commission
-       ↓
-Brand Earnings
+Customer
+   │ pays directly (cash / bank / wallet / card machine at the door)
+   ▼
+Seller (brand or service provider)
+   │ 1% of completed value, monthly
+   ▼
+CityCart
 ```
 
-Example:
+A completed sale produces:
 
 ```text
-Order Total:        PKR 10,000
-Commission:         PKR 1,000
-Brand Earnings:     PKR 9,000
-```
-
-The exact commission percentage or fixed-fee rules must be configurable.
-
----
-
-## 3. Commission Rules
-
-Commission may eventually be configured at different levels:
-
-```text
-Platform Default
-      ↓
-Brand Override
-      ↓
-Category Override
-      ↓
-Product Override
-```
-
-MVP should preferably use a simple platform-level or brand-level percentage.
-
-Example:
-
-```text
-commissionRate = 10%
-```
-
-The backend calculates the commission.
-
-The frontend must never determine the authoritative commission amount.
-
----
-
-## 4. Commission Record
-
-A commission record should retain enough historical information to reproduce the financial calculation.
-
-Recommended fields:
-
-```text
-Commission
-├── order
-├── brand
-├── orderAmount
-├── commissionRate
-├── commissionAmount
-├── brandAmount
-├── status
-├── currency
-├── createdAt
-└── updatedAt
-```
-
-Recommended status values:
-
-```text
-PENDING
-CONFIRMED
-ADJUSTED
-REFUNDED
-CANCELLED
-```
-
-Historical commission records should not silently change when the current commission configuration changes.
-
----
-
-## 5. Multi-Brand Orders
-
-CityCart supports multi-brand carts.
-
-A checkout such as:
-
-```text
-Customer Cart
-├── Brand A products
-├── Brand B products
-└── Brand C products
-```
-
-becomes separate brand orders:
-
-```text
-Order A → Brand A
-Order B → Brand B
-Order C → Brand C
-```
-
-Commission must therefore be calculated separately for each brand order.
-
-This ensures:
-
-* Brand A's earnings remain isolated.
-* Brand B's earnings remain isolated.
-* Platform commission is correctly attributed.
-* Payouts can be generated independently.
-
----
-
-## 6. Commission Calculation
-
-Conceptually:
-
-```text
-commissionAmount =
-eligibleAmount × commissionRate
-```
-
-Then:
-
-```text
-brandEarnings =
-eligibleAmount - commissionAmount
-```
-
-The definition of `eligibleAmount` must be documented and consistently applied.
-
-For example, CityCart may eventually decide whether commission applies to:
-
-* Product subtotal only.
-* Product subtotal + delivery.
-* Discounts before commission.
-* Discounts after commission.
-* Taxes.
-
-The implementation must not invent financial rules.
-
----
-
-## 7. Refunds and Cancellations
-
-Commission must account for financial changes.
-
-Possible scenarios:
-
-### Before fulfillment
-
-```text
-Order cancelled
+Order net merchandise value       (or confirmed booking amount)
         ↓
-Commission cancelled/reversed
+CommissionEntry                   1%, accrued
+        ↓
+Monthly SellerInvoice             issued on the 1st, due in 7 days
+        ↓
+SellerPaymentClaim                bank transfer + receipt
+        ↓
+Verified payment                  invoice PAID, seller ACTIVE
 ```
 
-### After payment
-
-```text
-Refund
-   ↓
-Financial adjustment
-   ↓
-Commission adjustment
-```
-
-### Partial refund
-
-Only the affected amount should be adjusted.
-
-Commission records should preserve an audit trail rather than simply overwriting historical values.
-
-### Returned goods at the door (added November 2026, Phase 6)
-
-A rider can refuse individual lines at the door (docs/22 §F). Refused goods were never sold, so they must not earn commission or count towards payout:
-
-```text
-order.total
-   − returnedSubtotal          (refused lines, at their unit price)
-   − feeRefunded               (delivery fee, only on a full store-fault rejection)
-= order.netTotal
-```
-
-`order.netTotal` is the amount the brand is actually paid for that order, and the amount the customer actually pays on COD. `order.fulfilment` (`FULL` / `PARTIAL` / `NONE`) and `order.returnedAmount` record why it differs from `order.total`. For prepaid orders the refused amount (plus the fee when refunded) is returned through the Payment record (docs/10 §13), so the brand's receipts and refunds stay consistent.
-
-No payout ledger exists yet (section 8 is still a concept), so this is the readiness rule the ledger must follow when it is built: eligible brand earnings use `netTotal`, never `total`, and a fully returned order (`orderStatus RETURNED`) is excluded like a cancelled order. Analytics already computes delivered revenue from `netTotal` and excludes `RETURNED` orders, so brand dashboards reflect returns today.
-
-Tests: `server/tests/returns.test.js` covers accepted/returned totals, `netTotal`, fee refunds and refund amounts; `server/tests/seedDemo.test.js` asserts that seeded payment amounts equal `netTotal` for partially returned COD orders.
+If a seller does not pay, the account is warned, restricted, then frozen.
 
 ---
 
-## 8. Payout Concept
+## 3. Commission rules
 
-A payout represents money that CityCart owes to a brand.
+| Rule | Value |
+|---|---|
+| Rate | **1%** (`rateBps = 100`) |
+| Order base | `order.netTotal - deliveryFee - tax` |
+| Service base | Confirmed final amount of the booking |
+| Trigger | Order `DELIVERED`; booking `CONFIRMED` |
+| Excluded | Cancelled/rejected orders, door-returned lines, unconfirmed bookings |
+| Delivery fee | Not commissionable |
+| Tax | Not commissionable |
+| Currency | PKR |
+| Rounding | Half-up to the nearest paisa |
 
-Conceptually:
-
-```text
-Completed Orders
-      ↓
-Eligible Brand Earnings
-      ↓
-Payout Calculation
-      ↓
-Payout
-      ↓
-Paid to Brand
-```
-
-Recommended payout statuses:
+The rate is stored on every entry. Changing the platform rate later affects
+only new entries; historical entries keep the rate they were created with.
 
 ```text
-PENDING
-PROCESSING
-PAID
-FAILED
-CANCELLED
+PKR 10,000 merchandise = 1,000,000 paisa
+1%                     =    10,000 paisa = PKR 100
 ```
+
+The backend computes the base from trusted records. A client may not submit
+`eligibleAmount`, `commissionAmount`, `rateBps`, `sellerId` or `sellerType`.
 
 ---
 
-## 9. Payout Record
+## 4. CommissionEntry
 
-Recommended fields:
+Collection: `commissionentries`
 
 ```text
-Payout
-├── brand
-├── periodStart
-├── periodEnd
-├── grossAmount
-├── commissionAmount
-├── adjustmentAmount
-├── netAmount
-├── status
-├── paymentReference
-├── processedAt
-├── processedBy
-├── notes
-├── createdAt
-└── updatedAt
+_id
+sellerType      BRAND | SERVICE_PROVIDER
+sellerId        Brand._id or ServiceProvider._id
+sourceType      ORDER | SERVICE_BOOKING
+sourceId        Order._id or ServiceBooking._id
+eligibleAmountPaisa
+rateBps         100 at the time of the sale
+commissionPaisa
+kind            SALE | REVERSAL
+status          ACCRUED | INVOICED | PAID | REVERSED
+occurredAt
+invoiceId       null until invoiced
+reversalOf      null | CommissionEntry._id
+createdAt
+updatedAt
 ```
 
-Financial records should retain historical values.
+Rules:
+
+* One `SALE` entry per source: unique `(sourceType, sourceId)`.
+* Entries are immutable. A correction is a `REVERSAL` entry pointing at the
+  original; the original is marked `REVERSED` only after the reversal is
+  invoiced.
+* A reversal can never make an invoice negative. The excess becomes a credit
+  carried to the next invoice.
+* The entry is written in the same transaction as the order/booking status
+  change that triggers it. If a retry finds the entry, it does nothing.
 
 ---
 
-## 10. Payout Periods
+## 5. Multi-seller separation
 
-Future payout schedules may support:
+A multi-brand cart becomes one order per brand. Each order produces its own
+commission entry, invoice and billing account. A service booking produces an
+entry for the provider.
+
+Brand A must never see Brand B's or a provider's entries, invoices, claims or
+balance. Service providers are isolated the same way. The super admin sees the
+platform total.
+
+---
+
+## 6. Triggers and adjustments
+
+### 6.1 Order delivered
+
+When the delivery is completed and the order becomes `DELIVERED`:
 
 ```text
-Weekly
-Biweekly
-Monthly
-Manual
+eligible = order.netTotal - order.deliveryFee - order.tax
 ```
 
-MVP does not need automatic payout processing.
+`netTotal` already excludes door-returned lines. A fully returned order
+(`RETURNED`) does not create a commission entry. A cancelled order never does.
 
-A manual Super Admin workflow may initially be sufficient.
+### 6.2 Booking confirmed
 
----
-
-## 11. Brand Financial Dashboard
-
-Authorized brand users may eventually see:
+When the customer confirms the provider's completion (or the 3-day
+auto-confirmation runs):
 
 ```text
-Gross Sales
-Commission
-Refunds
-Adjustments
-Net Earnings
-Pending Payout
-Paid Payout
+eligible = booking.finalAmount
 ```
 
-Brand users may only see financial information belonging to their own brand.
+### 6.3 Refund or return after invoicing
 
-Employees should require an explicit financial/analytics permission if financial permissions are introduced separately.
+A refund or return that reduces a sale already invoiced creates a `REVERSAL`
+entry in the next open period. The current invoice is never edited.
 
----
+### 6.4 Delivery fee and tax
 
-## 12. Super Admin Financial Dashboard
-
-Super Admin may access platform-level information such as:
-
-* Total gross sales.
-* Total commissions.
-* Brand earnings.
-* Pending payouts.
-* Completed payouts.
-* Failed payouts.
-* Refund adjustments.
-* Brand financial summaries.
-
-Platform-wide financial information must never be exposed to ordinary brand users.
+The delivery fee and tax are excluded from the base. If the order schema does
+not yet separate tax, the base is `netTotal - deliveryFee`, and the calculation
+is documented in the service before billing is enabled.
 
 ---
 
-## 13. Payment Relationship
+## 7. SellerInvoice
 
-Commission and payouts are separate from payment processing.
+Collection: `sellerinvoices`
 
 ```text
-Order
- ↓
-Payment
- ↓
-Commission
- ↓
-Brand Earnings
- ↓
-Payout
+_id
+sellerType / sellerId
+periodStart / periodEnd        calendar month, Asia/Karachi
+salesPaisa                     sum of eligible sales
+commissionPaisa                sum of SALE entries
+creditsPaisa                   reversals and overpayments
+amountDuePaisa                 commission - credits - verifiedPaid
+status                         DRAFT | ISSUED | PARTIALLY_PAID | PAID | OVERDUE | VOID
+issuedAt
+dueAt                          issuedAt + 7 days
+paidAt
+createdBy                      SYSTEM or a super admin id
+createdAt / updatedAt
 ```
 
-The Payment System determines whether money was successfully received.
+Lifecycle:
 
-The Commission System determines how that money is allocated financially.
+1. The monthly job closes the previous calendar month at 00:05 on the 1st.
+2. It groups `ACCRUED` entries per seller into one invoice.
+3. Invoices below **PKR 100** are not issued; their entries roll forward.
+4. An issued invoice is due 7 days later.
+5. Verification of a payment claim updates `amountDuePaisa` atomically and
+   marks the invoice `PARTIALLY_PAID` or `PAID`.
+6. An invoice is never edited after issue. Corrections are new entries.
 
-The Payout System tracks money owed/paid to brands.
+Unique: `(sellerType, sellerId, periodStart)`.
 
 ---
 
-## 14. Currency
+## 8. SellerPaymentClaim
 
-The MVP currency is:
+Collection: `sellerpaymentclaims`
+
+A seller reports that they paid an invoice.
 
 ```text
-PKR
+_id
+invoiceId / sellerType / sellerId
+amountPaisa
+method          BANK_TRANSFER | JAZZCASH | EASYPAISA | OTHER
+reference       bank transaction id or wallet reference
+receipt         { publicId, fingerprint }   private Cloudinary asset
+comment
+status          SUBMITTED | VERIFIED | REJECTED
+verifiedBy / verifiedAt
+rejectionReason required when REJECTED
+createdAt / updatedAt
 ```
 
-Financial records should explicitly store currency where appropriate.
+Rules:
 
-Future multi-currency support must not be assumed during MVP implementation.
+* The seller can submit a claim only for their own invoice.
+* The amount must be greater than zero and cannot exceed the outstanding
+  balance plus any credit the seller wants to leave. Overpayment becomes a
+  credit on the next invoice.
+* A receipt is uploaded through a signed Cloudinary path, like a payment proof.
+  Only the seller and the super admin can see it.
+* A claim is `SUBMITTED` until a super admin verifies or rejects it.
+* Verification is one conditional update, so two admins cannot pay the same
+  balance twice.
+* Rejection requires a reason and notifies the seller.
+* Idempotency: unique `(invoiceId, reference, amountPaisa)`; a duplicate
+  submission is refused.
 
 ---
 
-## 15. Financial Accuracy
+## 9. Freeze ladder
 
-Financial calculations must use backend-authoritative values.
-
-Never trust:
+Freeze state is stored per seller tenant and derived from the oldest unpaid
+invoice:
 
 ```text
-commissionAmount
-brandEarnings
-payoutAmount
-orderTotal
+ACTIVE       no overdue invoice
+WARNING      due date reached; login popup, banner; new orders allowed
+RESTRICTED   due + 7 days; no new orders/bookings; existing jobs fulfillable;
+             listings visible with "not accepting new orders";
+             dashboard read-only except Billing and Help
+FROZEN       due + 14 days; listings hidden from discovery;
+             dashboard read-only except Billing and Help;
+             existing orders/bookings still fulfillable
 ```
 
-submitted by a client.
+Rules:
 
-Amounts should be calculated from trusted database records.
-
-Where practical, monetary values should use integer minor units or another consistent strategy to avoid floating-point errors.
-
-For PKR, the implementation should define a consistent representation before financial features are implemented.
+* The seller can always complete work already accepted.
+* Commission keeps accruing on those completions.
+* Verifying a payment returns the seller to `ACTIVE` immediately and restores
+  listings.
+* The check is evaluated on every seller request, not only by the daily job, so
+  a stale job cannot let a restricted seller create orders.
+* A super admin may grant a grace period with a reason and an expiry. The
+  action is audited and shown to the seller.
+* A seller sees a login popup at `WARNING`, `RESTRICTED` and `FROZEN` with the
+  amount due, bank details and a link to Billing.
+* A frozen seller can still sign in, read, download invoices and submit proof.
 
 ---
 
-## 16. Idempotency
+## 10. Seller billing dashboard
 
-Financial operations must avoid duplicate processing.
-
-Examples:
+Brand and provider dashboards expose a Billing section:
 
 ```text
-Same payout processed twice
-Same commission created twice
-Same refund adjustment applied twice
+Balance and next due date
+Freeze state and what it blocks
+Platform bank details (bank, account title, IBAN/account number)
+Invoices, period, amount, status
+Orders/bookings behind each invoice line
+Submit payment: amount, method, reference, receipt, comment
+Claim history and rejection reasons
+Help and dispute form
 ```
 
-The backend should use unique references, transaction logic, or idempotency mechanisms where appropriate.
+The bank details are maintained by the super admin and are read-only to the
+seller. They are returned only to an authenticated seller and are never public.
 
 ---
 
-## 17. Financial Auditability
-
-Important financial changes should be traceable.
-
-The system should preserve:
-
-* Original amount.
-* Adjustment amount.
-* Reason.
-* Actor.
-* Timestamp.
-* Related order.
-* Related payment.
-* Related payout.
-
-Future `auditLogs` infrastructure can provide more detailed audit history.
-
----
-
-## 18. Security
-
-Financial endpoints require:
-
-* Authentication.
-* RBAC.
-* Tenant ownership checks.
-* Input validation.
-* ObjectId validation.
-* Rate limiting where appropriate.
-* Secure error handling.
-
-Brand users must never access:
+## 11. Super admin billing
 
 ```text
-Other brand payouts
-Other brand commissions
-Platform-wide financial data
+All invoices, filters by seller/status/period
+All claims, with the receipt and the invoice
+Verify or reject a claim
+Freeze, unfreeze or grant grace with a reason and expiry
+Edit platform bank details
+Edit billing settings: rate, due days, grace days, minimum invoice
+Revenue, outstanding and ageing reports
+Export for accounting
 ```
+
+Every decision writes an audit record with actor, time, amount and reason.
 
 ---
 
-## 19. Example APIs
+## 12. Relationship to customer payment
 
-### Brand
+Customer payment and seller billing are separate ledgers:
+
+```text
+Customer payment     proves the seller was paid by the customer
+CommissionEntry      proves the seller owes CityCart 1%
+SellerInvoice        groups the debt for a period
+SellerPaymentClaim   proves the seller paid CityCart
+```
+
+The platform never marks a customer payment as received on the seller's behalf,
+and a seller's failure to pay CityCart never changes what the customer owes the
+seller.
+
+---
+
+## 13. Currency and rounding
+
+* Currency is PKR only.
+* Amounts are stored in paisa (integer).
+* Display uses two decimals.
+* Rounding is half-up.
+* No floating-point arithmetic in money calculations.
+* Every entry stores the currency and the rate used.
+
+---
+
+## 14. Authority and trust
+
+The backend derives:
+
+```text
+sellerType
+sellerId
+sourceType
+sourceId
+eligibleAmountPaisa
+rateBps
+commissionPaisa
+invoice totals
+amount due
+freeze state
+```
+
+The client never supplies any of these. A seller cannot mark an invoice paid,
+change a rate, reverse an entry or unfreeze itself.
+
+---
+
+## 15. Idempotency and concurrency
+
+* Commission entry: unique `(sourceType, sourceId)`.
+* Invoice: unique `(sellerType, sellerId, periodStart)`.
+* Claim: unique `(invoiceId, reference, amountPaisa)`.
+* Payment verification: conditional on the invoice's previous paid amount and
+  status; a concurrent change returns `409 INVOICE_CHANGED`.
+* The monthly job is safe to re-run: it only picks entries that are still
+  `ACCRUED` and invoices that do not exist.
+* Order/booking completion and commission creation share one transaction where
+  the database supports it.
+
+---
+
+## 16. Auditability
+
+Preserve for every commission, invoice, claim and freeze change:
+
+```text
+original amount
+adjustment or reversal amount
+rate
+reason
+actor
+timestamp
+related order / booking
+related payment
+related invoice
+```
+
+Entries and invoices are never overwritten. Audit records are retained even
+when the seller account is anonymized or archived.
+
+---
+
+## 17. Security
+
+Billing endpoints require:
+
+* authentication;
+* role and permission checks;
+* tenant ownership (`sellerId` derived from the session, never the body);
+* Zod validation and ObjectId validation;
+* rate limiting on claim submission and verification;
+* signed, private receipt uploads;
+* secure error handling that never exposes another seller's balance.
+
+Sellers must never access another seller's invoices, claims, receipts, bank
+details or freeze state. The super admin's billing views are platform-wide.
+
+---
+
+## 18. APIs (planned)
+
+### Seller
 
 ```http
-GET /api/v1/brand/financial/summary
-GET /api/v1/brand/financial/commissions
-GET /api/v1/brand/financial/payouts
-GET /api/v1/brand/financial/payouts/:payoutId
+GET  /api/v1/billing/account
+GET  /api/v1/billing/invoices
+GET  /api/v1/billing/invoices/:id
+POST /api/v1/billing/invoices/:id/claims
+GET  /api/v1/billing/claims
+GET  /api/v1/billing/bank-details
+POST /api/v1/billing/help
 ```
 
-### Super Admin
+### Super admin
 
 ```http
-GET /api/v1/admin/financial/summary
-GET /api/v1/admin/financial/commissions
-GET /api/v1/admin/financial/payouts
-POST /api/v1/admin/financial/payouts
-PUT /api/v1/admin/financial/payouts/:payoutId
+GET   /api/v1/admin/billing/invoices
+GET   /api/v1/admin/billing/claims
+PATCH /api/v1/admin/billing/claims/:id
+POST  /api/v1/admin/billing/sellers/:type/:id/freeze
+DELETE/api/v1/admin/billing/sellers/:type/:id/freeze
+GET   /api/v1/admin/billing/settings
+PATCH /api/v1/admin/billing/settings
+GET   /api/v1/admin/billing/reports
 ```
 
-Exact endpoints may evolve with the final API design.
+Exact shapes are defined in `05-api-specification.md` during Phase 3.
 
 ---
 
-## 20. MVP Scope
+## 19. Required tests
 
-The initial CityCart MVP should prioritize:
-
-* COD payments.
-* Correct order totals.
-* Payment records.
-* Basic financial reporting.
-
-The following can remain future functionality:
-
-* Automated payouts.
-* Bank integrations.
-* Payment gateway settlement reconciliation.
-* Complex commission rules.
-* Tax accounting.
-* Multi-currency settlement.
-* Scheduled payouts.
-
----
-
-## 21. Testing Requirements
-
-Tests must verify:
-
-* Commission calculation is correct.
-* Brand earnings are correct.
-* Multi-brand orders calculate commissions separately.
-* Refunds adjust financial records correctly.
-* Cancelled orders do not incorrectly create payable earnings.
-* Brand A cannot access Brand B financial records.
-* Employees without permission cannot access financial data.
-* Duplicate payout processing is prevented.
-* Financial amounts cannot be overridden by clients.
+```text
+1% and rounding on orders and bookings
+delivery fee and tax excluded
+door returns reduce the base
+cancelled/rejected orders create no entry
+one entry per source (idempotent retry)
+monthly invoice groups only the right seller and period
+invoice below PKR 100 rolls forward
+refund after invoicing creates a reversal in the next period
+partial payment and overpayment credit
+duplicate claim refused
+claim verification is atomic
+freeze ladder at due, +7 and +14
+a frozen seller cannot create a new order/booking but can finish existing work
+verification unfreezes immediately
+seller A cannot read seller B's invoice, claim or receipt
+client-supplied amounts are ignored
+super admin actions are audited
+```
 
 ---
 
-## 22. AI Implementation Rules
+## 20. AI implementation rules
 
-AI agents must:
-
-1. Treat financial values as backend-authoritative.
-2. Never invent commission rules.
-3. Preserve historical financial values.
-4. Maintain brand isolation.
-5. Avoid implementing automated payouts unless explicitly requested.
-6. Use the existing Order and Payment models.
-7. Add tests for calculations and authorization.
-8. Flag conflicts involving financial business rules before implementation.
-
----
-
-## 23. Acceptance Criteria
-
-The Commission & Payout architecture is complete when:
-
-* Commission rules are clearly defined before implementation.
-* Commission records preserve historical calculations.
-* Multi-brand orders remain financially separated.
-* Refunds/cancellations can be represented correctly.
-* Brand financial data is isolated.
-* Super Admin can manage platform financial information.
-* Duplicate financial operations are prevented.
-* Financial calculations are covered by tests.
+1. Read this document before touching billing code.
+2. Never trust client financial values.
+3. Never edit an issued invoice or a commission entry; use a reversal.
+4. Keep brand, provider and platform data isolated.
+5. Use paisa and integer arithmetic.
+6. Make every financial operation idempotent.
+7. Keep customer payment and seller billing separate.
+8. Report any ambiguity about money before implementing it.
+9. Add tests for calculations, authorization and freeze behavior.
+10. Never delete financial history.
 
 ---
 
-## 24. Source of Truth
+## 21. Acceptance criteria
 
-This document defines the authoritative requirements for CityCart Commission & Payout functionality.
+Seller billing is complete when:
 
-Commission and payout functionality is considered a future expansion unless explicitly included in the MVP implementation plan.
+* every completed order and booking creates exactly one 1% entry;
+* monthly invoices are generated from entries, not from client data;
+* sellers can see and pay their bill with a receipt;
+* the super admin can verify payments and manage freezes;
+* the freeze ladder blocks new sales at the documented thresholds;
+* verification restores selling immediately;
+* refunds and returns are reflected through reversals and credits;
+* tenants are isolated and every action is audited;
+* the test list in section 19 passes.
 
-Any financial-rule conflict must be identified before implementation.
+---
+
+## 22. Source of truth
+
+This document is the authoritative specification for CityCart seller billing.
+`24-marketplace-v3-plan.md` controls the programme and the locked defaults. Any
+financial rule conflict must be reported before implementation.

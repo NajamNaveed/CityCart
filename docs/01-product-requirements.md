@@ -91,7 +91,7 @@ Responsibilities include:
 * Monitoring orders
 * Monitoring platform activity
 * Viewing platform-wide analytics
-* Managing commissions and payouts
+* Managing seller billing: invoices, payment claims and account freeze
 * Handling platform-level issues
 
 ---
@@ -769,7 +769,7 @@ Basic brand dashboard
 ```text
 Online payments
 Advanced courier integrations
-Complex commission/payout system
+Automated payouts to sellers (v3 bills sellers monthly instead — docs/15)
 SMS
 WhatsApp notifications
 Advanced recommendation engine
@@ -789,13 +789,13 @@ CityCart should be designed with future expansion in mind.
 
 Potential future features include:
 
-* Online payments
+* Online payments (not planned in v3: the customer pays the seller at the door)
 * Courier API integrations
 * Delivery tracking
-* Mobile applications
+* Mobile applications (v3 moves them to Flutter)
 * Push notifications
 * Seller subscriptions
-* Advanced commission management
+* Advanced commission management (v3 starts with 1% monthly seller billing, docs/15)
 * Brand advertising
 * Featured products
 * Coupons

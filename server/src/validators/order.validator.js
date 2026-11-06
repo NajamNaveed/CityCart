@@ -37,7 +37,7 @@ const shippingAddressSchema = z.object({
     }),
 });
 
-// COD always; ONLINE_GATEWAY only while a payment provider is switched on (checked at checkout).
+// Cash on delivery is the only payment method the customer chooses (docs/08 §17).
 const createOrderSchema = z.object({
   shippingAddress: shippingAddressSchema,
   // The delivery pin. The server finds the blocks that hold it and checks every
@@ -53,7 +53,7 @@ const createOrderSchema = z.object({
     .optional(),
   // Save the address for next time.
   saveAddress: z.object({ label: z.string().trim().min(1).max(40) }).optional(),
-  paymentMethod: z.enum(['COD', 'ONLINE_GATEWAY'], { error: 'paymentMethod must be COD or ONLINE_GATEWAY' }),
+  paymentMethod: z.literal('COD', { error: 'paymentMethod must be COD' }),
 });
 
 const listOrdersQuerySchema = z.object({

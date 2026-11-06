@@ -4,8 +4,17 @@ const {
   emailRequestSchema,
   tokenSchema,
   resetPasswordSchema,
+  workspaceTokenSchema,
+  workspaceSwitchSchema,
 } = require('../validators/auth.validator');
-const { registerUser, loginUser, toSafeUser, AuthError } = require('../services/auth.service');
+const {
+  registerUser,
+  loginUser,
+  completeWorkspaceLogin,
+  switchWorkspace,
+  toSafeUser,
+  AuthError,
+} = require('../services/auth.service');
 const {
   verifyEmail,
   resendVerification,
@@ -101,7 +110,9 @@ const loginFor = (portal) =>
       });
     } catch (err) {
       if (err instanceof AuthError) {
-        return res.status(err.status).json({ success: false, message: err.message, ...(err.code && { code: err.code }) });
+        return res
+          .status(err.status)
+          .json({ success: false, message: err.message, ...(err.code && { code: err.code }), ...(err.extra || {}) });
       }
       return next(err);
     }
@@ -140,7 +151,9 @@ const appLoginFor = (portal) => {
       return res.status(200).json({ success: true, message: 'Login successful', user, token });
     } catch (err) {
       if (err instanceof AuthError) {
-        return res.status(err.status).json({ success: false, message: err.message, ...(err.code && { code: err.code }) });
+        return res
+          .status(err.status)
+          .json({ success: false, message: err.message, ...(err.code && { code: err.code }), ...(err.extra || {}) });
       }
       return next(err);
     }
@@ -153,6 +166,71 @@ const deliveryLogin = appLoginFor('delivery');
 const login = loginFor('customer');
 const brandLogin = loginFor('brand');
 const adminLogin = loginFor('admin');
+
+/**
+ * Second step of a multi-brand employee's sign-in (docs/24 §3.3): exchange
+ * the short-lived workspace token and the chosen brand for a normal session.
+ * The brand is only a choice; the service re-checks the active membership.
+ * A staff-app token is returned in the body, the web brand portal gets the
+ * same HTTP-only staff cookie as a normal login.
+ */
+async function workspaceLogin(req, res, next) {
+  const parsed = workspaceTokenSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, message: 'Validation failed.', errors: formatZodError(parsed.error) });
+  }
+
+  try {
+    const { user, token, portal } = await completeWorkspaceLogin(parsed.data);
+    if (portal === 'staff') {
+      if (!isStaffClient(req)) {
+        return res.status(403).json({ success: false, message: 'This sign-in is for the CityCart Staff app.', code: 'STAFF_APP_ONLY' });
+      }
+      return res.status(200).json({ success: true, message: 'Login successful', user, token });
+    }
+    res.cookie(AUTH_COOKIE_NAME, token, cookieOptionsFor(user.role));
+    return res.status(200).json({ success: true, message: 'Login successful', user });
+  } catch (err) {
+    if (err instanceof AuthError) {
+      return res
+        .status(err.status)
+        .json({ success: false, message: err.message, ...(err.code && { code: err.code }), ...(err.extra || {}) });
+    }
+    return next(err);
+  }
+}
+
+/**
+ * Switch to another active membership without re-entering the password
+ * (docs/24 §3.3). The current session must be a staff session; the target
+ * membership is re-checked right now.
+ */
+async function switchWorkspaceHandler(req, res, next) {
+  const parsed = workspaceSwitchSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, message: 'Validation failed.', errors: formatZodError(parsed.error) });
+  }
+
+  try {
+    const { user, token } = await switchWorkspace({
+      user: req.user,
+      brandId: parsed.data.brandId,
+      client: req.sessionClient,
+    });
+    if (req.sessionClient === 'staff') {
+      return res.status(200).json({ success: true, message: 'Workspace switched', user, token });
+    }
+    res.cookie(AUTH_COOKIE_NAME, token, cookieOptionsFor(user.role));
+    return res.status(200).json({ success: true, message: 'Workspace switched', user });
+  } catch (err) {
+    if (err instanceof AuthError) {
+      return res
+        .status(err.status)
+        .json({ success: false, message: err.message, ...(err.code && { code: err.code }), ...(err.extra || {}) });
+    }
+    return next(err);
+  }
+}
 
 function logout(req, res) {
   // §10: "The server must use the same cookie configuration required to
@@ -172,11 +250,14 @@ async function me(req, res, next) {
   // only reachable when that middleware has already confirmed the user
   // is authenticated and active.
   try {
-    const user = toSafeUser(req.user);
+    const user = toSafeUser(req.user, req.membership);
     // A team member's permissions decide what the dashboard offers them.
-    // (Brand owners and the super admin have full access and need no list.)
+    // The membership (not just the account) is the authority, so a person
+    // employed by two brands sees the permissions of the active one.
     if (req.user.role === ROLES.BRAND_EMPLOYEE) {
-      const employee = await Employee.findOne({ userId: req.user._id });
+      const employee =
+        req.membership ||
+        (await Employee.findOne({ userId: req.user._id, brandId: req.user.brandId, isActive: true }));
       user.permissions = employee && employee.isActive ? employee.permissions : [];
     }
     // A platform-admin partner's ticked areas and read-only mode (docs/21 §G).
@@ -206,9 +287,10 @@ async function changePassword(req, res, next) {
     const token = signToken(
       {
         userId: user._id,
-        role: user.role,
-        brandId: user.brandId,
+        role: req.user.role,
+        brandId: req.user.brandId,
         passwordVersion: user.passwordVersion,
+        ...(req.membership && { membershipId: req.membership._id }),
       },
       { expiresIn: `${env.staffSessionHours}h` }
     );
@@ -313,6 +395,8 @@ module.exports = {
   staffLogin,
   deliveryLogin,
   adminLogin,
+  workspaceLogin,
+  switchWorkspaceHandler,
   logout,
   me,
   changePassword,

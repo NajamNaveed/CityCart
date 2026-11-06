@@ -28,6 +28,7 @@ export default function Riders() {
 
   const [resetting, setResetting] = useState(null) // { id, password }
   const [confirmOff, setConfirmOff] = useState(null) // rider id
+  const [confirmPurge, setConfirmPurge] = useState(null) // rider id
 
   useEffect(() => {
     let active = true
@@ -89,8 +90,20 @@ export default function Riders() {
   const setActive = (rider, isActive) =>
     run(
       () => api.patch(`/riders/${rider._id}`, { isActive }),
-      isActive ? 'Rider reactivated.' : 'Rider deactivated. They can no longer sign in. Move their open deliveries to someone else.',
+      isActive ? 'Rider reactivated.' : 'Rider deactivated. They can no longer sign in.',
     ).then(() => setConfirmOff(null))
+
+  const removeRider = (rider) =>
+    run(
+      () => api.delete(`/riders/${rider._id}`),
+      'Rider removed. Their past deliveries are kept, and you can add them again later.',
+    ).then(() => setConfirmOff(null))
+
+  const purgeRider = (rider) =>
+    run(
+      () => api.delete(`/riders/${rider._id}?purge=account`),
+      'Rider account deleted and the email freed. Past deliveries and records are kept.',
+    ).then(() => setConfirmPurge(null))
 
   return (
     <>
@@ -162,8 +175,8 @@ export default function Riders() {
                     {r.isActive && can('riders.update') &&
                       (confirmOff === r._id ? (
                         <span className="flex items-center gap-2.5 rounded-md bg-danger-soft px-3 py-1.5 font-normal text-danger">
-                          Deactivate?
-                          <button type="button" disabled={busy} onClick={() => setActive(r, false)} className="font-semibold hover:underline">
+                          Remove?
+                          <button type="button" disabled={busy} onClick={() => removeRider(r)} className="font-semibold hover:underline">
                             Yes
                           </button>
                           <button type="button" onClick={() => setConfirmOff(null)} className="text-muted hover:text-ink">
@@ -176,7 +189,7 @@ export default function Riders() {
                           onClick={() => setConfirmOff(r._id)}
                           className="rounded-md border border-danger/40 px-3 py-1.5 text-danger transition hover:border-danger"
                         >
-                          Deactivate
+                          Remove
                         </button>
                       ))}
                     {!r.isActive && can('riders.update') && (
@@ -189,6 +202,26 @@ export default function Riders() {
                         Reactivate
                       </button>
                     )}
+                    {!r.isActive && can('riders.update') &&
+                      (confirmPurge === r._id ? (
+                        <span className="flex items-center gap-2.5 rounded-md bg-danger-soft px-3 py-1.5 font-normal text-danger">
+                          Delete account and free the email?
+                          <button type="button" disabled={busy} onClick={() => purgeRider(r)} className="font-semibold hover:underline">
+                            Yes
+                          </button>
+                          <button type="button" onClick={() => setConfirmPurge(null)} className="text-muted hover:text-ink">
+                            No
+                          </button>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmPurge(r._id)}
+                          className="rounded-md border border-danger/40 px-3 py-1.5 text-danger transition hover:border-danger"
+                        >
+                          Delete account
+                        </button>
+                      ))}
                   </div>
                 </div>
 

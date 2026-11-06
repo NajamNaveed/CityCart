@@ -23,9 +23,9 @@ const { FULFILMENTS } = require('../config/returns');
 // these must never be merged into a single field.
 const PAYMENT_STATUSES = ['PENDING', 'PAID', 'FAILED', 'REFUNDED', 'PARTIALLY_REFUNDED', 'CANCELLED'];
 
-// COD is the only method implemented in the MVP; the others are
-// documented future methods (docs/04-database-design.md §26).
-const PAYMENT_METHODS = ['COD', 'CARD', 'BANK_TRANSFER', 'WALLET', 'ONLINE_GATEWAY'];
+// COD is the only method a customer chooses in v3; the door collection methods
+// (docs/10 §4) are recorded on the payment, not here.
+const PAYMENT_METHODS = ['COD', 'CARD', 'BANK_TRANSFER', 'WALLET'];
 
 const orderItemSchema = new mongoose.Schema({
   productId: {

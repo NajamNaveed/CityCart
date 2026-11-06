@@ -1,6 +1,7 @@
 const Brand = require('../models/brand.model');
 const Store = require('../models/store.model');
 const User = require('../models/user.model');
+const Employee = require('../models/employee.model');
 const Order = require('../models/order.model');
 const Payment = require('../models/payment.model');
 const Delivery = require('../models/delivery.model');
@@ -106,8 +107,16 @@ async function terminateBrand({ brandId, reason, adminId, graceHours }) {
   let transitioned = false;
 
   const brand = await runInTransaction(async (session) => {
-    const updated = await Brand.findOneAndUpdate(
-      { _id: brandId, status: { $ne: 'TERMINATED' } },
+    const current = await Brand.findOne({ _id: brandId, status: { $ne: 'TERMINATED' } }).session(session);
+    if (!current) {
+      const existing = await Brand.findById(brandId).session(session);
+      if (!existing) {
+        throw new BrandError(404, 'Brand not found.');
+      }
+      return existing; // already terminated: only retry the cleanup below
+    }
+    await Brand.updateOne(
+      { _id: current._id },
       {
         $set: {
           status: 'TERMINATED',
@@ -115,24 +124,41 @@ async function terminateBrand({ brandId, reason, adminId, graceHours }) {
           terminatedAt: new Date(),
           terminatedBy: adminId,
           accessEndsAt,
+          // The archived brand keeps its row and history, but the original
+          // name can be reused (docs/24 §3.7, docs/04 §36).
+          slug: `${current.slug}~terminated~${current._id}`,
         },
       },
-      { new: true, session }
+      { session }
     );
-    if (!updated) {
-      const existing = await Brand.findById(brandId).session(session);
-      if (!existing) {
-        throw new BrandError(404, 'Brand not found.');
-      }
-      return existing; // already terminated: only retry the cleanup below
-    }
+    const updated = await Brand.findById(current._id).session(session);
     transitioned = true;
     await Store.updateMany({ brandId }, { $set: { isActive: false } }, { session });
     // Staff are NOT deactivated: until accessEndsAt they keep a read-only
     // account (they can still finish in-transit deliveries); after it,
     // authenticate rejects every request. graceHours 0 = immediate cut-off.
+    //
+    // A multi-brand employee keeps a working account for their other brand,
+    // so the account-wide restriction must not be applied to them: their
+    // membership here is deactivated by the termination cleanup at
+    // accessEndsAt instead (docs/24 §3.7).
+    const memberships = await Employee.find({ brandId, isActive: true })
+      .select('userId')
+      .session(session);
+    const memberIds = memberships.map((m) => m.userId);
+    const stillEmployed = memberIds.length
+      ? await Employee.find({ userId: { $in: memberIds }, brandId: { $ne: brandId }, isActive: true })
+          .select('userId')
+          .session(session)
+      : [];
+    const keepsOtherWorkspace = stillEmployed.map((m) => m.userId);
+
     await User.updateMany(
-      { brandId, role: { $in: [ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE, ROLES.RIDER] } },
+      {
+        brandId,
+        role: { $in: [ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE, ROLES.PICKER, ROLES.RIDER] },
+        ...(keepsOtherWorkspace.length && { _id: { $nin: keepsOtherWorkspace } }),
+      },
       { $set: { accessExpiresAt: accessEndsAt, accessRestricted: true } },
       { session }
     );

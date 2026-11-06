@@ -360,18 +360,14 @@ Main files: `partner/src/app/(records)/*`, `partner/src/app/{order,shipment,rece
 `partner/src/services/records.js`, `partner/src/utils/permissions.js`,
 `partner/src/components/{FilterChips,ListRow,ListScreen,StatusPill}.jsx`.
 
-### 5.6 Phase E: online payments
+### 5.6 Phase E: online payments (removed in v3)
 
-Full rules, flow, outcome table and limits are in `10-payment-system.md` §29; this is the summary for whoever continues.
-
-* **Built:** a provider layer (`server/src/payments/`) with a **TEST gateway** (`mock`) that works exactly like a hosted-checkout gateway: a checkout page, and a **signed** webhook processed by the same code a real gateway will use. `ONLINE_GATEWAY` is accepted at checkout only while `PAYMENT_PROVIDER` names a provider and `PAYMENT_WEBHOOK_SECRET` is strong; the test gateway is refused in production.
-* **Safety rules built and tested:** signature checked on the raw bytes before any database access; each notification applied at most once (unique `provider + eventId`, applied in the same transaction as the payment change); wrong amount or currency, unknown reference, late payment (after the order expired or was cancelled) and duplicate payment are recorded in `PaymentEvent` and never applied (`GET /payments/events`, super admin); the brand cannot confirm an unpaid online order; the customer cannot cancel a paid one; the receipt and customer notification happen after the commit.
-* **Stock:** stock is deducted at checkout as before and **held for `ONLINE_PAYMENT_HOLD_MINUTES`** (default 30). A timer in the server (`jobs/paymentExpiry.js`, no new package) cancels unpaid online orders, restocks and notifies, with one atomic conditional update per order so it can never restock twice.
-* **Customer screens:** the website's checkout and the shopper app's checkout offer "Online payment" when `GET /payments/methods` lists it; after placing, each order has **Pay now** (opens the gateway page); the order page shows "Waiting for your payment" with the deadline, and the shopper app looks again when the app comes back to the foreground, so a payment that went through shows at once.
-* **Delivery app:** no change needed. Online orders have no cash to collect (the rider screen says "Already paid online"), no collector, and nothing to settle; receipts show the method.
-* **Demo:** `npm run seed:demo` makes about a quarter of the delivered orders paid online (provider `mock`). To try the whole flow live, set in `server/.env`: `PAYMENT_PROVIDER=mock`, `PAYMENT_WEBHOOK_SECRET=<16+ random characters>`, `PUBLIC_API_URL=http://<your computer's Wi-Fi address>:5000`, restart, choose "Online payment" at checkout, tap Pay now, and press **Pay now** on the test page.
-* **Not built (to do, in this order):** (1) a **real gateway adapter** (owner must open a sandbox account and verify the gateway's current official documentation: signature scheme, hosted-checkout request, refund API; add one `payments/<name>.provider.js`, register it, and add provider-specific tests; live card payments also need a registered business); (2) **real refunds through the gateway** (today a refund is only recorded; the brand returns the money in the gateway's dashboard); (3) one payment for a multi-brand cart (today one payment per order); (4) a screen in the website's admin area and in the app for the super admin's `LATE_PAYMENT` / `DUPLICATE_PAYMENT` review list (API exists).
-* **Not verified:** a real gateway (none was available), a physical phone, and the server's real-MongoDB integration tests (the webhook transaction's rollback of a duplicate event is proven only with mocks here; run `npm run test:integration` and consider adding an integration test for it).
+The test gateway built in Phase E was removed in Phase 1 of docs/24 (§5.7).
+There is no customer online payment in v3: checkout accepts `COD` only, and the
+rider records what was collected at the door (`CASH`, `BANK_TRANSFER`, `WALLET`,
+`CARD_MACHINE`) with photo proof where the brand requires it (docs/10 §4,
+docs/21 §I). Legacy `ONLINE_GATEWAY` orders and payments stay readable but
+read-only (docs/10 §29).
 
 ### 5.7 Phase F: push notifications and rider location (now split across the two apps)
 

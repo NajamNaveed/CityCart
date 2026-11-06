@@ -181,7 +181,8 @@ describe('GET /api/v1/inventory', () => {
       .get('/api/v1/inventory')
       .set(...asUser(makeFakeUser({ role: ROLES.BRAND_EMPLOYEE, brandId: oid() })));
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe('MEMBERSHIP_INACTIVE');
   });
 
   it('denies a brand user with missing brand context with 403', async () => {

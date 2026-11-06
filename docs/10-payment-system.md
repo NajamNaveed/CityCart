@@ -4,19 +4,25 @@
 
 This document defines CityCart's payment architecture.
 
-The MVP will initially support **Cash on Delivery (COD)** while keeping the architecture ready for future online payment gateways.
+**v3 rule (2026-11-06): CityCart takes no online payment from customers.**
+A customer pays the brand or service provider directly when the work is done:
+cash to the rider, or a door method using the seller's own bank account, wallet
+or card machine. The platform charges sellers a separate 1% monthly fee
+(`15-commission-and-payouts.md`).
 
-It covers:
+The customer payment record covers:
 
 * Payment records
-* COD
+* COD and door collection methods
 * Payment statuses
 * Order/payment relationship
 * Payment confirmation
 * Refunds
 * Security
-* Future gateway integration
 * Testing
+
+The mock/test online gateway described in §29 is removed in Phase 1 of
+`24-marketplace-v3-plan.md`. There is no customer-facing online checkout.
 
 ---
 
@@ -60,26 +66,26 @@ The exact schema is defined during implementation.
 
 ---
 
-# 4. Supported Payment Method
+# 4. Supported Payment Methods
 
-The initial MVP supports:
-
-```text
-COD
-```
-
-Meaning:
-
-> The customer pays when the order is delivered.
-
-Example:
+The order is always cash on delivery at the platform level. When the rider
+arrives, the customer pays one of:
 
 ```text
-paymentMethod = COD
-paymentStatus = PENDING
+CASH             cash to the rider
+BANK_TRANSFER    the seller's own bank account
+WALLET           the seller's own JazzCash / Easypaisa / other wallet
+CARD_MACHINE     the seller's card machine
 ```
 
-Online payments are intentionally excluded from the initial MVP.
+`Payment.collection` records which one was used, with a reference and a private
+proof photo for non-cash methods (§31). The payment's own `method` stays `COD`
+for cash and becomes `BANK_TRANSFER`, `WALLET` or `CARD` for the matching door
+method.
+
+Customer online payment (`ONLINE_GATEWAY`) is **not supported in v3**. It is
+removed together with the mock gateway (§29). No customer money passes through
+CityCart.
 
 ---
 
@@ -348,71 +354,49 @@ Payment-related APIs must:
 
 CityCart must not store raw card information.
 
-If online payment gateways are added later, sensitive card data should be handled by the payment provider whenever possible.
-
-The CityCart backend should store only the payment-provider information necessary to reference and reconcile the transaction.
-
----
-
-# 16. Future Online Payments
-
-The architecture should allow future providers such as:
-
-```text
-Online Payment Gateway
-Bank/Card Provider
-Wallet Provider
-```
-
-without rewriting the order system.
-
-Conceptually:
-
-```text
-Payment Service
-      ↓
-Payment Provider Interface
-      ↓
-COD
-Online Gateway A
-Online Gateway B
-```
-
-The exact provider will be selected later.
+A card machine at the door is handled by the seller's machine; CityCart keeps
+only the approval reference the rider enters and a private photo of the slip
+(§31). The platform never sees or stores a card number.
 
 ---
 
-# 17. Payment Provider Webhooks
+# 16. No Customer Online Payments
 
-Future online gateways will likely use webhooks.
+Customer online payment is out of scope for v3. There is no hosted checkout, no
+payment-provider adapter and no gateway webhook for customers. The seller is
+paid directly at the door.
 
-Webhook processing must:
+A future product decision may add online payment again, but it would be a new
+approved feature, not a dormant code path.
 
-* Verify the provider signature.
-* Validate the event.
-* Prevent duplicate processing.
-* Identify the correct payment.
-* Update payment status safely.
-* Record the provider transaction reference.
+---
 
-A webhook must never blindly trust request data.
+# 17. Seller Billing Is a Separate Ledger
+
+The platform's only charge is the seller's 1% monthly fee. It is computed from
+completed orders and bookings and is billed separately from the customer's
+payment. See `15-commission-and-payouts.md`.
+
+A seller's unpaid platform bill never changes what the customer owes the seller,
+and a customer's unpaid order never changes the seller's platform bill until the
+order is completed.
 
 ---
 
 # 18. Idempotency
 
-Payment operations should be idempotent where applicable.
-
-For example, receiving the same payment webhook twice must not:
+Payment operations must be idempotent where applicable:
 
 ```text
-PAID
-→ PAID again
-→ duplicate refund
-→ duplicate order action
+completing the same delivery twice          one PAID payment, one receipt
+verifying the same door proof twice         409 PROOF_ALREADY_DECIDED
+refunding the same amount twice             409 REFUND_EXCEEDS_PAID
+creating the same commission entry twice     one entry per order/booking
+issuing the same monthly invoice twice       one invoice per seller and period
 ```
 
-The system should detect previously processed payment events.
+Every write uses a conditional update or a unique index, not a read-then-write
+check that a concurrent request can race.
 
 ---
 
@@ -517,7 +501,8 @@ AI coding agents must:
 4. Never allow clients to directly modify payment status.
 5. Never store raw card information.
 6. Preserve brand/payment data isolation.
-7. Make webhook processing idempotent when online payments are introduced.
+7. Keep any future gateway webhook processing idempotent. v3 has no customer
+   gateway; seller billing claims are idempotent instead (docs/15).
 8. Validate payment-state transitions.
 9. Add tests for payment authorization.
 10. Report architectural conflicts before changing payment behavior.
@@ -554,7 +539,8 @@ At minimum:
 
 ### Future Gateway
 
-When implemented:
+Not applicable in v3: there is no customer online gateway (see §29). If one is
+ever reintroduced, it starts from a new product decision and needs these tests:
 
 * Webhook signature validation
 * Duplicate webhook handling
@@ -577,7 +563,7 @@ Payment functionality is considered implemented when:
 * Brands can only access payment information for their own orders.
 * Sensitive financial information is protected.
 * Payment status transitions are controlled.
-* The architecture supports future online payment providers.
+* Customer payments stay at the door; seller billing is separate (docs/15).
 * Payment functionality has automated tests.
 
 ---
@@ -586,7 +572,9 @@ Payment functionality is considered implemented when:
 
 This document is the authoritative specification for CityCart's payment system.
 
-The MVP should remain simple with COD while keeping the payment architecture extensible enough for future online payment integration.
+The MVP should remain simple with COD while keeping payment records separable
+from order records. v3 adds no customer online payment; the platform bills
+sellers separately (docs/15).
 
 ---
 
@@ -628,116 +616,72 @@ never created, edited or deleted through the API.
   was paid (for example "wallet (JazzCash)"); the brand's view also sees the reference
   and the proof's **live** check state. A cash collection still records the collector
   as before, and its `collectionMethod` is `CASH`.
-* **Card and online** payments (Phase E) get the same receipt from the same code;
-  only the confirmation of the payment differs (the gateway's signed webhook).
+* **Card machine and door methods** use the same receipt; only the method and
+  reference differ. Online gateway receipts are removed with the gateway
+  (§29).
 
 Endpoints are in `05-api-specification.md` §22c.
 
 ---
 
-# 29. Online Payments (added October 2026)
+# 29. Online Payments — Removed in v3
 
-Customers can pay for an order online, through a hosted payment page, besides cash on
-delivery. This chapter makes sections 16 to 19 concrete. **Status: built and tested with a
-built-in TEST gateway; a real gateway is added later as one more provider file.**
+The October 2026 online-payment chapter (test gateway, provider registry,
+`PaymentEvent`, signed webhooks, payment-expiry job, `ONLINE_GATEWAY` checkout
+and the `PayNow` UI) is **removed** in Phase 1 of
+`24-marketplace-v3-plan.md`.
 
-## 29.1 Rules (never break these)
+Why: CityCart does not take customer online payments. The customer pays the
+seller directly at the door, and the platform bills the seller separately
+(`15-commission-and-payouts.md`).
 
-1. Only a **verified gateway notification** marks an online payment `PAID`: never the app,
-   never the customer, never a redirect back from the gateway.
-2. Every notification is applied **at most once**, together with the change it causes.
-3. Money that nothing can accept (a cancelled or expired order, a second payment, a wrong
-   amount, an unknown reference) is **never applied silently**: it is recorded for review.
-4. **Card data is never stored or seen.** CityCart keeps only the provider's reference, the
-   provider's name and the status.
-5. The test gateway **cannot be switched on in production**.
+What is removed:
 
-## 29.2 Providers
+```text
+server/src/payments/                      provider registry and mock provider
+server/src/services/onlinePayment.service.js
+server/src/controllers/onlinePayment.controller.js
+server/src/models/paymentEvent.model.js
+server/src/jobs/paymentExpiry.js
+online routes in server/src/routes/payment.routes.js
+ONLINE_GATEWAY payment method
+PAYMENT_PROVIDER / PAYMENT_WEBHOOK_SECRET / ONLINE_PAYMENT_HOLD_MINUTES
+client/src/components/PayNow.jsx and its uses
+online-payment branches in order validators, services, seed and tests
+```
 
-Code: `server/src/payments/`. A provider is one file with `name`, `label`,
-`createCheckout({ payment, order })` (returns a reference and the hosted page's address) and
-`verifyWebhook(rawBody, headers)` (checks the signature over the raw bytes and returns
-`{ eventId, reference, status: PAID|FAILED, amount, currency }`). The registry in
-`payments/index.js` lists them; `activeProvider()` is `null` unless a known provider is named
-**and** `PAYMENT_WEBHOOK_SECRET` has at least 16 characters.
+What stays:
 
-* `mock` (`payments/mock.provider.js`): the TEST gateway. It serves a checkout page
-  (`GET /payments/mock-checkout/:reference`, with Pay and Fail buttons) and tells the server
-  about the result with a **signed** notification (HMAC-SHA256 of the raw body, header
-  `X-CityCart-Signature: sha256=<hex>`) that goes through exactly the same code as a real
-  gateway's. No money moves. Use it for development, demos and automated tests.
-* **A real gateway** (to do: needs the owner's sandbox account and the gateway's official
-  documentation): add `payments/<name>.provider.js` with the same members and register it.
-  Nothing else changes. Live card payments also need a registered business with the gateway.
+```text
+COD
+door collection: CASH | BANK_TRANSFER | WALLET | CARD_MACHINE
+Payment.collection, proof upload and brand verification
+receipts
+cash settlement
+existing Payment records (never deleted)
+```
 
-## 29.3 Environment
+`Payment`, `Payment.collection` and the door method enum keep their existing
+shapes except for removing `ONLINE_GATEWAY`. No migration deletes money
+records. Any existing `ONLINE_GATEWAY` row, if one exists, is reported and left
+read-only; it is not part of normal flows.
 
-| Variable | Meaning |
-|---|---|
-| `PAYMENT_PROVIDER` | `none` (default, cash only) or a provider name (`mock`) |
-| `PAYMENT_WEBHOOK_SECRET` | Signs and verifies notifications; 16+ random characters; secret |
-| `PUBLIC_API_URL` | The address phones and browsers can reach this server at (used to build the test gateway's page address) |
-| `ONLINE_PAYMENT_HOLD_MINUTES` | How long an unpaid online order keeps its stock (5 to 240, default 30) |
-
-## 29.4 The flow
-
-1. `GET /payments/methods` (customer): `COD`, plus `ONLINE_GATEWAY` while a provider is on.
-2. **Checkout** with `paymentMethod: ONLINE_GATEWAY` creates the usual orders (one per brand,
-   stock deducted exactly as for cash) and one payment per order, `PENDING`, with `expiresAt`
-   = now + the hold. Refused with `400 ONLINE_PAYMENTS_UNAVAILABLE` while no provider is on.
-   (`CARD`, `BANK_TRANSFER` and `WALLET` are still not accepted.)
-3. `POST /payments/order/:orderId/checkout` (customer, own order only) returns the hosted
-   page's address. Idempotent: it reuses the payment's reference. Errors: `404` not yours,
-   `409 NOT_ONLINE`, `ALREADY_PAID`, `NOT_PAYABLE`, `PAYMENT_EXPIRED`; `503
-   ONLINE_PAYMENTS_UNAVAILABLE`.
-4. The customer pays on the gateway's page. The gateway calls
-   `POST /payments/webhooks/:provider` (no login; authenticated by the signature, checked
-   before anything else, on the raw body). Answers: `401` bad signature, `400` malformed,
-   `404` unknown provider or payments off, otherwise **`200` with the outcome** so the gateway
-   stops retrying.
-5. Outcomes (stored as `PaymentEvent`, unique on provider + eventId):
-
-| Outcome | Meaning | What changed |
-|---|---|---|
-| `PAID` | Payment was pending and the amount matched | Payment `PAID`, order `paymentStatus` `PAID`, customer notified, receipt issued (after commit) |
-| `FAILED_ATTEMPT` | The customer's attempt failed | Nothing. The payment stays pending so they can try again until the hold ends |
-| `LATE_PAYMENT` | Money arrived for a cancelled, expired or failed payment | Nothing applied. **Needs a refund** |
-| `DUPLICATE_PAYMENT` | Money arrived again for an already paid payment | Nothing applied. **Needs a refund** |
-| `AMOUNT_MISMATCH` | Amount or currency differs | Nothing applied |
-| `UNKNOWN_PAYMENT` | No payment has this reference | Nothing applied |
-| `DUPLICATE_EVENT` (answer only) | The same notification again | Nothing (the unique index rejects it) |
-
-   The super admin reviews them at `GET /payments/events?outcome=` (the cases that need a
-   human are `LATE_PAYMENT`, `DUPLICATE_PAYMENT`, `AMOUNT_MISMATCH`).
-6. **The brand cannot confirm an unpaid online order:** `PATCH /brand/orders/:id/status` to
-   `CONFIRMED` needs cash on delivery or a paid payment (`409 PAYMENT_PENDING`). Rejecting is
-   still allowed and restocks.
-7. **Not paid in time:** a timer inside the server (`jobs/paymentExpiry.js`, every minute,
-   only while a provider is on) cancels online orders whose hold ended, returns their stock,
-   cancels the payment, and tells the customer and the brand. Each order is cancelled by one
-   atomic conditional update (still `PENDING` and unpaid), so running twice, on two servers, or
-   against the customer's own cancel can never restock twice.
-8. **The customer cannot cancel an order that is already paid online** (`409
-   PAID_ORDER_NOT_CANCELLABLE`): they ask the brand to reject it. A rejected paid order is
-   refunded with the existing refund endpoint (section 13).
-
-## 29.5 Limits of this version
-
-* **Refunds are records.** Marking a payment refunded does not send money back through the
-  gateway; the brand returns it in the gateway's dashboard. A real provider's refund call
-  belongs in its adapter.
-* One payment per order: a cart with several brands is paid in several steps (a Pay button per order).
-* The test gateway's page is plain HTML; a real gateway shows its own page.
-* Online receipts are issued like cash ones (section 28) but have no collector.
-
-Related code: `services/onlinePayment.service.js`, `controllers/onlinePayment.controller.js`,
-`models/paymentEvent.model.js`, `routes/payment.routes.js`, `jobs/paymentExpiry.js`.
+Related code after removal: `controllers/payment.controller.js`,
+`services/payment.service.js`, `services/paymentProof.service.js`,
+`services/cashSettlement.service.js`, `models/payment.model.js`,
+`models/receipt.model.js`.
 
 ---
 
 # 30. Money When an Order Changes (added October 2026)
 
 Feature H of `21-next-features-plan.md`: the brand cannot supply part of an order and proposes a change (rules in `08-order-management.md` §41). The money side is applied in the same transaction that rewrites the order lines.
+
+**v3 note:** customer online payment is removed (§29), so only §30.1 applies.
+§30.2 and §30.3 describe the former online-paid paths; they are not reachable
+after Phase 1 and are kept here only as history. Door non-cash payments are
+verified at completion, after any adjustment, so they need no paid-online
+adjustment path.
 
 ## 30.1 Cash on delivery
 

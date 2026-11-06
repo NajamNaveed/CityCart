@@ -47,8 +47,22 @@ SUPER_ADMIN
 ADMIN_PARTNER
 BRAND_ADMIN
 BRAND_EMPLOYEE
+PICKER
+RIDER
+SERVICE_PROVIDER
 CUSTOMER
 ```
+
+`BRAND_ADMIN`, `BRAND_EMPLOYEE` and `PICKER` are brand-side roles: the first
+two sign in on the web dashboard, `PICKER` on the Staff app (docs/20). `RIDER`
+signs in on the Delivery app (docs/23). `SERVICE_PROVIDER` (v3, docs/24 §4)
+signs in on the seller web portal and owns exactly one provider profile; it is
+a separate tenant type, never a brand.
+
+From v3, a `BRAND_EMPLOYEE` is defined by an **active membership** in a brand,
+not by `User.brandId`, and may hold active memberships in several brands
+(docs/24 §3.2). Authorisation always uses the membership named by the current
+session; `User.brandId` is only that account's home brand.
 
 `ADMIN_PARTNER` is a delegated platform admin introduced in October 2026
 (`21-next-features-plan.md` §G): it signs in on the web admin portal, holds only
@@ -211,6 +225,13 @@ The response must never contain:
 
 Invalid login attempts should return a generic authentication error rather than revealing whether an email exists.
 
+Sign-in is portal-specific: `/auth/login` (customer), `/auth/brand/login`
+(brand dashboard), `/auth/admin/login` (platform dashboard),
+`/auth/staff/login` and `/auth/delivery/login` (native apps), and — from v3 —
+`/auth/service/login` (seller portal, Phase 2). A brand employee with several
+active memberships receives the workspace step described in §9; no session
+cookie is issued until one workspace is chosen.
+
 ---
 
 # 7. JWT Authentication
@@ -224,7 +245,17 @@ userId
 role
 ```
 
-Brand-related identity may be included where appropriate, but the backend must still verify the user's current database state and ownership.
+Brand staff sessions additionally carry:
+
+```text
+brandId        the active membership's brand (v3 workspace selection)
+membershipId   the Employee row backing it
+```
+
+Native app tokens carry the `client` mark described in §9. Brand-related
+identity may be included, but the backend must still verify the user's current
+database state, the membership's active state and ownership on every request.
+A forged or stale `brandId` is refused, never trusted.
 
 JWTs must not contain sensitive information such as:
 
@@ -336,6 +367,34 @@ The server-side short cookie is the security backstop (a stolen staff cookie
 expires in hours); the client-side tab marker is what enforces "close the
 tab, sign in again". Both were added together and must stay in sync.
 
+### Workspace and membership sessions (added November 2026)
+
+Multi-brand employees (docs/24 §3.3) choose a workspace after the password is
+accepted. The session itself stays cookie-based and keeps every staff rule
+above; the workspace step only decides which membership the session names.
+
+* **One active membership** — the normal staff cookie is issued, exactly as
+  before.
+* **Several active memberships** — the login answers `409 WORKSPACE_REQUIRED`
+  with a five-minute signed `workspaceToken` and
+  `{ brandId, brandName, role }[]`. The list is produced only after a correct
+  password, so it cannot be used to discover accounts. `POST /auth/workspace`
+  exchanges the token and a chosen `brandId` for the normal staff cookie.
+* **Switching** — `POST /auth/workspace/switch` issues a fresh staff cookie for
+  another active membership without re-entering the password. The target
+  membership is re-checked at that moment.
+* **Token claims** — a brand session carries `brandId`, `membershipId` and
+  `role`. The tenant for every request is the membership named by these
+  claims, never `User.brandId` and never a body/query value.
+* **Revocation** — removing a membership (or deactivating it) makes the next
+  request with that brand's session fail before any controller runs. A
+  workspace token is short-lived and is refused once its membership is no
+  longer active.
+* **Service providers** — the seller portal session for `SERVICE_PROVIDER` uses
+  the same staff cookie rules and carries the provider id as its tenant; it
+  never carries a `brandId`. A provider session cannot call brand endpoints,
+  and a brand session cannot call provider endpoints.
+
 ### Native App Sessions (added October 2026)
 
 The shopper mobile app (docs/19) cannot use the browser's HTTP-only cookie, so
@@ -409,13 +468,15 @@ Conceptual flow:
 ```text
 Request
    ↓
-Read authentication cookie
+Read authentication cookie or Bearer token
    ↓
 Verify JWT
    ↓
 Extract user identity
    ↓
-Load/check user if required
+Load/check user (isActive, passwordVersion, app role)
+   ↓
+Resolve the active membership / tenant (v3)
    ↓
 Attach authenticated user to request
    ↓
@@ -428,11 +489,30 @@ Example conceptual request state:
 req.user = {
   id,
   role,
-  brandId
+  brandId,        // active brand for a brand session
+  providerId,     // active provider for a SERVICE_PROVIDER session
+  membershipId    // Employee row backing a brand session
 }
+req.membership = { id, brandId, role, permissions }
+req.tenantType = 'BRAND' | 'SERVICE'
 ```
 
 The exact implementation may differ, but controllers must never trust arbitrary client-supplied identity information.
+
+### Membership resolution (v3)
+
+For a `BRAND_EMPLOYEE`, `authenticate` loads the `Employee` named by
+`(userId, token.brandId)` and requires it to be active. A missing, inactive or
+wrong-brand membership is refused (`401`/`403`); the request is never silently
+downgraded to the user's home brand. `req.user.brandId` and
+`req.tenantBrandId` are set from that validated membership, and
+`requirePermission` loads the same membership by `(userId, brandId)`.
+`BRAND_ADMIN`, `PICKER` and `RIDER` keep the existing single-brand check.
+
+`requireTenant` sets `req.tenantType = 'BRAND'`. The v3 `requireServiceTenant`
+middleware resolves `req.tenantProviderId` from a `SERVICE_PROVIDER` session
+and never from the request body. The two tenant middlewares are mutually
+exclusive: one request has one tenant type.
 
 ### Forced password change
 
@@ -464,6 +544,24 @@ Inactive users must not be allowed to authenticate successfully.
 Super Admins may deactivate accounts where appropriate.
 
 Deactivation must not delete historical business records.
+
+### Account status vs membership status (v3)
+
+Two independent switches exist for brand staff:
+
+```text
+User.isActive        the person's account
+Employee.isActive    one membership in one brand
+```
+
+Both must be true for a brand request to proceed. Removing a person from one
+brand deactivates only that membership; the account and any other active
+memberships keep working. Deactivating the account stops every brand at once.
+An account is never hard-deleted: removal of the last membership offers
+**anonymization** (docs/24 §3.6 and docs/04 §36) — the email is freed for
+re-registration while the `_id` and all financial/audit history stay intact.
+Removal and purge revoke that brand's sessions, push tokens and queued
+notifications before they answer.
 
 ---
 
@@ -619,17 +717,25 @@ Example concept:
 ```javascript
 Order.findOne({
   _id: orderId,
-  brandId: req.user.brandId
+  brandId: req.tenantBrandId
 });
 ```
 
-The following is unsafe for brand users:
+`req.tenantBrandId` is set by the tenant middleware from the validated active
+membership, never from the request body. The following is unsafe for brand
+users:
 
 ```javascript
 Order.findById(orderId);
 ```
 
 if the result is returned without checking ownership.
+
+Service providers are a second, separate tenant type (docs/24 §4). Their
+resources carry `providerId`, their queries scope to `req.tenantProviderId`,
+and a provider can never read a brand resource or another provider's records.
+The union of the two tenant types is not a valid scope: a request is either a
+brand request or a provider request.
 
 ---
 
@@ -645,17 +751,25 @@ A user must not be able to change:
 
 to access another tenant.
 
-For brand users, the server should derive the brand from the authenticated user's identity.
+For brand users, the server should derive the brand from the authenticated
+session.
 
 Example:
 
 ```text
 Authenticated user
        ↓
-user.brandId
+active membership (validated session brandId)
+       ↓
+req.tenantBrandId
        ↓
 Server-controlled tenant scope
 ```
+
+A multi-brand employee therefore acts in exactly one brand per session: the
+one chosen at workspace login or switch. The client may not submit `brandId`
+to select a tenant, and a workspace switch goes through its own endpoint
+rather than a field on ordinary requests.
 
 Client-provided `brandId` values must be ignored or strictly validated where appropriate.
 
@@ -991,6 +1105,16 @@ Security testing must include at minimum:
 * Logout
 * Inactive account
 
+### Membership and workspace (v3)
+
+* Employee removed from a brand mid-session: the next request is refused
+* Session token naming a brand the user no longer belongs to
+* Workspace token reused after its membership is deactivated
+* Workspace switch to a brand with no active membership
+* A brand session cannot act as another brand by changing a body/query id
+* A provider session cannot call brand endpoints, and the reverse
+* Re-adding an employee email after removal vs after anonymization
+
 ### Authorization
 
 * Customer accessing another customer's order
@@ -1017,6 +1141,17 @@ This must be tested for:
 * Employees
 * Store settings
 * Customer-related brand data
+* Service providers, offerings, bookings and reviews (v3)
+
+### Seller billing (v3)
+
+* Invoice and payment-claim tampering (amount, period, seller)
+* Freeze bypass through an endpoint other than Billing/Help
+* Commission manipulation through order or booking edits
+* Receipt upload access and retention
+
+The v3 security baseline (Phase 1) and the independent audit (Phase 9) are
+listed in docs/24 §8. This section remains the minimum for every feature.
 
 ### Input Security
 
@@ -1064,6 +1199,11 @@ Before production deployment:
 [ ] Tenant isolation tested
 [ ] RBAC tested
 [ ] Privilege escalation tested
+[ ] Membership revocation tested (removed employee loses access immediately)
+[ ] Workspace selection cannot cross tenants
+[ ] Service-provider tenant isolated from brand tenant
+[ ] Seller invoices and claims tamper-tested
+[ ] Password, token and bank-detail log redaction verified
 [ ] Backup strategy configured
 ```
 

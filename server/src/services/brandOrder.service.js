@@ -68,8 +68,8 @@ async function updateBrandOrderStatus({ brandId, orderId, status, userId }) {
       update.$set.paymentStatus = 'CANCELLED';
     }
 
-    // An order paid online is not processed until the gateway has confirmed the money
-    // (docs/10 §29). Cash on delivery has nothing to wait for.
+    // Cash orders are processed immediately. A legacy order recorded against the
+    // removed online gateway still waits for its payment (docs/10 §29).
     const filter = { _id: orderId, brandId, orderStatus: { $in: legalSourcesFor(status) } };
     if (status === 'CONFIRMED') {
       filter.$or = [{ paymentMethod: 'COD' }, { paymentStatus: 'PAID' }];
@@ -97,7 +97,7 @@ async function updateBrandOrderStatus({ brandId, orderId, status, userId }) {
         });
       }
       if (status === 'CONFIRMED' && existing.paymentMethod !== 'COD' && existing.paymentStatus !== 'PAID' && legalSourcesFor(status).includes(existing.orderStatus)) {
-        throw new OrderError(409, 'This order has not been paid yet. Wait for the online payment to be confirmed.', {
+        throw new OrderError(409, 'This order has not been paid yet. Wait for the payment to be confirmed.', {
           code: 'PAYMENT_PENDING',
         });
       }

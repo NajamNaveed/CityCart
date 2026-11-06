@@ -144,14 +144,10 @@ Platform-wide configuration is stored in a singleton `platformSettings` collecti
 
 `deliveries` is part of the MVP (see `11-delivery-system.md`), not a future addition — it is required for brand fulfillment and customer tracking as described in `01-product-requirements.md` and `18-development-roadmap.md` (Phase 10).
 
-Additional collections may be introduced later for:
-
-```text
-commissions
-payouts
-coupons
-auditLogs
-```
+Additional v3 collections — service providers, bookings, commission entries,
+seller invoices and payment claims — are listed in §44 and introduced in the
+phase that needs them. There is no `payouts` collection: the platform bills
+sellers, it does not pay them (docs/15).
 
 ---
 
@@ -200,9 +196,31 @@ SUPER_ADMIN
 ADMIN_PARTNER
 BRAND_ADMIN
 BRAND_EMPLOYEE
+PICKER
 RIDER
+SERVICE_PROVIDER
 CUSTOMER
 ```
+
+`PICKER` (added October 2026, `22-marketplace-v2-plan.md` §E) is a brand-scoped
+account with `accountType: BRAND`; it signs in only on the Staff app and has no
+brand-team permissions.
+
+`SERVICE_PROVIDER` (added v3, `24-marketplace-v3-plan.md` §3) has
+`accountType: SERVICE` and a required `providerId` pointing at its
+`ServiceProvider` tenant. It never has a `brandId`.
+
+### `accountType`
+
+```text
+CUSTOMER        role CUSTOMER
+BRAND           roles BRAND_ADMIN, BRAND_EMPLOYEE, PICKER, RIDER
+SERVICE         role SERVICE_PROVIDER
+PLATFORM_ADMIN  roles SUPER_ADMIN, ADMIN_PARTNER
+```
+
+Uniqueness is `(accountType, email)` (§7). A customer, a brand and a service
+provider may share one email; two accounts of the same type may not.
 
 `RIDER` (added October 2026, `20-partner-app.md`) is a brand-scoped account with `accountType: BRAND`; riders are plain `User` records, not a separate collection.
 
@@ -217,6 +235,7 @@ Required for:
 ```text
 BRAND_ADMIN
 BRAND_EMPLOYEE
+PICKER
 RIDER
 ```
 
@@ -226,15 +245,31 @@ Not required for:
 SUPER_ADMIN
 ADMIN_PARTNER
 CUSTOMER
+SERVICE_PROVIDER
 ```
 
 A customer is not a tenant member merely because they purchase from a brand.
+A service provider is a tenant of its own (`ServiceProvider`), not a brand
+member.
+
+For a `BRAND_EMPLOYEE`, `brandId` is the **home brand** only. The active brand
+for a request is the validated membership in the session (§12).
 
 ---
 
 # 7. User Constraints
 
-Email addresses are unique within an account type (`CUSTOMER`, `BRAND`, or `PLATFORM_ADMIN`). A customer and brand account may share an email address; accounts in the same login portal may not.
+Email addresses are unique within an account type (`CUSTOMER`, `BRAND`,
+`SERVICE`, or `PLATFORM_ADMIN`). A customer, a brand and a service provider may
+share an email address; accounts in the same account type may not.
+
+The same email may be an employee of several brands. This is represented by
+several `Employee` memberships for one `User` (§12), not by several `User`
+rows.
+
+On anonymization, the email is moved to
+`deleted+<userId>@deleted.invalid`, which frees the original address
+(`24-marketplace-v3-plan.md` §3.6).
 
 Recommended:
 
@@ -423,35 +458,51 @@ The store must belong to a valid brand.
 
 # 12. Employee Model
 
-Employee information can be represented through the User model or a dedicated Employee model.
-
-For the initial architecture, the recommended approach is:
+Collection:
 
 ```text
-User
- +
-brandId
- +
-role
- +
-permissions
+employees
 ```
 
-If a dedicated `employees` collection becomes necessary later, it should reference the corresponding User.
-
-### Employee-specific information
-
-Potential fields:
+An `Employee` record is **one membership of one brand**, not the person's only
+employment. The login lives on `User`; the brand-scoped role, permissions and
+status live here.
 
 ```text
-userId
-brandId
-permissions
+_id
+userId          -> User
+brandId         -> Brand
+role            BRAND_ADMIN | BRAND_EMPLOYEE | PICKER
+permissions     [String]
+permissionHistory
 jobTitle
-isActive
+isActive        Boolean
+removedAt       Date | null
+removedBy       -> User | null
+removalReason   String | null
 createdAt
 updatedAt
 ```
+
+Constraints and indexes:
+
+```text
+unique (userId, brandId) where isActive = true    one active membership per brand
+index  (brandId, isActive)
+index  (userId, isActive)
+```
+
+A user may therefore be an employee of several brands. Permissions are
+per membership: a permission in Brand A has no effect in Brand B. `User.brandId`
+is the home brand for a `BRAND_ADMIN`, `PICKER` or `RIDER`; for a
+`BRAND_EMPLOYEE`, the active brand comes from the validated session and this
+membership record.
+
+Removal sets `isActive = false` and the audit fields. It does not delete
+orders, payments, receipts, reviews or audit history, and it does not delete the
+`User` while another active membership exists. Removing the last membership (or
+an explicit purge) anonymizes the `User` and frees the email
+(`24-marketplace-v3-plan.md` §3.6).
 
 Employee permissions are defined in:
 
@@ -1210,8 +1261,12 @@ Possible future methods:
 CARD
 BANK_TRANSFER
 WALLET
-ONLINE_GATEWAY
+CARD_MACHINE
 ```
+
+These are door collection methods, recorded by the rider from the seller's own
+account (docs/10 §4). `ONLINE_GATEWAY` is not a future method: v3 removes it in
+Phase 1.
 
 ---
 
@@ -1583,28 +1638,35 @@ The application must enforce:
 
 ---
 
-# 36. Soft Deletion
+# 36. Soft Deletion and Anonymization
 
-Permanent deletion should be avoided for important business records.
+Permanent deletion is avoided for important business records. v3 uses four
+actions (`24-marketplace-v3-plan.md` §3.6):
 
-For applicable entities, consider:
+| Action | Meaning | Used for |
+|---|---|---|
+| Archive | Hide from normal use, keep the row | Products, stores, brands, providers |
+| Deactivate | `isActive = false` or a terminal status | Employees, riders, pickers, admin partners, cities, blocks, categories |
+| Anonymize | Replace PII, free the email, keep the `_id` | The last membership of a person, a purged account |
+| Hard delete | Remove the row | Transient data only: carts, unread notifications, expired tokens, device tokens |
 
-```text
-isDeleted
-deletedAt
-```
+Rules:
 
-or status-based deactivation.
-
-Examples:
-
-```text
-Product → ARCHIVED
-Brand → SUSPENDED
-User → isActive = false
-```
-
-Orders and financial records should generally remain historically available.
+* Orders, payments, receipts, returns, reviews, bookings, invoices, commission
+  entries and audit logs are never hard-deleted.
+* Anonymizing a `User` sets `email` to
+  `deleted+<userId>@deleted.invalid`, clears name/phone/avatar, replaces the
+  password hash, increments `passwordVersion`, sets `isActive = false` and
+  `deletedAt`, and deletes device tokens.
+* The original email becomes reusable immediately after anonymization.
+* An archived brand or provider keeps its financial history. Its name/slug may
+  be released for reuse by renaming the archived slug
+  (`slug~terminated~<id>`), never by deleting the row.
+* Deactivation of a location or category can be reversed with an explicit
+  restore action; permanent deletion is refused while active records reference
+  the row.
+* Cloudinary assets belonging to removed records are cleaned by a
+  reference-counted job; payment proofs follow their own retention rule.
 
 ---
 
@@ -1739,22 +1801,39 @@ Backup strategy is part of the deployment and production-readiness work.
 
 # 44. Future Collections
 
-The architecture should allow future collections such as:
+The architecture allows future collections. The v3 programme
+(`24-marketplace-v3-plan.md`) adds these collections when their phase starts:
 
 ```text
-commissions
-payouts
+servicecategories
+serviceproviders
+serviceofferings
+serviceavailabilities
+servicebookings
+serviceproposals
+serviceconversations
+servicemessages
+servicereviews
+
+commissionentries
+sellerinvoices
+sellerpaymentclaims
+billingaudits
+```
+
+Still future and not part of v3:
+
+```text
 coupons
-deliveries
 deliveryAgents
-auditLogs
 wishlists
 productVariants
 promotions
 searchIndexes
 ```
 
-These should only be introduced when their requirements are defined.
+`payouts` is no longer planned: the platform is the payee, not the payer
+(`15-commission-and-payouts.md`).
 
 ---
 

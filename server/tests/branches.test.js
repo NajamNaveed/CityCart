@@ -24,6 +24,9 @@ function makeFakeUser(overrides = {}) {
 
 function asUser(user) {
   User.findById.mockResolvedValue(user);
+  if (user.role === ROLES.BRAND_EMPLOYEE) {
+    Employee.findOne.mockResolvedValue({ _id: oid(), userId: user._id, brandId: user.brandId, role: user.role, isActive: true, permissions: [] });
+  }
   return ['Cookie', getAuthCookie(user)];
 }
 

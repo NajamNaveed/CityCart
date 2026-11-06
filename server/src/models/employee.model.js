@@ -1,22 +1,15 @@
 const mongoose = require('mongoose');
 
 /**
- * Employee model — brand-employee-specific information referencing a User.
+ * Employee model — one membership of one brand.
  *
- * Source of truth: docs/04-database-design.md, §5 (Collections) and §12
- * (Employee Model).
+ * Source of truth: docs/04-database-design.md §12 (Employee Model) and
+ * docs/24-marketplace-v3-plan.md §3.2 (Employee becomes a membership).
  *
- * NOTE — unresolved documentation conflict (flagged, not silently
- * resolved): §12 states the *recommended* approach is to represent
- * employee data on the User model itself (User + brandId + role +
- * permissions), and that a dedicated `employees` collection should only
- * be introduced "if it becomes necessary later." However, §5 lists
- * `employees` as one of the initial MVP collections. This task's
- * instructions also disallow modifying user.model.js. Given that
- * constraint, this dedicated collection (using the "potential fields"
- * §12 lists) is the only way to satisfy §5 without touching User. See
- * the Phase 2 report for this decision — it should be confirmed by a
- * human before Phase 3 (Employees & Permissions) builds on it.
+ * A User may now hold one membership per brand (a BRAND_EMPLOYEE shared by
+ * several brands), so `userId` is no longer globally unique. The partial
+ * unique index below allows one ACTIVE membership per (userId, brandId) while
+ * keeping inactive history rows for the audit trail.
  *
  * `permissions` intentionally has no fixed enum: the permission strings
  * themselves are defined in docs/02-user-roles-and-permissions.md, which
@@ -30,7 +23,6 @@ const employeeSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
-      unique: true, // a user has at most one employee record
     },
     // §10 (Brand Ownership) explicitly lists Employee.brandId as an
     // ownership/tenant-isolation example.
@@ -38,7 +30,14 @@ const employeeSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Brand',
       required: true,
-      index: true,
+    },
+    // The role held inside this brand. It mirrors User.role for employees;
+    // the session carries the membership role so a switch cannot inherit a
+    // role from another brand.
+    role: {
+      type: String,
+      enum: ['BRAND_ADMIN', 'BRAND_EMPLOYEE', 'PICKER'],
+      default: 'BRAND_EMPLOYEE',
     },
     permissions: {
       type: [String],
@@ -67,11 +66,25 @@ const employeeSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    // Removal from one brand (docs/24 §3.6): the membership is deactivated,
+    // never deleted, so the history and the audit trail survive.
+    removedAt: { type: Date, default: null },
+    removedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    removalReason: { type: String, trim: true, default: null },
   },
   {
     timestamps: true,
   }
 );
+
+// One active membership per person per brand. Inactive rows stay for history
+// and may be reactivated (after the active duplicate rule is satisfied).
+employeeSchema.index(
+  { userId: 1, brandId: 1 },
+  { unique: true, partialFilterExpression: { isActive: true }, name: 'active_membership_unique' }
+);
+employeeSchema.index({ brandId: 1, isActive: 1 });
+employeeSchema.index({ userId: 1, isActive: 1 });
 
 const Employee = mongoose.model('Employee', employeeSchema);
 
