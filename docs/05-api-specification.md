@@ -1034,6 +1034,9 @@ Base:
 
 Customers only.
 
+The cart is stored on the server per customer, so items added from any page or
+device stay there until the customer changes them or checkout clears them.
+
 ## Get Cart
 
 ```text

@@ -190,8 +190,13 @@ only for data customers and operations actually need:
 ```text
 owner:    name, email, password, phone
 brand:    name, city, description; optional logo/cover/contact
-first shop: name, block in that city; optional address and phone
+first shop: name, block in that city; optional map pin, address and phone
 ```
+
+The sign-up form uses the same block-highlighted map picker as the dashboard's
+branch editor, so the owner can drop the shop's pin while applying. The pin is
+optional: without one the shop sits at the middle of the block. A pin outside
+the selected block's outline is rejected.
 
 The former separate "store name / store address / store contact" section has
 been removed: the internal `Store` record duplicated information customers never

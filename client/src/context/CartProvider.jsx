@@ -29,11 +29,23 @@ export function CartProvider({ children }) {
     return res.data.cart
   }, [])
 
+  const updateItem = useCallback(async (productId, quantity) => {
+    const res = await api.patch(`/cart/items/${productId}`, { quantity })
+    setLoadedCount(res.data.cart.itemCount)
+    return res.data.cart
+  }, [])
+
+  const removeItem = useCallback(async (productId) => {
+    const res = await api.delete(`/cart/items/${productId}`)
+    setLoadedCount(res.data.cart.itemCount)
+    return res.data.cart
+  }, [])
+
   const setCount = useCallback((n) => setLoadedCount(n), [])
 
   const value = useMemo(
-    () => ({ itemCount: isCustomer ? loadedCount : 0, addItem, setCount }),
-    [isCustomer, loadedCount, addItem, setCount],
+    () => ({ itemCount: isCustomer ? loadedCount : 0, addItem, updateItem, removeItem, setCount }),
+    [isCustomer, loadedCount, addItem, updateItem, removeItem, setCount],
   )
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>

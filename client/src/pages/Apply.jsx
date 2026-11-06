@@ -1,13 +1,18 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { MailCheck } from 'lucide-react'
 import Field from '../components/Field'
 import ResendVerification from '../components/ResendVerification'
+import { Skeleton } from '../components/ui'
 import { useAuth } from '../hooks/useAuth'
 import { useCity } from '../hooks/useCity'
 import { useNameAvailability } from '../hooks/useNameAvailability'
 import api, { getErrorMessage, getFieldErrors } from '../services/api'
+import { insidePolygon, parseLatLng } from '../utils/geo'
 import { btnPine, inputClass, sectionLabel, wrap } from '../ui'
+
+// Leaflet is downloaded only when the owner reaches the map in the form.
+const AreaMap = lazy(() => import('../components/nearby/AreaMap'))
 
 const labelClass = 'mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-muted'
 
@@ -45,6 +50,7 @@ export default function Apply() {
     description: '',
     shopName: '',
     blockId: '',
+    coords: '',
     shopAddress: '',
     samePhone: true,
     shopPhone: '',
@@ -61,8 +67,17 @@ export default function Apply() {
     if (name === 'cityId') {
       setBlocks([])
       setBlocksError('')
+      // The old shop's block and pin belong to another city.
+      setForm((f) => ({ ...f, cityId: value, blockId: '', coords: '' }))
+      return
     }
     setForm((f) => ({ ...f, [name]: type === 'checkbox' ? checked : value }))
+  }
+
+  // A new block invalidates the pin (it may now be outside the area).
+  const onBlockChange = (e) => {
+    const blockId = e.target.value
+    setForm((f) => ({ ...f, blockId, coords: '' }))
   }
 
   // The city defaults to the one the visitor was already shopping in.
@@ -93,6 +108,12 @@ export default function Apply() {
 
   const brandStatus = useNameAvailability('/brands/check-name', form.brandName)
 
+  const selectedBlock = blocks.find((b) => b._id === form.blockId) || null
+  const pin = form.coords.trim() ? parseLatLng(form.coords) : null
+  const outside = Boolean(pin && selectedBlock?.polygon && !insidePolygon(pin, selectedBlock.polygon))
+  const zones = useMemo(() => (selectedBlock ? [selectedBlock] : []), [selectedBlock])
+  const selectedIds = useMemo(() => (form.blockId ? [form.blockId] : []), [form.blockId])
+
   async function onSubmit(e) {
     e.preventDefault()
     setError('')
@@ -104,6 +125,14 @@ export default function Apply() {
     }
     if (!form.blockId) {
       setFieldErrors({ 'branch.blockId': 'Choose the area your shop is in' })
+      return
+    }
+    if (form.coords.trim() && !pin) {
+      setFieldErrors({ 'branch.latitude': 'Tap the map to place your shop again.' })
+      return
+    }
+    if (outside) {
+      setFieldErrors({ 'branch.latitude': `Place the pin inside ${selectedBlock.name}.` })
       return
     }
     if (brandStatus === 'taken') {
@@ -127,6 +156,7 @@ export default function Apply() {
           blockId: form.blockId,
           ...(form.shopAddress.trim() && { address: form.shopAddress.trim() }),
           ...(shopPhone.trim() && { phone: shopPhone.trim() }),
+          ...(pin && { latitude: pin.lat, longitude: pin.lng }),
         },
       })
       window.scrollTo({ top: 0 })
@@ -287,7 +317,7 @@ export default function Apply() {
               id="blockId"
               name="blockId"
               value={form.blockId}
-              onChange={onChange}
+              onChange={onBlockChange}
               className={`h-11 ${inputClass} ${fieldErrors['branch.blockId'] ? 'border-clay' : ''}`}
               required
             >
@@ -306,6 +336,51 @@ export default function Apply() {
               <p className="mt-1.5 text-xs text-muted">No areas are set up in this city yet. Contact CityCart support.</p>
             ) : (
               <p className="mt-1.5 text-xs text-muted">The neighbourhood where shoppers will find your shop.</p>
+            )}
+          </div>
+          <div className="sm:col-span-2">
+            <p className={labelClass}>Shop location on the map</p>
+            {form.blockId ? (
+              <>
+                <p className="mb-2 text-[13px] text-muted">
+                  {selectedBlock?.name} is highlighted. Tap inside it to place your shop’s pin — the pin decides the
+                  distances shoppers see.
+                </p>
+                <Suspense fallback={<Skeleton className="h-[300px] w-full rounded-lg" />}>
+                  <AreaMap
+                    key={form.blockId}
+                    zones={zones}
+                    selectedIds={selectedIds}
+                    pin={pin}
+                    height={300}
+                    onPick={(lat, lng) => setForm((f) => ({ ...f, coords: `${lat.toFixed(5)}, ${lng.toFixed(5)}` }))}
+                    label={`Map for placing the ${selectedBlock?.name || ''} shop`}
+                  />
+                </Suspense>
+                {outside ? (
+                  <p className="mt-2 text-xs text-clay" aria-live="polite">
+                    This pin is outside {selectedBlock.name}. Tap inside the highlighted outline.
+                  </p>
+                ) : fieldErrors['branch.latitude'] ? (
+                  <p className="mt-2 text-xs text-clay">{fieldErrors['branch.latitude']}</p>
+                ) : pin ? null : (
+                  <p className="mt-2 text-xs text-muted">Optional — skip this and the middle of the area is used.</p>
+                )}
+                {/* A pin the owner cannot place — including one outside the area — can always be cleared. */}
+                {pin && (
+                  <button
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, coords: '' }))}
+                    className="mt-2 text-xs font-medium text-ink/70 transition hover:text-ink"
+                  >
+                    Use the middle of {selectedBlock.name}
+                  </button>
+                )}
+              </>
+            ) : (
+              <p className="rounded-md bg-paper px-3.5 py-3 text-[13px] text-muted">
+                Choose an area to pin your shop on the map.
+              </p>
             )}
           </div>
           <div className="sm:col-span-2">

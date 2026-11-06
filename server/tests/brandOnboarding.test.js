@@ -109,6 +109,8 @@ describe('POST /api/v1/brands/apply', () => {
     ['shop blockId invalid', (a) => (a.branch.blockId = 'xyz')],
     ['shop address too long', (a) => (a.branch.address = 'x'.repeat(301))],
     ['shop phone invalid', (a) => (a.branch.phone = 'abc')],
+    ['shop pin without longitude', (a) => (a.branch.latitude = 31.42)],
+    ['shop latitude out of range', (a) => Object.assign(a.branch, { latitude: 95, longitude: 73.08 })],
     ['whole branch section missing', (a) => delete a.branch],
   ])('400 and nothing created when: %s', async (_n, mutate) => {
     applyWorld();
@@ -182,6 +184,42 @@ describe('POST /api/v1/brands/apply', () => {
 
     const [[branchDoc]] = Branch.create.mock.calls[0];
     expect(branchDoc).toMatchObject({ phone: '+923009999999', address: 'Shop 5, Main Boulevard' });
+  });
+
+  it('places the first shop at the pin the owner taps on the map', async () => {
+    applyWorld();
+    const body = application();
+    body.branch.latitude = 31.421;
+    body.branch.longitude = 73.081;
+
+    const res = await post(body);
+
+    expect(res.status).toBe(201);
+    const [[branchDoc]] = Branch.create.mock.calls[0];
+    expect(branchDoc.location).toEqual({ type: 'Point', coordinates: [73.081, 31.421] });
+    expect(blockIdsForPin).toHaveBeenCalledWith({ type: 'Point', coordinates: [73.081, 31.421] }, homeBlock);
+  });
+
+  it('400 when the tapped pin is outside the block outline', async () => {
+    applyWorld();
+    Block.findOne.mockResolvedValue({
+      ...homeBlock,
+      area: {
+        type: 'Polygon',
+        coordinates: [[[73.2, 31.5], [73.3, 31.5], [73.3, 31.6], [73.2, 31.6], [73.2, 31.5]]],
+      },
+    });
+    const body = application();
+    body.branch.latitude = 31.42;
+    body.branch.longitude = 73.08;
+
+    const res = await post(body);
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/outside/i);
+    expect(Brand.create).not.toHaveBeenCalled();
+    expect(Branch.create).not.toHaveBeenCalled();
+    expect(emailAuth.sendVerificationEmail).not.toHaveBeenCalled();
   });
 
   it('allows a brand account to use an email already registered as a customer', async () => {

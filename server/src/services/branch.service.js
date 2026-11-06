@@ -168,6 +168,7 @@ module.exports = {
   updateBranch,
   deactivateBranch,
   serializeBranch,
+  assertPinInBlock,
   BranchError,
   MAX_BRANCHES_PER_BRAND,
   MAX_PIN_DISTANCE_KM,

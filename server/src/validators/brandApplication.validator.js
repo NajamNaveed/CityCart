@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const { z } = require('zod');
 const { BRAND_STATUSES } = require('../config/brandStatuses');
+const { latitude, longitude } = require('./block.validator');
 
 const PHONE = /^\+?[0-9][0-9\s-]{6,19}$/;
 const objectId = z.string().refine((v) => mongoose.Types.ObjectId.isValid(v), { message: 'Invalid id.' });
@@ -15,12 +16,15 @@ const name = (label) => z.string().trim().min(2, `${label} must be at least 2 ch
  * REQUIRED  owner:  name, email, password (8+), phone
  *           brand:  name, cityId, description (10+ chars)
  *           branch: name, blockId (the shop's area in that city)
- * OPTIONAL  logo/cover/banner URLs, brand contact, branch address/phone
+ * OPTIONAL  logo/cover/banner URLs, brand contact, branch address/phone/pin
  *
  * The first branch IS the shop customers discover; the old separate "store"
- * section duplicated data customers never saw and has been removed.
+ * section duplicated data customers never saw and has been removed. The pin
+ * is optional and defaults to the middle of the block, exactly like the
+ * dashboard branch editor.
  */
-const brandApplicationSchema = z.object({
+const brandApplicationSchema = z
+  .object({
   owner: z.object({
     name: name('owner name'),
     email: z.string().trim().toLowerCase().email('invalid email format'),
@@ -44,11 +48,15 @@ const brandApplicationSchema = z.object({
   branch: z.object({
     name: name('shop name'),
     blockId: objectId,
-    // Defaults to the block centre; the owner can move the pin later from
-    // the dashboard once the shop is live.
     address: z.string().trim().max(300).optional(),
     phone: phone.optional(),
+    // Optional; without them the shop sits at the block centre.
+    latitude: latitude.optional(),
+    longitude: longitude.optional(),
   }),
+}).refine((data) => (data.branch.latitude === undefined) === (data.branch.longitude === undefined), {
+  message: 'latitude and longitude must be sent together.',
+  path: ['branch.latitude'],
 });
 
 const checkNameQuerySchema = z.object({ name: z.string().trim().min(2).max(100) });

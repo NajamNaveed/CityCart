@@ -10,6 +10,8 @@ const { hashPassword } = require('../utils/password');
 const { slugify } = require('../utils/slugify');
 const { runInTransaction } = require('../utils/transaction');
 const { blockIdsForPin } = require('./branchBlocks.service');
+const { assertPinInBlock } = require('./branch.service');
+const { pointFromLatLng } = require('../utils/geo');
 const { ROLES } = require('../config/roles');
 const { BrandError } = require('./brand.service');
 const { sendVerificationEmail } = require('./emailAuth.service');
@@ -60,6 +62,18 @@ async function applyForBrand({ owner, brand, branch }) {
     throw new BrandError(400, 'Invalid blockId — choose a shop area in the selected city.');
   }
 
+  // An optional map pin must sit inside that block (same rule as the branch
+  // editor); without one the shop sits at the middle of the block.
+  let location = block.center;
+  if (branch.latitude !== undefined) {
+    try {
+      assertPinInBlock(branch.latitude, branch.longitude, block);
+    } catch (err) {
+      throw new BrandError(err.status || 400, err.message);
+    }
+    location = pointFromLatLng(branch.latitude, branch.longitude);
+  }
+
   // Friendly pre-checks; the unique indexes below are the real guarantee.
   if (await User.findOne({ email: owner.email, accountType: 'BRAND' })) {
     throw new BrandError(409, 'Email is already registered.');
@@ -70,7 +84,6 @@ async function applyForBrand({ owner, brand, branch }) {
 
   const passwordHash = await hashPassword(owner.password); // slow: outside the transaction
   const brandId = new mongoose.Types.ObjectId();
-  const location = block.center;
 
   try {
     const result = await runInTransaction(async (session) => {

@@ -115,6 +115,33 @@ describe('applyForBrand (real MongoDB)', () => {
     expect(await AuthToken.countDocuments({ userId: user._id, type: 'EMAIL_VERIFY' })).toBe(1);
   });
 
+  it('places the first shop at the pin sent with the application', async () => {
+    const { branch } = await applyForBrand(
+      application({ branch: { latitude: 31.4222, longitude: 73.0822 } })
+    );
+
+    expect(branch.location.coordinates).toEqual([73.0822, 31.4222]);
+    expect(branch.blockIds.map(String)).toEqual([String(block._id)]);
+  });
+
+  it('rejects a pin outside the block outline and creates nothing', async () => {
+    block.area = {
+      type: 'Polygon',
+      coordinates: [[[73.2, 31.5], [73.3, 31.5], [73.3, 31.6], [73.2, 31.6], [73.2, 31.5]]],
+    };
+    await block.save();
+
+    await expect(
+      applyForBrand(application({ branch: { latitude: 31.42, longitude: 73.08 } }))
+    ).rejects.toThrow(/outside/i);
+
+    expect(await Brand.countDocuments()).toBe(0);
+    expect(await User.countDocuments()).toBe(0);
+    expect(await Branch.countDocuments()).toBe(0);
+    expect(await AuthToken.countDocuments()).toBe(0);
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
   it('ROLLS BACK everything if the store cannot be created (no orphan brand, login or shop)', async () => {
     const spy = jest.spyOn(Store, 'create').mockRejectedValueOnce(new Error('store write failed'));
     await expect(applyForBrand(application())).rejects.toThrow('store write failed');

@@ -10,6 +10,7 @@ import {
   Plus,
   ShieldCheck,
   ShoppingBag,
+  Trash2,
   Truck,
 } from 'lucide-react'
 import api, { getErrorMessage } from '../services/api'
@@ -26,6 +27,17 @@ import { loginUrl } from '../utils/nav'
 import { btnPrimary, formatPrice, sectionLabel, wrap } from '../ui'
 
 const MAX_QTY = 10
+// Matches the cart's own per-line ceiling, so the product page can edit any
+// quantity the cart already holds.
+const CART_MAX_QTY = 99
+
+function quantityInCart(cart, productId) {
+  for (const group of cart?.groups || []) {
+    const item = group.items.find((i) => String(i.productId) === String(productId))
+    if (item) return item.quantity
+  }
+  return 0
+}
 
 // Long text (descriptions, reviews) collapses behind a Read more toggle so one
 // product's copy can never push the rest of the page out of reach.
@@ -65,12 +77,16 @@ const ASSURANCES = [
 
 function ProductView({ product, brand }) {
   const { user } = useAuth()
-  const { addItem } = useCart()
+  const { addItem, updateItem, removeItem } = useCart()
   const navigate = useNavigate()
   const location = useLocation()
   const [params, setParams] = useSearchParams()
 
   const [qty, setQty] = useState(1)
+  // null while the cart is being read, so the buy box never flashes "Add to
+  // cart" for something the customer already has.
+  const [cartQty, setCartQty] = useState(null)
+  const [cartBusy, setCartBusy] = useState(false)
   const [shown, setShown] = useState(0)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState({ type: '', text: '' })
@@ -93,12 +109,54 @@ function ProductView({ product, brand }) {
     setBusy(true)
     setNotice({ type: '', text: '' })
     try {
-      await addItem(product._id, quantity)
-      setNotice({ type: 'ok', text: 'Added to your cart.' })
+      const cart = await addItem(product._id, quantity)
+      const total = quantityInCart(cart, product._id)
+      setCartQty(total)
+      setNotice({ type: 'ok', text: `Added ${quantity} to your cart — ${total} in your cart now.` })
     } catch (err) {
       setNotice({ type: 'error', text: getErrorMessage(err) })
     } finally {
       setBusy(false)
+    }
+  }
+
+  // The cart lives on the server, so a customer who comes back to this page
+  // sees what they added until checkout.
+  useEffect(() => {
+    if (!isCustomer) return undefined
+    let active = true
+    api
+      .get('/cart')
+      .then((res) => active && setCartQty(quantityInCart(res.data.cart, product._id)))
+      .catch(() => active && setCartQty(0))
+    return () => {
+      active = false
+    }
+  }, [isCustomer, product._id])
+
+  async function changeCartQuantity(next) {
+    setCartBusy(true)
+    setNotice({ type: '', text: '' })
+    try {
+      const cart = await updateItem(product._id, next)
+      setCartQty(quantityInCart(cart, product._id))
+    } catch (err) {
+      setNotice({ type: 'error', text: getErrorMessage(err) })
+    } finally {
+      setCartBusy(false)
+    }
+  }
+
+  async function removeFromCart() {
+    setCartBusy(true)
+    setNotice({ type: '', text: '' })
+    try {
+      await removeItem(product._id)
+      setCartQty(0)
+    } catch (err) {
+      setNotice({ type: 'error', text: getErrorMessage(err) })
+    } finally {
+      setCartBusy(false)
     }
   }
 
@@ -254,46 +312,102 @@ function ProductView({ product, brand }) {
               />
             )}
 
-            <div className="mt-8 flex items-center gap-3">
-              <div className="inline-flex h-12 items-center rounded-md border border-line bg-white">
+            {isCustomer && cartQty === null ? (
+              <div className="mt-8 h-[76px] w-full animate-pulse rounded-lg bg-sand" aria-hidden="true" />
+            ) : isCustomer && cartQty > 0 ? (
+              <div className="mt-8 rounded-lg border border-line bg-white p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm text-muted">
+                    <span className="text-base font-semibold text-ink">{cartQty}</span> in your cart
+                  </p>
+                  <button
+                    type="button"
+                    onClick={removeFromCart}
+                    disabled={cartBusy}
+                    className="inline-flex items-center gap-1.5 text-[13px] font-medium text-muted transition hover:text-danger disabled:opacity-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                    Remove
+                  </button>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-3">
+                  <div className="inline-flex h-10 items-center rounded-md border border-line">
+                    <button
+                      type="button"
+                      aria-label="Decrease cart quantity"
+                      onClick={() => changeCartQuantity(cartQty - 1)}
+                      className="flex h-full w-10 items-center justify-center text-muted transition hover:text-ink disabled:text-muted/40"
+                      disabled={cartBusy || soldOut || cartQty <= 1}
+                    >
+                      <Minus className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                    <span className="w-9 text-center text-sm font-semibold text-ink" aria-live="polite">
+                      {cartQty}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="Increase cart quantity"
+                      onClick={() => changeCartQuantity(cartQty + 1)}
+                      className="flex h-full w-10 items-center justify-center text-muted transition hover:text-ink disabled:text-muted/40"
+                      disabled={cartBusy || soldOut || cartQty >= CART_MAX_QTY}
+                    >
+                      <Plus className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                  <span className="text-[13px] text-muted">{formatPrice(product.price)} each</span>
+                  <Link to="/cart" className="ml-auto text-[13px] font-medium text-clay underline-offset-4 hover:underline">
+                    View cart
+                  </Link>
+                </div>
+                {soldOut && <p className="mt-2 text-xs text-clay">This product is sold out — remove it or wait for a restock.</p>}
+                {cartBusy && (
+                  <p className="mt-2 text-xs text-muted" role="status">
+                    Updating your cart…
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="mt-8 flex items-center gap-3">
+                <div className="inline-flex h-12 items-center rounded-md border border-line bg-white">
+                  <button
+                    type="button"
+                    aria-label="Decrease quantity"
+                    onClick={() => setQty((q) => Math.max(1, q - 1))}
+                    className="flex h-full w-11 items-center justify-center text-muted transition hover:text-ink disabled:text-muted/40"
+                    disabled={qty <= 1}
+                  >
+                    <Minus className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                  <span className="w-8 text-center text-sm font-semibold text-ink" aria-live="polite">
+                    {qty}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Increase quantity"
+                    onClick={() => setQty((q) => Math.min(MAX_QTY, q + 1))}
+                    className="flex h-full w-11 items-center justify-center text-muted transition hover:text-ink disabled:text-muted/40"
+                    disabled={qty >= MAX_QTY}
+                  >
+                    <Plus className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </div>
                 <button
                   type="button"
-                  aria-label="Decrease quantity"
-                  onClick={() => setQty((q) => Math.max(1, q - 1))}
-                  className="flex h-full w-11 items-center justify-center text-muted transition hover:text-ink disabled:text-muted/40"
-                  disabled={qty <= 1}
+                  onClick={onAddClick}
+                  disabled={soldOut || busy}
+                  className={`${btnPrimary} h-12 flex-1`}
                 >
-                  <Minus className="h-4 w-4" aria-hidden="true" />
-                </button>
-                <span className="w-8 text-center text-sm font-semibold text-ink" aria-live="polite">
-                  {qty}
-                </span>
-                <button
-                  type="button"
-                  aria-label="Increase quantity"
-                  onClick={() => setQty((q) => Math.min(MAX_QTY, q + 1))}
-                  className="flex h-full w-11 items-center justify-center text-muted transition hover:text-ink disabled:text-muted/40"
-                  disabled={qty >= MAX_QTY}
-                >
-                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  {soldOut ? (
+                    'Sold out'
+                  ) : (
+                    <>
+                      <ShoppingBag className="h-4 w-4" aria-hidden="true" />
+                      {busy ? 'Adding…' : 'Add to cart'}
+                    </>
+                  )}
                 </button>
               </div>
-              <button
-                type="button"
-                onClick={onAddClick}
-                disabled={soldOut || busy}
-                className={`${btnPrimary} h-12 flex-1`}
-              >
-                {soldOut ? (
-                  'Sold out'
-                ) : (
-                  <>
-                    <ShoppingBag className="h-4 w-4" aria-hidden="true" />
-                    {busy ? 'Adding…' : 'Add to cart'}
-                  </>
-                )}
-              </button>
-            </div>
+            )}
 
             {/* The conversation happens on its own page; a visitor is asked to sign in first. */}
             {brand && (!user || user.role === 'CUSTOMER') && (
