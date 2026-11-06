@@ -181,7 +181,29 @@ CLIENT_URL
 CLOUDINARY_CLOUD_NAME
 CLOUDINARY_API_KEY
 CLOUDINARY_API_SECRET
+BREVO_API_KEY
+EMAIL_FROM
+EMAIL_FROM_NAME
+EMAIL_VERIFY_TTL_HOURS
+PASSWORD_RESET_TTL_MINUTES
 ```
+
+Transactional email (verification + password reset, docs/06 §4–§5). Render's
+free plan blocks outbound SMTP, so the server posts to Brevo's **HTTPS API**
+(global `fetch`, no extra package):
+
+1. Create a free Brevo account and verify the sender address (or domain) under
+   *Senders, Domains & Dedicated IPs*.
+2. Copy an API key from *SMTP & API → API Keys* into `BREVO_API_KEY` on Render.
+3. Set `EMAIL_FROM` to that verified sender and `EMAIL_FROM_NAME=CityCart`.
+4. Leave the TTLs at their defaults (24 hours / 60 minutes) unless needed; they
+   are clamped to 1–168 hours and 5–1440 minutes.
+
+Without these values the API still starts and sign-up still works; in
+development the email link is printed to the server log, and in production the
+send is reported as unavailable (the user can request a new link). Links are
+stored hashed in MongoDB with a TTL index, so expiry needs no worker and no
+paid Render plan.
 
 Online payments (docs/10 §29), all optional; without them customers can only pay cash on delivery:
 
@@ -678,7 +700,9 @@ Remaining manual steps when deploying (nothing here needs code changes):
    leave `VITE_API_URL` EMPTY. Check that `client/vercel.json` points at the
    Render host you actually use (see the proxy section below).
 2. In Render, apply the Blueprint and fill in `MONGODB_URI` (Atlas),
-   `JWT_SECRET`, and `CLIENT_URL` (the Vercel URL).
+   `JWT_SECRET`, `CLIENT_URL` (the Vercel URL), `BREVO_API_KEY` and
+   `EMAIL_FROM` (a Brevo-verified sender). Without the last two, verification
+   and reset emails cannot be delivered in production.
 3. Render's auto-deploy is `true` in the Blueprint. Vercel may deploy on
    push or only through `vercel --prod` / the CI deploy hook, depending on
    the project's Git settings; either way, deploy the client after the API

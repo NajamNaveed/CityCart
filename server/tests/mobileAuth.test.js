@@ -4,6 +4,17 @@ const jwt = require('jsonwebtoken');
 
 jest.mock('../src/models/user.model');
 jest.mock('../src/models/employee.model');
+jest.mock('../src/services/emailAuth.service', () => {
+  class EmailAuthError extends Error {}
+  return {
+    sendVerificationEmail: jest.fn().mockResolvedValue(true),
+    verifyEmail: jest.fn(),
+    resendVerification: jest.fn(),
+    requestPasswordReset: jest.fn(),
+    resetPassword: jest.fn(),
+    EmailAuthError,
+  };
+});
 
 const User = require('../src/models/user.model');
 const app = require('../src/app');
@@ -62,21 +73,23 @@ describe('login for the native app (X-Client: mobile)', () => {
     expect(setCookies(res).some((c) => c.startsWith(`${AUTH_COOKIE_NAME}=`) && /HttpOnly/i.test(c))).toBe(true);
   });
 
-  it('does the same for registration', async () => {
+  it('issues no session on registration, in the app or on the web, until the email is verified', async () => {
     User.findOne.mockResolvedValue(null);
     User.create.mockImplementation(async (data) => ({ _id: oid(), role: 'CUSTOMER', isActive: true, passwordVersion: 0, ...data }));
     const body = { name: 'Sana Iqbal', email: 'sana@example.com', password: 'correcthorse123' };
 
     const mobile = await request(app).post('/api/v1/auth/register').set(...MOBILE).send(body);
     expect(mobile.status).toBe(201);
-    expect(typeof mobile.body.token).toBe('string');
+    expect(mobile.body.message).toBe('Check your email to verify your account.');
+    expect(mobile.body.user.emailVerified).toBe(false);
+    expect(mobile.body.token).toBeUndefined();
     expect(setCookies(mobile)).toEqual([]);
 
     User.findOne.mockResolvedValue(null);
     const web = await request(app).post('/api/v1/auth/register').send(body);
     expect(web.status).toBe(201);
     expect(web.body.token).toBeUndefined();
-    expect(setCookies(web).length).toBe(1);
+    expect(setCookies(web)).toEqual([]);
   });
 
   it('refuses the seller and admin doors outright, before looking up any account', async () => {

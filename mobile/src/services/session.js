@@ -35,7 +35,14 @@ async function startSession(path, body) {
 }
 
 export const signIn = ({ email, password }) => startSession('/auth/login', { email, password })
-export const signUp = (details) => startSession('/auth/register', details)
+
+// Registration no longer starts a session: the account is unusable until the
+// emailed verification link is opened. The screen shows a "check your email"
+// state instead. The server's message explains the same rule.
+export async function signUp(details) {
+  const res = await api.post('/auth/register', details)
+  return res.data
+}
 
 // There is nothing to tell the server: the token simply stops being used.
 export const signOut = () => tokenStore.clear()

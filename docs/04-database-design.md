@@ -132,9 +132,15 @@ payments
 deliveries
 reviews
 notifications
+authtokens
 ```
 
+Discovery also uses `blocks` (neighbourhoods inside a city) and `branches`
+(the physical shops of a brand); see docs/22 and §15.
+
 Platform-wide configuration is stored in a singleton `platformSettings` collection. It is not tenant-owned.
+
+`authtokens` holds hashed, expiring one-time links for email verification and password reset (§7a).
 
 `deliveries` is part of the MVP (see `11-delivery-system.md`), not a future addition — it is required for brand fulfillment and customer tracking as described in `01-product-requirements.md` and `18-development-roadmap.md` (Phase 10).
 
@@ -174,9 +180,16 @@ brandId
 phone
 avatar
 isActive
+emailVerifiedAt
 createdAt
 updatedAt
 ```
+
+`emailVerifiedAt` is set when the account's email is proven. Self-registered
+customers and brand owners start with `null` and cannot sign in until the
+emailed link is opened; accounts created by the platform (staff, riders, admin
+partners, demo seed) are created with a timestamp. Records that predate the
+field (`undefined`) are treated as verified.
 
 ### Role
 
@@ -234,6 +247,35 @@ Passwords must never be stored in plaintext.
 Only the password hash should be stored.
 
 Sensitive authentication information must never be returned through normal user API responses.
+
+---
+
+# 7a. AuthToken Model
+
+Collection:
+
+```text
+authtokens
+```
+
+Stores the one-time links behind email verification and password reset.
+
+```text
+_id
+userId       -> User
+type         EMAIL_VERIFY | PASSWORD_RESET
+tokenHash    SHA-256 of the raw token (never the token itself), unique
+expiresAt    TTL index (expireAfterSeconds: 0) removes the document
+usedAt       set when claimed; a claimed token can never be used again
+createdAt
+updatedAt
+```
+
+The raw token is 32 random bytes and exists only in the emailed link. Consuming
+a token is a single atomic `findOneAndUpdate` (unused + unexpired), so two
+simultaneous clicks cannot both succeed. Issuing a new token deletes the
+previous unused one of the same type. The TTL index makes expiry work without a
+scheduled job (important on Render's free plan).
 
 ---
 

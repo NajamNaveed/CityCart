@@ -2,14 +2,17 @@ const mongoose = require('mongoose');
 
 const Brand = require('../models/brand.model');
 const Store = require('../models/store.model');
+const Branch = require('../models/branch.model');
+const Block = require('../models/block.model');
 const User = require('../models/user.model');
 const City = require('../models/city.model');
 const { hashPassword } = require('../utils/password');
 const { slugify } = require('../utils/slugify');
 const { runInTransaction } = require('../utils/transaction');
+const { blockIdsForPin } = require('./branchBlocks.service');
 const { ROLES } = require('../config/roles');
 const { BrandError } = require('./brand.service');
-const { notifySuperAdminsOfNewBrand, notifyBrandOwnerWelcome } = require('./notification.service');
+const { sendVerificationEmail } = require('./emailAuth.service');
 
 /**
  * Names are unique platform-wide and compared case-insensitively through
@@ -22,36 +25,39 @@ async function isBrandNameAvailable(name) {
   return slug.length > 0 && !(await Brand.exists({ slug }));
 }
 
-async function isStoreNameAvailable(name) {
-  const slug = slugify(name);
-  return slug.length > 0 && !(await Store.exists({ slug }));
-}
-
 function duplicateError(err) {
   const text = `${err.message || ''} ${JSON.stringify(err.keyPattern || {})}`;
   if (text.includes('email')) return new BrandError(409, 'Email is already registered.');
-  if (text.includes('stores')) return new BrandError(409, 'A store with this name already exists.');
   if (text.includes('brands')) return new BrandError(409, 'A brand with this name already exists.');
-  return new BrandError(409, 'The brand or store name is already taken.');
+  if (text.includes('stores')) return new BrandError(409, 'This name is already in use. Choose another brand name.');
+  return new BrandError(409, 'The brand name is already taken.');
 }
 
 /**
  * Self-service seller sign-up: creates the owner account (BRAND_ADMIN), the
- * brand and its store together in ONE transaction. The brand is ACTIVE
- * immediately — the data validation IS the gate — and a super admin can
- * suspend or terminate it later. If anything fails nothing is created, so
- * there are never orphan accounts or half-built stores.
+ * brand, its internal storefront record and its FIRST PHYSICAL SHOP (branch)
+ * together in ONE transaction. If anything fails nothing is created, so there
+ * are never orphan accounts or half-built shops.
+ *
+ * The brand starts PENDING and the owner unverified: discovery and sign-in
+ * stay closed until the emailed link is opened, then emailAuth.service
+ * activates the brand. This keeps unverified sign-ups out of the marketplace.
  */
-async function applyForBrand({ owner, brand, store }) {
+async function applyForBrand({ owner, brand, branch }) {
   const city = await City.findOne({ _id: brand.cityId, isActive: true });
   if (!city) {
     throw new BrandError(400, 'Invalid cityId — city does not exist or is not active.');
   }
 
   const brandSlug = slugify(brand.name);
-  const storeSlug = slugify(store.name);
-  if (!brandSlug || !storeSlug) {
-    throw new BrandError(400, 'Brand and store names must contain letters or numbers.');
+  if (!brandSlug) {
+    throw new BrandError(400, 'Brand name must contain letters or numbers.');
+  }
+
+  // The shop's block must be real, active and in the brand's own city.
+  const block = await Block.findOne({ _id: branch.blockId, isActive: true });
+  if (!block || String(block.cityId) !== String(city._id)) {
+    throw new BrandError(400, 'Invalid blockId — choose a shop area in the selected city.');
   }
 
   // Friendly pre-checks; the unique indexes below are the real guarantee.
@@ -61,34 +67,55 @@ async function applyForBrand({ owner, brand, store }) {
   if (!(await isBrandNameAvailable(brand.name))) {
     throw new BrandError(409, 'A brand with this name already exists.');
   }
-  if (!(await isStoreNameAvailable(store.name))) {
-    throw new BrandError(409, 'A store with this name already exists.');
-  }
 
   const passwordHash = await hashPassword(owner.password); // slow: outside the transaction
   const brandId = new mongoose.Types.ObjectId();
+  const location = block.center;
 
   try {
     const result = await runInTransaction(async (session) => {
       const [createdBrand] = await Brand.create(
-        [{ ...brand, _id: brandId, slug: brandSlug, status: 'ACTIVE' }],
+        [{ ...brand, _id: brandId, slug: brandSlug, status: 'PENDING' }],
         { session }
       );
       const [user] = await User.create(
-        [{ name: owner.name, email: owner.email, phone: owner.phone, passwordHash, role: ROLES.BRAND_ADMIN, accountType: 'BRAND', brandId }],
+        [
+          {
+            name: owner.name,
+            email: owner.email,
+            phone: owner.phone,
+            passwordHash,
+            role: ROLES.BRAND_ADMIN,
+            accountType: 'BRAND',
+            brandId,
+            emailVerifiedAt: null,
+          },
+        ],
         { session }
       );
-      const [createdStore] = await Store.create([{ ...store, brandId, slug: storeSlug }], { session });
-      return { brand: createdBrand, store: createdStore, user };
+      // Internal one-per-brand storefront record, named after the brand.
+      // Customers never see it; public discovery uses branches only.
+      const [createdStore] = await Store.create([{ brandId, name: brand.name, slug: brandSlug }], { session });
+      const [createdBranch] = await Branch.create(
+        [
+          {
+            brandId,
+            blockId: block._id,
+            blockIds: await blockIdsForPin(location, block),
+            name: branch.name,
+            address: branch.address || '',
+            // The owner's phone is the shop's phone unless they gave another.
+            phone: branch.phone || owner.phone || '',
+            location,
+          },
+        ],
+        { session }
+      );
+      return { brand: createdBrand, store: createdStore, branch: createdBranch, user };
     });
-    // docs/12 §6/§8: the new owner is welcomed, and platform staff learn a
-    // brand registered. Post-commit and best-effort (like every trigger).
-    await notifySuperAdminsOfNewBrand({
-      brandId: result.brand._id,
-      brandName: result.brand.name,
-      ownerName: result.user.name,
-    });
-    await notifyBrandOwnerWelcome({ userId: result.user._id, brandName: result.brand.name });
+    // Post-commit and best-effort: a provider outage never rolls back an
+    // application, and the owner can resend the link from sign-in.
+    await sendVerificationEmail(result.user);
     return result;
   } catch (err) {
     if (err.code === 11000) {
@@ -98,4 +125,4 @@ async function applyForBrand({ owner, brand, store }) {
   }
 }
 
-module.exports = { applyForBrand, isBrandNameAvailable, isStoreNameAvailable };
+module.exports = { applyForBrand, isBrandNameAvailable };

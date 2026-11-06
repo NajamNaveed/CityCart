@@ -6,7 +6,7 @@ import AppText from '../../components/ui/AppText'
 import Button from '../../components/ui/Button'
 import TextField from '../../components/ui/TextField'
 import { useAuth } from '../../hooks/useAuth'
-import { getErrorMessage, getFieldErrors } from '../../services/api'
+import api, { getErrorMessage, getFieldErrors } from '../../services/api'
 import { loginHref, safeNext } from '../../utils/nav'
 import { MIN_PASSWORD_LENGTH, sentenceAll, validateRegister } from '../../utils/validation'
 import { colors, radius, spacing } from '../../theme'
@@ -22,6 +22,9 @@ export default function Register() {
   const [fieldErrors, setFieldErrors] = useState({})
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [sentTo, setSentTo] = useState('')
+  const [resending, setResending] = useState(false)
+  const [resent, setResent] = useState(false)
 
   // See login.jsx: signing up flips `status`, and this redirect does the rest.
   if (status === 'signedIn') return <Redirect href={next || '/account'} />
@@ -35,14 +38,84 @@ export default function Register() {
     setError('')
     if (Object.keys(problems).length > 0) return
 
+    const email = form.email.trim().toLowerCase()
     setSubmitting(true)
     try {
-      await register({ name: form.name.trim(), email: form.email.trim().toLowerCase(), password: form.password })
+      await register({ name: form.name.trim(), email, password: form.password })
+      setSentTo(email)
     } catch (err) {
       setFieldErrors(sentenceAll(getFieldErrors(err)))
       setError(getErrorMessage(err))
+    } finally {
       setSubmitting(false)
     }
+  }
+
+  async function resend() {
+    if (resending || resent) return
+    setResending(true)
+    setError('')
+    try {
+      await api.post('/auth/verify-email/resend', { email: sentTo, portal: 'customer' })
+      setResent(true)
+    } catch (err) {
+      setError(getErrorMessage(err))
+    } finally {
+      setResending(false)
+    }
+  }
+
+  if (sentTo) {
+    return (
+      <AuthShell title="Check your email" subtitle={`We sent a verification link to ${sentTo}.`}>
+        <View
+          style={{
+            backgroundColor: colors.successSoft,
+            borderRadius: radius.md,
+            padding: spacing.lg,
+            marginBottom: spacing.lg,
+          }}
+        >
+          <AppText variant="small" style={{ color: colors.success }}>
+            Open the link to activate your account, then sign in. It works once and expires in 24 hours.
+          </AppText>
+        </View>
+
+        {error ? (
+          <View
+            accessibilityRole="alert"
+            style={{ backgroundColor: colors.dangerSoft, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.lg }}
+          >
+            <AppText variant="small" style={{ color: colors.danger }}>
+              {error}
+            </AppText>
+          </View>
+        ) : null}
+
+        <Button
+          title={resent ? 'Verification email sent' : 'Resend verification email'}
+          onPress={resend}
+          loading={resending}
+          disabled={resent}
+          variant="outline"
+        />
+
+        {resent ? (
+          <AppText variant="small" style={{ marginTop: spacing.sm }}>
+            Check your inbox and spam folder. Only the newest link works.
+          </AppText>
+        ) : null}
+
+        <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: spacing.xl, gap: spacing.xs }}>
+          <AppText variant="small">Link opened?</AppText>
+          <Link href={loginHref(next)} replace>
+            <AppText variant="label" style={{ color: colors.clay }}>
+              Sign in
+            </AppText>
+          </Link>
+        </View>
+      </AuthShell>
+    )
   }
 
   return (

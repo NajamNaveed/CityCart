@@ -5,6 +5,8 @@ jest.mock('../src/models/user.model');
 jest.mock('../src/models/employee.model');
 jest.mock('../src/models/brand.model');
 jest.mock('../src/models/store.model');
+jest.mock('../src/models/branch.model');
+jest.mock('../src/models/block.model');
 jest.mock('../src/models/city.model');
 jest.mock('../src/models/order.model');
 jest.mock('../src/models/payment.model');
@@ -13,13 +15,31 @@ jest.mock('../src/models/inventory.model');
 jest.mock('../src/utils/password', () => ({ hashPassword: jest.fn(), comparePassword: jest.fn() }));
 jest.mock('../src/utils/transaction', () => ({ runInTransaction: (work) => work('SESSION') }));
 jest.mock('../src/services/notification.service');
+jest.mock('../src/services/branchBlocks.service', () => ({ blockIdsForPin: jest.fn() }));
+// The provider is not under test here; the verification token itself is
+// covered by emailAuth.test.js and the real-DB onboarding integration test.
+jest.mock('../src/services/emailAuth.service', () => {
+  class EmailAuthError extends Error {}
+  return {
+    sendVerificationEmail: jest.fn(),
+    verifyEmail: jest.fn(),
+    resendVerification: jest.fn(),
+    requestPasswordReset: jest.fn(),
+    resetPassword: jest.fn(),
+    EmailAuthError,
+  };
+});
 
 const User = require('../src/models/user.model');
 const Employee = require('../src/models/employee.model');
 const Brand = require('../src/models/brand.model');
 const Store = require('../src/models/store.model');
+const Branch = require('../src/models/branch.model');
+const Block = require('../src/models/block.model');
 const City = require('../src/models/city.model');
 const notifications = require('../src/services/notification.service');
+const emailAuth = require('../src/services/emailAuth.service');
+const { blockIdsForPin } = require('../src/services/branchBlocks.service');
 const Order = require('../src/models/order.model');
 const Payment = require('../src/models/payment.model');
 const Delivery = require('../src/models/delivery.model');
@@ -31,24 +51,26 @@ const { getAuthCookie } = require('./helpers/testAuth');
 const oid = () => new mongoose.Types.ObjectId();
 const q = (v) => Object.assign(Promise.resolve(v), { session: () => Promise.resolve(v) });
 
+let homeBlock;
+const BLOCK_IDS = [oid()];
+
 const application = () => ({
   owner: { name: 'Sara Owner', email: 'Sara@Shop.com', password: 'secret123', phone: '+923001234567' },
   brand: { name: 'Fresh Kicks', cityId: oid().toString(), description: 'Sneakers and sportswear.' },
-  store: {
-    name: 'Fresh Kicks Store',
-    address: { addressLine: 'Shop 5, Main Boulevard', city: 'Faisalabad' },
-    contact: { phone: '+923001234567' },
-  },
+  branch: { name: 'Fresh Kicks Main', blockId: String(homeBlock._id) },
 });
 
 function applyWorld() {
-  City.findOne.mockResolvedValue({ _id: oid(), isActive: true });
+  const cityId = oid();
+  homeBlock = { _id: oid(), cityId, isActive: true, center: { type: 'Point', coordinates: [73.08, 31.42] } };
+  City.findOne.mockResolvedValue({ _id: cityId, isActive: true });
+  Block.findOne.mockResolvedValue(homeBlock);
   User.findOne.mockResolvedValue(null);
   Brand.exists.mockResolvedValue(null);
-  Store.exists.mockResolvedValue(null);
   Brand.create.mockImplementation(async ([d]) => [{ ...d }]);
   User.create.mockImplementation(async ([d]) => [{ _id: oid(), ...d }]);
   Store.create.mockImplementation(async ([d]) => [{ _id: oid(), ...d }]);
+  Branch.create.mockImplementation(async ([d]) => [{ _id: oid(), ...d }]);
 }
 
 function asRole(role) {
@@ -60,6 +82,8 @@ function asRole(role) {
 beforeEach(() => {
   jest.resetAllMocks();
   require('../src/utils/password').hashPassword.mockResolvedValue('HASHED');
+  blockIdsForPin.mockResolvedValue(BLOCK_IDS);
+  emailAuth.sendVerificationEmail.mockResolvedValue(true);
 });
 
 describe('POST /api/v1/brands/apply', () => {
@@ -72,6 +96,7 @@ describe('POST /api/v1/brands/apply', () => {
   };
 
   it.each([
+    ['owner name missing', (a) => delete a.owner.name],
     ['owner phone missing', (a) => delete a.owner.phone],
     ['owner phone invalid', (a) => (a.owner.phone = 'abc')],
     ['weak password', (a) => (a.owner.password = '123')],
@@ -79,12 +104,12 @@ describe('POST /api/v1/brands/apply', () => {
     ['brand name missing', (a) => delete a.brand.name],
     ['brand description too short', (a) => (a.brand.description = 'short')],
     ['invalid cityId', (a) => (a.brand.cityId = 'xyz')],
-    ['store name missing', (a) => delete a.store.name],
-    ['store address missing', (a) => delete a.store.address],
-    ['store addressLine too short', (a) => (a.store.address.addressLine = 'x')],
-    ['store address city missing', (a) => delete a.store.address.city],
-    ['store contact phone missing', (a) => delete a.store.contact.phone],
-    ['whole section missing', (a) => delete a.store],
+    ['shop name missing', (a) => delete a.branch.name],
+    ['shop blockId missing', (a) => delete a.branch.blockId],
+    ['shop blockId invalid', (a) => (a.branch.blockId = 'xyz')],
+    ['shop address too long', (a) => (a.branch.address = 'x'.repeat(301))],
+    ['shop phone invalid', (a) => (a.branch.phone = 'abc')],
+    ['whole branch section missing', (a) => delete a.branch],
   ])('400 and nothing created when: %s', async (_n, mutate) => {
     applyWorld();
     const res = await post(withChange(mutate));
@@ -92,34 +117,71 @@ describe('POST /api/v1/brands/apply', () => {
     expect(Brand.create).not.toHaveBeenCalled();
     expect(User.create).not.toHaveBeenCalled();
     expect(Store.create).not.toHaveBeenCalled();
+    expect(Branch.create).not.toHaveBeenCalled();
+    expect(emailAuth.sendVerificationEmail).not.toHaveBeenCalled();
   });
 
-  it('is public, creates brand + owner + store instantly ACTIVE, and logs the owner in', async () => {
+  it('is public and creates brand (PENDING), owner (unverified), internal store and first shop together', async () => {
     applyWorld();
     const res = await post(application());
 
     expect(res.status).toBe(201);
-    expect(res.headers['set-cookie'].join(';')).toMatch(/auth_token=/);
-    expect(res.body.message).toBe('Your store is live');
+    expect(res.headers['set-cookie']).toBeUndefined();
+    expect(res.body.message).toBe('Check your email to verify your account and publish your shop.');
+    expect(res.body.brand).toMatchObject({ name: 'Fresh Kicks', slug: 'fresh-kicks', status: 'PENDING' });
+    expect(res.body.branch).toMatchObject({ name: 'Fresh Kicks Main' });
+    expect(res.body.user).toMatchObject({
+      email: 'sara@shop.com',
+      role: ROLES.BRAND_ADMIN,
+      emailVerified: false,
+    });
 
     const [[brandDoc], brandOpts] = Brand.create.mock.calls[0];
     const [[userDoc]] = User.create.mock.calls[0];
     const [[storeDoc]] = Store.create.mock.calls[0];
-    expect(brandDoc).toMatchObject({ name: 'Fresh Kicks', slug: 'fresh-kicks', status: 'ACTIVE' });
+    const [[branchDoc]] = Branch.create.mock.calls[0];
+    expect(brandDoc).toMatchObject({ name: 'Fresh Kicks', slug: 'fresh-kicks', status: 'PENDING' });
     expect(brandOpts).toEqual({ session: 'SESSION' });
-    expect(userDoc).toMatchObject({ role: ROLES.BRAND_ADMIN, email: 'sara@shop.com', passwordHash: 'HASHED' });
+    expect(userDoc).toMatchObject({
+      role: ROLES.BRAND_ADMIN,
+      accountType: 'BRAND',
+      email: 'sara@shop.com',
+      passwordHash: 'HASHED',
+      emailVerifiedAt: null,
+    });
     expect(String(userDoc.brandId)).toBe(String(brandDoc._id)); // owner is bound to the new brand
-    expect(storeDoc).toMatchObject({ slug: 'fresh-kicks-store', name: 'Fresh Kicks Store' });
+    // Customers never see this internal storefront record; it is named after the brand.
+    expect(storeDoc).toMatchObject({ name: 'Fresh Kicks', slug: 'fresh-kicks' });
     expect(String(storeDoc.brandId)).toBe(String(brandDoc._id));
+    expect(branchDoc).toMatchObject({
+      name: 'Fresh Kicks Main',
+      blockId: homeBlock._id,
+      address: '',
+      phone: '+923001234567', // falls back to the owner's phone
+      location: homeBlock.center,
+    });
+    expect(branchDoc.blockIds).toEqual(BLOCK_IDS);
+    expect(String(branchDoc.brandId)).toBe(String(brandDoc._id));
+    expect(emailAuth.sendVerificationEmail).toHaveBeenCalledTimes(1);
+    expect(emailAuth.sendVerificationEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ email: 'sara@shop.com', brandId: brandDoc._id })
+    );
+    // The brand is not announced until the owner verifies the inbox.
+    expect(notifications.notifySuperAdminsOfNewBrand).not.toHaveBeenCalled();
+    expect(notifications.notifyBrandOwnerWelcome).not.toHaveBeenCalled();
     expect(JSON.stringify(res.body)).not.toMatch(/HASHED|secret123|passwordHash/);
-    // docs/12 §8: the platform is told a brand registered; the owner is welcomed.
-    expect(notifications.notifySuperAdminsOfNewBrand).toHaveBeenCalledTimes(1);
-    expect(notifications.notifySuperAdminsOfNewBrand).toHaveBeenCalledWith(
-      expect.objectContaining({ brandName: 'Fresh Kicks', ownerName: 'Sara Owner' })
-    );
-    expect(notifications.notifyBrandOwnerWelcome).toHaveBeenCalledWith(
-      expect.objectContaining({ brandName: 'Fresh Kicks' })
-    );
+  });
+
+  it('uses the shop phone and address when the owner gives them', async () => {
+    applyWorld();
+    const body = application();
+    body.branch.phone = '+923009999999';
+    body.branch.address = 'Shop 5, Main Boulevard';
+
+    await post(body);
+
+    const [[branchDoc]] = Branch.create.mock.calls[0];
+    expect(branchDoc).toMatchObject({ phone: '+923009999999', address: 'Shop 5, Main Boulevard' });
   });
 
   it('allows a brand account to use an email already registered as a customer', async () => {
@@ -141,8 +203,9 @@ describe('POST /api/v1/brands/apply', () => {
     body.status = 'SUSPENDED';
 
     expect((await post(body)).status).toBe(201);
-    expect(Brand.create.mock.calls[0][0][0].status).toBe('ACTIVE');
+    expect(Brand.create.mock.calls[0][0][0].status).toBe('PENDING'); // only verification may activate it
     expect(User.create.mock.calls[0][0][0].role).toBe(ROLES.BRAND_ADMIN);
+    expect(User.create.mock.calls[0][0][0].emailVerifiedAt).toBeNull();
   });
 
   it('400 when the city does not exist or is inactive (looked up as active only)', async () => {
@@ -151,25 +214,37 @@ describe('POST /api/v1/brands/apply', () => {
     const res = await post(application());
     expect(res.status).toBe(400);
     expect(City.findOne).toHaveBeenCalledWith({ _id: expect.any(String), isActive: true });
+    expect(Block.findOne).not.toHaveBeenCalled();
     expect(Brand.create).not.toHaveBeenCalled();
   });
 
-  it('409 for a taken email, brand name or store name', async () => {
+  it('400 when the shop block is unknown, inactive or in another city', async () => {
+    applyWorld();
+    Block.findOne.mockResolvedValue(null);
+    let res = await post(application());
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/blockId/i);
+    expect(Block.findOne).toHaveBeenCalledWith({ _id: expect.any(String), isActive: true });
+    expect(Brand.create).not.toHaveBeenCalled();
+
+    applyWorld();
+    Block.findOne.mockResolvedValue({ ...homeBlock, cityId: oid() });
+    res = await post(application());
+    expect(res.status).toBe(400);
+    expect(Brand.create).not.toHaveBeenCalled();
+  });
+
+  it('409 for a taken email or brand name', async () => {
     applyWorld();
     User.findOne.mockResolvedValue({ _id: oid() });
     expect((await post(application())).status).toBe(409);
 
     applyWorld();
     Brand.exists.mockResolvedValue({ _id: oid() });
-    let res = await post(application());
+    const res = await post(application());
     expect(res.status).toBe(409);
     expect(res.body.message).toMatch(/brand/i);
-
-    applyWorld();
-    Store.exists.mockResolvedValue({ _id: oid() });
-    res = await post(application());
-    expect(res.status).toBe(409);
-    expect(res.body.message).toMatch(/store/i);
+    expect(User.create).not.toHaveBeenCalled();
   });
 
   it('409 when a unique-index race is lost (E11000) and nothing is half-created', async () => {
@@ -177,7 +252,8 @@ describe('POST /api/v1/brands/apply', () => {
     Store.create.mockRejectedValue(Object.assign(new Error('E11000 duplicate key collection: citycart.stores index: slug_1'), { code: 11000 }));
     const res = await post(application());
     expect(res.status).toBe(409);
-    expect(res.body.message).toMatch(/store/i);
+    expect(res.body.message).toMatch(/name/i);
+    expect(emailAuth.sendVerificationEmail).not.toHaveBeenCalled();
   });
 });
 
@@ -194,20 +270,16 @@ describe('name availability checks (public)', () => {
     expect(res.body.available).toBe(false);
   });
 
-  it('store name: available / taken', async () => {
-    Store.exists.mockResolvedValue({ _id: oid() });
-    const res = await request(app).get('/api/v1/stores/check-name?name=Demo%20Store');
-    expect(res.status).toBe(200);
-    expect(res.body.available).toBe(false);
-    expect(Store.exists).toHaveBeenCalledWith({ slug: 'demo-store' });
-  });
-
   it('400 for a too-short or missing name; a name with no letters is never available', async () => {
     expect((await request(app).get('/api/v1/brands/check-name')).status).toBe(400);
-    expect((await request(app).get('/api/v1/stores/check-name?name=a')).status).toBe(400);
     const res = await request(app).get('/api/v1/brands/check-name?name=%21%21%21');
     expect(res.body.available).toBe(false);
     expect(Brand.exists).not.toHaveBeenCalled();
+  });
+
+  it('the dead store-name check has been removed', async () => {
+    const res = await request(app).get('/api/v1/stores/check-name?name=Demo%20Store');
+    expect(res.body.available).toBeUndefined();
   });
 });
 

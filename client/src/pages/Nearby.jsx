@@ -295,7 +295,29 @@ export default function Nearby() {
         </p>
       )}
 
-      <section className="mt-7" aria-live="polite">
+      {(cityId || view === 'map') && (
+        <div className="mt-6 flex justify-end">
+          <div role="group" aria-label="Results view" className="inline-flex overflow-hidden rounded-md border border-line bg-white text-[13px] font-medium">
+            {[
+              ['list', 'Shops', LayoutList],
+              ['map', 'Map', MapIcon],
+            ].map(([value, label, Icon]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={view === value}
+                onClick={() => setView(value)}
+                className={`inline-flex h-9 items-center gap-1.5 px-3.5 transition ${view === value ? 'bg-ink text-white' : 'text-ink/70 hover:text-ink'}`}
+              >
+                <Icon className="h-4 w-4" aria-hidden="true" />
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <section className="mt-4" aria-live="polite">
         {view === 'map' ? (
           <div className="relative">
             <Suspense fallback={<Skeleton className="h-[460px] w-full rounded-lg" />}>
@@ -402,23 +424,6 @@ export default function Nearby() {
                 {areaName && range !== 'block' && <> of {areaName}</>}
                 {fromBlockCentre && range !== 'block' && <> · from the centre of {areaName}</>}
               </p>
-              <div role="group" aria-label="Results view" className="inline-flex overflow-hidden rounded-md border border-line bg-white text-[13px] font-medium">
-                {[
-                  ['list', 'Shops', LayoutList],
-                  ['map', 'Map', MapIcon],
-                ].map(([value, label, Icon]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    aria-pressed={view === value}
-                    onClick={() => setView(value)}
-                    className={`inline-flex h-9 items-center gap-1.5 px-3.5 transition ${view === value ? 'bg-ink text-white' : 'text-ink/70 hover:text-ink'}`}
-                  >
-                    <Icon className="h-4 w-4" aria-hidden="true" />
-                    {label}
-                  </button>
-                ))}
-              </div>
             </div>
             <div className="space-y-5">
               {items.map((brand) => (

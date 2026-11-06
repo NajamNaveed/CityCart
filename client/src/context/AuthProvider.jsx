@@ -66,19 +66,19 @@ export function AuthProvider({ children }) {
     return me.data.user
   }, [])
 
+  // Registration does not sign the shopper in: the account is unusable
+  // until the emailed link is opened (server-provided message).
   const register = useCallback(async (name, email, password) => {
     const res = await api.post('/auth/register', { name, email, password })
     sessionStorage.removeItem(STAFF_TAB_KEY)
-    setUser(res.data.user)
-    return res.data.user
+    return res.data
   }, [])
 
-  // Seller sign-up: creates the owner, brand and store in one request and signs the owner in.
+  // Seller sign-up: creates the owner, brand, storefront record and first
+  // shop in one request. The brand stays hidden until the owner verifies
+  // their email, so no session is issued here either.
   const applyForBrand = useCallback(async (payload) => {
     const res = await api.post('/brands/apply', payload)
-    // Brand owners are dashboard staff: their session is per-tab too.
-    sessionStorage.setItem(STAFF_TAB_KEY, '1')
-    setUser(res.data.user)
     return res.data
   }, [])
 

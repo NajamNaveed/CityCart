@@ -74,13 +74,15 @@ describe('signIn / signUp', () => {
     expect(SecureStore.setItemAsync).toHaveBeenCalledWith('citycart.session', 'new.token', expect.any(Object))
   })
 
-  it('registers through the same flow', async () => {
-    api.post.mockResolvedValue({ data: { user: { name: 'Ali' }, token: 'reg.token' } })
+  it('registers without a session: the email must be verified first', async () => {
+    const body = { success: true, message: 'Check your email to verify your account.', user: { name: 'Ali' } }
+    api.post.mockResolvedValue({ data: body })
 
-    await signUp({ name: 'Ali', email: 'ali@example.com', password: 'secret123' })
+    await expect(signUp({ name: 'Ali', email: 'ali@example.com', password: 'secret123' })).resolves.toEqual(body)
 
     expect(api.post).toHaveBeenCalledWith('/auth/register', { name: 'Ali', email: 'ali@example.com', password: 'secret123' })
-    expect(tokenStore.get()).toBe('reg.token')
+    expect(tokenStore.get()).toBeNull()
+    expect(SecureStore.setItemAsync).not.toHaveBeenCalled()
   })
 
   it('stores nothing and passes the error on when the login fails', async () => {

@@ -7,6 +7,18 @@ const mongoose = require('mongoose');
 jest.mock('../src/models/user.model');
 jest.mock('../src/models/employee.model');
 
+jest.mock('../src/services/emailAuth.service', () => {
+  class EmailAuthError extends Error {}
+  return {
+    sendVerificationEmail: jest.fn().mockResolvedValue(true),
+    verifyEmail: jest.fn(),
+    resendVerification: jest.fn(),
+    requestPasswordReset: jest.fn(),
+    resetPassword: jest.fn(),
+    EmailAuthError,
+  };
+});
+
 const User = require('../src/models/user.model');
 const Employee = require('../src/models/employee.model');
 const app = require('../src/app');
@@ -101,8 +113,8 @@ describe('cookie lifetime by role (docs/06 §9 — staff session security)', () 
     expect(maxAge).toBeLessThanOrEqual(STAFF_MAX_AGE_S);
   });
 
-  it('issues a 7-day cookie on customer registration', async () => {
-    const created = makeFakeUser({ passwordHash: '$2a$10$fakehash$' });
+  it('issues no cookie on customer registration: the account must be verified first', async () => {
+    const created = makeFakeUser({ passwordHash: '$2a$10$fakehash$', emailVerifiedAt: null });
     User.findOne.mockResolvedValue(null);
     User.create.mockResolvedValue(created);
 
@@ -113,8 +125,7 @@ describe('cookie lifetime by role (docs/06 §9 — staff session security)', () 
     });
 
     expect(res.status).toBe(201);
-    const maxAge = authCookieMaxAge(res);
-    expect(maxAge).toBeGreaterThan(CUSTOMER_MAX_AGE_S - 60);
+    expect(authCookieMaxAge(res)).toBeNull();
   });
 
   it('sets SameSite=Lax outside production (test env is same-site)', async () => {

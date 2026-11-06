@@ -113,6 +113,8 @@ function buildDataset({ now = new Date(), hashes }) {
     accountType: role === 'CUSTOMER' ? 'CUSTOMER' : role === 'SUPER_ADMIN' ? 'PLATFORM_ADMIN' : 'BRAND',
     ...(brandId && { brandId }), phone,
     avatar: monogram(name, 240), isActive, passwordVersion: 0, mustChangePassword: false,
+    // Demo accounts are pre-existing: they can sign in without a verification email.
+    emailVerifiedAt: createdAt,
     ...(restrictedUntil && { accessRestricted: true, accessExpiresAt: restrictedUntil }),
     createdAt, updatedAt: createdAt,
   });

@@ -12,6 +12,18 @@ const mongoose = require('mongoose');
 jest.mock('../src/models/user.model');
 jest.mock('../src/models/employee.model');
 
+jest.mock('../src/services/emailAuth.service', () => {
+  class EmailAuthError extends Error {}
+  return {
+    sendVerificationEmail: jest.fn().mockResolvedValue(true),
+    verifyEmail: jest.fn(),
+    resendVerification: jest.fn(),
+    requestPasswordReset: jest.fn(),
+    resetPassword: jest.fn(),
+    EmailAuthError,
+  };
+});
+
 const User = require('../src/models/user.model');
 const Employee = require('../src/models/employee.model');
 const app = require('../src/app');
@@ -43,9 +55,9 @@ beforeEach(() => {
 });
 
 describe('POST /api/v1/auth/register', () => {
-  it('registers a new customer successfully', async () => {
+  it('registers a new customer, unverified and with no session', async () => {
     User.findOne.mockResolvedValue(null); // no existing account
-    const created = makeFakeUser();
+    const created = makeFakeUser({ emailVerifiedAt: null });
     User.create.mockResolvedValue(created);
 
     const res = await request(app).post('/api/v1/auth/register').send({
@@ -56,11 +68,13 @@ describe('POST /api/v1/auth/register', () => {
 
     expect(res.status).toBe(201);
     expect(res.body.success).toBe(true);
+    expect(res.body.message).toBe('Check your email to verify your account.');
     expect(res.body.user).toEqual({
       id: created._id.toString(),
       name: 'Jane Doe',
       email: 'jane@example.com',
       role: 'CUSTOMER',
+      emailVerified: false,
     });
     // Never leak sensitive fields.
     expect(res.body.user.passwordHash).toBeUndefined();
@@ -70,11 +84,12 @@ describe('POST /api/v1/auth/register', () => {
     // Role is always CUSTOMER regardless of what might be sent, and is
     // never taken from client input for this endpoint.
     expect(User.create).toHaveBeenCalledWith(
-      expect.objectContaining({ role: 'CUSTOMER' })
+      expect.objectContaining({ role: 'CUSTOMER', emailVerifiedAt: null })
     );
 
-    // Sets the HTTP-only auth cookie.
-    expect(getCookieValue(res, AUTH_COOKIE_NAME)).toBeTruthy();
+    // No session is issued until the emailed link is opened (docs/06 §4).
+    expect(getCookieValue(res, AUTH_COOKIE_NAME)).toBeNull();
+    expect(res.body.token).toBeUndefined();
   });
 
   it('rejects a duplicate email with 409', async () => {
@@ -211,6 +226,34 @@ describe('POST /api/v1/auth/login', () => {
 
     expect(res.status).toBe(401);
     expect(res.body.message).toBe('Invalid email or password.');
+  });
+
+  it('refuses an unverified account after the password is proven, and issues no cookie', async () => {
+    const passwordHash = await hashPassword('correcthorse123');
+    const user = makeFakeUser({ passwordHash, emailVerifiedAt: null });
+    User.findOne.mockReturnValue({ select: jest.fn().mockResolvedValue(user) });
+
+    const res = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: 'jane@example.com', password: 'correcthorse123' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('EMAIL_NOT_VERIFIED');
+    expect(getCookieValue(res, AUTH_COOKIE_NAME)).toBeNull();
+  });
+
+  it('still gives the generic error to an unverified account with a wrong password', async () => {
+    const passwordHash = await hashPassword('correcthorse123');
+    const user = makeFakeUser({ passwordHash, emailVerifiedAt: null });
+    User.findOne.mockReturnValue({ select: jest.fn().mockResolvedValue(user) });
+
+    const res = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: 'jane@example.com', password: 'totally-wrong' });
+
+    expect(res.status).toBe(401);
+    expect(res.body.message).toBe('Invalid email or password.');
+    expect(res.body.code).toBeUndefined();
   });
 
   it('rejects login for an inactive user with the same generic message', async () => {

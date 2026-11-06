@@ -4,6 +4,7 @@ const { hashPassword, comparePassword } = require('../utils/password');
 const { signToken } = require('../utils/jwt');
 const { ROLES, STAFF_ROLES, STAFF_APP_ROLES, DELIVERY_APP_ROLES } = require('../config/roles');
 const env = require('../config/env');
+const { sendVerificationEmail } = require('./emailAuth.service');
 
 /**
  * Auth business logic, per docs/06-authentication-and-security.md §4
@@ -16,9 +17,10 @@ const env = require('../config/env');
  */
 
 class AuthError extends Error {
-  constructor(status, message) {
+  constructor(status, message, code) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -36,6 +38,10 @@ const GENERIC_LOGIN_ERROR = 'Invalid email or password.';
 /**
  * Registers a new CUSTOMER. Public registration can never create any
  * other role (§4) — the role is hardcoded here, never taken from input.
+ *
+ * The account starts unverified: no session is issued until the emailed
+ * link is opened (docs/06 §4). The email is best-effort — if the provider
+ * is down, the user can ask for another link from the sign-in screen.
  */
 async function registerUser({ name, email, password }) {
   const existing = await User.findOne({ email, accountType: 'CUSTOMER' });
@@ -53,6 +59,7 @@ async function registerUser({ name, email, password }) {
       passwordHash,
       role: 'CUSTOMER',
       accountType: 'CUSTOMER',
+      emailVerifiedAt: null,
     });
   } catch (err) {
     // Defense-in-depth against a race between the findOne check above and
@@ -64,14 +71,8 @@ async function registerUser({ name, email, password }) {
     throw err;
   }
 
-  const token = signToken({
-    userId: user._id,
-    role: user.role,
-    brandId: user.brandId,
-    passwordVersion: user.passwordVersion,
-  });
-
-  return { user: toSafeUser(user), token };
+  await sendVerificationEmail(user);
+  return { user: toSafeUser(user) };
 }
 
 /**
@@ -135,6 +136,17 @@ async function loginUser({ email, password }, portal = 'customer') {
     throw new AuthError(401, GENERIC_LOGIN_ERROR);
   }
 
+  // Unverified accounts are refused AFTER the password is proven, so the
+  // check never reveals whether an address exists. The code lets the client
+  // offer "resend verification email" instead of a dead end.
+  if (user.emailVerifiedAt === null) {
+    throw new AuthError(
+      403,
+      'Please verify your email before signing in. Check your inbox for the link.',
+      'EMAIL_NOT_VERIFIED'
+    );
+  }
+
   // A deactivated partner record blocks the login even if the User row was
   // not flipped for some reason (the deactivate path flips both).
   if (user.role === ROLES.ADMIN_PARTNER) {
@@ -175,6 +187,10 @@ function toSafeUser(user) {
     name: user.name,
     email: user.email,
     role: user.role,
+    // false only for a self-registered account that has not confirmed its
+    // inbox yet (such accounts cannot sign in, but the flag keeps clients
+    // honest if that rule ever loosens).
+    emailVerified: user.emailVerifiedAt !== null && user.emailVerifiedAt !== undefined,
     // A brand account's own brand id (the dashboard needs it to load its categories).
     ...(user.brandId && { brandId: user.brandId }),
     // Only present for staff of a terminated brand, so the UI can show a banner.

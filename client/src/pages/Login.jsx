@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import AuthShell from '../components/AuthShell'
 import Field from '../components/Field'
+import ResendVerification from '../components/ResendVerification'
 import { useAuth } from '../hooks/useAuth'
 import { getErrorMessage, getFieldErrors } from '../services/api'
 import { registerUrl, safeNext } from '../utils/nav'
@@ -16,6 +17,7 @@ export default function Login() {
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
+  const [needsVerification, setNeedsVerification] = useState(false)
 
   const onChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }))
 
@@ -23,6 +25,7 @@ export default function Login() {
     e.preventDefault()
     setError('')
     setFieldErrors({})
+    setNeedsVerification(false)
     setSubmitting(true)
     try {
       // GuestRoute sends the visitor on to ?next= once the session exists.
@@ -30,6 +33,7 @@ export default function Login() {
     } catch (err) {
       setFieldErrors(getFieldErrors(err))
       setError(getErrorMessage(err))
+      setNeedsVerification(err.response?.data?.code === 'EMAIL_NOT_VERIFIED')
       setSubmitting(false)
     }
   }
@@ -73,10 +77,17 @@ export default function Login() {
           error={fieldErrors.password}
           required
         />
+        <div className="flex justify-end">
+          <Link to="/forgot-password?portal=customer" className="text-[13px] font-medium text-clay underline-offset-4 hover:underline">
+            Forgot password?
+          </Link>
+        </div>
         <button type="submit" disabled={submitting} className={`${btnPrimary} w-full`}>
           {submitting ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
+
+      {needsVerification && <ResendVerification email={form.email.trim()} portal="customer" className="mt-4" />}
 
       <p className="mt-6 text-sm text-muted">
         New to CityCart?{' '}

@@ -6,7 +6,7 @@ import AppText from '../../components/ui/AppText'
 import Button from '../../components/ui/Button'
 import TextField from '../../components/ui/TextField'
 import { useAuth } from '../../hooks/useAuth'
-import { getErrorMessage, getFieldErrors } from '../../services/api'
+import api, { getErrorMessage, getFieldErrors } from '../../services/api'
 import { registerHref, safeNext } from '../../utils/nav'
 import { sentenceAll, validateLogin } from '../../utils/validation'
 import { colors, radius, spacing } from '../../theme'
@@ -21,6 +21,9 @@ export default function Login() {
   const [fieldErrors, setFieldErrors] = useState({})
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [unverifiedEmail, setUnverifiedEmail] = useState('')
+  const [resending, setResending] = useState(false)
+  const [resent, setResent] = useState(false)
 
   // Signing in flips `status`; this one redirect then takes the shopper back to
   // where they were going (or to their account), whether they just signed in or
@@ -34,6 +37,7 @@ export default function Login() {
     const problems = validateLogin(form)
     setFieldErrors(problems)
     setError('')
+    setUnverifiedEmail('')
     if (Object.keys(problems).length > 0) return
 
     setSubmitting(true)
@@ -42,7 +46,24 @@ export default function Login() {
     } catch (err) {
       setFieldErrors(sentenceAll(getFieldErrors(err)))
       setError(getErrorMessage(err))
+      if (err.response?.data?.code === 'EMAIL_NOT_VERIFIED') {
+        setUnverifiedEmail(form.email.trim().toLowerCase())
+      }
       setSubmitting(false)
+    }
+  }
+
+  async function resend() {
+    if (resending || resent || !unverifiedEmail) return
+    setResending(true)
+    setError('')
+    try {
+      await api.post('/auth/verify-email/resend', { email: unverifiedEmail, portal: 'customer' })
+      setResent(true)
+    } catch (err) {
+      setError(getErrorMessage(err))
+    } finally {
+      setResending(false)
     }
   }
 
@@ -87,10 +108,35 @@ export default function Login() {
         textContentType="password"
         returnKeyType="go"
         onSubmitEditing={onSubmit}
-        style={{ marginBottom: spacing.xl }}
+        style={{ marginBottom: spacing.md }}
       />
 
+      <View style={{ alignItems: 'flex-end', marginBottom: spacing.xl }}>
+        <Link href="/forgot-password" replace>
+          <AppText variant="label" style={{ color: colors.clay }}>
+            Forgot password?
+          </AppText>
+        </Link>
+      </View>
+
       <Button title="Sign in" onPress={onSubmit} loading={submitting} />
+
+      {unverifiedEmail ? (
+        <View style={{ marginTop: spacing.lg }}>
+          <Button
+            title={resent ? 'Verification email sent' : 'Resend verification email'}
+            onPress={resend}
+            loading={resending}
+            disabled={resent}
+            variant="outline"
+          />
+          {resent ? (
+            <AppText variant="small" style={{ marginTop: spacing.sm }}>
+              Check your inbox and spam folder. Only the newest link works.
+            </AppText>
+          ) : null}
+        </View>
+      ) : null}
 
       <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: spacing.xl, gap: spacing.xs }}>
         <AppText variant="small">New to CityCart?</AppText>

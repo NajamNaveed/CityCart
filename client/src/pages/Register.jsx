@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import AuthShell from '../components/AuthShell'
 import Field from '../components/Field'
+import ResendVerification from '../components/ResendVerification'
 import { useAuth } from '../hooks/useAuth'
 import { getErrorMessage, getFieldErrors } from '../services/api'
 import { loginUrl, safeNext } from '../utils/nav'
@@ -13,6 +14,7 @@ export default function Register() {
   const next = safeNext(params.get('next'), '')
 
   const [form, setForm] = useState({ name: '', email: '', password: '' })
+  const [sentTo, setSentTo] = useState('')
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
@@ -26,18 +28,47 @@ export default function Register() {
     setSubmitting(true)
     try {
       await register(form.name, form.email, form.password)
+      window.scrollTo({ top: 0 })
+      setSentTo(form.email.trim())
     } catch (err) {
       setFieldErrors(getFieldErrors(err))
       setError(getErrorMessage(err))
+    } finally {
       setSubmitting(false)
     }
+  }
+
+  if (sentTo) {
+    return (
+      <AuthShell
+        eyebrow="Verify your email"
+        title="One click, and you’re in."
+        intro="We verify every inbox before an account can order, so nobody signs up with someone else’s address."
+      >
+        <h1 className="font-display text-[28px] font-semibold tracking-tight text-ink">Check your inbox</h1>
+        <p className="mt-1.5 text-sm text-muted">
+          We sent a verification link to <span className="font-medium text-ink">{sentTo}</span>. Open it to activate your
+          account, then sign in.
+        </p>
+        <div className="mt-6 rounded-lg border border-line bg-paper px-4 py-3 text-[13px] leading-relaxed text-muted">
+          The link expires in 24 hours. If it doesn’t arrive within a few minutes, check spam or send it again.
+        </div>
+        <ResendVerification email={sentTo} portal="customer" className="mt-5" />
+        <p className="mt-6 text-sm text-muted">
+          Link already opened?{' '}
+          <Link to={next ? loginUrl(next) : '/login'} className="font-medium text-clay underline-offset-4 hover:underline">
+            Sign in
+          </Link>
+        </p>
+      </AuthShell>
+    )
   }
 
   return (
     <AuthShell
       eyebrow="Create an account"
       title="Your city’s brands, one account."
-      intro="Registering takes a minute. You will come straight back to what you were looking at."
+      intro="Create your account, confirm your email, and start shopping with the brands around you."
     >
       <h1 className="font-display text-[28px] font-semibold tracking-tight text-ink">Create your account</h1>
       <p className="mt-1.5 text-sm text-muted">For shoppers. Selling on CityCart uses a separate brand account.</p>

@@ -98,6 +98,16 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    // When the account's inbox was confirmed. Self-registered customers and
+    // brand owners are created with `null` and cannot sign in until they
+    // follow the emailed link; every account created by the platform
+    // (employees, riders, admins, seeds) is trusted and starts verified.
+    // Legacy rows predating this field have no value and are treated as
+    // verified by the login check.
+    emailVerifiedAt: {
+      type: Date,
+      default: Date.now,
+    },
     avatar: {
       type: String,
       trim: true,

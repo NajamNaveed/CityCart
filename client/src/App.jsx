@@ -16,6 +16,9 @@ import Nearby from './pages/Nearby'
 import ProductDetail from './pages/ProductDetail'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import VerifyEmail from './pages/VerifyEmail'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
 import Cart from './pages/Cart'
 import Checkout from './pages/Checkout'
 import OrderPlaced from './pages/OrderPlaced'
@@ -102,6 +105,11 @@ function App() {
                   <Route path="brands" element={<Brands />} />
                   <Route path="nearby" element={<Nearby />} />
                   <Route path="product/:id" element={<ProductDetail />} />
+
+                  {/* Email links and password recovery work signed in or out. */}
+                  <Route path="verify-email" element={<VerifyEmail />} />
+                  <Route path="forgot-password" element={<ForgotPassword />} />
+                  <Route path="reset-password" element={<ResetPassword />} />
 
                   <Route element={<GuestRoute />}>
                     <Route path="login" element={<Login />} />

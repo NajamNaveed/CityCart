@@ -5,12 +5,10 @@ const {
   adminListBrandsQuerySchema,
 } = require('../validators/brandApplication.validator');
 const { objectIdParamSchema } = require('../validators/common.validator');
-const { applyForBrand, isBrandNameAvailable, isStoreNameAvailable } = require('../services/brandOnboarding.service');
+const { applyForBrand, isBrandNameAvailable } = require('../services/brandOnboarding.service');
 const { listAdminBrands, getAdminBrand, terminateBrand } = require('../services/brandAdmin.service');
 const { BrandError } = require('../services/brand.service');
 const { toSafeUser } = require('../services/auth.service');
-const { signToken } = require('../utils/jwt');
-const { AUTH_COOKIE_NAME, authCookieOptions } = require('../config/cookie');
 const { formatZodError } = require('../utils/formatZodError');
 const { recordAdminAction } = require('../services/adminAction.service');
 
@@ -25,19 +23,18 @@ function handleError(err, res, next) {
   return next(err);
 }
 
-// Public. The owner is logged in immediately (same cookie as /auth/login).
+// Public. No session yet: the brand and owner stay inactive until the owner
+// opens the emailed verification link (see services/emailAuth.service.js).
 async function apply(req, res, next) {
   const parsed = brandApplicationSchema.safeParse(req.body);
   if (!parsed.success) return invalid(res, parsed.error);
   try {
-    const { brand, store, user } = await applyForBrand(parsed.data);
-    const token = signToken({ userId: user._id, role: user.role, brandId: user.brandId });
-    res.cookie(AUTH_COOKIE_NAME, token, authCookieOptions);
+    const { brand, branch, user } = await applyForBrand(parsed.data);
     return res.status(201).json({
       success: true,
-      message: 'Your store is live',
+      message: 'Check your email to verify your account and publish your shop.',
       brand,
-      store,
+      branch,
       user: toSafeUser(user),
     });
   } catch (err) {
@@ -56,7 +53,6 @@ const nameChecker = (check) => async (req, res, next) => {
 };
 
 const checkBrandName = nameChecker(isBrandNameAvailable);
-const checkStoreName = nameChecker(isStoreNameAvailable);
 
 async function adminList(req, res, next) {
   const parsed = adminListBrandsQuerySchema.safeParse(req.query);
@@ -103,4 +99,4 @@ async function adminTerminate(req, res, next) {
   }
 }
 
-module.exports = { apply, checkBrandName, checkStoreName, adminList, adminGet, adminTerminate };
+module.exports = { apply, checkBrandName, adminList, adminGet, adminTerminate };

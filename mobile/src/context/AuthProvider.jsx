@@ -40,11 +40,9 @@ export function AuthProvider({ children }) {
     return user
   }, [])
 
-  const register = useCallback(async (details) => {
-    const user = await signUp(details)
-    setState({ status: 'signedIn', user, offline: false })
-    return user
-  }, [])
+  // Signing up does not sign the shopper in; the customer verifies their
+  // email first, so the auth state is left exactly as it was.
+  const register = useCallback(async (details) => signUp(details), [])
 
   const value = useMemo(
     () => ({ ...state, isReady: state.status !== 'loading', login, register, logout, retry: restore }),

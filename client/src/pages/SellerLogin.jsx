@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import AuthShell from '../components/AuthShell'
 import Field from '../components/Field'
+import ResendVerification from '../components/ResendVerification'
 import { useAuth } from '../hooks/useAuth'
 import { getErrorMessage, getFieldErrors } from '../services/api'
 import { safeNext } from '../utils/nav'
@@ -16,6 +17,7 @@ export default function SellerLogin() {
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
+  const [needsVerification, setNeedsVerification] = useState(false)
 
   const onChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }))
 
@@ -23,6 +25,7 @@ export default function SellerLogin() {
     e.preventDefault()
     setError('')
     setFieldErrors({})
+    setNeedsVerification(false)
     setSubmitting(true)
     try {
       // GuestRoute sends the user on to their dashboard once the session exists.
@@ -30,6 +33,7 @@ export default function SellerLogin() {
     } catch (err) {
       setFieldErrors(getFieldErrors(err))
       setError(getErrorMessage(err))
+      setNeedsVerification(err.response?.data?.code === 'EMAIL_NOT_VERIFIED')
       setSubmitting(false)
     }
   }
@@ -65,10 +69,17 @@ export default function SellerLogin() {
           error={fieldErrors.password}
           required
         />
+        <div className="flex justify-end">
+          <Link to="/forgot-password?portal=brand" className="text-[13px] font-medium text-pine underline-offset-4 hover:underline">
+            Forgot password?
+          </Link>
+        </div>
         <button type="submit" disabled={submitting} className={`${btnPine} w-full`}>
           {submitting ? 'Logging in…' : 'Log in'}
         </button>
       </form>
+
+      {needsVerification && <ResendVerification email={form.email.trim()} portal="brand" className="mt-4" />}
 
       <p className="mt-6 text-sm text-muted">
         Don’t have a brand yet?{' '}

@@ -23,4 +23,25 @@ const loginSchema = z.object({
   password: z.string().min(1, 'password is required'),
 });
 
-module.exports = { registerSchema, loginSchema };
+// Which kind of account the request is about. Customers reset on the
+// shopper sign-in page, brand owners on the seller sign-in page; keeping
+// them apart matters because one email may hold both accounts.
+const portalSchema = z.enum(['customer', 'brand']).optional().default('customer');
+
+const emailRequestSchema = z.object({
+  email: z.string().trim().toLowerCase().email('invalid email format'),
+  portal: portalSchema,
+});
+
+const tokenSchema = z.object({
+  token: z.string().trim().regex(/^[a-f0-9]{64}$/i, 'invalid token'),
+});
+
+const resetPasswordSchema = tokenSchema.extend({
+  newPassword: z
+    .string()
+    .min(MIN_PASSWORD_LENGTH, `newPassword must be at least ${MIN_PASSWORD_LENGTH} characters`)
+    .max(128, 'newPassword must be at most 128 characters'),
+});
+
+module.exports = { registerSchema, loginSchema, emailRequestSchema, tokenSchema, resetPasswordSchema };

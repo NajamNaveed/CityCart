@@ -1,5 +1,18 @@
-const { registerSchema, loginSchema } = require('../validators/auth.validator');
+const {
+  registerSchema,
+  loginSchema,
+  emailRequestSchema,
+  tokenSchema,
+  resetPasswordSchema,
+} = require('../validators/auth.validator');
 const { registerUser, loginUser, toSafeUser, AuthError } = require('../services/auth.service');
+const {
+  verifyEmail,
+  resendVerification,
+  requestPasswordReset,
+  resetPassword,
+  EmailAuthError,
+} = require('../services/emailAuth.service');
 const { AUTH_COOKIE_NAME, authCookieOptions, staffAuthCookieOptions } = require('../config/cookie');
 const { ROLES, STAFF_ROLES } = require('../config/roles');
 const Employee = require('../models/employee.model');
@@ -35,22 +48,17 @@ async function register(req, res, next) {
   }
 
   try {
-    const { user, token } = await registerUser(parsed.data);
-
-    // The native app asks for the token in the response (no cookie is set for
-    // it); the web gets the HTTP-only cookie and never sees the token.
-    if (isMobileClient(req)) {
-      return res.status(201).json({ success: true, message: 'Registration successful', user, token });
-    }
-    res.cookie(AUTH_COOKIE_NAME, token, authCookieOptions);
+    // No session yet: the account becomes usable after the emailed link is
+    // opened (docs/06 §4). The same answer is given to web and app clients.
+    const { user } = await registerUser(parsed.data);
     return res.status(201).json({
       success: true,
-      message: 'Registration successful',
+      message: 'Check your email to verify your account.',
       user,
     });
   } catch (err) {
     if (err instanceof AuthError) {
-      return res.status(err.status).json({ success: false, message: err.message });
+      return res.status(err.status).json({ success: false, message: err.message, ...(err.code && { code: err.code }) });
     }
     return next(err);
   }
@@ -93,7 +101,7 @@ const loginFor = (portal) =>
       });
     } catch (err) {
       if (err instanceof AuthError) {
-        return res.status(err.status).json({ success: false, message: err.message });
+        return res.status(err.status).json({ success: false, message: err.message, ...(err.code && { code: err.code }) });
       }
       return next(err);
     }
@@ -132,7 +140,7 @@ const appLoginFor = (portal) => {
       return res.status(200).json({ success: true, message: 'Login successful', user, token });
     } catch (err) {
       if (err instanceof AuthError) {
-        return res.status(err.status).json({ success: false, message: err.message });
+        return res.status(err.status).json({ success: false, message: err.message, ...(err.code && { code: err.code }) });
       }
       return next(err);
     }
@@ -214,4 +222,102 @@ async function changePassword(req, res, next) {
   }
 }
 
-module.exports = { register, login, brandLogin, staffLogin, deliveryLogin, adminLogin, logout, me, changePassword };
+async function verifyEmailToken(req, res, next) {
+  const parsed = tokenSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsed.error),
+    });
+  }
+
+  try {
+    await verifyEmail(parsed.data.token);
+    return res.status(200).json({
+      success: true,
+      message: 'Email verified. You can now sign in.',
+    });
+  } catch (err) {
+    if (err instanceof EmailAuthError) {
+      return res.status(err.status).json({ success: false, message: err.message, ...(err.code && { code: err.code }) });
+    }
+    return next(err);
+  }
+}
+
+async function resendVerificationEmail(req, res, next) {
+  const parsed = emailRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsed.error),
+    });
+  }
+
+  try {
+    const { message } = await resendVerification(parsed.data);
+    return res.status(200).json({ success: true, message });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function forgotPassword(req, res, next) {
+  const parsed = emailRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsed.error),
+    });
+  }
+
+  try {
+    const { message } = await requestPasswordReset(parsed.data);
+    return res.status(200).json({ success: true, message });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function resetPasswordHandler(req, res, next) {
+  const parsed = resetPasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsed.error),
+    });
+  }
+
+  try {
+    await resetPassword(parsed.data);
+    return res.status(200).json({
+      success: true,
+      message: 'Password changed. Sign in with your new password.',
+    });
+  } catch (err) {
+    if (err instanceof EmailAuthError) {
+      return res.status(err.status).json({ success: false, message: err.message, ...(err.code && { code: err.code }) });
+    }
+    return next(err);
+  }
+}
+
+module.exports = {
+  register,
+  login,
+  brandLogin,
+  staffLogin,
+  deliveryLogin,
+  adminLogin,
+  logout,
+  me,
+  changePassword,
+  verifyEmailToken,
+  resendVerificationEmail,
+  forgotPassword,
+  resetPasswordHandler,
+};

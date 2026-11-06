@@ -107,6 +107,27 @@ BRAND_EMPLOYEE
 
 Privileged roles must only be assigned through authorized administrative workflows.
 
+### Email verification
+
+Self-service registration creates the account **unverified** and sends a
+single-use link to the address:
+
+* The token is 32 random bytes; only its SHA-256 hash is stored (`AuthToken`).
+  The raw value exists only in the email link.
+* The link expires after 24 hours by default (`EMAIL_VERIFY_TTL_HOURS`) and
+  works once. Requesting a new link invalidates the previous one.
+* Registration issues no session cookie and no app token. Sign-in is refused
+  with `403` and `code: "EMAIL_NOT_VERIFIED"` **after** the password is proven,
+  so the check cannot be used to discover which emails have accounts.
+* Platform-created accounts (staff, riders, admins, demo seed data) are created
+  verified and skip this flow.
+* A self-registered brand is `PENDING` and invisible in discovery until the
+  link is opened. Verification activates it only from `PENDING`, so it can
+  never override a suspension or termination an admin set in the meantime.
+
+The web and shopper app sign-in screens offer "resend verification email" when
+they receive that error code.
+
 ---
 
 # 5. Password Security
@@ -129,7 +150,18 @@ The original password must never be stored or logged.
 
 Password requirements should enforce a reasonable minimum length and reject obviously invalid credentials.
 
-Authenticated Brand Admins can change their password by proving the current password. Password changes update the bcrypt hash and increment a server-side password version carried in signed sessions; older sessions fail authentication. This current-password flow is separate from future email verification and password-reset links, which must use one-time, expiring tokens and must not reuse the authenticated change-password endpoint.
+Authenticated Brand Admins can change their password by proving the current password. Password changes update the bcrypt hash and increment a server-side password version carried in signed sessions; older sessions fail authentication. This current-password flow is separate from the emailed reset flow and does not reuse the authenticated change-password endpoint.
+
+### Password reset
+
+`POST /auth/forgot-password` emails a single-use link that expires after 60
+minutes (`PASSWORD_RESET_TTL_MINUTES`); `POST /auth/reset-password` sets the new
+password. Reset tokens are stored hashed, only the newest token of each type is
+valid, and the response to a reset request is identical whether or not the
+account exists. A successful reset bumps `passwordVersion`, ending every
+existing session. Opening the link also proves control of the inbox, so an
+unverified account becomes verified (and a `PENDING` brand is published) by the
+same step.
 
 Future improvements may include:
 
@@ -838,6 +870,8 @@ JWT_SECRET=
 CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
+BREVO_API_KEY=
+EMAIL_FROM=
 ```
 
 Never commit:

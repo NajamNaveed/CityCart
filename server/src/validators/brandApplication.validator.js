@@ -8,15 +8,17 @@ const phone = z.string().trim().regex(PHONE, 'Invalid phone number');
 const name = (label) => z.string().trim().min(2, `${label} must be at least 2 characters`).max(100);
 
 /**
- * The data a seller must provide to open a store. If ANY required field is
+ * The data a seller must provide to open a shop. If ANY required field is
  * missing or invalid the application is rejected and nothing is created.
  * status/role/brandId are never accepted from the client.
  *
  * REQUIRED  owner:  name, email, password (8+), phone
  *           brand:  name, cityId, description (10+ chars)
- *           store:  name, address.addressLine, address.city, contact.phone
- * OPTIONAL  logo/cover/banner URLs, brand contact, store description,
- *           address state/postalCode/country, contact email, business hours
+ *           branch: name, blockId (the shop's area in that city)
+ * OPTIONAL  logo/cover/banner URLs, brand contact, branch address/phone
+ *
+ * The first branch IS the shop customers discover; the old separate "store"
+ * section duplicated data customers never saw and has been removed.
  */
 const brandApplicationSchema = z.object({
   owner: z.object({
@@ -39,23 +41,13 @@ const brandApplicationSchema = z.object({
       })
       .optional(),
   }),
-  store: z.object({
-    name: name('store name'),
-    description: z.string().trim().max(1000).optional(),
-    logo: z.string().trim().max(500).optional(),
-    banner: z.string().trim().max(500).optional(),
-    address: z.object({
-      addressLine: z.string().trim().min(5, 'addressLine must be at least 5 characters').max(300),
-      city: z.string().trim().min(1).max(100),
-      state: z.string().trim().max(100).optional(),
-      postalCode: z.string().trim().max(20).optional(),
-      country: z.string().trim().max(100).optional(),
-    }),
-    contact: z.object({
-      phone,
-      email: z.string().trim().email().optional(),
-    }),
-    businessHours: z.record(z.string(), z.unknown()).optional(),
+  branch: z.object({
+    name: name('shop name'),
+    blockId: objectId,
+    // Defaults to the block centre; the owner can move the pin later from
+    // the dashboard once the shop is live.
+    address: z.string().trim().max(300).optional(),
+    phone: phone.optional(),
   }),
 });
 

@@ -76,6 +76,23 @@ const env = {
     enabled: (process.env.PUSH_ENABLED || '').trim().toLowerCase() === 'true',
     accessToken: (process.env.EXPO_ACCESS_TOKEN || '').trim(),
   },
+  // Transactional email (email verification and password reset). Sent over
+  // Brevo's HTTPS API because Render's free plan blocks outbound SMTP ports.
+  // Without an API key and sender, links are logged to the console in
+  // development and delivery is reported as unavailable in production.
+  email: {
+    brevoApiKey: (process.env.BREVO_API_KEY || '').trim(),
+    fromEmail: (process.env.EMAIL_FROM || '').trim(),
+    fromName: (process.env.EMAIL_FROM_NAME || 'CityCart').trim(),
+    verifyTtlHours: (() => {
+      const hours = Number((process.env.EMAIL_VERIFY_TTL_HOURS || '').trim());
+      return Number.isFinite(hours) && hours >= 1 ? Math.min(hours, 168) : 24;
+    })(),
+    resetTtlMinutes: (() => {
+      const minutes = Number((process.env.PASSWORD_RESET_TTL_MINUTES || '').trim());
+      return Number.isFinite(minutes) && minutes >= 5 ? Math.min(minutes, 1440) : 60;
+    })(),
+  },
   // How long a terminated brand's staff keep (read-only) access, in hours.
   // 0 = cut off immediately. Capped at 30 days.
   terminationGraceHours: (() => {

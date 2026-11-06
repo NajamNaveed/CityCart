@@ -106,6 +106,15 @@ Each phase ends with the server tests, lint and a successful app bundle.
 * Fields set `autoComplete` / `textContentType` so the phone's password manager works,
   passwords are masked with a show/hide toggle, and nothing secret is logged or stored
   beyond the token in secure storage.
+* Registration does **not** sign the shopper in. After `POST /auth/register` the
+  screen shows "Check your inbox", with a resend button; the account becomes usable
+  after the emailed link is opened. Signing in before verifying answers
+  `EMAIL_NOT_VERIFIED`, and the login screen offers the same resend button instead
+  of a dead end.
+* `forgot-password` (in `(auth)/`) takes an email, calls
+  `POST /auth/forgot-password` with `portal: "customer"`, and always shows the same
+  "check your email" state. The emailed link opens the **web** reset page, where the
+  shopper chooses a new password; the app then signs in with the new one.
 
 ## 8. Browsing (Phase 3)
 

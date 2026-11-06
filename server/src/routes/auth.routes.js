@@ -1,6 +1,20 @@
 const express = require('express');
 
-const { register, login, brandLogin, staffLogin, deliveryLogin, adminLogin, logout, me, changePassword } = require('../controllers/auth.controller');
+const {
+  register,
+  login,
+  brandLogin,
+  staffLogin,
+  deliveryLogin,
+  adminLogin,
+  logout,
+  me,
+  changePassword,
+  verifyEmailToken,
+  resendVerificationEmail,
+  forgotPassword,
+  resetPasswordHandler,
+} = require('../controllers/auth.controller');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
 const { ROLES } = require('../config/roles');
@@ -14,6 +28,13 @@ router.post('/brand/login', authLimiter, brandLogin); // BRAND_ADMIN / BRAND_EMP
 router.post('/staff/login', authLimiter, staffLogin); // BRAND_EMPLOYEE / PICKER, staff app only
 router.post('/delivery/login', authLimiter, deliveryLogin); // RIDER, delivery app only
 router.post('/admin/login', authLimiter, adminLogin); // SUPER_ADMIN / ADMIN_PARTNER only
+// Email verification and password recovery. Rate-limited with the same
+// strict limiter as the credential endpoints so links cannot be brute-forced
+// or inboxes spammed.
+router.post('/verify-email', authLimiter, verifyEmailToken);
+router.post('/verify-email/resend', authLimiter, resendVerificationEmail);
+router.post('/forgot-password', authLimiter, forgotPassword);
+router.post('/reset-password', authLimiter, resetPasswordHandler);
 router.post('/logout', logout);
 router.get('/me', authenticate, me);
 // Web staff only. A partner with a temporary password must use exactly this

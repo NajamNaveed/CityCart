@@ -166,16 +166,42 @@ A brand storefront must never display products belonging to another brand.
 Brands may have statuses such as:
 
 ```text
+PENDING
 ACTIVE
 INACTIVE
 SUSPENDED
+TERMINATED
 ```
 
-Only brands allowed by the platform should be visible to customers.
+Only brands allowed by the platform should be visible to customers. A brand
+starts `PENDING` and is invisible in discovery until its owner verifies the
+account email; `TERMINATED` is final and cannot be revived.
 
 A suspended brand should not accept new orders.
 
 Existing historical orders must remain accessible to authorized users.
+
+## Self-service brand sign-up
+
+`POST /api/v1/brands/apply` creates the owner login, the brand, its internal
+storefront record and its first shop (branch) in one transaction. The form asks
+only for data customers and operations actually need:
+
+```text
+owner:    name, email, password, phone
+brand:    name, city, description; optional logo/cover/contact
+first shop: name, block in that city; optional address and phone
+```
+
+The former separate "store name / store address / store contact" section has
+been removed: the internal `Store` record duplicated information customers never
+saw and is now created automatically from the brand name. The first branch is
+the shop customers discover. The shop phone defaults to the owner's phone.
+
+Brand names are unique platform-wide (case-insensitive). The brand stays
+`PENDING` and the owner unverified (no session) until the emailed verification
+link is opened; that link activates the brand and publishes the shop. A PENDING
+brand cannot be bought from.
 
 ---
 

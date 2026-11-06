@@ -1,9 +1,13 @@
+jest.mock('../../src/services/email.service');
+
 const mongoose = require('mongoose');
 
 const { connect, disconnect, clearAll } = require('./db');
 const City = require('../../src/models/city.model');
 const Brand = require('../../src/models/brand.model');
 const Store = require('../../src/models/store.model');
+const Branch = require('../../src/models/branch.model');
+const Block = require('../../src/models/block.model');
 const User = require('../../src/models/user.model');
 const Employee = require('../../src/models/employee.model');
 const Product = require('../../src/models/product.model');
@@ -13,7 +17,10 @@ const Order = require('../../src/models/order.model');
 const Payment = require('../../src/models/payment.model');
 const Delivery = require('../../src/models/delivery.model');
 const Counter = require('../../src/models/counter.model');
-const { applyForBrand, isBrandNameAvailable, isStoreNameAvailable } = require('../../src/services/brandOnboarding.service');
+const AuthToken = require('../../src/models/authToken.model');
+const { applyForBrand, isBrandNameAvailable } = require('../../src/services/brandOnboarding.service');
+const { verifyEmail } = require('../../src/services/emailAuth.service');
+const { sendEmail } = require('../../src/services/email.service');
 const { terminateBrand } = require('../../src/services/brandAdmin.service');
 const { updateBrandStatus } = require('../../src/services/brand.service');
 const { checkout } = require('../../src/services/order.service');
@@ -46,46 +53,69 @@ let n = 0;
 const ok = (r) => r.filter((x) => x.status === 'fulfilled');
 
 let city;
+let block;
+
 const application = (over = {}) => {
   n += 1;
   return {
     owner: { name: 'Owner', email: `owner${n}@shop.com`, password: 'secret123', phone: '+923001234567', ...over.owner },
     brand: { name: `Brand ${n}`, cityId: String(city._id), description: 'A fine brand with fine goods.', ...over.brand },
-    store: {
-      name: `Store ${n}`,
-      address: { addressLine: 'Shop 1, Main Road', city: 'Faisalabad' },
-      contact: { phone: '+923001234567' },
-      ...over.store,
-    },
+    branch: { name: `Shop ${n}`, blockId: String(block._id), ...over.branch },
   };
 };
 
+// The raw verification token exists only in the email; tests read it from there.
+const verificationTokenFor = (call = 0) =>
+  sendEmail.mock.calls[call][0].text.match(/verify-email\?token=([a-f0-9]{64})/)[1];
+
 beforeAll(async () => {
   await connect();
-  await Promise.all([City, Brand, Store, User, Employee, Product, Inventory, Cart, Order, Payment, Delivery, Counter].map((m) => m.init()));
+  await Promise.all(
+    [City, Brand, Store, Branch, Block, User, Employee, Product, Inventory, Cart, Order, Payment, Delivery, Counter, AuthToken].map((m) =>
+      m.init()
+    )
+  );
 });
 afterAll(disconnect);
 beforeEach(async () => {
   await clearAll();
   n += 1;
   city = await City.create({ name: `City${n}`, slug: `city${n}`, isActive: true });
+  block = await Block.create({
+    cityId: city._id,
+    name: `Block ${n}`,
+    slug: `block${n}`,
+    center: { type: 'Point', coordinates: [73.08, 31.42] },
+    isActive: true,
+  });
+  sendEmail.mockReset();
+  sendEmail.mockResolvedValue({ delivered: true });
 });
 
 describe('applyForBrand (real MongoDB)', () => {
-  it('creates ACTIVE brand + BRAND_ADMIN owner + store together, instantly', async () => {
-    const { brand, store, user } = await applyForBrand(application({ owner: { email: 'Sara@Shop.com' }, brand: { name: 'Fresh Kicks' }, store: { name: 'Fresh Kicks Store' } }));
+  it('creates a PENDING brand, unverified owner, internal store and first shop together', async () => {
+    const { brand, store, branch, user } = await applyForBrand(
+      application({ brand: { name: 'Fresh Kicks' }, branch: { name: 'Fresh Kicks Main' } })
+    );
 
-    expect(brand).toMatchObject({ name: 'Fresh Kicks', slug: 'fresh-kicks', status: 'ACTIVE' });
-    expect(store).toMatchObject({ slug: 'fresh-kicks-store', isActive: true });
+    expect(brand).toMatchObject({ name: 'Fresh Kicks', slug: 'fresh-kicks', status: 'PENDING' });
+    expect(store).toMatchObject({ name: 'Fresh Kicks', slug: 'fresh-kicks' });
     expect(String(store.brandId)).toBe(String(brand._id));
-    expect(user.role).toBe('BRAND_ADMIN');
+    expect(branch).toMatchObject({ name: 'Fresh Kicks Main', blockId: block._id, phone: '+923001234567' });
+    expect(String(branch.brandId)).toBe(String(brand._id));
+    expect(branch.blockIds.map(String)).toEqual([String(block._id)]);
+    expect(user).toMatchObject({ role: 'BRAND_ADMIN', emailVerifiedAt: null });
     expect(String(user.brandId)).toBe(String(brand._id));
-    expect(user.email).toBe('sara@shop.com');
     const stored = await User.findById(user._id).select('+passwordHash');
     expect(stored.passwordHash).toMatch(/^\$2[aby]\$/);
+
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    expect(sendEmail.mock.calls[0][0].to).toBe(user.email);
+    expect(sendEmail.mock.calls[0][0].text).toContain('/verify-email?token=');
+    expect(await AuthToken.countDocuments({ userId: user._id, type: 'EMAIL_VERIFY' })).toBe(1);
   });
 
-  it('ROLLS BACK everything if the store cannot be created (no orphan brand or login)', async () => {
+  it('ROLLS BACK everything if the store cannot be created (no orphan brand, login or shop)', async () => {
     const spy = jest.spyOn(Store, 'create').mockRejectedValueOnce(new Error('store write failed'));
     await expect(applyForBrand(application())).rejects.toThrow('store write failed');
     spy.mockRestore();
@@ -93,32 +123,43 @@ describe('applyForBrand (real MongoDB)', () => {
     expect(await Brand.countDocuments()).toBe(0);
     expect(await User.countDocuments()).toBe(0);
     expect(await Store.countDocuments()).toBe(0);
+    expect(await Branch.countDocuments()).toBe(0);
+    expect(await AuthToken.countDocuments()).toBe(0);
+    expect(sendEmail).not.toHaveBeenCalled();
   });
 
-  it('brand and store names are unique case-insensitively (and across punctuation)', async () => {
-    await applyForBrand(application({ brand: { name: 'Fresh Kicks' }, store: { name: 'Kicks Corner' } }));
+  it('brand names are unique case-insensitively (and across punctuation)', async () => {
+    await applyForBrand(application({ brand: { name: 'Fresh Kicks' } }));
 
     await expect(applyForBrand(application({ brand: { name: 'FRESH KICKS' } }))).rejects.toMatchObject({ status: 409 });
     await expect(applyForBrand(application({ brand: { name: 'fresh-kicks!' } }))).rejects.toMatchObject({ status: 409 });
-    await expect(applyForBrand(application({ store: { name: 'kicks corner' } }))).rejects.toMatchObject({ status: 409 });
-    await expect(applyForBrand(application({ owner: { email: 'OWNER1@shop.com' } }))).resolves.toBeTruthy(); // unrelated
+    await expect(applyForBrand(application({ owner: { email: 'unrelated@shop.com' } }))).resolves.toBeTruthy();
     expect(await Brand.countDocuments()).toBe(2);
   });
 
-  it('the live name checks agree with what the application enforces', async () => {
+  it('the live name check agrees with what the application enforces', async () => {
     expect(await isBrandNameAvailable('Fresh Kicks')).toBe(true);
-    await applyForBrand(application({ brand: { name: 'Fresh Kicks' }, store: { name: 'Fresh Store' } }));
+    await applyForBrand(application({ brand: { name: 'Fresh Kicks' } }));
     expect(await isBrandNameAvailable('FRESH KICKS')).toBe(false);
-    expect(await isStoreNameAvailable('fresh store')).toBe(false);
-    expect(await isStoreNameAvailable('Another Store')).toBe(true);
+    expect(await isBrandNameAvailable('Another Brand')).toBe(true);
     expect(await isBrandNameAvailable('!!!')).toBe(false);
   });
 
-  it('rejects an inactive or unknown city and a taken email', async () => {
+  it('rejects an inactive or unknown city, a block outside the city, and a taken email', async () => {
     await City.updateOne({ _id: city._id }, { $set: { isActive: false } });
     await expect(applyForBrand(application())).rejects.toMatchObject({ status: 400 });
 
     await City.updateOne({ _id: city._id }, { $set: { isActive: true } });
+    const otherCity = await City.create({ name: `Other${n}`, slug: `other${n}`, isActive: true });
+    const foreignBlock = await Block.create({
+      cityId: otherCity._id,
+      name: 'Foreign',
+      slug: 'foreign',
+      center: { type: 'Point', coordinates: [73.1, 31.5] },
+      isActive: true,
+    });
+    await expect(applyForBrand(application({ branch: { blockId: String(foreignBlock._id) } }))).rejects.toMatchObject({ status: 400 });
+
     await applyForBrand(application({ owner: { email: 'same@shop.com' } }));
     await expect(applyForBrand(application({ owner: { email: 'same@shop.com' } }))).rejects.toMatchObject({ status: 409 });
   });
@@ -132,15 +173,7 @@ describe('applyForBrand (real MongoDB)', () => {
     expect(await Brand.countDocuments()).toBe(1);
     expect(await User.countDocuments()).toBe(1);
     expect(await Store.countDocuments()).toBe(1);
-  });
-
-  it('6 concurrent applications for the SAME store name: exactly one wins, no orphans', async () => {
-    const results = await Promise.allSettled(
-      Array.from({ length: 6 }, () => applyForBrand(application({ store: { name: 'Race Store' } })))
-    );
-    expect(ok(results)).toHaveLength(1);
-    expect(await Brand.countDocuments()).toBe(1);
-    expect(await User.countDocuments()).toBe(1);
+    expect(await Branch.countDocuments()).toBe(1);
   });
 
   it('6 concurrent applications with the SAME email: exactly one wins', async () => {
@@ -153,6 +186,40 @@ describe('applyForBrand (real MongoDB)', () => {
   });
 });
 
+describe('email verification publishes the brand (real MongoDB)', () => {
+  it('activates the brand and the owner, and the link works exactly once', async () => {
+    const { brand, user } = await applyForBrand(application({ brand: { name: 'Fresh Kicks' } }));
+    const token = verificationTokenFor();
+
+    await expect(verifyEmail(token)).resolves.toEqual({ verified: true });
+    expect((await Brand.findById(brand._id)).status).toBe('ACTIVE');
+    expect((await User.findById(user._id)).emailVerifiedAt).toBeInstanceOf(Date);
+
+    // Two clicks on the same link: the second claims nothing.
+    await expect(verifyEmail(token)).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('refuses an expired link and never activates the brand', async () => {
+    const { brand, user } = await applyForBrand(application());
+    const token = verificationTokenFor();
+    await AuthToken.updateMany({ userId: user._id, type: 'EMAIL_VERIFY' }, { $set: { expiresAt: new Date(Date.now() - 1000) } });
+
+    await expect(verifyEmail(token)).rejects.toMatchObject({ status: 400 });
+    expect((await Brand.findById(brand._id)).status).toBe('PENDING');
+  });
+
+  it('6 concurrent clicks: only one activation, and only one branded welcome', async () => {
+    const { brand, user } = await applyForBrand(application());
+    const token = verificationTokenFor();
+
+    const results = await Promise.allSettled(Array.from({ length: 6 }, () => verifyEmail(token)));
+
+    expect(ok(results)).toHaveLength(1);
+    expect((await Brand.findById(brand._id)).status).toBe('ACTIVE');
+    expect((await User.findById(user._id)).emailVerifiedAt).toBeInstanceOf(Date);
+  });
+});
+
 describe('terminateBrand (real MongoDB)', () => {
   const input = {
     shippingAddress: { fullName: 'John', phone: '+923001234567', addressLine: 'Street 1', city: 'Lahore', additionalInstructions: 'Gate 2, ring the bell.' },
@@ -162,6 +229,9 @@ describe('terminateBrand (real MongoDB)', () => {
   // A live brand with one product (stock 20) and orders in various states.
   async function scenario() {
     const { brand, user: owner } = await applyForBrand(application());
+    // This suite is about termination, not onboarding: publish the shop first.
+    await Brand.updateOne({ _id: brand._id }, { $set: { status: 'ACTIVE' } });
+    await User.updateOne({ _id: owner._id }, { $set: { emailVerifiedAt: new Date() } });
     const employeeUser = await User.create({ name: 'Emp', email: `emp${++n}@x.com`, passwordHash: 'x', role: 'BRAND_EMPLOYEE', brandId: brand._id });
     await Employee.create({ userId: employeeUser._id, brandId: brand._id, permissions: ['orders.view'] });
     const product = await Product.create({

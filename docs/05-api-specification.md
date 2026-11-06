@@ -138,6 +138,50 @@ then restricted to `GET /auth/me`, `PATCH /auth/password` and
 `POST /auth/logout` until they choose their own password; every other request
 answers `403` with `code: "PASSWORD_CHANGE_REQUIRED"`.
 
+### Activation
+
+A self-registered account starts **unverified** and receives a single-use
+verification link by email (24 hours by default). Registration does not start a
+session: the `201` response contains a message and the safe user object, but no
+`Set-Cookie` and no `token`, for both web and app clients.
+
+```json
+{
+  "success": true,
+  "message": "Check your email to verify your account.",
+  "user": { "id": "user_id", "name": "John Doe", "email": "john@example.com", "role": "CUSTOMER", "emailVerified": false }
+}
+```
+
+Until the link is opened, sign-in is refused **after** the password is accepted,
+so the check never reveals whether an address exists:
+
+```json
+{
+  "success": false,
+  "message": "Please verify your email before signing in. Check your inbox for the link.",
+  "code": "EMAIL_NOT_VERIFIED"
+}
+```
+
+### Email verification and password reset
+
+| Method | Path | Body | Purpose |
+| ------ | ---- | ---- | ------- |
+| `POST` | `/api/v1/auth/verify-email` | `{ "token": "..." }` | Confirm the address (single use) |
+| `POST` | `/api/v1/auth/verify-email/resend` | `{ "email": "...", "portal": "customer\|brand" }` | Send a fresh verification link |
+| `POST` | `/api/v1/auth/forgot-password` | `{ "email": "...", "portal": "customer\|brand" }` | Send a reset link (60 minutes) |
+| `POST` | `/api/v1/auth/reset-password` | `{ "token": "...", "newPassword": "..." }` | Set a new password |
+
+`portal` defaults to `customer`. Resend and forgot-password always answer `200`
+with the same message whether or not the address belongs to an account, so the
+endpoints cannot be used to discover registered emails. Invalid, expired or
+already-used links answer `400` with `code: "INVALID_TOKEN"`. A successful
+password reset signs out every existing session (`passwordVersion` is bumped),
+and — because opening the link proves control of the inbox — also verifies an
+unverified account and publishes a `PENDING` brand. Both link types work once
+and can be reissued; issuing a new one invalidates the previous link.
+
 ---
 
 ## Login
@@ -174,9 +218,9 @@ The JWT must not be returned unnecessarily in the JSON response when HTTP-only c
 
 ### Native app clients
 
-The shopper mobile app (docs/19) sends `X-Client: mobile` on `POST /auth/login`
-and `POST /auth/register`. For that request only, the response also contains
-the session token and no cookie is set:
+The shopper mobile app (docs/19) sends `X-Client: mobile` on `POST /auth/login`.
+For that request only, the response also contains the session token and no
+cookie is set:
 
 ```json
 {
@@ -192,6 +236,8 @@ This is for customers only: `POST /auth/brand/login` and `/auth/admin/login`
 answer `403` with `code: "WEB_ONLY"` to `X-Client: mobile`, and a Bearer token
 of a seller or admin account is refused with `403 WEB_ONLY` on every endpoint.
 The web client does not send `X-Client` and never receives a token in a body.
+`POST /auth/register` never returns a token or cookie in either client: the
+account must be verified first (see Activation above).
 See docs/06 (Native App Sessions).
 
 ### Staff and Delivery app sign-in

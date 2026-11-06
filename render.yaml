@@ -45,3 +45,15 @@ services:
         sync: false
       - key: CLOUDINARY_API_SECRET
         sync: false
+      # Transactional email over Brevo's HTTPS API (Render free blocks SMTP).
+      # Without these, verification/reset links cannot be delivered in production.
+      - key: BREVO_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false # a sender address verified in Brevo
+      - key: EMAIL_FROM_NAME
+        value: CityCart
+      - key: EMAIL_VERIFY_TTL_HOURS
+        value: 24
+      - key: PASSWORD_RESET_TTL_MINUTES
+        value: 60

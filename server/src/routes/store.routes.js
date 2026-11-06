@@ -1,7 +1,6 @@
 const express = require('express');
 
 const { getById, me, update, create } = require('../controllers/store.controller');
-const { checkStoreName } = require('../controllers/brandOnboarding.controller');
 const { getStoreByIdRaw } = require('../services/store.service');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
@@ -34,7 +33,6 @@ router.post(
 );
 
 // Public
-router.get('/check-name', checkStoreName); // must stay above '/:id'
 router.get('/:id', getById);
 
 // store.update + correct brand ownership (docs/05 §10). requirePermission
