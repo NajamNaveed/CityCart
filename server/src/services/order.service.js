@@ -15,6 +15,7 @@ const { activeBlocksContaining } = require('./block.service');
 const { createAddress } = require('./address.service');
 const { deliveryForCustomer } = require('../utils/deliveryView');
 const { evaluateLine } = require('./cart.service');
+const { refreshSellerBillingState } = require('./billing.service');
 const { deductStock, restockStock, getStockStatus, InventoryError } = require('./inventory.service');
 const { closeActiveAdjustment, listAdjustmentsForOrder } = require('./orderAdjustmentStock.service');
 const {
@@ -149,11 +150,34 @@ async function checkout(userId, { shippingAddress, paymentMethod, deliveryLocati
         lines.push({ product, quantity: item.quantity });
       }
     });
+    // A seller whose bill is RESTRICTED or FROZEN cannot take new orders
+    // (docs/15 §9). The state is re-derived here, not only by the daily job,
+    // so a stale job can never let a frozen seller sell.
+    if (issues.length === 0) {
+      for (const brand of brands) {
+        const state = await refreshSellerBillingState('BRAND', brand._id, { session });
+        if (state && ['RESTRICTED', 'FROZEN'].includes(state.status)) {
+          for (const line of lines.filter((l) => String(l.product.brandId) === String(brand._id))) {
+            issues.push({
+              productId: line.product._id,
+              name: line.product.name,
+              code: 'SELLER_BILLING_RESTRICTED',
+              brandName: brand.name,
+            });
+          }
+        }
+      }
+    }
+
     if (issues.length > 0) {
-      throw new OrderError(409, 'Some items in your cart are no longer available.', {
-        code: 'CHECKOUT_ISSUES',
-        issues,
-      });
+      const billingOnly = issues.every((issue) => issue.code === 'SELLER_BILLING_RESTRICTED');
+      throw new OrderError(
+        409,
+        billingOnly
+          ? 'Some sellers in your cart cannot take new orders right now.'
+          : 'Some items in your cart are no longer available.',
+        { code: 'CHECKOUT_ISSUES', issues }
+      );
     }
 
     // 1b. Every store in the cart must deliver to the pin: it needs an active shop

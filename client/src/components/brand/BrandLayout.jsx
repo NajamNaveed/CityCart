@@ -17,11 +17,13 @@ import {
   Star,
   Truck,
   Users,
+  Wallet,
   Warehouse,
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useChat } from '../../hooks/useChat'
 import { useCan } from '../../hooks/useCan'
+import BillingAlert from '../billing/BillingAlert'
 import NotificationBell from '../NotificationBell'
 import Drawer from '../ui/Drawer'
 import Menu from '../ui/Menu'
@@ -37,6 +39,7 @@ const NAV = [
   ['/brand/riders', 'Riders', false, 'riders.view', Bike],
   ['/brand/reviews', 'Reviews', false, 'products.view', Star],
   ['/brand/analytics', 'Analytics', false, 'analytics.view', ChartLine],
+  ['/brand/billing', 'Billing', false, 'brand.update', Wallet],
   ['/brand/team', 'Team', false, 'employees.view', Users],
   ['/brand/inventory', 'Quick inventory', false, 'inventory.manage', Warehouse],
   ['/brand/branches', 'Branches', false, 'brand.update', MapPin],
@@ -63,7 +66,7 @@ function SidebarNav({ onNavigate }) {
   const { unread } = useChat()
   return (
     <nav aria-label="Dashboard" className="space-y-1">
-      {NAV.filter(([to, , , permission]) => (!permission || can(permission)) && ((to !== '/brand/settings' && to !== '/brand/inventory') || user.role === 'BRAND_ADMIN')).map(([to, label, end, , Icon]) => (
+      {NAV.filter(([to, , , permission]) => (!permission || can(permission)) && (!['/brand/settings', '/brand/inventory', '/brand/billing'].includes(to) || user.role === 'BRAND_ADMIN')).map(([to, label, end, , Icon]) => (
         <NavLink key={to} to={to} end={end} className={sideLink} onClick={onNavigate}>
           {({ isActive }) => (
             <>
@@ -191,6 +194,8 @@ export default function BrandLayout() {
           </div>
         </div>
       </header>
+
+      <BillingAlert billingPath="/brand/billing" />
 
       {user.access?.restricted && (
         <div className="bg-clay px-4 py-2 text-center text-sm text-white">

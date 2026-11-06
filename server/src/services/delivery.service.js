@@ -16,6 +16,7 @@ const {
 const { generateDeliveryCode } = require('../utils/deliveryCode');
 const { issueReceiptBestEffort } = require('./receipt.service');
 const { duplicateFlags } = require('./payment.service');
+const { recordOrderCommission } = require('./billing.service');
 const { buildCompletion, returnPhotoBelongsToDelivery } = require('./return.service');
 const { isConfigured } = require('./upload.service');
 const { deliveryForCustomer } = require('../utils/deliveryView');
@@ -253,6 +254,12 @@ async function applyDeliveryStatus({
         session,
         verifiedPayment,
       });
+    }
+
+    // One 1% entry per delivered order, in the same transaction (docs/15 §6.1).
+    // Fully returned orders are RETURNED and never reach this branch.
+    if (orderTarget === 'DELIVERED') {
+      await recordOrderCommission(order, { session });
     }
   }
 

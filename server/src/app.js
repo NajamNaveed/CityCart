@@ -53,6 +53,8 @@ const adminServiceProviderRoutes = require('./routes/adminServiceProvider.routes
 const adminServiceCategoryRoutes = require('./routes/adminServiceCategory.routes');
 const adminServiceBookingRoutes = require('./routes/adminServiceBooking.routes');
 const adminServiceReviewRoutes = require('./routes/adminServiceReview.routes');
+const billingRoutes = require('./routes/billing.routes');
+const adminBillingRoutes = require('./routes/adminBilling.routes');
 
 const requestLogger = require('./middleware/requestLogger');
 const { apiLimiter } = require('./middleware/rateLimiters');
@@ -126,6 +128,8 @@ app.use('/api/v1/uploads', uploadRoutes);
 app.use('/api/v1/reviews', reviewRoutes);
 app.use('/api/v1/admin/reviews', adminReviewRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/admin/billing', adminBillingRoutes);
+app.use('/api/v1/billing', billingRoutes);
 app.use('/api/v1/admin', adminSettingsRoutes);
 app.use('/api/v1/admin', adminUsersRoutes);
 app.use('/api/v1/admin/partners', adminPartnerRoutes);

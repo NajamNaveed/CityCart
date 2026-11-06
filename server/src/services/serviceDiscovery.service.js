@@ -59,6 +59,8 @@ async function getPublicProvider(slug) {
     slug,
     status: 'ACTIVE',
     verification: 'VERIFIED',
+    // A FROZEN provider is hidden from the public (docs/15 §9).
+    billingStatus: { $ne: 'FROZEN' },
   }).populate(PUBLIC_PROVIDER_POPULATE);
   if (!provider) throw new ServiceDiscoveryError(404, 'Provider not found.');
 
@@ -84,6 +86,7 @@ async function getPublicProvider(slug) {
     ratingCount: provider.ratingCount,
     completedBookings: provider.completedBookings,
     isNew: provider.completedBookings < 10,
+    acceptingNewOrders: !['RESTRICTED', 'FROZEN'].includes(provider.billingStatus),
     category: category ? { _id: category._id, name: category.name, slug: category.slug } : null,
     city: city ? { _id: city._id, name: city.name } : null,
     block: blockPublic(block),
@@ -139,7 +142,7 @@ async function discoverServices({
   const effectiveRadius = scope === 'radius' || (scope === 'area' && radiusKm !== undefined) ? radiusKm : null;
 
   // ---- 2. Tenant filter ---------------------------------------------------
-  const filter = { status: 'ACTIVE', verification: 'VERIFIED' };
+  const filter = { status: 'ACTIVE', verification: 'VERIFIED', billingStatus: { $ne: 'FROZEN' } };
   const effectiveCityId = cityId || (block && String(block.cityId));
   if (effectiveCityId) filter.cityId = effectiveCityId;
   if (scope === 'block') {
@@ -164,7 +167,12 @@ async function discoverServices({
     const regex = { $regex: escapeRegex(search), $options: 'i' };
     const [nameMatches, offeringMatches] = await Promise.all([
       ServiceProvider.find(
-        { status: 'ACTIVE', verification: 'VERIFIED', $or: [{ displayName: regex }, { bio: regex }] },
+        {
+          status: 'ACTIVE',
+          verification: 'VERIFIED',
+          billingStatus: { $ne: 'FROZEN' },
+          $or: [{ displayName: regex }, { bio: regex }],
+        },
         '_id'
       ).limit(OFFERING_HIT_CAP),
       ServiceOffering.find(
@@ -221,6 +229,7 @@ async function discoverServices({
       ratingCount: provider.ratingCount,
       completedBookings: provider.completedBookings,
       isNew: provider.completedBookings < 10,
+      acceptingNewOrders: !['RESTRICTED', 'FROZEN'].includes(provider.billingStatus),
       category: category ? { _id: category._id, name: category.name, slug: category.slug } : null,
       city: city ? { _id: city._id, name: city.name } : null,
       block: providerBlock,

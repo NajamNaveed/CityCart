@@ -18,6 +18,8 @@ jest.mock('../src/models/delivery.model');
 jest.mock('../src/models/counter.model');
 jest.mock('../src/models/orderAdjustment.model');
 jest.mock('../src/models/return.model');
+jest.mock('../src/models/sellerInvoice.model');
+jest.mock('../src/models/platformSettings.model');
 jest.mock('../src/models/product.model', () => {
   const actual = jest.requireActual('../src/models/product.model');
   return {
@@ -47,6 +49,8 @@ const Payment = require('../src/models/payment.model');
 const Counter = require('../src/models/counter.model');
 const OrderAdjustment = require('../src/models/orderAdjustment.model');
 const Return = require('../src/models/return.model');
+const SellerInvoice = require('../src/models/sellerInvoice.model');
+const PlatformSettings = require('../src/models/platformSettings.model');
 const Product = require('../src/models/product.model');
 const Inventory = require('../src/models/inventory.model');
 const Block = require('../src/models/block.model');
@@ -60,6 +64,7 @@ const { getAuthCookie } = require('./helpers/testAuth');
 
 const oid = () => new mongoose.Types.ObjectId();
 const q = (value) => ({ session: () => Promise.resolve(value) });
+const DAY = 24 * 60 * 60 * 1000;
 
 const address = {
   fullName: 'John Doe',
@@ -129,7 +134,27 @@ beforeEach(() => {
   Branch.find.mockResolvedValue([]);
   OrderAdjustment.find.mockReturnValue({ sort: () => Promise.resolve([]) });
   Return.findOne.mockResolvedValue(null);
+  // Checkout re-derives each brand's billing state (docs/15 §9). By default
+  // every brand is ACTIVE with no unpaid invoice; tests override these mocks.
+  Brand.findById.mockImplementation((id) => ({
+    select: () => ({
+      session: () => Promise.resolve({ _id: id, billingStatus: 'ACTIVE', billingGraceUntil: null, billingOverride: null }),
+    }),
+  }));
+  Brand.updateOne.mockResolvedValue({});
+  SellerInvoice.findOne.mockReturnValue({
+    sort: () => ({ session: () => Promise.resolve(null) }),
+  });
+  PlatformSettings.findOne.mockReturnValue({ lean: () => Promise.resolve(null) });
 });
+
+// Makes the oldest unpaid invoice of every brand `daysOverdue` days past due.
+function overdueBy(daysOverdue) {
+  const dueAt = new Date(Date.now() - daysOverdue * DAY);
+  SellerInvoice.findOne.mockReturnValue({
+    sort: () => ({ session: () => Promise.resolve({ _id: oid(), dueAt }) }),
+  });
+}
 
 describe('order access control', () => {
   it('401 when unauthenticated', async () => {
@@ -354,6 +379,57 @@ describe('POST /api/v1/orders (checkout)', () => {
     expect(notifications.notifyBrandOfNewOrders).toHaveBeenCalledTimes(1);
     const notified = notifications.notifyBrandOfNewOrders.mock.calls[0][0];
     expect(notified.map((o) => String(o.brandId))).toEqual([String(brandA._id), String(brandB._id)]);
+  });
+
+  describe('seller billing', () => {
+    const oneItem = () => {
+      const p = mkProduct(brandA);
+      return { lines: [[p, 1]], products: [p], p };
+    };
+
+    it('409 SELLER_BILLING_RESTRICTED when a seller is 10 days past due, and creates nothing', async () => {
+      const world = oneItem();
+      const { p } = world;
+      checkoutWorld(world);
+      overdueBy(10);
+
+      const res = await post();
+
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe('CHECKOUT_ISSUES');
+      const issue = res.body.issues.find((i) => i.code === 'SELLER_BILLING_RESTRICTED');
+      expect(issue).toBeDefined();
+      expect(String(issue.productId)).toBe(String(p._id));
+      expect(Order.create).not.toHaveBeenCalled();
+      expect(Inventory.findOneAndUpdate).not.toHaveBeenCalled();
+      expect(Brand.updateOne).toHaveBeenCalledWith(
+        { _id: brandA._id },
+        expect.objectContaining({ $set: expect.objectContaining({ billingStatus: 'RESTRICTED' }) }),
+        expect.anything()
+      );
+    });
+
+    it('409 when a seller is 15 days past due (FROZEN) and creates nothing', async () => {
+      checkoutWorld(oneItem());
+      overdueBy(15);
+
+      const res = await post();
+
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe('CHECKOUT_ISSUES');
+      expect(res.body.issues.some((i) => i.code === 'SELLER_BILLING_RESTRICTED')).toBe(true);
+      expect(Order.create).not.toHaveBeenCalled();
+    });
+
+    it('a seller 2 days past due is still WARNING and can take the order', async () => {
+      checkoutWorld(oneItem());
+      overdueBy(2);
+
+      const res = await post();
+
+      expect(res.status).toBe(201);
+      expect(Order.create).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('deducts stock per line inside the session, in productId order', async () => {

@@ -32,6 +32,34 @@ export async function uploadProviderImage(file, onProgress) {
   return uploadToCloudinary('/uploads/provider-signature', file, onProgress)
 }
 
+/**
+ * A seller's payment receipt is private (docs/15 §8). The signature puts it in
+ * an `authenticated` asset of the seller's own billing folder, and the result
+ * is the Cloudinary public id — never a public URL.
+ */
+export async function uploadBillingReceipt(file, onProgress) {
+  const { data } = await api.post('/billing/receipt-signature')
+  const sig = data.upload
+
+  const form = new FormData()
+  form.append('file', file)
+  form.append('api_key', sig.apiKey)
+  form.append('timestamp', String(sig.timestamp))
+  form.append('folder', sig.folder)
+  form.append('allowed_formats', sig.allowedFormats)
+  form.append('type', sig.type)
+  form.append('signature', sig.signature)
+
+  try {
+    const res = await axios.post(sig.uploadUrl, form, {
+      onUploadProgress: (e) => e.total && onProgress?.(e.loaded / e.total),
+    })
+    return { publicId: res.data.public_id, fingerprint: res.data.public_id }
+  } catch (err) {
+    throw new Error(err.response?.data?.error?.message || 'The receipt could not be uploaded. Please try again.')
+  }
+}
+
 async function uploadToCloudinary(signaturePath, file, onProgress) {
   const { data } = await api.post(signaturePath)
   const sig = data.upload

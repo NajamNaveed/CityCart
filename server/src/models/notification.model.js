@@ -48,6 +48,13 @@ const NOTIFICATION_TYPES = [
   'SERVICE_BOOKING_CANCELLED',
   'SERVICE_BOOKING_DECLINED',
   'SERVICE_REVIEW_REPLIED',
+  // Seller billing (docs/15 §9).
+  'BILLING_WARNING',
+  'BILLING_RESTRICTED',
+  'BILLING_FROZEN',
+  'BILLING_CLAIM_VERIFIED',
+  'BILLING_CLAIM_REJECTED',
+  'BILLING_HELP_ANSWERED',
 ];
 // NEW_REVIEW is the one type added beyond doc12 §4's initial list: §6 lists
 // "New review received" as a brand notification example, and §4 explicitly

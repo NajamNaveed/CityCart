@@ -60,7 +60,7 @@ If a seller does not pay, the account is warned, restricted, then frozen.
 | Rule | Value |
 |---|---|
 | Rate | **1%** (`rateBps = 100`) |
-| Order base | `order.netTotal - deliveryFee - tax` |
+| Order base | `order.netTotal - deliveryFee - tax` (rupees; converted to paisa) |
 | Service base | Confirmed final amount of the booking |
 | Trigger | Order `DELIVERED`; booking `CONFIRMED` |
 | Excluded | Cancelled/rejected orders, door-returned lines, unconfirmed bookings |
@@ -136,10 +136,14 @@ platform total.
 When the delivery is completed and the order becomes `DELIVERED`:
 
 ```text
-eligible = order.netTotal - order.deliveryFee - order.tax
+eligibleRupees = order.netTotal - order.deliveryFee - order.tax
+eligiblePaisa  = round(eligibleRupees × 100)
+commission     = 1% of eligiblePaisa, half-up
 ```
 
-`netTotal` already excludes door-returned lines. A fully returned order
+Order totals are stored in rupees (`08-order-management.md` §6) while the
+ledger is integer paisa, so the service converts the base before taking the
+percentage. `netTotal` already excludes door-returned lines. A fully returned order
 (`RETURNED`) does not create a commission entry. A cancelled order never does.
 
 ### 6.2 Booking confirmed
@@ -172,6 +176,7 @@ Collection: `sellerinvoices`
 _id
 sellerType / sellerId
 periodStart / periodEnd        calendar month, Asia/Karachi
+periodKey                      YYYY-MM of periodStart, Asia/Karachi
 salesPaisa                     sum of eligible sales
 commissionPaisa                sum of SALE entries
 creditsPaisa                   reversals and overpayments
@@ -215,6 +220,9 @@ comment
 status          SUBMITTED | VERIFIED | REJECTED
 verifiedBy / verifiedAt
 rejectionReason required when REJECTED
+creditPaisa     overpayment kept for a later invoice (0 by default)
+creditAppliedInvoiceId   the invoice that consumed the credit (null until then)
+currency        PKR
 createdAt / updatedAt
 ```
 

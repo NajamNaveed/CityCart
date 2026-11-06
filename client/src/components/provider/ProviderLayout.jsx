@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
-import { ExternalLink, CalendarClock, CalendarDays, LayoutDashboard, LogOut, MapPin, Menu as MenuIcon, Settings, Sparkles, Star, Wrench } from 'lucide-react'
+import { ExternalLink, CalendarClock, CalendarDays, LayoutDashboard, LogOut, MapPin, Menu as MenuIcon, Settings, Sparkles, Star, Wallet, Wrench } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
+import BillingAlert from '../billing/BillingAlert'
 import NotificationBell from '../NotificationBell'
 import Drawer from '../ui/Drawer'
 
@@ -12,6 +13,7 @@ const NAV = [
   ['/provider/offerings', 'Services & prices', false, Wrench],
   ['/provider/availability', 'Working hours', false, CalendarDays],
   ['/provider/reviews', 'Reviews', false, Star],
+  ['/provider/billing', 'Billing', false, Wallet],
   ['/provider/profile', 'Service profile', false, Settings],
   ['/provider/area', 'Service area', false, MapPin],
 ]
@@ -109,6 +111,8 @@ export default function ProviderLayout() {
           </div>
         </div>
       </header>
+
+      <BillingAlert billingPath="/provider/billing" />
 
       {pending && (
         <div className="flex items-center justify-center gap-2 bg-warning-soft px-4 py-2 text-center text-sm text-warning">

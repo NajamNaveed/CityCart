@@ -1,6 +1,6 @@
 # 24 — Marketplace v3: Services, Seller Billing, Redesign, Flutter and Security
 
-Status: **approved 2026-11-06; Phases 0, 1, 2a, 2b and 2c implemented.** This document is the
+Status: **approved 2026-11-06; Phases 0, 1, 2a, 2b, 2c and 3 implemented. Phase 4 is next.** This document is the
 authoritative plan for the v3 programme. Where it conflicts with an earlier
 document, this document wins until the earlier document is updated.
 
@@ -113,6 +113,9 @@ starts before the previous phase's exit gate passes.
 | **7** | Flutter Delivery app | 5 | P0 parity |
 | **8** | Flutter Service Provider app (brand admin may follow) | 5, 2c | P0 parity |
 | **9** | Independent security audit, penetration test, performance and release hardening | all | No critical/high findings; release checklist signed off |
+
+Phase 3 is complete: the ledger, invoices, freeze ladder, claims, help and both
+billing UIs are implemented and tested. Phase 4 (web redesign) is next.
 
 Flutter phase 5 starts only after Phase 4 freezes design tokens and components,
 so the Flutter widgets are translations of a settled system rather than a
@@ -530,7 +533,7 @@ stored `rankScore`; no client input reaches the calculation.
 | Rule | Value |
 |---|---|
 | Rate | **1%** (`rateBps = 100`), configurable for future entries only |
-| Order base | `order.netTotal - deliveryFee - tax` (merchandise actually sold) |
+| Order base | `order.netTotal - deliveryFee - tax`, in rupees; converted to paisa before the percentage |
 | Service base | The confirmed final amount of the booking |
 | Trigger | Order `DELIVERED`; booking `CONFIRMED` |
 | Excluded | Cancelled orders, rejected orders, door-returned lines, unconfirmed bookings |
@@ -603,8 +606,11 @@ unique (invoiceId, reference, amountPaisa)        one claim per bank reference
 3. Invoices below **PKR 100** are not issued; their entries roll into the next
    month.
 4. The invoice is issued on the 1st and is due **7 days** later.
-5. A verified payment claim or a super-admin manual mark moves the invoice to
-   `PAID`/`PARTIALLY_PAID`. Overpayment becomes a credit on the next invoice.
+5. A verified payment claim moves the invoice to `PAID`/`PARTIALLY_PAID`.
+   Overpayment becomes a credit on the next invoice. A separate "mark paid
+   manually" endpoint is **not implemented**: the seller submits a claim and a
+   super admin verifies it, even when the money changed hands in cash. This
+   keeps one audit trail and one code path for every payment.
 6. A reversal after invoicing creates a negative entry in the next period. An
    invoice is never edited after issue; corrections are separate entries.
 
@@ -653,7 +659,8 @@ The super admin gets:
 * Verify/reject a claim (rejection requires a reason).
 * Freeze/unfreeze override with a reason and expiry.
 * Platform bank details editor.
-* Billing settings: rate, due days, grace days, minimum invoice, bank details.
+* Billing settings: rate, due days, restrict/freeze days, minimum invoice, bank
+  details.
 * Revenue and outstanding reports.
 
 ### 5.7 Removal of the old gateway

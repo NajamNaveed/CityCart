@@ -13,6 +13,9 @@ const STATUS_TONE = {
   REFUNDED: 'bad', PARTIALLY_REFUNDED: 'warn',
   PROPOSED: 'warn', ACCEPTED: 'good', REMOVED: 'warn', WITHDRAWN: 'quiet', EXPIRED: 'quiet', ORDER_CANCELLED: 'bad',
   SUSPENDED: 'warn', TERMINATED: 'bad', DRAFT: 'quiet', INACTIVE: 'quiet', ARCHIVED: 'quiet',
+  // Seller billing (docs/15 §9)
+  WARNING: 'warn', RESTRICTED: 'bad', FROZEN: 'bad', ISSUED: 'info', PARTIALLY_PAID: 'warn',
+  OVERDUE: 'bad', SUBMITTED: 'info', VOID: 'quiet', ACCRUED: 'info', INVOICED: 'info', REVERSED: 'quiet',
 }
 
 const TONES = {

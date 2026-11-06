@@ -102,6 +102,13 @@ EMPLOYEE_PERMISSION_CHANGED
 DELIVERY_ASSIGNED
 RETURN_IN_TRANSIT
 
+BILLING_WARNING
+BILLING_RESTRICTED
+BILLING_FROZEN
+BILLING_CLAIM_VERIFIED
+BILLING_CLAIM_REJECTED
+BILLING_HELP_ANSWERED
+
 SYSTEM_NOTIFICATION
 ```
 
@@ -707,3 +714,36 @@ push           Staff app, via the existing push bridge; data.orderId opens the o
 A return notification is **best effort**: a failure to notify never fails the delivery completion that created the return. Tests: `server/tests/returns.test.js` covers the return flow, and the seed (`server/scripts/demo/build.js`) creates a `RETURN_IN_TRANSIT` notification for every seeded return so the inbox shows one.
 
 
+
+---
+
+# 34. Seller Billing Notifications (added November 2026, Phase 3)
+
+Seller billing (docs/15) notifies the **seller tenant only** — the active
+`BRAND_ADMIN` owners of the brand, or the owner of the service provider. No
+other tenant ever receives these events.
+
+| Type | Recipient | When | Title / message |
+| ---- | --------- | ---- | --------------- |
+| `BILLING_WARNING` | the seller owners | the oldest invoice reaches its due date | “Payment due” / the amount and a link to Billing |
+| `BILLING_RESTRICTED` | the seller owners | the invoice is 7 days overdue | “New orders paused” / new orders and bookings are paused |
+| `BILLING_FROZEN` | the seller owners | the invoice is 14 days overdue | “Account frozen” / listings are hidden until payment |
+| `BILLING_CLAIM_VERIFIED` | the seller owners | a super admin verifies a payment claim | “Payment confirmed” / the amount and period |
+| `BILLING_CLAIM_REJECTED` | the seller owners | a super admin rejects a claim | “Payment could not be confirmed” / the reason |
+| `BILLING_HELP_ANSWERED` | the seller owners | a super admin resolves a help request | “Billing request answered” / the subject and answer |
+
+The transition notification is sent by the billing state refresh only when the
+status actually changes, so repeated requests do not spam the seller. `data`
+carries `status`, `amountDuePaisa`, `invoiceId` and the note/reason where
+applicable. Delivery uses the existing bridge:
+
+```text
+in-app inbox   always (persisted per userId)
+socket         notify() emits to each recipient
+push           web and provider surfaces; data.invoiceId opens Billing
+```
+
+Tests: `server/tests/billing.test.js` covers the transition and decision
+helpers, and the seed creates one of each type. `PAYMENT_FAILED` stays in the
+enum for historical notifications, but no v3 flow emits it because the customer
+gateway was removed in Phase 1.

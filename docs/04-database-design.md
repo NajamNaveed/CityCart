@@ -389,6 +389,10 @@ cityId
 status
 contact
 settings
+billingStatus          ACTIVE | WARNING | RESTRICTED | FROZEN (v3 Phase 3, §12f)
+billingCheckedAt
+billingGraceUntil / billingGraceReason / billingGraceBy
+billingOverride        { status, reason, until, by, at }
 createdAt
 updatedAt
 ```
@@ -646,7 +650,10 @@ verification     UNVERIFIED | VERIFIED | REJECTED
 ratingAvg / ratingCount
 completedBookings
 rankScore
-billingStatus    ACTIVE | WARNING | RESTRICTED | FROZEN
+billingStatus    ACTIVE | WARNING | RESTRICTED | FROZEN (v3 Phase 3, §12f)
+billingCheckedAt
+billingGraceUntil / billingGraceReason / billingGraceBy
+billingOverride  { status, reason, until, by, at }
 blockChangedAt   month of the last BLOCK change (pin moves do not count)
 blockHistory[]   { blockId, changedAt, changedBy }
 approvedBy / approvedAt
@@ -858,6 +865,132 @@ reviews after completion, review, cancellation and nightly. The formula and
 weights are in `server/src/services/serviceRanking.service.js`
 (`24-marketplace-v3-plan.md` §4.7); no client input is accepted. Scheduled jobs
 expire stale proposals, auto-confirm completed jobs and refresh rankings.
+
+---
+
+# 12f. Billing Models (v3 Phase 3)
+
+Seller billing (`15-commission-and-payouts.md`) uses four collections. Every
+amount is an **integer number of paisa**; `Brand` and `ServiceProvider` carry
+the derived `billingStatus`, grace and override fields listed in §9 and §12c.
+
+## CommissionEntry
+
+Collection: `commissionentries`
+
+```text
+_id
+sellerType          BRAND | SERVICE_PROVIDER
+sellerId            Brand._id or ServiceProvider._id
+sourceType          ORDER | SERVICE_BOOKING
+sourceId            Order._id or ServiceBooking._id
+eligibleAmountPaisa integer
+rateBps             rate at the time of the sale (100 = 1%)
+commissionPaisa     positive for SALE, negative for REVERSAL
+kind                SALE | REVERSAL
+status              ACCRUED | INVOICED | PAID | REVERSED
+occurredAt
+invoiceId           null until invoiced
+reversalOf          null | CommissionEntry._id
+reason              reversal note
+currency            PKR
+createdAt / updatedAt
+```
+
+Indexes:
+
+```text
+(sourceType, sourceId) unique WHERE kind = SALE   one sale per source
+(sellerType, sellerId, status, occurredAt)
+invoiceId
+```
+
+Entries are never edited. A refund writes a negative `REVERSAL` pointing at the
+original, and the original becomes `REVERSED` once the reversal is invoiced.
+
+## SellerInvoice
+
+Collection: `sellerinvoices`
+
+```text
+_id
+sellerType / sellerId
+periodStart / periodEnd     Karachi calendar month
+periodKey                   YYYY-MM
+salesPaisa
+commissionPaisa
+creditsPaisa                reversals + applied overpayment credits
+paidPaisa
+amountDuePaisa
+status                      DRAFT | ISSUED | PARTIALLY_PAID | PAID | OVERDUE | VOID
+issuedAt
+dueAt                       issuedAt + 7 days
+paidAt
+createdBy                   SYSTEM or a super admin id
+currency                    PKR
+createdAt / updatedAt
+```
+
+Indexes:
+
+```text
+(sellerType, sellerId, periodStart) unique   one invoice per seller per month
+(sellerType, sellerId, status, dueAt)
+```
+
+An invoice below the configured minimum (PKR 100) is not created; its entries
+stay `ACCRUED` and roll into the next month.
+
+## SellerPaymentClaim
+
+Collection: `sellerpaymentclaims`
+
+```text
+_id
+invoiceId / sellerType / sellerId
+amountPaisa
+method          BANK_TRANSFER | JAZZCASH | EASYPAISA | OTHER
+reference       max 120
+receipt         { publicId, fingerprint }   private Cloudinary asset
+comment
+status          SUBMITTED | VERIFIED | REJECTED
+verifiedBy / verifiedAt
+rejectionReason
+creditPaisa             overpayment kept for a later invoice
+creditAppliedInvoiceId  invoice that consumed the credit, null until then
+currency        PKR
+createdAt / updatedAt
+```
+
+Indexes:
+
+```text
+(invoiceId, reference, amountPaisa) unique   no duplicate submission
+(sellerId), (status), (invoiceId)
+```
+
+Verification happens in a transaction with a conditional invoice update, so two
+admins cannot pay the same balance twice.
+
+## BillingHelpRequest
+
+Collection: `billinghelprequests`
+
+```text
+_id
+sellerType / sellerId
+subject          3–150 chars
+message          3–2000 chars
+status           OPEN | RESOLVED
+resolutionNote
+handledBy / handledAt
+createdAt / updatedAt
+```
+
+The super admin resolves a request with a note and the seller is notified.
+Admin billing actions (settings, invoice generation, claim decisions, freeze,
+grace, help) write `AdminAction` records (§12b); there is no separate
+`billingaudits` collection.
 
 ---
 
@@ -2080,26 +2213,28 @@ Backup strategy is part of the deployment and production-readiness work.
 
 # 44. Future Collections
 
-The architecture allows future collections. The v3 programme
-(`24-marketplace-v3-plan.md`) adds these collections when their phase starts:
+The v3 programme (`24-marketplace-v3-plan.md`) added these collections in
+Phases 2a–3 and they are implemented:
 
 ```text
-serviceofferings
-serviceavailabilities
-servicebookings
-serviceproposals
-serviceconversations
-servicemessages
-servicereviews
+servicecategories        §12c
+serviceproviders         §12c
+serviceofferings         §12d
+serviceavailabilities    §12e
+servicebookings          §12e
+serviceproposals         §12e
+serviceconversations     §12e
+servicemessages          §12e
+servicereviews           §12e
 
-commissionentries
-sellerinvoices
-sellerpaymentclaims
-billingaudits
+commissionentries        §12f
+sellerinvoices           §12f
+sellerpaymentclaims      §12f
+billinghelprequests      §12f
 ```
 
-`servicecategories` and `serviceproviders` belong to Phase 2a and are already
-implemented (§12c).
+Billing audits use the existing `adminactions` collection (§12b) rather than a
+dedicated collection.
 
 Still future and not part of v3:
 

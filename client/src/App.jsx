@@ -65,6 +65,7 @@ const ProviderBookings = lazy(() => import('./pages/provider/Bookings'))
 const ProviderBookingDetail = lazy(() => import('./pages/provider/BookingDetail'))
 const ProviderAvailability = lazy(() => import('./pages/provider/Availability'))
 const ProviderReviews = lazy(() => import('./pages/provider/Reviews'))
+const SellerBilling = lazy(() => import('./pages/billing/Billing'))
 const AdminLayout = lazy(() => import('./components/admin/AdminLayout'))
 const AdminLanding = lazy(() => import('./pages/admin/Landing'))
 const AdminBrands = lazy(() => import('./pages/admin/Brands'))
@@ -87,6 +88,7 @@ const AdminServiceBookings = lazy(() => import('./pages/admin/ServiceBookings'))
 const AdminServiceReviews = lazy(() => import('./pages/admin/ServiceReviews'))
 const AdminTeam = lazy(() => import('./pages/admin/Team'))
 const AdminActivity = lazy(() => import('./pages/admin/Activity'))
+const AdminBilling = lazy(() => import('./pages/admin/Billing'))
 
 function RouteFallback() {
   return <div className="flex min-h-[60vh] items-center justify-center text-sm text-muted">Loading…</div>
@@ -179,6 +181,7 @@ function App() {
                     <Route path="reviews" element={<ProviderReviews />} />
                     <Route path="profile" element={<ProviderProfile />} />
                     <Route path="area" element={<ProviderArea />} />
+                    <Route path="billing" element={<SellerBilling />} />
                     <Route path="notifications" element={<Notifications />} />
                   </Route>
                 </Route>
@@ -204,6 +207,7 @@ function App() {
                       <Route path="settings" element={<BrandSettings />} />
                       <Route path="branches" element={<BrandBranches />} />
                       <Route path="inventory" element={<InventoryHub />} />
+                      <Route path="billing" element={<SellerBilling />} />
                     </Route>
                     <Route path="notifications" element={<Notifications />} />
                   </Route>
@@ -235,6 +239,7 @@ function App() {
                     <Route element={<ProtectedRoute roles={['SUPER_ADMIN']} loginPath="/admin/login" />}>
                       <Route path="providers" element={<AdminProviders />} />
                       <Route path="providers/:id" element={<AdminProviderDetail />} />
+                      <Route path="billing" element={<AdminBilling />} />
                       <Route path="team" element={<AdminTeam />} />
                       <Route path="activity" element={<AdminActivity />} />
                     </Route>

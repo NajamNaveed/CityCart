@@ -66,6 +66,7 @@ export const ADMIN_NAV = [
   ['/admin/analytics', 'Analytics', false, 'ChartLine', [ADMIN_PERMISSIONS.ANALYTICS], false],
   ['/admin/users', 'Users', false, 'UsersRound', [ADMIN_PERMISSIONS.USERS], false],
   ['/admin/settings', 'Settings', false, 'Settings', [ADMIN_PERMISSIONS.SETTINGS], false],
+  ['/admin/billing', 'Billing', false, 'ReceiptText', [], true],
   ['/admin/team', 'Admin team', false, 'UserCog', [], true],
   ['/admin/activity', 'Activity', false, 'History', [], true],
 ]

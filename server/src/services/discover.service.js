@@ -68,12 +68,13 @@ async function discover({ q, scope, cityId, blockId, blockIds, radiusKm, lat, ln
   const effectiveRadius = scope === 'radius' || (scope === 'area' && radiusKm !== undefined) ? radiusKm : null;
 
   // ---- 2. Which brands could appear? -------------------------------------
-  const brandFilter = { status: 'ACTIVE' };
+  // A FROZEN seller's listings disappear from discovery (docs/15 §9).
+  const brandFilter = { status: 'ACTIVE', billingStatus: { $ne: 'FROZEN' } };
   const effectiveCityId = cityId || (block && String(block.cityId));
   if (effectiveCityId) {
     brandFilter.cityId = effectiveCityId;
   }
-  const brands = await Brand.find(brandFilter, '_id name slug logo');
+  const brands = await Brand.find(brandFilter, '_id name slug logo billingStatus');
   const brandById = new Map(brands.map((b) => [String(b._id), b]));
 
   const search = q ? q.trim() : '';
@@ -192,6 +193,8 @@ async function discover({ q, scope, cityId, blockId, blockIds, radiusKm, lat, ln
         name: brand.name,
         slug: brand.slug,
         logo: brand.logo,
+        // RESTRICTED sellers stay visible but cannot take new orders.
+        acceptingNewOrders: !['RESTRICTED', 'FROZEN'].includes(brand.billingStatus),
         nearestKm: sorted[0].distanceKm,
         branchCount: sorted.length,
         branches: sorted,

@@ -92,6 +92,24 @@ const serviceProviderSchema = new mongoose.Schema(
       type: String,
       enum: BILLING_STATUSES,
       default: 'ACTIVE',
+      index: true,
+    },
+    billingCheckedAt: { type: Date },
+    billingGraceUntil: { type: Date, default: null },
+    billingGraceReason: { type: String, trim: true, maxlength: 500 },
+    billingGraceBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    billingOverride: {
+      type: new mongoose.Schema(
+        {
+          status: { type: String, enum: BILLING_STATUSES, required: true },
+          reason: { type: String, trim: true, maxlength: 500 },
+          until: { type: Date, default: null },
+          by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+          at: { type: Date },
+        },
+        { _id: false }
+      ),
+      default: null,
     },
     // The calendar month of the last BLOCK change (not a pin move inside the
     // same block); the provider may change block once per month.

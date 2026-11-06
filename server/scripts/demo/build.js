@@ -12,7 +12,7 @@ const { computeBlockIds } = require('../../src/utils/blockMembership');
 const { PAYMENT_METHOD_FOR_COLLECTION } = require('../../src/config/paymentCollection');
 const { STORE_FAULT_REASONS } = require('../../src/config/returns');
 const { CITIES, BLOCKS, BRANCHES, BRANDS, CHATS, LONG_CHAT, CUSTOMERS, ADMIN, CARTS, REMARKS } = require('./catalog');
-const { karachiDateKey, karachiMonthKey } = require('../../src/utils/karachiTime');
+const { karachiDateKey, karachiMonthKey, startOfKarachiMonth } = require('../../src/utils/karachiTime');
 
 const { ObjectId } = mongoose.Types;
 const HOUR = 3600 * 1000;
@@ -66,6 +66,15 @@ const PICKERS = {
   naqsh: { name: 'Waleed Akhtar', email: 'waleed.akhtar@citycart.demo', phone: '+92 301 3397650' },
 };
 
+// One brand in each stage of the billing ladder (docs/15 §9), so the demo shows
+// a warning, a restricted seller, a frozen seller and a granted grace period.
+const BILLING_STATE = {
+  loom: { status: 'WARNING' },
+  rangrez: { status: 'RESTRICTED' },
+  sukoon: { status: 'FROZEN' },
+  zaitoon: { status: 'ACTIVE', graceDays: 5 },
+};
+
 // ── the builder ──────────────────────────────────────────────────────────────
 function buildDataset({ now = new Date(), hashes }) {
   const random = makeRandom(20260501);
@@ -80,6 +89,7 @@ function buildDataset({ now = new Date(), hashes }) {
     reviews: [], notifications: [], counters: [],
     serviceCategories: [], serviceProviders: [], serviceOfferings: [], serviceAvailabilities: [],
     serviceBookings: [], serviceConversations: [], serviceMessages: [], serviceReviews: [],
+    commissionEntries: [], sellerInvoices: [], sellerPaymentClaims: [], billingHelpRequests: [],
   };
 
   // ── cities ──
@@ -220,7 +230,10 @@ function buildDataset({ now = new Date(), hashes }) {
     startingAtPrice: 250000, status: 'ACTIVE', verification: 'VERIFIED',
     ratingAvg: 4.5, ratingCount: 2, completedBookings: 18, rankScore: 0.72,
     rankInputs: { windowDays: 90, ratingAvg: 4.5, reviewCount: 2, computedAt: ago(2 * DAY) },
-    rankingUpdatedAt: ago(2 * DAY), billingStatus: 'ACTIVE',
+    rankingUpdatedAt: ago(2 * DAY), billingStatus: 'ACTIVE', billingCheckedAt: ago(DAY),
+    billingGraceUntil: new Date(now.getTime() + 4 * DAY),
+    billingGraceReason: 'First invoice; the super admin allowed extra time to set up the transfer.',
+    billingGraceBy: admin._id,
     customerLateCancelMonth: karachiMonthKey(now), customerLateCancelCount: 1,
     blockChangedAt: ago(160 * DAY),
     blockHistory: [{ blockId: serviceBlock._id, changedAt: providerMade, changedBy: admin._id }],
@@ -245,7 +258,12 @@ function buildDataset({ now = new Date(), hashes }) {
     ratingAvg: 0, ratingCount: 0, completedBookings: 0, rankScore: 0,
     rankInputs: { windowDays: 90, ratingAvg: 0, reviewCount: 0, newProvider: true, computedAt: ago(18 * DAY) },
     rankingUpdatedAt: ago(18 * DAY),
-    billingStatus: 'ACTIVE', blockChangedAt: ago(18 * DAY),
+    billingStatus: 'ACTIVE', billingCheckedAt: ago(5 * DAY),
+    billingOverride: {
+      status: 'ACTIVE', reason: 'Pilot provider; billing reviewed by hand while it is onboarded.',
+      until: new Date(now.getTime() + 30 * DAY), by: admin._id, at: ago(5 * DAY),
+    },
+    blockChangedAt: ago(18 * DAY),
     blockHistory: [{ blockId: serviceBlock._id, changedAt: ago(18 * DAY), changedBy: pendingOwner._id }],
     createdAt: ago(18 * DAY), updatedAt: ago(18 * DAY),
   };
@@ -476,6 +494,21 @@ function buildDataset({ now = new Date(), hashes }) {
       _id: brandId, name: b.name, slug: slugify(b.name), description: b.description,
       logo: monogram(b.name), coverImage: photo(`${b.key} cover`, 1, 1600, 600), cityId: cityByKey[b.city]._id,
       status: b.status, contact: b.contact, settings: b.settings, createdAt, updatedAt: createdAt,
+      ...(BILLING_STATE[b.key] && {
+        billingStatus: BILLING_STATE[b.key].status,
+        billingCheckedAt: ago(2 * DAY),
+        ...(BILLING_STATE[b.key].graceDays && {
+          billingGraceUntil: new Date(now.getTime() + BILLING_STATE[b.key].graceDays * DAY),
+          billingGraceReason: 'Bank transfer delayed; the super admin granted a short grace period.',
+          billingGraceBy: admin._id,
+        }),
+      }),
+      ...(b.key === 'sukoon' && {
+        billingOverride: {
+          status: 'FROZEN', reason: 'No payment received after repeated reminders.',
+          until: new Date(now.getTime() + 30 * DAY), by: admin._id, at: ago(3 * DAY),
+        },
+      }),
       ...(terminatedAt && { terminationReason: b.terminationReason, terminatedAt, terminatedBy: admin._id, accessEndsAt }),
     };
     ds.brands.push(brandDoc);
@@ -1665,6 +1698,207 @@ function buildDataset({ now = new Date(), hashes }) {
       { brandId: d.brandId, deliveryId: d._id, orderNumber: order.orderNumber }, d.assignedAt);
   }
   customers.forEach((c) => note(c.doc._id, 'SYSTEM_NOTIFICATION', 'Welcome to CityCart', 'Shop local brands in your city and pay in cash when your order arrives.', { kind: 'welcome' }, new Date(c.doc.createdAt.getTime() + 5 * 60 * 1000)));
+
+  // ── seller billing (docs/15, docs/24 §5) ──
+  // One 1% commission ledger, monthly invoices in every state, receipt claims
+  // and help requests, so both the seller page and the admin console have data.
+  const loom = brandByKey.loom;
+  const rangrez = brandByKey.rangrez;
+  const sukoon = brandByKey.sukoon;
+  const zaitoon = brandByKey.zaitoon;
+
+  const currentMonthStart = startOfKarachiMonth(now);
+  const lastMonthStart = startOfKarachiMonth(new Date(currentMonthStart.getTime() - 1));
+  const monthBeforeStart = startOfKarachiMonth(new Date(lastMonthStart.getTime() - 1));
+  const RATE_BPS = 100;
+  const commissionOf = (paisa) => Math.floor((paisa * RATE_BPS + 5000) / 10000);
+
+  const addInvoice = ({
+    sellerType, sellerId, start, end, status, salesPaisa, commissionPaisa,
+    creditsPaisa = 0, paidPaisa = 0, issuedAt, dueAt, paidAt = null, createdBy = 'SYSTEM',
+  }) => {
+    const doc = {
+      _id: new ObjectId(), sellerType, sellerId, periodStart: start, periodEnd: end,
+      periodKey: karachiMonthKey(start), salesPaisa, commissionPaisa, creditsPaisa, paidPaisa,
+      amountDuePaisa: Math.max(0, commissionPaisa - creditsPaisa - paidPaisa),
+      status, issuedAt, dueAt, paidAt, createdBy, currency: 'PKR', createdAt: issuedAt, updatedAt: issuedAt,
+    };
+    ds.sellerInvoices.push(doc);
+    return doc;
+  };
+
+  const loomAugust = addInvoice({
+    sellerType: 'BRAND', sellerId: loom.doc._id, start: monthBeforeStart, end: lastMonthStart,
+    status: 'PAID', salesPaisa: 12000000, commissionPaisa: 120000, paidPaisa: 120000,
+    issuedAt: lastMonthStart, dueAt: new Date(lastMonthStart.getTime() + 7 * DAY),
+    paidAt: new Date(lastMonthStart.getTime() + 2 * DAY),
+  });
+  const loomSeptember = addInvoice({
+    sellerType: 'BRAND', sellerId: loom.doc._id, start: lastMonthStart, end: currentMonthStart,
+    status: 'OVERDUE', salesPaisa: 21000000, commissionPaisa: 210000, creditsPaisa: 5000, paidPaisa: 90000,
+    issuedAt: currentMonthStart, dueAt: new Date(now.getTime() - 2 * DAY),
+  });
+  const rangrezInvoice = addInvoice({
+    sellerType: 'BRAND', sellerId: rangrez.doc._id, start: monthBeforeStart, end: lastMonthStart,
+    status: 'OVERDUE', salesPaisa: 9600000, commissionPaisa: 96000,
+    issuedAt: lastMonthStart, dueAt: new Date(now.getTime() - 10 * DAY),
+  });
+  const sukoonInvoice = addInvoice({
+    sellerType: 'BRAND', sellerId: sukoon.doc._id, start: monthBeforeStart, end: lastMonthStart,
+    status: 'OVERDUE', salesPaisa: 6400000, commissionPaisa: 64000,
+    issuedAt: lastMonthStart, dueAt: new Date(now.getTime() - 15 * DAY),
+  });
+  addInvoice({
+    sellerType: 'BRAND', sellerId: zaitoon.doc._id, start: monthBeforeStart, end: lastMonthStart,
+    status: 'VOID', salesPaisa: 3000000, commissionPaisa: 30000,
+    issuedAt: lastMonthStart, dueAt: new Date(lastMonthStart.getTime() + 7 * DAY),
+    createdBy: admin._id.toString(),
+  });
+  const providerInvoice = addInvoice({
+    sellerType: 'SERVICE_PROVIDER', sellerId: provider._id, start: lastMonthStart, end: currentMonthStart,
+    status: 'ISSUED', salesPaisa: 440000, commissionPaisa: 4400,
+    issuedAt: currentMonthStart, dueAt: new Date(now.getTime() + 5 * DAY),
+  });
+
+  const addEntry = ({
+    sellerType, sellerId, sourceType, sourceId, eligibleAmountPaisa, kind = 'SALE', status,
+    occurredAt, invoiceId = null, reversalOf = null, reason,
+  }) => {
+    const amount = commissionOf(eligibleAmountPaisa);
+    const doc = {
+      _id: new ObjectId(), sellerType, sellerId, sourceType, sourceId, eligibleAmountPaisa,
+      rateBps: RATE_BPS, commissionPaisa: kind === 'REVERSAL' ? -amount : amount, kind, status,
+      occurredAt, invoiceId, reversalOf, reason, currency: 'PKR', createdAt: occurredAt, updatedAt: occurredAt,
+    };
+    ds.commissionEntries.push(doc);
+    return doc;
+  };
+
+  const deliveredAtOf = (order) => {
+    const event = order.statusHistory.find((s) => s.status === 'DELIVERED');
+    return event ? event.at : order.updatedAt;
+  };
+  const loomDelivered = ds.orders
+    .filter((o) => String(o.brandId) === String(loom.doc._id) && o.orderStatus === 'DELIVERED')
+    .sort((a, b) => a.createdAt - b.createdAt);
+  const billableBase = (order) =>
+    Math.round(Math.max(0, order.netTotal - order.deliveryFee - order.tax) * 100);
+  const [paidSale, invoicedSale, reversedSale] = loomDelivered.slice(0, 3);
+  addEntry({
+    sellerType: 'BRAND', sellerId: loom.doc._id, sourceType: 'ORDER', sourceId: paidSale._id,
+    eligibleAmountPaisa: billableBase(paidSale), status: 'PAID', occurredAt: deliveredAtOf(paidSale),
+    invoiceId: loomAugust._id, reason: '1% commission on a delivered order.',
+  });
+  addEntry({
+    sellerType: 'BRAND', sellerId: loom.doc._id, sourceType: 'ORDER', sourceId: invoicedSale._id,
+    eligibleAmountPaisa: billableBase(invoicedSale), status: 'INVOICED', occurredAt: deliveredAtOf(invoicedSale),
+    invoiceId: loomSeptember._id, reason: '1% commission on a delivered order.',
+  });
+  const reversedEntry = addEntry({
+    sellerType: 'BRAND', sellerId: loom.doc._id, sourceType: 'ORDER', sourceId: reversedSale._id,
+    eligibleAmountPaisa: billableBase(reversedSale), status: 'REVERSED', occurredAt: deliveredAtOf(reversedSale),
+    invoiceId: loomAugust._id, reason: 'Order returned after delivery; the charge was reversed.',
+  });
+  addEntry({
+    sellerType: 'BRAND', sellerId: loom.doc._id, sourceType: 'ORDER', sourceId: reversedSale._id,
+    eligibleAmountPaisa: billableBase(reversedSale), kind: 'REVERSAL', status: 'REVERSED',
+    occurredAt: new Date(deliveredAtOf(reversedSale).getTime() + 2 * DAY), invoiceId: loomSeptember._id,
+    reversalOf: reversedEntry._id, reason: 'Reversal of the charge for a returned order.',
+  });
+  if (loomDelivered[3]) {
+    addEntry({
+      sellerType: 'BRAND', sellerId: loom.doc._id, sourceType: 'ORDER', sourceId: loomDelivered[3]._id,
+      eligibleAmountPaisa: billableBase(loomDelivered[3]), status: 'ACCRUED',
+      occurredAt: deliveredAtOf(loomDelivered[3]), reason: '1% commission on a delivered order.',
+    });
+  }
+  addEntry({
+    sellerType: 'SERVICE_PROVIDER', sellerId: provider._id, sourceType: 'SERVICE_BOOKING',
+    sourceId: confirmedService._id, eligibleAmountPaisa: confirmedService.finalAmountPaisa ?? confirmedService.agreedPricePaisa,
+    status: 'INVOICED', occurredAt: confirmedService.confirmedAt, invoiceId: providerInvoice._id,
+    reason: '1% commission on a confirmed booking.',
+  });
+
+  const addClaim = ({
+    invoiceId, sellerType, sellerId, amountPaisa, method, reference, receiptId, comment, status,
+    verifiedBy = null, verifiedAt = null, rejectionReason = '', creditPaisa = 0, creditAppliedInvoiceId = null, at,
+  }) => {
+    const doc = {
+      _id: new ObjectId(), invoiceId, sellerType, sellerId, amountPaisa, method, reference,
+      receipt: { publicId: receiptId, fingerprint: `${receiptId.replace(/[^a-z0-9]+/gi, '-')}-fp` },
+      comment, status, verifiedBy, verifiedAt, rejectionReason, creditPaisa, creditAppliedInvoiceId,
+      currency: 'PKR', createdAt: at, updatedAt: verifiedAt || at,
+    };
+    ds.sellerPaymentClaims.push(doc);
+    return doc;
+  };
+  const loomReceipt = `citycart/billing/brands/${loom.doc._id}/receipts`;
+  addClaim({
+    invoiceId: loomAugust._id, sellerType: 'BRAND', sellerId: loom.doc._id, amountPaisa: 125000,
+    method: 'BANK_TRANSFER', reference: 'MCB-2026-0902-8841', receiptId: `${loomReceipt}/loom-august-2026`,
+    comment: 'Paid in full plus an extra PKR 50; keep the difference as credit.', status: 'VERIFIED',
+    verifiedBy: admin._id, verifiedAt: new Date(lastMonthStart.getTime() + 3 * DAY),
+    creditPaisa: 5000, creditAppliedInvoiceId: loomSeptember._id,
+    at: new Date(lastMonthStart.getTime() + 2 * DAY),
+  });
+  addClaim({
+    invoiceId: loomSeptember._id, sellerType: 'BRAND', sellerId: loom.doc._id, amountPaisa: 90000,
+    method: 'JAZZCASH', reference: 'JC-4471-2201', receiptId: `${loomReceipt}/loom-september-part`,
+    comment: 'Part payment while the rest is on the way.', status: 'SUBMITTED', at: ago(DAY),
+  });
+  addClaim({
+    invoiceId: sukoonInvoice._id, sellerType: 'BRAND', sellerId: sukoon.doc._id, amountPaisa: 30000,
+    method: 'EASYPAISA', reference: 'EP-9932-1180', receiptId: `citycart/billing/brands/${sukoon.doc._id}/receipts/sukoon-august`,
+    comment: 'Sent the amount we agreed on the phone.', status: 'REJECTED',
+    verifiedBy: admin._id, verifiedAt: ago(2 * DAY),
+    rejectionReason: 'The reference number does not match any CityCart payment.', at: ago(5 * DAY),
+  });
+
+  const addHelp = ({ sellerType, sellerId, subject, message, status, resolutionNote = '', handledBy = null, handledAt = null, at }) => {
+    ds.billingHelpRequests.push({
+      _id: new ObjectId(), sellerType, sellerId, subject, message, status, resolutionNote,
+      handledBy, handledAt, createdAt: at, updatedAt: handledAt || at,
+    });
+  };
+  addHelp({
+    sellerType: 'BRAND', sellerId: loom.doc._id,
+    subject: 'Bank account title for the transfer',
+    message: 'Our bank account title differs from the brand name. Can we still send the September payment from it?',
+    status: 'OPEN', at: ago(6 * HOUR),
+  });
+  addHelp({
+    sellerType: 'BRAND', sellerId: rangrez.doc._id,
+    subject: 'Card machine sales are split with a partner',
+    message: 'Half of our card sales settle to a partner account. Which amount should the 1% be calculated on?',
+    status: 'RESOLVED',
+    resolutionNote: 'The 1% is on the full completed order; where the money settles does not change the charge.',
+    handledBy: admin._id, handledAt: ago(3 * DAY), at: ago(5 * DAY),
+  });
+  addHelp({
+    sellerType: 'SERVICE_PROVIDER', sellerId: provider._id,
+    subject: 'Invoice for a disputed booking',
+    message: 'A customer disputed the final amount. Will the commission be recalculated if the dispute is settled lower?',
+    status: 'OPEN', at: ago(4 * HOUR),
+  });
+
+  note(loom.owner._id, 'BILLING_WARNING', 'Your CityCart bill is 2 days past due',
+    `Invoice ${loomSeptember.periodKey} has ${money((loomSeptember.amountDuePaisa) / 100)} still to pay. New orders are still accepted until day 7.`,
+    { invoiceId: loomSeptember._id, sellerType: 'BRAND' }, ago(2 * DAY));
+  note(loom.owner._id, 'BILLING_CLAIM_VERIFIED', 'Your payment was verified',
+    `We received ${money(1250)} for invoice ${loomAugust.periodKey}. PKR 50 is kept as credit for your next bill.`,
+    { invoiceId: loomAugust._id, claimId: ds.sellerPaymentClaims[0]._id }, ago(1.5 * DAY));
+  note(sukoon.owner._id, 'BILLING_CLAIM_REJECTED', 'Your payment could not be matched',
+    'The reference number does not match any CityCart payment. Please check it and send the claim again.',
+    { invoiceId: sukoonInvoice._id, claimId: ds.sellerPaymentClaims[2]._id }, ago(2 * DAY));
+  note(rangrez.owner._id, 'BILLING_HELP_ANSWERED', 'CityCart answered your billing question',
+    'The 1% is on the full completed order; where the money settles does not change the charge.',
+    { sellerType: 'BRAND' }, ago(3 * DAY));
+  note(rangrez.owner._id, 'BILLING_RESTRICTED', 'New orders are paused on your account',
+    `Invoice ${rangrezInvoice.periodKey} is 10 days past due. Existing orders can still be fulfilled, and listing stays visible.`,
+    { invoiceId: rangrezInvoice._id, sellerType: 'BRAND' }, ago(DAY));
+  note(sukoon.owner._id, 'BILLING_FROZEN', 'Your listings are hidden',
+    `Invoice ${sukoonInvoice.periodKey} is 15 days past due. Customers cannot find your products until it is settled.`,
+    { invoiceId: sukoonInvoice._id, sellerType: 'BRAND' }, ago(3 * DAY));
 
   return ds;
 }

@@ -1021,11 +1021,11 @@ Phase 2b Service catalogue and discovery                        DONE
 Phase 2c Booking lifecycle                                      DONE
          Availability, request, chat, proposal, completion, reviews, ranking.
 
-Phase 3  Seller billing                                         NEXT
+Phase 3  Seller billing                                         DONE
          1% commission ledger, monthly invoices, freeze ladder, bank details,
-         receipt claims, super-admin verification, help.
+         receipt claims, super-admin verification, help, seller billing UI.
 
-Phase 4  Web redesign and SEO
+Phase 4  Web redesign and SEO                                   NEXT
          Design system, customer site, seller landing, auth, product/service
          pages, dashboard usability pass, SSR/prerender, accessibility, legal.
 

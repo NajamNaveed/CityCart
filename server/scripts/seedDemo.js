@@ -50,6 +50,10 @@ const MODELS = {
   serviceReviews: require('../src/models/serviceReview.model'),
   notifications: require('../src/models/notification.model'),
   counters: require('../src/models/counter.model'),
+  commissionEntries: require('../src/models/commissionEntry.model'),
+  sellerInvoices: require('../src/models/sellerInvoice.model'),
+  sellerPaymentClaims: require('../src/models/sellerPaymentClaim.model'),
+  billingHelpRequests: require('../src/models/billingHelp.model'),
 };
 
 const PASSWORDS = {
@@ -105,6 +109,37 @@ async function main() {
     await Model.collection.insertMany(docs);
     console.log(`  ${name.padEnd(14)} ${String(docs.length).padStart(4)}`);
   }
+
+  // The single platform settings row: contact details and the bank account
+  // sellers transfer their 1% bill to (docs/15 §7).
+  const PlatformSettings = require('../src/models/platformSettings.model');
+  await PlatformSettings.updateOne(
+    { key: 'platform' },
+    {
+      $setOnInsert: {
+        key: 'platform',
+        platformName: 'CityCart',
+        supportEmail: 'support@citycart.local',
+        supportPhone: '+92 300 0000000',
+        billing: {
+          rateBps: 100,
+          dueDays: 7,
+          restrictAfterDays: 7,
+          freezeAfterDays: 14,
+          minimumInvoicePaisa: 10000,
+          bank: {
+            bankName: 'Meezan Bank',
+            accountTitle: 'CityCart Technologies (Pvt) Ltd',
+            accountNumber: '0101-0103456789',
+            iban: 'PK36MEZN0001010103456789',
+            instructions: 'Send the exact invoice amount, then submit the claim with the transfer reference.',
+          },
+        },
+      },
+    },
+    { upsert: true }
+  );
+  console.log(`  ${'platformSettings'.padEnd(14)}    1`);
 
   console.log(`
 Done. Everything is in "${dbName}".

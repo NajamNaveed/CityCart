@@ -1,6 +1,18 @@
 const mongoose = require('mongoose');
 
 const { BRAND_STATUSES } = require('../config/brandStatuses');
+const { BILLING_STATUSES } = require('../config/billing');
+
+const billingOverrideSchema = new mongoose.Schema(
+  {
+    status: { type: String, enum: BILLING_STATUSES, required: true },
+    reason: { type: String, trim: true, maxlength: 500 },
+    until: { type: Date, default: null },
+    by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    at: { type: Date },
+  },
+  { _id: false }
+);
 
 /**
  * Brand model — the primary tenant in CityCart.
@@ -74,6 +86,14 @@ const brandSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: {},
     },
+    // Seller billing state (docs/15 §9). Derived from the oldest unpaid
+    // invoice, evaluated on seller requests and by the daily job.
+    billingStatus: { type: String, enum: BILLING_STATUSES, default: 'ACTIVE', index: true },
+    billingCheckedAt: { type: Date },
+    billingGraceUntil: { type: Date, default: null },
+    billingGraceReason: { type: String, trim: true, maxlength: 500 },
+    billingGraceBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    billingOverride: { type: billingOverrideSchema, default: null },
   },
   {
     timestamps: true,

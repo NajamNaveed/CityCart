@@ -137,7 +137,7 @@ describe('GET /api/v1/discover — city scope', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.items).toEqual([]);
-    expect(Brand.find.mock.calls[0][0]).toEqual({ status: 'ACTIVE', cityId });
+    expect(Brand.find.mock.calls[0][0]).toEqual({ status: 'ACTIVE', cityId, billingStatus: { $ne: 'FROZEN' } });
     expect(Branch.find).not.toHaveBeenCalled();
   });
 

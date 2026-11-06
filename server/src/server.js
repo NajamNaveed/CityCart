@@ -8,12 +8,14 @@ const { startAdjustmentExpiryJob } = require('./jobs/adjustmentExpiry');
 const { startPaymentProofRetentionJob } = require('./jobs/paymentProofRetention');
 const { startBrandTerminationCleanupJob } = require('./jobs/brandTerminationCleanup');
 const { startServiceBookingJobs } = require('./jobs/serviceBookingJobs');
+const { startBillingJobs } = require('./jobs/billingJobs');
 
 let httpServer;
 let stopAdjustmentExpiryJob;
 let stopPaymentProofRetentionJob;
 let stopBrandTerminationCleanupJob;
 let stopServiceBookingJobs;
+let stopBillingJobs;
 
 /**
  * Startup order matters: the database connection must succeed before the
@@ -49,6 +51,8 @@ async function start() {
   stopBrandTerminationCleanupJob = startBrandTerminationCleanupJob();
   // Service proposals expire, completed jobs auto-confirm and ranking refreshes (docs/24 §4.4).
   stopServiceBookingJobs = startServiceBookingJobs();
+  // Monthly invoices, overdue marking and the seller freeze ladder (docs/15 §7-§9).
+  stopBillingJobs = startBillingJobs();
   httpServer.listen(env.port, () => {
     // eslint-disable-next-line no-console
     console.log(
@@ -77,6 +81,7 @@ async function shutdown(signal) {
     if (stopPaymentProofRetentionJob) stopPaymentProofRetentionJob();
     if (stopBrandTerminationCleanupJob) stopBrandTerminationCleanupJob();
     if (stopServiceBookingJobs) stopServiceBookingJobs();
+    if (stopBillingJobs) stopBillingJobs();
     if (httpServer) {
       await new Promise((resolve, reject) => {
         httpServer.close((err) => (err ? reject(err) : resolve()));

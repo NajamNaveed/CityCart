@@ -778,6 +778,80 @@ async function notifyCustomerOfServiceReviewReply({ booking, review }) {
   });
 }
 
+// ---- Seller billing (docs/15 §9) ------------------------------------------
+
+// The tenant owner is the recipient: a brand owner or the provider's user.
+async function sellerRecipients(sellerType, sellerId) {
+  if (sellerType === 'SERVICE_PROVIDER') {
+    const provider = await ServiceProvider.findById(sellerId).select('userId');
+    return provider && provider.userId ? [provider.userId] : [];
+  }
+  const owners = await User.find({ role: ROLES.BRAND_ADMIN, brandId: sellerId, isActive: true }).select('_id');
+  return owners.map((owner) => owner._id);
+}
+
+const BILLING_LABEL = {
+  WARNING: 'Payment due',
+  RESTRICTED: 'New orders paused',
+  FROZEN: 'Account frozen',
+};
+
+const billingMessage = (status, amountDuePaisa) => {
+  const amount = `PKR ${(Number(amountDuePaisa || 0) / 100).toFixed(2)}`;
+  if (status === 'WARNING') {
+    return `Your CityCart bill of ${amount} is due. Pay it from Billing to keep taking new orders.`;
+  }
+  if (status === 'RESTRICTED') {
+    return `Your CityCart bill of ${amount} is overdue. New orders and bookings are paused until it is paid.`;
+  }
+  return `Your CityCart bill of ${amount} is 14 days overdue and your listings are hidden. Pay from Billing to restore them.`;
+};
+
+async function notifySellerBillingTransition({ sellerType, sellerId, status, amountDuePaisa, invoiceId }) {
+  if (!['WARNING', 'RESTRICTED', 'FROZEN'].includes(status)) return;
+  const userIds = await sellerRecipients(sellerType, sellerId);
+  await notify({
+    userIds,
+    type: `BILLING_${status}`,
+    title: BILLING_LABEL[status],
+    message: billingMessage(status, amountDuePaisa),
+    data: { status, amountDuePaisa, invoiceId: invoiceId || null },
+  });
+}
+
+async function notifySellerClaimDecided({ sellerType, sellerId, decision, amountPaisa, note, invoice, billingStatus }) {
+  const userIds = await sellerRecipients(sellerType, sellerId);
+  const amount = `PKR ${(Number(amountPaisa || 0) / 100).toFixed(2)}`;
+  if (decision === 'VERIFIED') {
+    await notify({
+      userIds,
+      type: 'BILLING_CLAIM_VERIFIED',
+      title: 'Payment confirmed',
+      message: `We confirmed your payment of ${amount}${invoice ? ` for ${invoice.periodKey}` : ''}.`,
+      data: { invoiceId: invoice ? invoice._id : null, amountPaisa, billingStatus },
+    });
+    return;
+  }
+  await notify({
+    userIds,
+    type: 'BILLING_CLAIM_REJECTED',
+    title: 'Payment could not be confirmed',
+    message: `Your claim of ${amount} was rejected: ${note || 'check the receipt and submit again.'}`,
+    data: { invoiceId: invoice ? invoice._id : null, amountPaisa, note: note || null },
+  });
+}
+
+async function notifySellerBillingHelpAnswered({ sellerType, sellerId, subject, note }) {
+  const userIds = await sellerRecipients(sellerType, sellerId);
+  await notify({
+    userIds,
+    type: 'BILLING_HELP_ANSWERED',
+    title: 'Billing request answered',
+    message: `"${subject}": ${note || 'The platform team has answered your request.'}`,
+    data: { subject },
+  });
+}
+
 // --------------------------------------------------------------------------
 // READ side — the personal inbox APIs of docs/05 §21 / docs/12 §11
 // --------------------------------------------------------------------------
@@ -888,6 +962,9 @@ module.exports = {
   notifyServiceBookingCancelled: bestEffort(notifyServiceBookingCancelled),
   notifyProviderOfNewServiceReview: bestEffort(notifyProviderOfNewServiceReview),
   notifyCustomerOfServiceReviewReply: bestEffort(notifyCustomerOfServiceReviewReply),
+  notifySellerBillingTransition: bestEffort(notifySellerBillingTransition),
+  notifySellerClaimDecided: bestEffort(notifySellerClaimDecided),
+  notifySellerBillingHelpAnswered: bestEffort(notifySellerBillingHelpAnswered),
   listMyNotifications,
   markMyNotificationRead,
   markAllMyNotificationsRead,

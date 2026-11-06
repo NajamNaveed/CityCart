@@ -2629,6 +2629,144 @@ and notifies the owner. An `ADMIN_PARTNER` cannot reach these endpoints.
 
 ---
 
+# 22h. Seller Billing Endpoints (v3 Phase 3)
+
+Seller billing implements `15-commission-and-payouts.md`. The seller tenant is
+read from the session by `requireSellerTenant`; a body or query `sellerId` is
+never accepted, so one seller can never reach another seller's bill. Amounts
+are integer paisa.
+
+## Seller endpoints
+
+Base:
+
+```text
+/api/v1/billing
+```
+
+Authentication: a signed-in `BRAND_ADMIN` or `SERVICE_PROVIDER` owner. The
+account is resolved from the session; any other role answers
+`403 ROLE_NOT_ALLOWED`.
+
+```text
+GET    /account                      -> { billing: summary }
+GET    /invoices?status=&page=&limit= -> { invoices, pagination }
+GET    /invoices/:id                 -> { invoice, entries, claims }
+POST   /invoices/:id/claims          -> { message, claim }   (201)
+GET    /claims?status=&page=&limit=  -> { claims, pagination }
+GET    /claims/:id/receipt           -> { receipt: { url, expiresAt } }
+POST   /receipt-signature            -> { upload: { ...signed cloudinary params } }
+GET    /help                         -> { requests, pagination }
+POST   /help                        -> { message, request }  (201)
+```
+
+`summary` contains the seller's billing status, grace/override, outstanding
+balance, next due date, unpaid invoice count, pending claims, platform bank
+details, the active settings and the five most recent claims.
+
+Claim body:
+
+```json
+{
+  "amountPaisa": 40000,
+  "method": "BANK_TRANSFER | JAZZCASH | EASYPAISA | OTHER",
+  "reference": "MCB-123 (3–120 chars)",
+  "receipt": { "publicId": "citycart/billing/brands/<id>/receipts/...", "fingerprint": "..." },
+  "comment": "optional, max 500"
+}
+```
+
+`amountPaisa` is 1–1,000,000,000 and cannot exceed the invoice balance. The
+receipt `publicId` must live under the seller's own billing folder.
+
+Help body:
+
+```json
+{ "subject": "3–150 chars", "message": "3–2000 chars" }
+```
+
+Seller error codes: `400` validation, `404` invoice/claim/receipt not found,
+`409 INVOICE_NOT_PAYABLE`, `409 CLAIM_EXISTS`,
+`400 CLAIM_EXCEEDS_BALANCE` (with `amountDuePaisa`),
+`422 RECEIPT_NOT_YOURS`, `409 SELLER_BILLING_RESTRICTED` when a new order or
+booking is blocked by the freeze ladder.
+
+## Super admin endpoints
+
+Base:
+
+```text
+/api/v1/admin/billing
+```
+
+Every route is `SUPER_ADMIN` only (`24-marketplace-v3-plan.md` §5.6). An
+`ADMIN_PARTNER` receives `403`.
+
+```text
+GET    /reports                       -> { report: outstanding, collected, accrued, ageing }
+GET    /settings                      -> { settings }
+PATCH  /settings                      -> { message, settings }
+POST   /invoices/generate             -> { message, periodKey, issued, skipped }
+GET    /invoices?status=&sellerType=&sellerId=&periodKey=&page=&limit=
+                                      -> { invoices, pagination }
+GET    /invoices/:id                  -> { invoice, entries, claims }
+GET    /claims?status=&sellerType=&page=&limit=
+                                      -> { claims, pagination }
+GET    /claims/:id/receipt            -> { receipt }
+POST   /claims/:id/decision           -> { claim, invoice, billingStatus }
+GET    /sellers?billingStatus=&type=&q=&page=&limit=
+                                      -> { sellers, pagination }
+POST   /sellers/:type/:id/override    -> { message, seller }
+POST   /sellers/:type/:id/clear-freeze -> { message, state }
+POST   /sellers/:type/:id/grace       -> { message, state }
+DELETE /sellers/:type/:id/grace       -> { message, state }
+GET    /help?status=&page=&limit=     -> { requests, pagination }
+POST   /help/:id/resolve              -> { message, request }
+```
+
+`:type` is `BRAND | SERVICE_PROVIDER`.
+
+Decision body:
+
+```json
+{ "decision": "VERIFIED | REJECTED", "note": "required (3–500) when REJECTED" }
+```
+
+Verification updates the invoice and records an overpayment credit in one
+transaction; a second decision answers `409 CLAIM_ALREADY_DECIDED`. A paid or
+void invoice answers `409 INVOICE_NOT_PAYABLE`.
+
+Override body:
+
+```json
+{ "status": "ACTIVE | WARNING | RESTRICTED | FROZEN", "reason": "3–500 chars", "until": "optional ISO date" }
+```
+
+Grace body:
+
+```json
+{ "until": "ISO date", "reason": "3–500 chars" }
+```
+
+Settings body (at least one field; `freezeAfterDays >= restrictAfterDays`):
+
+```json
+{
+  "rateBps": 100,
+  "dueDays": 7,
+  "restrictAfterDays": 7,
+  "freezeAfterDays": 14,
+  "minimumInvoicePaisa": 10000,
+  "bank": { "bankName": "...", "accountTitle": "...", "accountNumber": "...", "iban": "...", "instructions": "..." }
+}
+```
+
+Every admin mutation writes an `AdminAction` (`billing.*`) with the actor,
+target and reason. Seed data and the daily job use the same services, so a
+manual run and the scheduled run produce identical results.
+
+---
+
 # 23. Analytics Endpoints
 
 Base:

@@ -32,6 +32,7 @@ const {
 const { ServiceAvailabilityError } = require('../services/serviceAvailability.service');
 const { ServiceChatError } = require('../services/serviceChat.service');
 const { ServiceReviewError } = require('../services/serviceReview.service');
+const { BillingError } = require('../services/billing.service');
 const { ROLES } = require('../config/roles');
 const { formatZodError } = require('../utils/formatZodError');
 const { recordAdminAction } = require('../services/adminAction.service');
@@ -45,7 +46,8 @@ function handleError(err, res, next) {
     err instanceof ServiceBookingError ||
     err instanceof ServiceAvailabilityError ||
     err instanceof ServiceChatError ||
-    err instanceof ServiceReviewError
+    err instanceof ServiceReviewError ||
+    err instanceof BillingError
   ) {
     return res.status(err.status).json({
       success: false,

@@ -10,6 +10,7 @@ const { assertPinInBlock } = require('./branch.service');
 const { rawAvailability, assertSlotWithinAvailability } = require('./serviceAvailability.service');
 const { openBookingChat } = require('./serviceChat.service');
 const { refreshRanking } = require('./serviceRanking.service');
+const { recordBookingCommission, assertSellerCanSell } = require('./billing.service');
 const { runInTransaction } = require('../utils/transaction');
 const { latLngFromPoint } = require('../utils/geo');
 const { karachiMonthKey } = require('../utils/karachiTime');
@@ -211,6 +212,10 @@ async function createBooking(customerId, data) {
     verification: 'VERIFIED',
   });
   if (!provider) throw new ServiceBookingError(404, 'Provider not found.');
+
+  // A provider whose bill is overdue cannot take new bookings; existing jobs
+  // stay fulfillable (docs/15 §9). The state is re-derived on every request.
+  await assertSellerCanSell('SERVICE_PROVIDER', provider._id);
 
   const offering = await ServiceOffering.findOne({
     _id: data.offeringId,
@@ -526,6 +531,7 @@ async function customerConfirm(customerId, bookingId) {
     throw statusError(existing);
   }
   await ServiceProvider.updateOne({ _id: booking.providerId }, { $inc: { completedBookings: 1 } });
+  await recordBookingCommission(booking);
   const provider = await ServiceProvider.findById(booking.providerId);
   await notifyProviderOfServiceConfirmed({ providerUserId: provider ? provider.userId : null, booking, by: 'CUSTOMER' });
   await refreshRanking(booking.providerId, { provider });
@@ -663,6 +669,7 @@ async function resolveDispute(adminId, bookingId, { resolution, note }) {
 
   if (confirmed) {
     await ServiceProvider.updateOne({ _id: updated.providerId }, { $inc: { completedBookings: 1 } });
+    await recordBookingCommission(updated);
   }
   const provider = await ServiceProvider.findById(updated.providerId);
   await notifyPartiesOfDisputeResolved({ booking: updated, resolution, note });
@@ -728,6 +735,7 @@ async function autoConfirmCompleted({ now = new Date(), limit = 200 } = {}) {
     if (!booking) continue;
     confirmed += 1;
     await ServiceProvider.updateOne({ _id: booking.providerId }, { $inc: { completedBookings: 1 } });
+    await recordBookingCommission(booking, { now });
     const provider = await ServiceProvider.findById(booking.providerId).select('userId');
     await notifyProviderOfServiceConfirmed({
       providerUserId: provider ? provider.userId : null,

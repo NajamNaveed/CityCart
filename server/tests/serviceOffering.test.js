@@ -156,6 +156,7 @@ describe('public provider page', () => {
       slug: 'sparkle-home',
       status: 'ACTIVE',
       verification: 'VERIFIED',
+      billingStatus: { $ne: 'FROZEN' },
     });
     expect(result.offerings).toHaveLength(1);
     expect(result.availability).toMatchObject({ isPublished: false });

@@ -155,6 +155,35 @@ function createReturnPhotoSignature(brandId, deliveryId, { now = Date.now(), con
 }
 
 /**
+ * A seller's payment receipt (docs/15 §8) is private: it is uploaded as an
+ * `authenticated` asset into a folder derived from the tenant, never from
+ * client input, and only a short-lived signed link can open it.
+ */
+function billingReceiptFolder(sellerType, sellerId) {
+  const segment = sellerType === 'BRAND' ? 'brands' : 'providers';
+  return `citycart/billing/${segment}/${sellerId}/receipts`;
+}
+
+function createBillingReceiptSignature(sellerType, sellerId, { now = Date.now(), config = env.cloudinary } = {}) {
+  if (!isConfigured(config)) {
+    throw new UploadError(503, 'Receipt upload is not set up on this server yet.');
+  }
+  const timestamp = Math.floor(now / 1000);
+  const folder = billingReceiptFolder(sellerType, sellerId);
+  const signedParams = { allowed_formats: ALLOWED_FORMATS, folder, timestamp, type: 'authenticated' };
+
+  return {
+    uploadUrl: `https://api.cloudinary.com/v1_1/${config.cloudName}/image/upload`,
+    apiKey: config.apiKey,
+    timestamp,
+    folder,
+    allowedFormats: ALLOWED_FORMATS,
+    type: 'authenticated',
+    signature: signParams(signedParams, config.apiSecret),
+  };
+}
+
+/**
  * A short-lived signed link for one private proof photo. It expires in
  * `paymentProof.linkMinutes` (about five by default) and is generated only after
  * the caller has been authorized for that brand's payments.
@@ -203,6 +232,8 @@ module.exports = {
   createProviderImageSignature,
   createPaymentProofSignature,
   createReturnPhotoSignature,
+  createBillingReceiptSignature,
+  billingReceiptFolder,
   createProofDownloadUrl,
   destroyPrivateAsset,
   paymentProofFolder,

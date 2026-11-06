@@ -5,6 +5,7 @@ const { OrderError } = require('./order.service');
 const { notifyPaymentReceived, notifyRefundIssued } = require('./notification.service');
 const { issueReceiptBestEffort } = require('./receipt.service');
 const { ROLES } = require('../config/roles');
+const { recordRefundReversal } = require('./billing.service');
 
 const toCents = (amount) => Math.round(amount * 100);
 const fromCents = (cents) => cents / 100;
@@ -96,6 +97,7 @@ async function updatePaymentStatus({ userId, tenantBrandId, paymentId, status, r
     };
     let update;
     let finalStatus;
+    let refundPaisa = 0;
 
     if (status === 'PAID') {
       if (payment.status !== 'PENDING') {
@@ -133,6 +135,7 @@ async function updatePaymentStatus({ userId, tenantBrandId, paymentId, status, r
         }
       }
       finalStatus = status;
+      refundPaisa = requestedCents;
       update = {
         $set: { status: status, refundedAmount: fromCents(refundedCents + requestedCents) },
         $push: { refunds: { amount: fromCents(requestedCents), reason: refundReason, by: userId, at: new Date() } },
@@ -145,6 +148,12 @@ async function updatePaymentStatus({ userId, tenantBrandId, paymentId, status, r
       throw new OrderError(409, 'The payment was changed by another request. Please reload and retry.', { code: 'PAYMENT_CHANGED' });
     }
     await Order.updateOne({ _id: order._id }, { $set: { paymentStatus: finalStatus } }, { session });
+
+    // A refund on an already-delivered sale reduces the 1% charge in the next
+    // period through a REVERSAL entry (docs/15 §6.3).
+    if (refundPaisa > 0) {
+      await recordRefundReversal({ order, refundPaisa, reason: refundReason, session });
+    }
     return updated;
   });
 

@@ -33,6 +33,10 @@ const ServiceBooking = require('../src/models/serviceBooking.model');
 const ServiceConversation = require('../src/models/serviceConversation.model');
 const ServiceMessage = require('../src/models/serviceMessage.model');
 const ServiceReview = require('../src/models/serviceReview.model');
+const CommissionEntry = require('../src/models/commissionEntry.model');
+const SellerInvoice = require('../src/models/sellerInvoice.model');
+const SellerPaymentClaim = require('../src/models/sellerPaymentClaim.model');
+const BillingHelpRequest = require('../src/models/billingHelp.model');
 const { ALL_PERMISSIONS } = require('../src/config/permissions');
 
 const MODELS = {
@@ -42,6 +46,8 @@ const MODELS = {
   serviceCategories: ServiceCategory, serviceProviders: ServiceProvider, serviceOfferings: ServiceOffering,
   serviceAvailabilities: ServiceAvailability, serviceBookings: ServiceBooking, serviceConversations: ServiceConversation,
   serviceMessages: ServiceMessage, serviceReviews: ServiceReview,
+  commissionEntries: CommissionEntry, sellerInvoices: SellerInvoice,
+  sellerPaymentClaims: SellerPaymentClaim, billingHelpRequests: BillingHelpRequest,
 };
 
 const NOW = new Date('2026-10-04T10:00:00Z');

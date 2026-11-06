@@ -13,6 +13,8 @@ jest.mock('../src/utils/transaction', () => ({
 }));
 jest.mock('../src/services/notification.service');
 jest.mock('../src/services/receipt.service');
+// Commission accrual is covered by the billing suites.
+jest.mock('../src/services/billing.service');
 
 const User = require('../src/models/user.model');
 const Employee = require('../src/models/employee.model');
