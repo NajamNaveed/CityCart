@@ -1,10 +1,14 @@
 jest.mock('../src/models/serviceOffering.model');
 jest.mock('../src/models/serviceProvider.model');
+jest.mock('../src/services/serviceAvailability.service');
+jest.mock('../src/services/serviceReview.service');
 
 const mongoose = require('mongoose');
 
 const ServiceOffering = require('../src/models/serviceOffering.model');
 const ServiceProvider = require('../src/models/serviceProvider.model');
+const { getAvailability } = require('../src/services/serviceAvailability.service');
+const { publicProviderReviews } = require('../src/services/serviceReview.service');
 const {
   listOwnOfferings,
   createOffering,
@@ -34,6 +38,8 @@ const offeringDoc = (over = {}) => ({
 
 beforeEach(() => {
   jest.resetAllMocks();
+  getAvailability.mockResolvedValue({ windows: [], blackoutDates: [], isPublished: false });
+  publicProviderReviews.mockResolvedValue([]);
 });
 
 describe('provider offerings', () => {
@@ -152,6 +158,8 @@ describe('public provider page', () => {
       verification: 'VERIFIED',
     });
     expect(result.offerings).toHaveLength(1);
+    expect(result.availability).toMatchObject({ isPublished: false });
+    expect(result.reviews).toEqual([]);
     expect(result.block).toMatchObject({ name: 'Madina Town', center: { lat: 31.43, lng: 73.09 } });
     expect(result).not.toHaveProperty('phone');
     expect(result).not.toHaveProperty('addressLine');

@@ -1018,10 +1018,10 @@ Phase 2a Service-provider account and onboarding                DONE
 Phase 2b Service catalogue and discovery                        DONE
          Categories, offerings, provider pages, map, search, public pages.
 
-Phase 2c Booking lifecycle                                      NEXT
+Phase 2c Booking lifecycle                                      DONE
          Availability, request, chat, proposal, completion, reviews, ranking.
 
-Phase 3  Seller billing
+Phase 3  Seller billing                                         NEXT
          1% commission ledger, monthly invoices, freeze ladder, bank details,
          receipt claims, super-admin verification, help.
 

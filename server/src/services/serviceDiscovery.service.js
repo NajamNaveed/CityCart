@@ -3,6 +3,8 @@ const ServiceOffering = require('../models/serviceOffering.model');
 const Block = require('../models/block.model');
 const { escapeRegex } = require('../utils/escapeRegex');
 const { distanceKm, latLngFromPoint, roundKm, MONGO_EARTH_RADIUS_KM } = require('../utils/geo');
+const { getAvailability } = require('./serviceAvailability.service');
+const { publicProviderReviews } = require('./serviceReview.service');
 
 class ServiceDiscoveryError extends Error {
   constructor(status, message) {
@@ -60,9 +62,11 @@ async function getPublicProvider(slug) {
   }).populate(PUBLIC_PROVIDER_POPULATE);
   if (!provider) throw new ServiceDiscoveryError(404, 'Provider not found.');
 
-  const offerings = await ServiceOffering.find({ providerId: provider._id, isActive: true }).sort({
-    createdAt: -1,
-  });
+  const [offerings, availability, reviews] = await Promise.all([
+    ServiceOffering.find({ providerId: provider._id, isActive: true }).sort({ createdAt: -1 }),
+    getAvailability(provider._id),
+    publicProviderReviews(provider._id, 6),
+  ]);
 
   const category = provider.categoryId && provider.categoryId.name ? provider.categoryId : null;
   const city = provider.cityId && provider.cityId.name ? provider.cityId : null;
@@ -84,9 +88,8 @@ async function getPublicProvider(slug) {
     city: city ? { _id: city._id, name: city.name } : null,
     block: blockPublic(block),
     offerings: offerings.map(serializePublicOffering),
-    // Availability and reviews arrive with the booking lifecycle (Phase 2c).
-    availability: [],
-    reviews: [],
+    availability,
+    reviews,
   };
 }
 

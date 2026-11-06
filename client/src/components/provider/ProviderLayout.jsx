@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
-import { ExternalLink, LayoutDashboard, LogOut, MapPin, Menu as MenuIcon, Settings, Sparkles, Wrench } from 'lucide-react'
+import { ExternalLink, CalendarClock, CalendarDays, LayoutDashboard, LogOut, MapPin, Menu as MenuIcon, Settings, Sparkles, Star, Wrench } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import NotificationBell from '../NotificationBell'
 import Drawer from '../ui/Drawer'
@@ -8,7 +8,10 @@ import Drawer from '../ui/Drawer'
 // [path, label, end-exact, icon]
 const NAV = [
   ['/provider', 'Overview', true, LayoutDashboard],
+  ['/provider/bookings', 'Bookings', false, CalendarClock],
   ['/provider/offerings', 'Services & prices', false, Wrench],
+  ['/provider/availability', 'Working hours', false, CalendarDays],
+  ['/provider/reviews', 'Reviews', false, Star],
   ['/provider/profile', 'Service profile', false, Settings],
   ['/provider/area', 'Service area', false, MapPin],
 ]

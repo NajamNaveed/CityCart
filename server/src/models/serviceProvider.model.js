@@ -79,6 +79,15 @@ const serviceProviderSchema = new mongoose.Schema(
     ratingCount: { type: Number, default: 0, min: 0 },
     completedBookings: { type: Number, default: 0, min: 0 },
     rankScore: { type: Number, default: 0 },
+    // Ranking inputs are stored so the reason for a position is auditable
+    // (docs/24 §4.7). They are recomputed, never accepted from a client.
+    rankInputs: { type: mongoose.Schema.Types.Mixed, default: {} },
+    rankingUpdatedAt: { type: Date },
+    // Late customer cancellations in the current Karachi calendar month. The
+    // counter and its ranking penalty reset on the 1st (docs/24 §4.7); the
+    // provider-cancellation rate is deliberately not reset.
+    customerLateCancelMonth: { type: String, default: '' },
+    customerLateCancelCount: { type: Number, default: 0, min: 0 },
     billingStatus: {
       type: String,
       enum: BILLING_STATUSES,

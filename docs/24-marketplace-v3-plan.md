@@ -1,6 +1,6 @@
 # 24 — Marketplace v3: Services, Seller Billing, Redesign, Flutter and Security
 
-Status: **approved 2026-11-06; Phases 0, 1, 2a and 2b implemented.** This document is the
+Status: **approved 2026-11-06; Phases 0, 1, 2a, 2b and 2c implemented.** This document is the
 authoritative plan for the v3 programme. Where it conflicts with an earlier
 document, this document wins until the earlier document is updated.
 
@@ -314,8 +314,8 @@ must pass the same `assertPinInBlock` rule as a shop. A new provider is
 Phase 2a implements the tenant, onboarding, block/pin and admin approval only
 (docs/04 §12c, docs/05 §22g): `POST /services/apply`, the provider's own
 `GET/PATCH /services/provider/me` and `PATCH /services/provider/block`, and the
-super-admin list/detail/status endpoints. Availability and offerings land in 2b,
-so signup does not ask for them yet. The owner is a `SERVICE_PROVIDER` user whose
+super-admin list/detail/status endpoints. Offerings land in 2b and availability in
+2c, so signup does not ask for them. The owner is a `SERVICE_PROVIDER` user whose
 session carries `providerId`; `requireServiceTenant` refuses every other role.
 The city is fixed at signup, a pin move inside the current block is unlimited,
 and a block change is allowed once per UTC calendar month
@@ -341,7 +341,10 @@ its own list at `GET/POST/PATCH/DELETE /services/provider/offerings`, the tenant
 and category are copied from the session, the slug is derived once, and delete
 is a soft delete. Admins holding `admin.catalog` manage the catalogue at
 `/admin/service-categories`; a category in use cannot be deactivated, and the
-tree stays two levels deep. `ServiceAvailability` remains a Phase 2c model.
+tree stays two levels deep. Phase 2c adds `ServiceAvailability` (docs/04 §12e):
+weekly Karachi wall-clock windows with a slot step and whole-day blackouts, read
+and replaced at `GET/PUT /services/provider/availability`. No published windows
+means "ask for any future time"; published windows must contain the whole job.
 
 ### 4.3 Discovery and the public page
 
@@ -367,7 +370,9 @@ offerings. `GET /services/providers/:slug` publishes the same summary plus all
 active offerings, and answers `404` for any non-approved provider. Neither
 endpoint ever returns the provider's pin, phone or address line. The web
 screens are `/services` (list + Leaflet map) and `/services/:slug`.
-Availability, reviews and `OUTSIDE_SERVICE_BLOCK` arrive with Phase 2c.
+Phase 2c adds the published availability and approved review list to the public
+provider page, and the booking form refuses a customer pin outside the
+provider's block with `OUTSIDE_SERVICE_BLOCK` (docs/04 §12e, docs/05 §22g).
 
 ### 4.4 Booking lifecycle
 
@@ -403,6 +408,17 @@ Rules:
 * A provider cannot complete a booking without a final amount. A customer
   cannot review before `CONFIRMED`.
 
+Phase 2c implements the lifecycle in `ServiceBooking` (docs/04 §12e) with the
+statuses `REQUESTED`, `PROPOSED`, `ACCEPTED`, `IN_PROGRESS`, `COMPLETED`,
+`CONFIRMED`, `DECLINED`, `CANCELLED` and `DISPUTED`. Money is integer paisa; the
+agreed price cannot be below the offering's starting price. Proposals expire
+after 1–72 hours (default 24) and a new one supersedes the active one. The
+customer confirms within three days or the job auto-confirms; a dispute opens a
+super-admin review (`PATCH /admin/service-bookings/:id/dispute`). Cancellations
+require a reason, a customer cancellation after acceptance is counted as late,
+and the provider cancellation counter is unaffected. Completion writes the
+final amount but does **not** create commission; the 1% ledger is Phase 3.
+
 ### 4.5 Chat
 
 Booking chat is a new, booking-scoped conversation:
@@ -429,6 +445,13 @@ admin with the relevant permission. No other provider can read it. Text and
 images are stored as immutable messages; contact details may be shared after
 the provider accepts, but the chat itself never becomes public.
 
+Phase 2c creates the conversation when the provider accepts and keeps the two
+unread counters on `ServiceConversation`. Chat is readable and writable while
+the booking is `ACCEPTED`, `IN_PROGRESS`, `COMPLETED`, `CONFIRMED`, `DISPUTED`
+or `CANCELLED`; a request or proposal has no chat yet. Messages are sent over
+the authenticated booking routes and pushed to that booking's room only. The
+admin view (`GET /admin/service-bookings/:id/messages`) is read-only.
+
 ### 4.6 Reviews
 
 `ServiceReview` is separate from product reviews:
@@ -447,6 +470,12 @@ ServiceReview
 
 Only a customer with a `CONFIRMED` booking may review, once. A provider may
 reply once. Reviews are moderated with the same policy as product reviews.
+
+Phase 2c enforces eligibility on the server from the booking (`CONFIRMED`, the
+signed-in customer, no existing review). The provider replies once, and hiding a
+review through `PATCH /admin/service-reviews/:id` removes it from the public
+page and the rating average. The public provider page shows the six newest
+approved reviews without customer identities.
 
 ### 4.7 Ranking
 
@@ -474,6 +503,13 @@ rankScore =
 * `rankScore` and its inputs are stored on the provider and recomputed on
   booking completion, review, cancellation, and nightly.
 * No paid ranking.
+
+Phase 2c implements this formula with the weights above and a 90-day window
+(`server/src/services/serviceRanking.service.js`). The customer late-cancel
+counter uses the Karachi calendar month and resets on the first day of the
+month; the provider cancellation rate is not reset. A provider keeps a small
+visibility boost until 10 confirmed bookings. Discovery's `sort=rank` reads the
+stored `rankScore`; no client input reaches the calculation.
 
 ---
 

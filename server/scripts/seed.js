@@ -13,6 +13,11 @@ const Block = require('../src/models/block.model');
 const ServiceCategory = require('../src/models/serviceCategory.model');
 const ServiceProvider = require('../src/models/serviceProvider.model');
 const ServiceOffering = require('../src/models/serviceOffering.model');
+const ServiceAvailability = require('../src/models/serviceAvailability.model');
+const ServiceBooking = require('../src/models/serviceBooking.model');
+const ServiceConversation = require('../src/models/serviceConversation.model');
+const ServiceMessage = require('../src/models/serviceMessage.model');
+const ServiceReview = require('../src/models/serviceReview.model');
 const { hashPassword } = require('../src/utils/password');
 const { slugify } = require('../src/utils/slugify');
 const { ROLES } = require('../src/config/roles');
@@ -133,23 +138,123 @@ async function main() {
         durationMinutes: 300, description: 'Empty-home clean before you move in, kitchen and bathrooms included.',
       },
     ];
+    const offeringDocs = [];
     for (const [index, offering] of offerings.entries()) {
+      const saved = await getOrCreate(ServiceOffering, { providerId: provider.doc._id, slug: offering.slug }, {
+        ...offering,
+        providerId: provider.doc._id,
+        categoryId: categories['home-cleaning']._id,
+        images: [`https://picsum.photos/seed/citycart-service-${index + 1}/900/600`],
+      });
+      offeringDocs.push(saved.doc);
+      log.push([`service offering: ${offering.title}`, saved]);
+    }
+
+    log.push(['service availability', await getOrCreate(ServiceAvailability, { providerId: provider.doc._id }, {
+      providerId: provider.doc._id,
+      windows: [1, 2, 3, 4, 5, 6].map((weekday) => ({
+        weekday, startMinute: 540, endMinute: 1140, slotMinutes: 60,
+      })),
+      blackoutDates: [],
+    })]);
+
+    // A customer and two bookings so the booking, chat and review screens have
+    // something to show straight after seeding.
+    const customerPw = process.env.SEED_CUSTOMER_PASSWORD || 'Demo@12345';
+    const customer = await getOrCreate(User, { email: 'customer@citycart.local', role: ROLES.CUSTOMER }, {
+      name: 'Demo Customer', email: 'customer@citycart.local',
+      passwordHash: await hashPassword(customerPw), role: ROLES.CUSTOMER,
+      emailVerifiedAt: new Date(),
+    });
+    log.push(['demo customer', customer]);
+
+    const bookingAddress = {
+      fullName: 'Demo Customer', phone: '03009876543',
+      addressLine: 'House 8, Street 2, Seeded Block',
+      city: city.doc.name, blockId: block._id, blockName: block.name,
+      location: { type: 'Point', coordinates: block.center.coordinates },
+    };
+    const snapshot = (offering) => ({
+      offeringId: offering._id, title: offering.title, slug: offering.slug,
+      durationMinutes: offering.durationMinutes, startingAtPrice: offering.startingAtPrice,
+      image: offering.images[0],
+    });
+    const year = new Date().getFullYear();
+    const now = new Date();
+    const inDays = (days, hour) => {
+      const date = new Date(now);
+      date.setDate(date.getDate() + days);
+      date.setHours(hour, 0, 0, 0);
+      return date;
+    };
+
+    const accepted = await getOrCreate(ServiceBooking, { bookingNumber: `SB-${year}-900001` }, {
+      bookingNumber: `SB-${year}-900001`,
+      customerId: customer.doc._id, providerId: provider.doc._id,
+      offering: snapshot(offeringDocs[0]), status: 'ACCEPTED',
+      requestedStart: inDays(3, 10), scheduledStart: inDays(3, 10), scheduledEnd: inDays(3, 13),
+      address: bookingAddress, agreedPricePaisa: 450000, acceptedAt: now,
+      events: [
+        { type: 'REQUESTED', by: customer.doc._id, byRole: 'CUSTOMER', at: now },
+        { type: 'ACCEPTED', by: owner.doc._id, byRole: 'PROVIDER', at: now },
+      ],
+    });
+    log.push(['service booking (accepted)', accepted]);
+
+    const conversation = await getOrCreate(ServiceConversation, { bookingId: accepted.doc._id }, {
+      bookingId: accepted.doc._id, customerId: customer.doc._id, providerId: provider.doc._id,
+      lastMessageAt: now, lastMessagePreview: 'I will bring the extra brushes.',
+      lastSenderRole: 'PROVIDER', customerUnread: 1, providerUnread: 0,
+    });
+    log.push(['service conversation', conversation]);
+    if (!accepted.doc.conversationId) {
+      await ServiceBooking.updateOne(
+        { _id: accepted.doc._id },
+        { $set: { conversationId: conversation.doc._id } }
+      );
+    }
+    for (const message of [
+      { senderRole: 'SYSTEM', body: 'Booking accepted. You can chat here about the job.' },
+      { senderRole: 'CUSTOMER', senderId: customer.doc._id, body: 'Please also do the balcony if there is time.' },
+      { senderRole: 'PROVIDER', senderId: owner.doc._id, body: 'I will bring the extra brushes.' },
+    ]) {
       log.push([
-        `service offering: ${offering.title}`,
-        await getOrCreate(ServiceOffering, { providerId: provider.doc._id, slug: offering.slug }, {
-          ...offering,
-          providerId: provider.doc._id,
-          categoryId: categories['home-cleaning']._id,
-          images: [`https://picsum.photos/seed/citycart-service-${index + 1}/900/600`],
+        `service message: ${message.body.slice(0, 30)}`,
+        await getOrCreate(ServiceMessage, { conversationId: conversation.doc._id, body: message.body }, {
+          ...message, conversationId: conversation.doc._id,
         }),
       ]);
     }
+
+    const confirmed = await getOrCreate(ServiceBooking, { bookingNumber: `SB-${year}-900002` }, {
+      bookingNumber: `SB-${year}-900002`,
+      customerId: customer.doc._id, providerId: provider.doc._id,
+      offering: snapshot(offeringDocs[1]), status: 'CONFIRMED',
+      requestedStart: inDays(-7, 11), scheduledStart: inDays(-7, 11), scheduledEnd: inDays(-7, 12),
+      address: bookingAddress, agreedPricePaisa: 180000, finalAmountPaisa: 180000,
+      acceptedAt: inDays(-8, 9), startedAt: inDays(-7, 11), completedAt: inDays(-7, 12),
+      confirmedAt: inDays(-6, 9), confirmedBy: 'CUSTOMER',
+      events: [
+        { type: 'REQUESTED', by: customer.doc._id, byRole: 'CUSTOMER', at: inDays(-8, 9) },
+        { type: 'ACCEPTED', by: owner.doc._id, byRole: 'PROVIDER', at: inDays(-8, 9) },
+        { type: 'CONFIRMED', by: customer.doc._id, byRole: 'CUSTOMER', at: inDays(-6, 9) },
+      ],
+    });
+    log.push(['service booking (confirmed)', confirmed]);
+
+    log.push(['service review', await getOrCreate(ServiceReview, { bookingId: confirmed.doc._id }, {
+      bookingId: confirmed.doc._id, customerId: customer.doc._id, providerId: provider.doc._id,
+      rating: 5, comment: 'On time, thorough and polite — the sofas look new again.',
+      isApproved: true,
+    })]);
   }
 
   log.forEach(([n, r]) => console.log(`${r.created ? 'created' : 'exists '}  ${n}`));
   console.log(
     '\nLogins:\n  admin@citycart.local / Admin@12345\n  brand@citycart.local / Brand@12345' +
-      (block ? '\n  service@citycart.local / Service@12345' : '')
+      (block
+        ? '\n  service@citycart.local / Service@12345\n  customer@citycart.local / Demo@12345'
+        : '')
   );
 }
 

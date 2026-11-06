@@ -7,11 +7,13 @@ const { initSockets, closeSockets } = require('./sockets');
 const { startAdjustmentExpiryJob } = require('./jobs/adjustmentExpiry');
 const { startPaymentProofRetentionJob } = require('./jobs/paymentProofRetention');
 const { startBrandTerminationCleanupJob } = require('./jobs/brandTerminationCleanup');
+const { startServiceBookingJobs } = require('./jobs/serviceBookingJobs');
 
 let httpServer;
 let stopAdjustmentExpiryJob;
 let stopPaymentProofRetentionJob;
 let stopBrandTerminationCleanupJob;
+let stopServiceBookingJobs;
 
 /**
  * Startup order matters: the database connection must succeed before the
@@ -45,6 +47,8 @@ async function start() {
   stopPaymentProofRetentionJob = startPaymentProofRetentionJob();
   // Terminated brands release their staff emails once access has ended (docs/24 §3.7).
   stopBrandTerminationCleanupJob = startBrandTerminationCleanupJob();
+  // Service proposals expire, completed jobs auto-confirm and ranking refreshes (docs/24 §4.4).
+  stopServiceBookingJobs = startServiceBookingJobs();
   httpServer.listen(env.port, () => {
     // eslint-disable-next-line no-console
     console.log(
@@ -72,6 +76,7 @@ async function shutdown(signal) {
     if (stopAdjustmentExpiryJob) stopAdjustmentExpiryJob();
     if (stopPaymentProofRetentionJob) stopPaymentProofRetentionJob();
     if (stopBrandTerminationCleanupJob) stopBrandTerminationCleanupJob();
+    if (stopServiceBookingJobs) stopServiceBookingJobs();
     if (httpServer) {
       await new Promise((resolve, reject) => {
         httpServer.close((err) => (err ? reject(err) : resolve()));

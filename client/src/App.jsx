@@ -25,6 +25,8 @@ import Cart from './pages/Cart'
 import Checkout from './pages/Checkout'
 import OrderPlaced from './pages/OrderPlaced'
 import MyOrders from './pages/MyOrders'
+import MyBookings from './pages/MyBookings'
+import MyBookingDetail from './pages/MyBookingDetail'
 import MyAddresses from './pages/MyAddresses'
 import Chat from './pages/Chat'
 import MyOrderDetail from './pages/MyOrderDetail'
@@ -59,6 +61,10 @@ const ProviderOverview = lazy(() => import('./pages/provider/Overview'))
 const ProviderProfile = lazy(() => import('./pages/provider/Profile'))
 const ProviderArea = lazy(() => import('./pages/provider/Area'))
 const ProviderOfferings = lazy(() => import('./pages/provider/Offerings'))
+const ProviderBookings = lazy(() => import('./pages/provider/Bookings'))
+const ProviderBookingDetail = lazy(() => import('./pages/provider/BookingDetail'))
+const ProviderAvailability = lazy(() => import('./pages/provider/Availability'))
+const ProviderReviews = lazy(() => import('./pages/provider/Reviews'))
 const AdminLayout = lazy(() => import('./components/admin/AdminLayout'))
 const AdminLanding = lazy(() => import('./pages/admin/Landing'))
 const AdminBrands = lazy(() => import('./pages/admin/Brands'))
@@ -77,6 +83,8 @@ const AdminSettings = lazy(() => import('./pages/admin/Settings'))
 const AdminAnalytics = lazy(() => import('./pages/admin/Analytics'))
 const AdminUsers = lazy(() => import('./pages/admin/Users'))
 const AdminReviews = lazy(() => import('./pages/admin/Reviews'))
+const AdminServiceBookings = lazy(() => import('./pages/admin/ServiceBookings'))
+const AdminServiceReviews = lazy(() => import('./pages/admin/ServiceReviews'))
 const AdminTeam = lazy(() => import('./pages/admin/Team'))
 const AdminActivity = lazy(() => import('./pages/admin/Activity'))
 
@@ -134,6 +142,8 @@ function App() {
                     <Route path="checkout" element={<Checkout />} />
                     <Route path="order-placed" element={<OrderPlaced />} />
                     <Route path="orders" element={<MyOrders />} />
+                    <Route path="bookings" element={<MyBookings />} />
+                    <Route path="bookings/:id" element={<MyBookingDetail />} />
                     <Route path="addresses" element={<MyAddresses />} />
                     <Route path="chat" element={<Chat />} />
                     <Route path="orders/:id" element={<MyOrderDetail />} />
@@ -163,6 +173,10 @@ function App() {
                   <Route path="provider" element={<ProviderLayout />}>
                     <Route index element={<ProviderOverview />} />
                     <Route path="offerings" element={<ProviderOfferings />} />
+                    <Route path="bookings" element={<ProviderBookings />} />
+                    <Route path="bookings/:id" element={<ProviderBookingDetail />} />
+                    <Route path="availability" element={<ProviderAvailability />} />
+                    <Route path="reviews" element={<ProviderReviews />} />
                     <Route path="profile" element={<ProviderProfile />} />
                     <Route path="area" element={<ProviderArea />} />
                     <Route path="notifications" element={<Notifications />} />
@@ -206,8 +220,10 @@ function App() {
                     <Route path="brands/:id" element={<AdminBrandDetail />} />
                     <Route path="orders" element={<AdminOrders />} />
                     <Route path="orders/:id" element={<AdminOrderDetail />} />
+                    <Route path="service-bookings" element={<AdminServiceBookings />} />
                     <Route path="returns" element={<AdminReturns />} />
                     <Route path="reviews" element={<AdminReviews />} />
+                    <Route path="service-reviews" element={<AdminServiceReviews />} />
                     <Route path="cities" element={<AdminCities />} />
                     <Route path="blocks" element={<AdminBlocks />} />
                     <Route path="categories" element={<AdminCategories />} />

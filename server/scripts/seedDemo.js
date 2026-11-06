@@ -40,6 +40,14 @@ const MODELS = {
   deliveries: require('../src/models/delivery.model'),
   returns: require('../src/models/return.model'),
   reviews: require('../src/models/review.model'),
+  serviceCategories: require('../src/models/serviceCategory.model'),
+  serviceProviders: require('../src/models/serviceProvider.model'),
+  serviceOfferings: require('../src/models/serviceOffering.model'),
+  serviceAvailabilities: require('../src/models/serviceAvailability.model'),
+  serviceBookings: require('../src/models/serviceBooking.model'),
+  serviceConversations: require('../src/models/serviceConversation.model'),
+  serviceMessages: require('../src/models/serviceMessage.model'),
+  serviceReviews: require('../src/models/serviceReview.model'),
   notifications: require('../src/models/notification.model'),
   counters: require('../src/models/counter.model'),
 };
@@ -109,6 +117,7 @@ Sign in (passwords are the same on every account in a group):
   Picker       partner app    areeba.saleem@citycart.demo (Loom & Co., one per active brand)   ${PASSWORDS.demo}
   Staff        /sell/login    usman.tariq@citycart.demo (orders) / fatima.noor@citycart.demo (catalogue)   ${PASSWORDS.demo}
   Records      partner app    hira.anwar@citycart.demo (Loom & Co.: orders, deliveries, riders, receipts, cash)   ${PASSWORDS.demo}
+  Service      /service/login service@citycart.local (Sana Home Cleaning)   ${PASSWORDS.demo}
   Customers    /login         sana.iqbal@citycart.demo and the rest      ${PASSWORDS.demo}
 `);
 }

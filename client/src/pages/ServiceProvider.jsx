@@ -4,7 +4,9 @@ import { ArrowLeft, Clock3, MapPin, Star, Wrench } from 'lucide-react'
 import api, { getErrorMessage } from '../services/api'
 import ProductImage from '../components/ProductImage'
 import Stars from '../components/Stars'
+import BookingRequest from '../components/services/BookingRequest'
 import { EmptyState, Skeleton } from '../components/ui'
+import { formatKarachiDate, minuteLabel } from '../utils/serviceSlots'
 import { btnDark, btnOutline, card, formatPrice, wrap } from '../ui'
 
 const ServicesMap = lazy(() => import('../components/services/ServicesMap'))
@@ -166,9 +168,76 @@ export default function ServiceProvider() {
           <p className="mt-6 rounded-md bg-paper px-4 py-3 text-[13px] leading-relaxed text-muted">
             Prices are starting points. Agree the final scope and price with {provider.displayName} before the job.
           </p>
+
+          <section className="mt-8">
+            <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">Working hours</h2>
+            {provider.availability?.isPublished ? (
+              <div className={`${card} mt-3 p-5`}>
+                <dl className="space-y-1.5 text-[13px]">
+                  {provider.availability.windows.map((window) => (
+                    <div key={`${window.weekday}-${window.startMinute}`} className="flex justify-between gap-4">
+                      <dt className="text-muted">{window.weekdayName}</dt>
+                      <dd className="text-ink">
+                        {minuteLabel(window.startMinute)} – {minuteLabel(window.endMinute)}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+                {provider.availability.blackoutDates.length > 0 && (
+                  <p className="mt-4 border-t border-line pt-3 text-[12.5px] leading-relaxed text-muted">
+                    Not available on {provider.availability.blackoutDates.map(formatKarachiDate).join(', ')}.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className={`${card} mt-3 p-5 text-[13px] leading-relaxed text-muted`}>
+                No fixed working hours published. Request any future time and {provider.displayName} will confirm the
+                slot.
+              </p>
+            )}
+          </section>
+
+          <section className="mt-8">
+            <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">Reviews</h2>
+            {provider.reviews?.length > 0 ? (
+              <ul className="mt-3 space-y-3">
+                {provider.reviews.map((review) => (
+                  <li key={review._id} className={`${card} p-5`}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <Stars value={review.rating} />
+                      <span className="text-[12px] text-muted">
+                        {review.reviewerName} · {formatKarachiDate(review.createdAt)}
+                      </span>
+                    </div>
+                    {review.serviceTitle && (
+                      <p className="mt-1 text-[12px] font-medium text-muted">{review.serviceTitle}</p>
+                    )}
+                    {review.comment && (
+                      <p className="mt-2 text-[13.5px] leading-relaxed text-ink/85">{review.comment}</p>
+                    )}
+                    {review.providerReply?.body && (
+                      <div className="mt-3 rounded-md bg-paper px-3.5 py-2.5 text-[13px] leading-relaxed text-muted">
+                        <span className="font-medium text-ink">{provider.displayName} replied: </span>
+                        {review.providerReply.body}
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className={`${card} mt-3 p-5 text-[13px] text-muted`}>
+                No reviews yet. Only customers with a confirmed booking can review.
+              </p>
+            )}
+          </section>
         </section>
 
         <aside className="space-y-4">
+          <section className={`${card} p-5`}>
+            <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">Request a booking</h2>
+            <BookingRequest provider={provider} />
+          </section>
+
           <section className={`${card} p-5`}>
             <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">Service area</h2>
             <p className="mt-2 font-medium text-ink">

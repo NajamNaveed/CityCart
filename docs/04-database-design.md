@@ -717,6 +717,150 @@ provider. The public serialized offering omits the tenant id and category id.
 
 ---
 
+# 12e. Booking, Availability, Chat and Review Models (v3 Phase 2c)
+
+Phase 2c adds five collections (`24-marketplace-v3-plan.md` §4.4–4.7). None of
+them is a brand collection; every one is scoped by the booking's provider,
+customer or both.
+
+## ServiceAvailability
+
+Collection:
+
+```text
+serviceavailabilities
+```
+
+One document per provider (`providerId` unique).
+
+```text
+providerId
+windows[]        { weekday 0–6, startMinute 0–1439, endMinute 1–1440, slotMinutes 15–240 }
+blackoutDates[]  'YYYY-MM-DD' in Asia/Karachi, at most 60
+createdAt / updatedAt
+```
+
+`weekday` 0 is Sunday and minutes are Karachi wall-clock minutes, so a provider
+never thinks about UTC. Windows on the same weekday may not overlap and a
+provider has at most 21 windows. No windows means "request any future time";
+when windows exist, the whole job (start + offering duration) must fit inside
+one window and the day must not be blacked out. `PUT` replaces the whole
+document; the server derives `isPublished` from `windows.length > 0`.
+
+## ServiceBooking
+
+Collection:
+
+```text
+servicebookings
+```
+
+One full-service job between one customer and one provider. It is never an
+`Order` (D11), and no internal payment is recorded.
+
+```text
+bookingNumber    unique
+customerId       -> User, indexed
+providerId       -> ServiceProvider, indexed
+offering         snapshot { offeringId, title, slug, durationMinutes, startingAtPrice, image }
+status           REQUESTED | PROPOSED | ACCEPTED | IN_PROGRESS | COMPLETED |
+                 CONFIRMED | DECLINED | CANCELLED | DISPUTED
+requestedStart
+scheduledStart / scheduledEnd   set when accepted
+address          snapshot { fullName, phone, addressLine, city, blockId, blockName, location }
+note
+proposals[]      { pricePaisa, scope, scheduledStart, scheduledEnd, expiresAt,
+                   status ACTIVE | SUPERSEDED | ACCEPTED | DECLINED | EXPIRED, createdAt }
+agreedPricePaisa
+finalAmountPaisa
+completionNote
+acceptedAt / startedAt / completedAt / confirmedAt / autoConfirmAt
+confirmedBy      CUSTOMER | AUTO | ADMIN
+cancellation     { by CUSTOMER | PROVIDER | ADMIN, reason, late, at }
+dispute          { reason, at, resolvedAt, resolution CONFIRMED | CANCELLED,
+                   resolvedBy, resolutionNote }
+conversationId   -> ServiceConversation
+events[]         { type, at, by, byRole, note, meta }
+createdAt / updatedAt
+```
+
+Rules:
+
+* The offering price is a floor: `agreedPricePaisa` cannot be below
+  `offering.startingAtPrice`; `finalAmountPaisa` is required on completion.
+* Only one proposal is `ACTIVE`; sending another marks the previous one
+  `SUPERSEDED`. Proposals expire in 1–72 hours (default 24) and a scheduled
+  request may be at most 60 days ahead.
+* Completion sets `autoConfirmAt` three days ahead. The customer may confirm or
+  dispute; a job left alone is confirmed by the job as `confirmedBy: AUTO`.
+* A cancellation always carries a reason. A customer cancellation after
+  acceptance sets `late: true`; a provider cancellation always counts against
+  the provider.
+* The address is a snapshot: editing a saved address later never changes a
+  booking that is already on the calendar.
+* Indexes support the customer list, the provider list, the provider calendar
+  overlap check and the auto-confirm sweep.
+
+## ServiceConversation and ServiceMessage
+
+Collections:
+
+```text
+serviceconversations
+servicemessages
+```
+
+One conversation per accepted booking (`bookingId` unique). It stores the two
+membership ids, the last-message preview/time/sender and
+`customerUnread` / `providerUnread`.
+
+```text
+ServiceConversation
+bookingId, customerId, providerId, lastMessageAt, lastMessagePreview,
+lastSenderRole, customerUnread, providerUnread, timestamps
+
+ServiceMessage
+conversationId, senderId (null for SYSTEM), senderRole CUSTOMER | PROVIDER | SYSTEM,
+body (max 1000), attachments[] (max 3), createdAt
+```
+
+Messages are immutable and rendered as text only. Access is booking membership
+on every request; a super admin may read but never post. Unread counters are
+cleared by the booking's `/chats/:id/read` endpoint.
+
+## ServiceReview
+
+Collection:
+
+```text
+servicereviews
+```
+
+Separate from product reviews (`bookingId` unique, so one review per booking).
+
+```text
+bookingId, customerId, providerId
+rating          1–5 integer
+comment         max 2000
+providerReply   { body max 1000, at } | null
+isApproved      moderation flag, default true
+createdAt / updatedAt
+```
+
+Only the customer of a `CONFIRMED` booking may create the review, and only once.
+The provider replies once. Hiding a review removes it from the public provider
+page and from the stored rating, and triggers a ranking recomputation.
+
+## Ranking and jobs
+
+`ServiceProvider.rankScore` is recomputed from stored bookings and approved
+reviews after completion, review, cancellation and nightly. The formula and
+weights are in `server/src/services/serviceRanking.service.js`
+(`24-marketplace-v3-plan.md` §4.7); no client input is accepted. Scheduled jobs
+expire stale proposals, auto-confirm completed jobs and refresh rankings.
+
+---
+
 # 13. Category Model
 
 Collection:

@@ -48,8 +48,11 @@ const adminUsersRoutes = require('./routes/adminUsers.routes');
 const adminPartnerRoutes = require('./routes/adminPartner.routes');
 const adminActivityRoutes = require('./routes/adminActivity.routes');
 const serviceProviderRoutes = require('./routes/serviceProvider.routes');
+const serviceBookingRoutes = require('./routes/serviceBooking.routes');
 const adminServiceProviderRoutes = require('./routes/adminServiceProvider.routes');
 const adminServiceCategoryRoutes = require('./routes/adminServiceCategory.routes');
+const adminServiceBookingRoutes = require('./routes/adminServiceBooking.routes');
+const adminServiceReviewRoutes = require('./routes/adminServiceReview.routes');
 
 const requestLogger = require('./middleware/requestLogger');
 const { apiLimiter } = require('./middleware/rateLimiters');
@@ -129,7 +132,10 @@ app.use('/api/v1/admin/partners', adminPartnerRoutes);
 app.use('/api/v1/admin/activity', adminActivityRoutes);
 app.use('/api/v1/admin/providers', adminServiceProviderRoutes);
 app.use('/api/v1/admin/service-categories', adminServiceCategoryRoutes);
+app.use('/api/v1/admin/service-bookings', adminServiceBookingRoutes);
+app.use('/api/v1/admin/service-reviews', adminServiceReviewRoutes);
 app.use('/api/v1/services', serviceProviderRoutes);
+app.use('/api/v1/services', serviceBookingRoutes);
 app.use('/api/v1', analyticsRoutes);
 
 // Must stay LAST: unmatched routes -> 404, then the global error handler.

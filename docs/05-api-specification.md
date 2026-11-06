@@ -2242,7 +2242,7 @@ or line.
 
 ---
 
-# 22g. Service-Provider Endpoints (v3 Phase 2a–2b)
+# 22g. Service-Provider Endpoints (v3 Phase 2a–2c)
 
 Base:
 
@@ -2254,8 +2254,8 @@ Service providers are a second tenant type (docs/24 §4). They are never brands:
 no endpoint accepts or returns a `brandId` for them, and every provider query is
 scoped to `req.tenantProviderId` from the session. Phase 2a covers signup,
 profile, one-block area and super-admin approval; Phase 2b adds offerings,
-discovery and the public provider page. Booking and billing arrive in Phases
-2c–3.
+discovery and the public provider page; Phase 2c adds availability, bookings,
+booking chat, reviews and ranking oversight.
 
 ## Public
 
@@ -2342,9 +2342,11 @@ The public provider page. `:slug` must match `^[a-z0-9-]+$` (`400` otherwise).
 A pending, suspended, terminated or unknown provider answers `404`, so the
 public cannot enumerate applications. The response adds the provider's active
 offerings (`_id`, `title`, `slug`, `description`, `images`, `startingAtPrice`,
-`durationMinutes`, `attributes`) and placeholder `availability: []` /
-`reviews: []` until Phase 2c. It never includes the pin, phone, address line or
-owner.
+`durationMinutes`, `attributes`), its published `availability` (windows with
+`weekdayName`, `start`/`end` `HH:MM`, `slotMinutes`, plus `blackoutDates`,
+`updatedAt` and `isPublished`) and up to six approved `reviews` (`_id`, `rating`,
+`comment`, `providerReply`, `reviewerName`, `serviceTitle`, `createdAt`). It
+never includes the pin, phone, address line or owner.
 
 ## Provider's own tenant
 
@@ -2419,6 +2421,155 @@ POST /api/v1/uploads/provider-signature -> { success, upload: { uploadUrl, apiKe
 It requires a `SERVICE_PROVIDER` session and signs the folder
 `citycart/providers/<providerId>/offerings`, so the browser can post straight to
 Cloudinary without an authenticated cookie.
+
+## Availability (Phase 2c)
+
+```text
+GET /services/provider/availability -> { availability }
+PUT /services/provider/availability -> { message, availability }
+```
+
+Both require a `SERVICE_PROVIDER` session. `PUT` replaces the whole document:
+
+```json
+{
+  "windows": [
+    { "weekday": 1, "startMinute": 540, "endMinute": 1080, "slotMinutes": 60 }
+  ],
+  "blackoutDates": ["2026-12-25"]
+}
+```
+
+Weekdays are `0` (Sunday) to `6`; minutes are Karachi wall-clock minutes;
+`slotMinutes` is 15–240. Windows on the same day may not overlap, at most 21
+windows are allowed and `blackoutDates` is capped at 60 (`YYYY-MM-DD`). The
+response adds `weekdayName`, `start`/`end` as `HH:MM`, `updatedAt` and
+`isPublished` (`windows.length > 0`). No windows means any future time may be
+requested; once published, the whole job must fit inside a window on a day that
+is not blacked out.
+
+## Booking lifecycle (Phase 2c)
+
+Customer endpoints require a `CUSTOMER` session. Every query and mutation is
+scoped to the signed-in customer; another customer's booking id answers `404`.
+
+```text
+POST /services/bookings                       -> 201 { message, booking }
+GET  /services/bookings?status=&page=&limit=  -> { bookings, pagination }
+GET  /services/bookings/:id                   -> { booking }
+
+POST /services/bookings/:id/proposals/accept  -> { message, booking }
+POST /services/bookings/:id/proposals/decline -> { message, booking }
+POST /services/bookings/:id/confirm           -> { message, booking }
+POST /services/bookings/:id/dispute           -> { message, booking }
+POST /services/bookings/:id/cancel            -> { message, booking }
+POST /services/bookings/:id/review            -> 201 { message, review }
+GET  /services/bookings/:id/review            -> { review }
+```
+
+Create body — the provider, block, price and customer are never accepted from
+the client:
+
+```json
+{
+  "providerId": "<ObjectId>",
+  "offeringId": "<ObjectId>",
+  "scheduledStart": "2026-11-20T09:00:00.000Z",
+  "address": {
+    "fullName": "Sana Iqbal",
+    "phone": "+92 300 1234567",
+    "addressLine": "House 4, Street 7",
+    "city": "Faisalabad"
+  },
+  "location": { "lat": 31.41, "lng": 73.11 },
+  "note": "optional, max 1000"
+}
+```
+
+The server resolves the active provider, its active offering and its block. A
+pin outside the provider's block answers `400 OUTSIDE_SERVICE_BLOCK`; a
+published slot that does not contain the job answers `409 SLOT_UNAVAILABLE`.
+The request starts `REQUESTED` with a booking number and a server-side event.
+
+Proposals are provider-only (`POST /services/provider/bookings/:id/propose`
+with `{ pricePaisa, scope, scheduledStart, expiresInHours? }`), expire after
+1–72 hours (default 24) and a new one supersedes the active one. The customer
+accepts or declines; accepting sets `ACCEPTED`, the agreed price and the
+scheduled window, and opens the chat. Provider actions and rules:
+
+```text
+POST /services/provider/bookings/:id/accept   { pricePaisa }              REQUESTED -> ACCEPTED
+POST /services/provider/bookings/:id/propose  { pricePaisa, scope, ... }  REQUESTED | PROPOSED
+POST /services/provider/bookings/:id/start                                ACCEPTED -> IN_PROGRESS
+POST /services/provider/bookings/:id/complete { finalAmountPaisa, completionNote? }
+                                                                          IN_PROGRESS -> COMPLETED
+POST /services/provider/bookings/:id/cancel   { reason }                  any open -> CANCELLED
+```
+
+The agreed and final amounts are whole paisa and may not be below the offering's
+starting price. Completion sets `autoConfirmAt` three days ahead; the customer
+confirms (`CONFIRMED`) or disputes (`DISPUTED`). Cancellations require a reason;
+a customer cancellation after acceptance is recorded as late. The booking
+serializer omits the provider's phone until the request is accepted.
+
+## Booking chat (Phase 2c)
+
+```text
+GET  /services/chats                    -> { items, pagination }
+GET  /services/chats/unread             -> { unread }
+GET  /services/chats/:id/messages?before=&limit= -> { messages, hasMore }
+POST /services/chats/:id/messages       { body, attachments? } -> 201 { message }
+POST /services/chats/:id/read           -> { success: true }
+```
+
+`:id` is the **booking id**, not a conversation id. These routes accept the
+booking's customer or its provider owner; the server checks membership on every
+request. Chat opens once the booking is `ACCEPTED`. Messages are text (max 1000)
+plus up to three attachment URLs, stored immutably and rendered as text. The
+list adds the counterpart name, booking number, service title, status and the
+viewer's unread count.
+
+## Provider reviews and ranking (Phase 2c)
+
+```text
+GET   /services/provider/reviews?rating=&page=&limit= -> { reviews, summary, pagination }
+POST  /services/provider/reviews/:id/reply { body }   -> { message, review }
+```
+
+The provider list includes `reviewerName`, `serviceTitle`, the reply and the
+moderation flag; `summary` is `{ average, count, distribution {1..5} }` over
+approved reviews. A provider may reply once. Ranking (`ServiceProvider.rankScore`)
+is server-computed after completion, review and cancellation, and nightly; no
+client input is accepted.
+
+## Service bookings and reviews (platform admin)
+
+Base `/api/v1/admin/service-bookings`. Guarded by
+`requireAdminPermission(admin.orders)`.
+
+```text
+GET   /admin/service-bookings?status=&disputed=true&providerId=&page=&limit=
+      -> { bookings, pagination }
+GET   /admin/service-bookings/:id              -> { booking }
+GET   /admin/service-bookings/:id/messages     -> { messages, hasMore }
+PATCH /admin/service-bookings/:id/dispute      { resolution, note? }
+      -> { message, booking }
+```
+
+Dispute resolution is `CONFIRMED` or `CANCELLED`; the decision is recorded on the
+booking and in the admin activity log. Admin chat is read-only.
+
+Base `/api/v1/admin/service-reviews`, guarded by
+`requireAdminPermission(admin.reviews)`:
+
+```text
+GET   /admin/service-reviews?approved=&rating=&providerId=&page=&limit=
+      -> { reviews, pagination }
+PATCH /admin/service-reviews/:id { isApproved } -> { message, review }
+```
+
+The list adds `providerName`, `serviceTitle` and `bookingNumber`. Hiding a review
+removes it from the public page and the rating average.
 
 ## Service categories (platform admin)
 

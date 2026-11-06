@@ -8,6 +8,7 @@ const STATUS_TONE = {
   READY_FOR_SHIPMENT: 'good', PROCESSING: 'info', RECEIVED: 'good',
   PENDING: 'warn', LOW_STOCK: 'warn', UNVERIFIED: 'warn', OUT_OF_STOCK: 'bad', SHIPPED: 'info',
   OUT_FOR_DELIVERY: 'info', IN_TRANSIT: 'info', PICKED_UP: 'info', READY_FOR_PICKUP: 'info',
+  REQUESTED: 'info', IN_PROGRESS: 'info', COMPLETED: 'warn', DECLINED: 'bad', DISPUTED: 'bad',
   REJECTED: 'bad', CANCELLED: 'bad', FAILED: 'bad', RETURNED: 'bad',
   REFUNDED: 'bad', PARTIALLY_REFUNDED: 'warn',
   PROPOSED: 'warn', ACCEPTED: 'good', REMOVED: 'warn', WITHDRAWN: 'quiet', EXPIRED: 'quiet', ORDER_CANCELLED: 'bad',

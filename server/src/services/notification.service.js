@@ -3,6 +3,7 @@ const User = require('../models/user.model');
 const Employee = require('../models/employee.model');
 const Product = require('../models/product.model');
 const Brand = require('../models/brand.model');
+const ServiceProvider = require('../models/serviceProvider.model');
 const { ROLES } = require('../config/roles');
 const { PERMISSIONS } = require('../config/permissions');
 const { emitToUser } = require('../sockets');
@@ -565,6 +566,218 @@ async function notifyBrandStatusChanged(brand, status) {
   });
 }
 
+// --- Service bookings (docs/24 §4.4) --------------------------------------
+
+function bookingData(booking) {
+  return {
+    bookingId: String(booking._id),
+    bookingNumber: booking.bookingNumber,
+    providerId: String(booking.providerId),
+    serviceTitle: booking.offering ? booking.offering.title : undefined,
+    status: booking.status,
+  };
+}
+
+async function notifyProviderOfServiceRequest({ providerUserId, booking }) {
+  if (!providerUserId || !booking) return;
+  await notify({
+    userIds: [providerUserId],
+    type: 'SERVICE_BOOKING_REQUESTED',
+    title: 'New booking request',
+    message: `${booking.address.fullName} asked for "${booking.offering.title}" on ${booking.requestedStart.toUTCString()}.`,
+    data: bookingData(booking),
+  });
+}
+
+async function notifyCustomerOfServiceProposal({ booking, proposal }) {
+  if (!booking || !proposal) return;
+  await notify({
+    userIds: [booking.customerId],
+    type: 'SERVICE_BOOKING_PROPOSED',
+    title: 'Your provider sent a proposal',
+    message: `A price of PKR ${(proposal.pricePaisa / 100).toFixed(2)} was proposed for "${booking.offering.title}". Review it before it expires.`,
+    data: bookingData(booking),
+  });
+}
+
+async function notifyProviderOfProposalAnswer({ providerUserId, booking, accepted }) {
+  if (!providerUserId || !booking) return;
+  await notify({
+    userIds: [providerUserId],
+    type: 'SERVICE_BOOKING_PROPOSAL_ANSWERED',
+    title: accepted ? 'Proposal accepted' : 'Proposal declined',
+    message: accepted
+      ? `${booking.address.fullName} accepted your proposal for "${booking.offering.title}".`
+      : `${booking.address.fullName} declined your proposal for "${booking.offering.title}".`,
+    data: bookingData(booking),
+  });
+}
+
+async function notifyCustomerOfServiceAccepted({ booking }) {
+  if (!booking) return;
+  await notify({
+    userIds: [booking.customerId],
+    type: 'SERVICE_BOOKING_ACCEPTED',
+    title: 'Booking accepted',
+    message: `${booking.offering.title} is booked for ${booking.scheduledStart.toUTCString()}. Chat with the provider inside the booking.`,
+    data: bookingData(booking),
+  });
+}
+
+async function notifyCustomerOfServiceStarted({ booking }) {
+  if (!booking) return;
+  await notify({
+    userIds: [booking.customerId],
+    type: 'SERVICE_BOOKING_STARTED',
+    title: 'Your provider has started',
+    message: `Work on "${booking.offering.title}" has started.`,
+    data: bookingData(booking),
+  });
+}
+
+async function notifyCustomerOfServiceCompleted({ booking }) {
+  if (!booking) return;
+  await notify({
+    userIds: [booking.customerId],
+    type: 'SERVICE_BOOKING_COMPLETED',
+    title: 'Job completed — please confirm',
+    message: `${booking.offering.title} was marked complete at PKR ${(booking.finalAmountPaisa / 100).toFixed(
+      2
+    )}. Confirm within 3 days or dispute it.`,
+    data: bookingData(booking),
+  });
+}
+
+async function notifyProviderOfServiceConfirmed({ providerUserId, booking, by }) {
+  if (!providerUserId || !booking) return;
+  await notify({
+    userIds: [providerUserId],
+    type: 'SERVICE_BOOKING_CONFIRMED',
+    title: by === 'AUTO' ? 'Booking auto-confirmed' : 'Booking confirmed',
+    message:
+      by === 'AUTO'
+        ? `The customer did not answer, so "${booking.offering.title}" was automatically confirmed.`
+        : `The customer confirmed "${booking.offering.title}".`,
+    data: bookingData(booking),
+  });
+}
+
+async function notifyProviderOfServiceDispute({ providerUserId, booking }) {
+  if (!providerUserId || !booking) return;
+  await notify({
+    userIds: [providerUserId],
+    type: 'SERVICE_BOOKING_DISPUTED',
+    title: 'Completion disputed',
+    message: `The customer disputed the completion of "${booking.offering.title}". CityCart admin will review it.`,
+    data: bookingData(booking),
+  });
+}
+
+async function notifySuperAdminsOfServiceDispute({ booking }) {
+  if (!booking) return;
+  await notify({
+    userIds: await superAdminIds(),
+    type: 'SERVICE_BOOKING_DISPUTED',
+    title: 'Service booking dispute',
+    message: `${booking.address.fullName} disputed "${booking.offering.title}" (${booking.bookingNumber}). Review it.`,
+    data: bookingData(booking),
+  });
+}
+
+/** Super admin closed a dispute; both sides learn the outcome (docs/24 §4.4). */
+async function notifyPartiesOfDisputeResolved({ booking, resolution, note }) {
+  if (!booking) return;
+  const confirmed = resolution === 'CONFIRMED';
+  const title = confirmed ? 'Dispute resolved: booking confirmed' : 'Dispute resolved in your favour';
+  const customerMessage = confirmed
+    ? `CityCart reviewed "${booking.offering.title}" and confirmed the booking.${note ? ` Note: ${note}` : ''}`
+    : `CityCart reviewed "${booking.offering.title}" and cancelled it.${note ? ` Note: ${note}` : ''}`;
+  const provider = await ServiceProvider.findById(booking.providerId).select('userId');
+  const providerMessage = confirmed
+    ? `CityCart reviewed the dispute on "${booking.offering.title}" and confirmed the booking.${note ? ` Note: ${note}` : ''}`
+    : `CityCart reviewed the dispute on "${booking.offering.title}" and cancelled it.${note ? ` Note: ${note}` : ''}`;
+  await notify({
+    userIds: [booking.customerId],
+    type: 'SERVICE_BOOKING_DISPUTED',
+    title,
+    message: customerMessage,
+    data: bookingData(booking),
+  });
+  if (provider) {
+    await notify({
+      userIds: [provider.userId],
+      type: 'SERVICE_BOOKING_DISPUTED',
+      title: 'Dispute resolved',
+      message: providerMessage,
+      data: bookingData(booking),
+    });
+  }
+}
+
+async function notifyProviderOfServiceDeclined({ providerUserId, booking }) {
+  if (!providerUserId || !booking) return;
+  await notify({
+    userIds: [providerUserId],
+    type: 'SERVICE_BOOKING_DECLINED',
+    title: 'Request declined',
+    message: `${booking.address.fullName} declined the proposal for "${booking.offering.title}".`,
+    data: bookingData(booking),
+  });
+}
+
+async function notifyServiceBookingCancelled({ booking, by }) {
+  if (!booking) return;
+  const toCustomer = by !== 'CUSTOMER';
+  const toProvider = by !== 'PROVIDER';
+  const messageBy = by === 'CUSTOMER' ? 'The customer' : by === 'PROVIDER' ? 'The provider' : 'CityCart';
+  const text = `${messageBy} cancelled "${booking.offering.title}"${
+    booking.cancellation && booking.cancellation.reason ? `: ${booking.cancellation.reason}` : '.'
+  }`;
+  if (toCustomer) {
+    await notify({
+      userIds: [booking.customerId],
+      type: 'SERVICE_BOOKING_CANCELLED',
+      title: 'Booking cancelled',
+      message: text,
+      data: bookingData(booking),
+    });
+  }
+  if (toProvider) {
+    const provider = await ServiceProvider.findById(booking.providerId).select('userId');
+    if (provider) {
+      await notify({
+        userIds: [provider.userId],
+        type: 'SERVICE_BOOKING_CANCELLED',
+        title: 'Booking cancelled',
+        message: text,
+        data: bookingData(booking),
+      });
+    }
+  }
+}
+
+async function notifyProviderOfNewServiceReview({ providerUserId, booking, review }) {
+  if (!providerUserId || !review) return;
+  await notify({
+    userIds: [providerUserId],
+    type: 'NEW_REVIEW',
+    title: 'New service review',
+    message: `A customer left a ${review.rating}-star review on "${booking ? booking.offering.title : 'your service'}".`,
+    data: booking ? bookingData(booking) : { providerId: String(review.providerId) },
+  });
+}
+
+async function notifyCustomerOfServiceReviewReply({ booking, review }) {
+  if (!booking || !review || !review.providerReply) return;
+  await notify({
+    userIds: [booking.customerId],
+    type: 'SERVICE_REVIEW_REPLIED',
+    title: 'Provider replied to your review',
+    message: `"${booking.offering.title}": ${review.providerReply.body}`,
+    data: bookingData(booking),
+  });
+}
+
 // --------------------------------------------------------------------------
 // READ side — the personal inbox APIs of docs/05 §21 / docs/12 §11
 // --------------------------------------------------------------------------
@@ -661,6 +874,20 @@ module.exports = {
   notifyBrandOwnerWelcome: bestEffort(notifyBrandOwnerWelcome),
   notifyBrandTerminated: bestEffort(notifyBrandTerminated),
   notifyBrandStatusChanged: bestEffort(notifyBrandStatusChanged),
+  notifyProviderOfServiceRequest: bestEffort(notifyProviderOfServiceRequest),
+  notifyCustomerOfServiceProposal: bestEffort(notifyCustomerOfServiceProposal),
+  notifyProviderOfProposalAnswer: bestEffort(notifyProviderOfProposalAnswer),
+  notifyCustomerOfServiceAccepted: bestEffort(notifyCustomerOfServiceAccepted),
+  notifyCustomerOfServiceStarted: bestEffort(notifyCustomerOfServiceStarted),
+  notifyCustomerOfServiceCompleted: bestEffort(notifyCustomerOfServiceCompleted),
+  notifyProviderOfServiceConfirmed: bestEffort(notifyProviderOfServiceConfirmed),
+  notifyProviderOfServiceDispute: bestEffort(notifyProviderOfServiceDispute),
+  notifySuperAdminsOfServiceDispute: bestEffort(notifySuperAdminsOfServiceDispute),
+  notifyProviderOfServiceDeclined: bestEffort(notifyProviderOfServiceDeclined),
+  notifyPartiesOfDisputeResolved: bestEffort(notifyPartiesOfDisputeResolved),
+  notifyServiceBookingCancelled: bestEffort(notifyServiceBookingCancelled),
+  notifyProviderOfNewServiceReview: bestEffort(notifyProviderOfNewServiceReview),
+  notifyCustomerOfServiceReviewReply: bestEffort(notifyCustomerOfServiceReviewReply),
   listMyNotifications,
   markMyNotificationRead,
   markAllMyNotificationsRead,

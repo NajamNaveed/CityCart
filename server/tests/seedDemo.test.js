@@ -25,12 +25,23 @@ const Review = require('../src/models/review.model');
 const Receipt = require('../src/models/receipt.model');
 const Notification = require('../src/models/notification.model');
 const Counter = require('../src/models/counter.model');
+const ServiceCategory = require('../src/models/serviceCategory.model');
+const ServiceProvider = require('../src/models/serviceProvider.model');
+const ServiceOffering = require('../src/models/serviceOffering.model');
+const ServiceAvailability = require('../src/models/serviceAvailability.model');
+const ServiceBooking = require('../src/models/serviceBooking.model');
+const ServiceConversation = require('../src/models/serviceConversation.model');
+const ServiceMessage = require('../src/models/serviceMessage.model');
+const ServiceReview = require('../src/models/serviceReview.model');
 const { ALL_PERMISSIONS } = require('../src/config/permissions');
 
 const MODELS = {
   cities: City, blocks: Block, branches: Branch, conversations: Conversation, messages: Message, users: User, brands: Brand, stores: Store, categories: Category, catalogProducts: CatalogProduct, addresses: Address, products: Product,
   inventories: Inventory, employees: Employee, carts: Cart, orders: Order, orderAdjustments: OrderAdjustment, inventoryMovements: InventoryMovement, payments: Payment, receipts: Receipt,
   deliveries: Delivery, returns: Return, reviews: Review, notifications: Notification, counters: Counter,
+  serviceCategories: ServiceCategory, serviceProviders: ServiceProvider, serviceOfferings: ServiceOffering,
+  serviceAvailabilities: ServiceAvailability, serviceBookings: ServiceBooking, serviceConversations: ServiceConversation,
+  serviceMessages: ServiceMessage, serviceReviews: ServiceReview,
 };
 
 const NOW = new Date('2026-10-04T10:00:00Z');

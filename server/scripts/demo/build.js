@@ -12,6 +12,7 @@ const { computeBlockIds } = require('../../src/utils/blockMembership');
 const { PAYMENT_METHOD_FOR_COLLECTION } = require('../../src/config/paymentCollection');
 const { STORE_FAULT_REASONS } = require('../../src/config/returns');
 const { CITIES, BLOCKS, BRANCHES, BRANDS, CHATS, LONG_CHAT, CUSTOMERS, ADMIN, CARTS, REMARKS } = require('./catalog');
+const { karachiDateKey, karachiMonthKey } = require('../../src/utils/karachiTime');
 
 const { ObjectId } = mongoose.Types;
 const HOUR = 3600 * 1000;
@@ -77,6 +78,8 @@ function buildDataset({ now = new Date(), hashes }) {
     cities: [], blocks: [], branches: [], conversations: [], messages: [], users: [], brands: [], stores: [], categories: [], catalogProducts: [], addresses: [], products: [], inventories: [],
     employees: [], carts: [], orders: [], payments: [], receipts: [], deliveries: [], returns: [], orderAdjustments: [], inventoryMovements: [],
     reviews: [], notifications: [], counters: [],
+    serviceCategories: [], serviceProviders: [], serviceOfferings: [], serviceAvailabilities: [],
+    serviceBookings: [], serviceConversations: [], serviceMessages: [], serviceReviews: [],
   };
 
   // ── cities ──
@@ -110,7 +113,14 @@ function buildDataset({ now = new Date(), hashes }) {
   // ── users ──
   const userDoc = ({ name, email, phone, role, passwordHash, brandId, createdAt, isActive = true, restrictedUntil }) => ({
     _id: new ObjectId(), name, email, passwordHash, role,
-    accountType: role === 'CUSTOMER' ? 'CUSTOMER' : role === 'SUPER_ADMIN' ? 'PLATFORM_ADMIN' : 'BRAND',
+    accountType:
+      role === 'CUSTOMER'
+        ? 'CUSTOMER'
+        : role === 'SUPER_ADMIN' || role === 'ADMIN_PARTNER'
+          ? 'PLATFORM_ADMIN'
+          : role === 'SERVICE_PROVIDER'
+            ? 'SERVICE'
+            : 'BRAND',
     ...(brandId && { brandId }), phone,
     avatar: monogram(name, 240), isActive, passwordVersion: 0, mustChangePassword: false,
     // Demo accounts are pre-existing: they can sign in without a verification email.
@@ -170,6 +180,286 @@ function buildDataset({ now = new Date(), hashes }) {
         isDefault: false, createdAt: new Date(made.getTime() + 3 * DAY), updatedAt: new Date(made.getTime() + 3 * DAY),
       });
     }
+  });
+
+  // ── service providers (their own tenant, docs/24 §4) ──
+  const serviceCategoryDefs = [
+    { name: 'Home Cleaning', slug: 'home-cleaning' },
+    { name: 'Deep Cleaning', slug: 'deep-cleaning', parent: 'home-cleaning' },
+    { name: 'Plumbing', slug: 'plumbing' },
+    { name: 'Electrical', slug: 'electrical' },
+  ];
+  const serviceCategoryBySlug = {};
+  serviceCategoryDefs.forEach((def, order) => {
+    const doc = {
+      _id: new ObjectId(), name: def.name, slug: def.slug, order, isActive: true,
+      parentId: def.parent ? serviceCategoryBySlug[def.parent]._id : null,
+      image: photo(`service category ${def.name}`, order + 20, 600, 400),
+      createdAt: ago(210 * DAY), updatedAt: ago(210 * DAY),
+    };
+    ds.serviceCategories.push(doc);
+    serviceCategoryBySlug[def.slug] = doc;
+  });
+
+  const serviceBlock = ds.blocks.find((b) => b.slug === 'peoples-colony') || ds.blocks[0];
+  const serviceOwner = userDoc({
+    name: 'Sana Khalid', email: 'service@citycart.local', phone: '+92 300 1234567',
+    role: 'SERVICE_PROVIDER', passwordHash: hashes.demo, createdAt: ago(190 * DAY),
+  });
+  ds.users.push(serviceOwner);
+
+  const providerMade = ago(185 * DAY);
+  const provider = {
+    _id: new ObjectId(), userId: serviceOwner._id, displayName: 'Sana Home Cleaning',
+    legalName: 'Sana Home Cleaning Services', slug: 'sana-home-cleaning-demo',
+    categoryId: serviceCategoryBySlug['home-cleaning']._id, cityId: faisalabad._id, blockId: serviceBlock._id,
+    location: { type: 'Point', coordinates: [...serviceBlock.center.coordinates] },
+    addressLine: 'House 12, Street 4, Peoples Colony No. 1', phone: '+92 300 1234567',
+    bio: 'Reliable home cleaning in Faisalabad — deep cleans, sofas and move-in jobs.',
+    avatar: photo('cleaner', 4, 300, 300), coverImage: photo('clean house', 5, 1600, 500),
+    startingAtPrice: 250000, status: 'ACTIVE', verification: 'VERIFIED',
+    ratingAvg: 4.5, ratingCount: 2, completedBookings: 18, rankScore: 0.72,
+    rankInputs: { windowDays: 90, ratingAvg: 4.5, reviewCount: 2, computedAt: ago(2 * DAY) },
+    rankingUpdatedAt: ago(2 * DAY), billingStatus: 'ACTIVE',
+    customerLateCancelMonth: karachiMonthKey(now), customerLateCancelCount: 1,
+    blockChangedAt: ago(160 * DAY),
+    blockHistory: [{ blockId: serviceBlock._id, changedAt: providerMade, changedBy: admin._id }],
+    approvedBy: admin._id, approvedAt: providerMade, createdAt: providerMade, updatedAt: ago(2 * DAY),
+  };
+  ds.serviceProviders.push(provider);
+
+  const pendingOwner = userDoc({
+    name: 'Bilal Ahmed', email: 'bilal.plumbing@citycart.demo', phone: '+92 301 7788120',
+    role: 'SERVICE_PROVIDER', passwordHash: hashes.demo, createdAt: ago(18 * DAY),
+  });
+  ds.users.push(pendingOwner);
+  const pendingProvider = {
+    _id: new ObjectId(), userId: pendingOwner._id, displayName: 'Bilal Plumbing Works',
+    legalName: 'Bilal Plumbing Works', slug: 'bilal-plumbing-works',
+    categoryId: serviceCategoryBySlug.plumbing._id, cityId: faisalabad._id, blockId: serviceBlock._id,
+    location: { type: 'Point', coordinates: [...serviceBlock.center.coordinates] },
+    addressLine: 'Shop 3, Peoples Colony No. 1 Market', phone: '+92 301 7788120',
+    bio: 'Leak repairs, taps, water tanks and bathroom fittings.',
+    avatar: photo('plumber', 6, 300, 300), coverImage: photo('plumbing tools', 7, 1600, 500),
+    startingAtPrice: 80000, status: 'PENDING', verification: 'UNVERIFIED',
+    ratingAvg: 0, ratingCount: 0, completedBookings: 0, rankScore: 0,
+    rankInputs: { windowDays: 90, ratingAvg: 0, reviewCount: 0, newProvider: true, computedAt: ago(18 * DAY) },
+    rankingUpdatedAt: ago(18 * DAY),
+    billingStatus: 'ACTIVE', blockChangedAt: ago(18 * DAY),
+    blockHistory: [{ blockId: serviceBlock._id, changedAt: ago(18 * DAY), changedBy: pendingOwner._id }],
+    createdAt: ago(18 * DAY), updatedAt: ago(18 * DAY),
+  };
+  ds.serviceProviders.push(pendingProvider);
+
+  const offeringDefs = [
+    {
+      title: 'Deep clean — 2 bedroom', slug: 'deep-clean-2-bedroom', startingAtPrice: 450000,
+      durationMinutes: 180, description: 'Full deep clean of a two-bedroom home, including bathrooms and kitchen.',
+    },
+    {
+      title: 'Sofa shampoo', slug: 'sofa-shampoo', startingAtPrice: 180000,
+      durationMinutes: 90, description: 'Up to five seats, machine shampoo and quick dry.',
+    },
+    {
+      title: 'Move-in deep clean', slug: 'move-in-deep-clean', startingAtPrice: 800000,
+      durationMinutes: 300, description: 'Empty-home clean before you move in, kitchen and bathrooms included.',
+    },
+  ];
+  const offerings = offeringDefs.map((def, index) => {
+    const doc = {
+      _id: new ObjectId(), providerId: provider._id, categoryId: provider.categoryId,
+      title: def.title, slug: def.slug, description: def.description,
+      images: [photo(`home cleaning ${index + 1}`, index + 8, 900, 600)],
+      startingAtPrice: def.startingAtPrice, durationMinutes: def.durationMinutes,
+      attributes: index === 0 ? { bedrooms: 2, bathrooms: 2 } : index === 1 ? { seats: 5 } : { bedrooms: 3, emptyHome: true },
+      isActive: true, createdAt: providerMade, updatedAt: providerMade,
+    };
+    ds.serviceOfferings.push(doc);
+    return doc;
+  });
+  ds.serviceOfferings.push({
+    _id: new ObjectId(), providerId: pendingProvider._id, categoryId: pendingProvider.categoryId,
+    title: 'Tap and leak repair', slug: 'tap-and-leak-repair',
+    description: 'Fix a dripping tap or a leaking joint, parts extra.',
+    images: [photo('plumbing repair', 11, 900, 600)], startingAtPrice: 80000,
+    durationMinutes: 60, attributes: { fittings: 'standard', partsExtra: true }, isActive: true,
+    createdAt: ago(18 * DAY), updatedAt: ago(18 * DAY),
+  });
+
+  ds.serviceAvailabilities.push({
+    _id: new ObjectId(), providerId: provider._id,
+    windows: [1, 2, 3, 4, 5, 6].map((weekday) => ({ weekday, startMinute: 540, endMinute: 1080, slotMinutes: 60 })),
+    blackoutDates: [karachiDateKey(new Date(now.getTime() + 21 * DAY))],
+    createdAt: providerMade, updatedAt: ago(2 * DAY),
+  });
+
+  const SERVICE_OFFERING = offerings[0];
+  const serviceAddress = (customer) => {
+    const block = ds.blocks.find((b) => String(b._id) === String(customer.blockIds[0])) || serviceBlock;
+    return {
+      fullName: customer.name, phone: customer.phone, addressLine: customer.address,
+      city: customer.city, blockId: block._id, blockName: block.name, location: customer.pin,
+    };
+  };
+  let serviceBookingSeq = 0;
+  const addServiceBooking = ({ customer, offering = SERVICE_OFFERING, status, at, start, over = {} }) => {
+    serviceBookingSeq += 1;
+    const doc = {
+      _id: new ObjectId(),
+      bookingNumber: `SB-${now.getUTCFullYear()}-${pad(serviceBookingSeq, 6)}`,
+      customerId: customer.doc._id, providerId: provider._id,
+      offering: {
+        offeringId: offering._id, title: offering.title, slug: offering.slug,
+        durationMinutes: offering.durationMinutes, startingAtPrice: offering.startingAtPrice,
+        image: offering.images[0],
+      },
+      status, requestedStart: start, address: serviceAddress(customer),
+      events: [{ type: status, byRole: 'SYSTEM', at }],
+      createdAt: at, updatedAt: at,
+      ...over,
+    };
+    ds.serviceBookings.push(doc);
+    return doc;
+  };
+
+  const requestedService = addServiceBooking({
+    customer: customers[0], status: 'REQUESTED', at: ago(2 * HOUR), start: new Date(now.getTime() + 2 * DAY + 3 * HOUR),
+    over: { note: 'Please bring your own supplies.' },
+  });
+  const proposedService = addServiceBooking({
+    customer: customers[1], status: 'PROPOSED', at: ago(6 * HOUR), start: new Date(now.getTime() + 3 * DAY + 4 * HOUR),
+    over: {
+      proposals: [{
+        pricePaisa: 480000, scope: 'Two bedrooms, kitchen and both bathrooms; supplies included.',
+        scheduledStart: new Date(now.getTime() + 3 * DAY + 4 * HOUR),
+        scheduledEnd: new Date(now.getTime() + 3 * DAY + 7 * HOUR),
+        expiresAt: new Date(now.getTime() + 18 * HOUR), status: 'ACTIVE', createdAt: ago(6 * HOUR),
+      }],
+    },
+  });
+  const acceptedService = addServiceBooking({
+    customer: customers[2], status: 'ACCEPTED', at: ago(DAY), start: new Date(now.getTime() + 4 * DAY + 2 * HOUR),
+    over: {
+      scheduledStart: new Date(now.getTime() + 4 * DAY + 2 * HOUR),
+      scheduledEnd: new Date(now.getTime() + 4 * DAY + 5 * HOUR),
+      agreedPricePaisa: 500000, acceptedAt: ago(DAY),
+    },
+  });
+  addServiceBooking({
+    customer: customers[3], status: 'IN_PROGRESS', at: ago(3 * DAY), start: ago(2 * HOUR),
+    over: {
+      scheduledStart: ago(2 * HOUR), scheduledEnd: new Date(now.getTime() + 1 * HOUR),
+      agreedPricePaisa: 460000, acceptedAt: ago(3 * DAY), startedAt: ago(2 * HOUR),
+    },
+  });
+  addServiceBooking({
+    customer: customers[4], status: 'COMPLETED', at: ago(2 * DAY), start: ago(DAY),
+    over: {
+      scheduledStart: ago(DAY), scheduledEnd: ago(DAY), agreedPricePaisa: 470000,
+      finalAmountPaisa: 470000, completionNote: 'Extra balcony cleaned at no charge.',
+      acceptedAt: ago(2 * DAY), startedAt: ago(DAY), completedAt: ago(6 * HOUR),
+      autoConfirmAt: new Date(now.getTime() + 2 * DAY - 6 * HOUR),
+    },
+  });
+  const confirmedService = addServiceBooking({
+    customer: customers[5], status: 'CONFIRMED', at: ago(12 * DAY), start: ago(10 * DAY),
+    over: {
+      scheduledStart: ago(10 * DAY), scheduledEnd: ago(10 * DAY), agreedPricePaisa: 440000,
+      finalAmountPaisa: 440000, acceptedAt: ago(12 * DAY), startedAt: ago(10 * DAY),
+      completedAt: ago(9 * DAY), confirmedAt: ago(8 * DAY), confirmedBy: 'CUSTOMER',
+    },
+  });
+  addServiceBooking({
+    customer: customers[6], status: 'CONFIRMED', at: ago(7 * DAY), start: ago(5 * DAY),
+    over: {
+      scheduledStart: ago(5 * DAY), scheduledEnd: ago(5 * DAY), agreedPricePaisa: 460000,
+      finalAmountPaisa: 460000, acceptedAt: ago(7 * DAY), startedAt: ago(5 * DAY),
+      completedAt: ago(4 * DAY), confirmedAt: ago(3 * DAY), confirmedBy: 'AUTO',
+    },
+  });
+  addServiceBooking({
+    customer: customers[7], status: 'DISPUTED', at: ago(4 * DAY), start: ago(3 * DAY),
+    over: {
+      scheduledStart: ago(3 * DAY), scheduledEnd: ago(3 * DAY), agreedPricePaisa: 480000,
+      finalAmountPaisa: 520000, acceptedAt: ago(4 * DAY), startedAt: ago(3 * DAY),
+      completedAt: ago(2 * DAY), dispute: { reason: 'The agreed amount was PKR 4,800, not PKR 5,200.', at: ago(DAY) },
+    },
+  });
+  addServiceBooking({
+    customer: customers[8], status: 'CANCELLED', at: ago(2 * DAY), start: ago(DAY),
+    over: {
+      scheduledStart: ago(DAY), scheduledEnd: ago(DAY), agreedPricePaisa: 450000, acceptedAt: ago(2 * DAY),
+      cancellation: { by: 'CUSTOMER', reason: 'Family emergency.', late: true, at: ago(DAY) },
+    },
+  });
+  addServiceBooking({
+    customer: customers[9], status: 'DECLINED', at: ago(5 * DAY), start: new Date(now.getTime() + 6 * DAY),
+    over: {
+      proposals: [{
+        pricePaisa: 490000, scope: 'Whole house including two balconies.',
+        scheduledStart: new Date(now.getTime() + 6 * DAY),
+        scheduledEnd: new Date(now.getTime() + 6 * DAY + 3 * HOUR),
+        expiresAt: ago(4 * DAY), status: 'DECLINED', createdAt: ago(5 * DAY),
+      }],
+    },
+  });
+  // One dispute that the admin already settled, so the resolution path has data too.
+  addServiceBooking({
+    customer: customers[0], status: 'CONFIRMED', at: ago(9 * DAY), start: ago(8 * DAY),
+    over: {
+      scheduledStart: ago(8 * DAY), scheduledEnd: ago(8 * DAY), agreedPricePaisa: 430000,
+      finalAmountPaisa: 430000, acceptedAt: ago(9 * DAY), startedAt: ago(8 * DAY),
+      completedAt: ago(7 * DAY), confirmedAt: ago(6 * DAY), confirmedBy: 'ADMIN',
+      dispute: {
+        reason: 'Customer believed the balcony was skipped.', at: ago(7 * DAY),
+        resolvedAt: ago(6 * DAY), resolution: 'CONFIRMED', resolvedBy: admin._id,
+        resolutionNote: 'Provider sent photographs showing the balcony cleaned.',
+      },
+      events: [
+        {
+          type: 'REQUESTED', by: customers[0].doc._id, byRole: 'CUSTOMER', at: ago(9 * DAY),
+          note: 'Please also cover the balcony.', meta: { offeringSlug: SERVICE_OFFERING.slug },
+        },
+        {
+          type: 'CONFIRMED', by: admin._id, byRole: 'ADMIN', at: ago(6 * DAY),
+          note: 'Dispute resolved in the provider’s favour.',
+        },
+      ],
+    },
+  });
+
+  const serviceConversation = {
+    _id: new ObjectId(), bookingId: acceptedService._id, customerId: acceptedService.customerId,
+    providerId: provider._id, lastMessageAt: ago(3 * HOUR),
+    lastMessagePreview: 'I will bring the extra brushes for the balcony.', lastSenderRole: 'PROVIDER',
+    customerUnread: 1, providerUnread: 0, createdAt: ago(DAY), updatedAt: ago(3 * HOUR),
+  };
+  ds.serviceConversations.push(serviceConversation);
+  acceptedService.conversationId = serviceConversation._id;
+  [
+    { senderRole: 'SYSTEM', body: 'Booking accepted. You can chat here about the job.', at: ago(DAY) },
+    { senderRole: 'CUSTOMER', senderId: customers[2].doc._id, body: 'Please also do the balcony if there is time.', at: ago(5 * HOUR), attachments: [photo('balcony before cleaning', 12, 900, 600)] },
+    { senderRole: 'PROVIDER', senderId: serviceOwner._id, body: 'I will bring the extra brushes for the balcony.', at: ago(3 * HOUR) },
+  ].forEach((m) => {
+    ds.serviceMessages.push({
+      _id: new ObjectId(), conversationId: serviceConversation._id, senderRole: m.senderRole,
+      ...(m.senderId && { senderId: m.senderId }), body: m.body,
+      attachments: m.attachments || [], createdAt: m.at,
+    });
+  });
+
+  ds.serviceReviews.push({
+    _id: new ObjectId(), bookingId: confirmedService._id, customerId: confirmedService.customerId,
+    providerId: provider._id, rating: 5,
+    comment: 'The team arrived on time, cleaned every corner and left the kitchen spotless.',
+    providerReply: { body: 'Thank you! We are glad the kitchen came up so well.', at: ago(7 * DAY) },
+    isApproved: true, createdAt: ago(8 * DAY), updatedAt: ago(7 * DAY),
+  });
+  ds.serviceReviews.push({
+    _id: new ObjectId(), bookingId: ds.serviceBookings[6]._id, customerId: ds.serviceBookings[6].customerId,
+    providerId: provider._id, rating: 4,
+    comment: 'Good work overall; they had to come back for one bathroom.',
+    isApproved: true, createdAt: ago(3 * DAY), updatedAt: ago(3 * DAY),
   });
 
   // ── brands, stores, categories, products, inventory, staff ──
@@ -1174,6 +1464,47 @@ function buildDataset({ now = new Date(), hashes }) {
     const staff = brand.staff.find((s) => s.employee.isActive && s.employee.permissions.includes('orders.view'));
     return staff ? [brand.owner, staff.user] : [brand.owner];
   };
+
+  // Service bookings keep the provider owner and the customer informed at every step.
+  const serviceRef = (booking) => ({
+    serviceBookingId: booking._id, bookingNumber: booking.bookingNumber, providerId: provider._id,
+  });
+  note(serviceOwner._id, 'SERVICE_BOOKING_REQUESTED', `New booking request ${requestedService.bookingNumber}`,
+    `${customers[0].name} asked for ${requestedService.offering.title}. Accept it or propose another price and time.`,
+    serviceRef(requestedService), ago(2 * HOUR));
+  note(customers[1].doc._id, 'SERVICE_BOOKING_PROPOSED', 'Sana Home Cleaning sent a proposal',
+    `${money(4800)} for "${proposedService.offering.title}". Accept or decline before it expires.`,
+    serviceRef(proposedService), ago(5 * HOUR));
+  note(serviceOwner._id, 'SERVICE_BOOKING_PROPOSAL_ANSWERED', 'Proposal declined',
+    `${customers[9].name} declined the proposal for ${ds.serviceBookings[9].offering.title}.`,
+    serviceRef(ds.serviceBookings[9]), ago(4 * DAY));
+  note(customers[2].doc._id, 'SERVICE_BOOKING_ACCEPTED', 'Your booking is accepted',
+    `Sana Home Cleaning accepted ${acceptedService.offering.title} at ${money(5000)}. You can chat about the job now.`,
+    serviceRef(acceptedService), ago(DAY));
+  note(customers[3].doc._id, 'SERVICE_BOOKING_STARTED', 'The provider has started',
+    `Sana Home Cleaning started ${ds.serviceBookings[3].offering.title}.`,
+    serviceRef(ds.serviceBookings[3]), ago(2 * HOUR));
+  note(customers[4].doc._id, 'SERVICE_BOOKING_COMPLETED', 'The job is complete',
+    `Sana Home Cleaning marked ${ds.serviceBookings[4].offering.title} complete at ${money(4700)}. Confirm it or raise a dispute.`,
+    serviceRef(ds.serviceBookings[4]), ago(6 * HOUR));
+  note(serviceOwner._id, 'SERVICE_BOOKING_CONFIRMED', 'Booking confirmed',
+    `${customers[5].name} confirmed ${confirmedService.offering.title}. It now counts towards your ranking.`,
+    serviceRef(confirmedService), ago(8 * DAY));
+  note(serviceOwner._id, 'SERVICE_BOOKING_DISPUTED', 'A customer raised a dispute',
+    `${customers[7].name} disputed the final amount on ${ds.serviceBookings[7].offering.title}. CityCart will review it.`,
+    serviceRef(ds.serviceBookings[7]), ago(DAY));
+  note(admin._id, 'SERVICE_BOOKING_DISPUTED', 'Service dispute needs review',
+    `${customers[7].name} disputed booking ${ds.serviceBookings[7].bookingNumber}.`,
+    serviceRef(ds.serviceBookings[7]), ago(DAY));
+  note(customers[8].doc._id, 'SERVICE_BOOKING_CANCELLED', 'Booking cancelled',
+    `Booking ${ds.serviceBookings[8].bookingNumber} was cancelled: Family emergency.`,
+    serviceRef(ds.serviceBookings[8]), ago(DAY));
+  note(serviceOwner._id, 'SERVICE_BOOKING_DECLINED', 'Proposal declined',
+    `${customers[9].name} declined the proposal on ${ds.serviceBookings[9].bookingNumber}.`,
+    serviceRef(ds.serviceBookings[9]), ago(4 * DAY));
+  note(confirmedService.customerId, 'SERVICE_REVIEW_REPLIED', 'Sana Home Cleaning replied to your review',
+    'Thank you! We are glad the kitchen came up so well.',
+    serviceRef(confirmedService), ago(7 * DAY));
 
   for (const { order, payment, brand, customer, events } of orders) {
     const ref = { orderId: order._id, orderNumber: order.orderNumber, brandId: brand.doc._id };

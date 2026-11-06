@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
-import { Bell, ChevronDown, LayoutDashboard, LogOut, Menu as MenuIcon, MessageCircle, Package, Search, ShoppingBag } from 'lucide-react'
+import { Bell, CalendarCheck, ChevronDown, LayoutDashboard, LogOut, Menu as MenuIcon, MessageCircle, Package, Search, ShoppingBag } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useCart } from '../../hooks/useCart'
 import { useChat } from '../../hooks/useChat'
@@ -147,6 +147,16 @@ function AccountMenu({ user, logout }) {
             <span className="block truncate text-[11.5px] text-muted">{user.email}</span>
           </p>
           <div className="pt-1.5">
+            {user.role === 'CUSTOMER' && (
+              <>
+                <MenuLink to="/orders" icon={Package} onClick={close}>
+                  My orders
+                </MenuLink>
+                <MenuLink to="/bookings" icon={CalendarCheck} onClick={close}>
+                  My bookings
+                </MenuLink>
+              </>
+            )}
             {user.role !== 'CUSTOMER' && (
               <MenuLink to={homeFor(user.role)} icon={LayoutDashboard} onClick={close}>
                 Dashboard
@@ -321,6 +331,11 @@ export default function StoreNavbar() {
             {user?.role === 'CUSTOMER' && (
               <DrawerLink to="/orders" onClick={() => setDrawerOpen(false)}>
                 My orders
+              </DrawerLink>
+            )}
+            {user?.role === 'CUSTOMER' && (
+              <DrawerLink to="/bookings" onClick={() => setDrawerOpen(false)}>
+                My bookings
               </DrawerLink>
             )}
             {user?.role === 'CUSTOMER' && (
