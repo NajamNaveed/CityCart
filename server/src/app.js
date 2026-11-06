@@ -47,6 +47,8 @@ const analyticsRoutes = require('./routes/analytics.routes');
 const adminUsersRoutes = require('./routes/adminUsers.routes');
 const adminPartnerRoutes = require('./routes/adminPartner.routes');
 const adminActivityRoutes = require('./routes/adminActivity.routes');
+const serviceProviderRoutes = require('./routes/serviceProvider.routes');
+const adminServiceProviderRoutes = require('./routes/adminServiceProvider.routes');
 
 const requestLogger = require('./middleware/requestLogger');
 const { apiLimiter } = require('./middleware/rateLimiters');
@@ -124,6 +126,8 @@ app.use('/api/v1/admin', adminSettingsRoutes);
 app.use('/api/v1/admin', adminUsersRoutes);
 app.use('/api/v1/admin/partners', adminPartnerRoutes);
 app.use('/api/v1/admin/activity', adminActivityRoutes);
+app.use('/api/v1/admin/providers', adminServiceProviderRoutes);
+app.use('/api/v1/services', serviceProviderRoutes);
 app.use('/api/v1', analyticsRoutes);
 
 // Must stay LAST: unmatched routes -> 404, then the global error handler.

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, NavLink, Outlet } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { ArrowUpRight, LayoutDashboard, LogIn, LogOut, Menu as MenuIcon, ShoppingBag, Store } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import Drawer from './ui/Drawer'
@@ -13,8 +13,11 @@ const navLink = ({ isActive }) =>
 
 export default function SellerLayout() {
   const { user, logout } = useAuth()
+  const { pathname } = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
   const isSeller = user && user.role !== 'CUSTOMER'
+  // The same shell serves the brand and provider doors; the copy follows the door.
+  const services = pathname.startsWith('/provider') || pathname.startsWith('/sell/service')
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -34,7 +37,7 @@ export default function SellerLayout() {
                 citycart<span className="text-pine">.</span>
               </span>
               <span className="text-[10.5px] font-medium uppercase tracking-[0.18em] text-pine sm:text-[11px]">
-                for brands
+                {services ? 'for providers' : 'for brands'}
               </span>
             </Link>
           </div>
@@ -59,11 +62,11 @@ export default function SellerLayout() {
               </>
             ) : (
               <>
-                <NavLink to="/sell/login" className={navLink}>
-                  Brand log in
+                <NavLink to={services ? '/sell/service/login' : '/sell/login'} className={navLink}>
+                  {services ? 'Provider log in' : 'Brand log in'}
                 </NavLink>
-                <Link to="/sell/apply" className={`${btnPine} h-9 px-4 text-[12px]`}>
-                  Open your brand
+                <Link to={services ? '/provider/apply' : '/sell/apply'} className={`${btnPine} h-9 px-4 text-[12px]`}>
+                  {services ? 'Offer a service' : 'Open your brand'}
                 </Link>
               </>
             )}
@@ -78,12 +81,13 @@ export default function SellerLayout() {
               >
                 Dashboard
               </Link>
+
             ) : (
               <Link
-                to="/sell/apply"
+                to={services ? '/provider/apply' : '/sell/apply'}
                 className="inline-flex h-8 items-center rounded-md bg-pine px-3 text-[11.5px] font-medium uppercase tracking-wider text-white"
               >
-                Open brand
+                {services ? 'Offer service' : 'Open brand'}
               </Link>
             )}
           </div>
@@ -91,7 +95,7 @@ export default function SellerLayout() {
       </header>
 
       {/* Mobile Drawer */}
-      <Drawer open={mobileOpen} onClose={() => setMobileOpen(false)} title="Brand Portal">
+      <Drawer open={mobileOpen} onClose={() => setMobileOpen(false)} title={services ? 'Provider portal' : 'Brand portal'}>
         <div className="space-y-4">
           <div className="space-y-1">
             <Link
@@ -138,20 +142,20 @@ export default function SellerLayout() {
             ) : (
               <>
                 <Link
-                  to="/sell/apply"
+                  to={services ? '/provider/apply' : '/sell/apply'}
                   onClick={() => setMobileOpen(false)}
                   className="flex w-full items-center justify-center gap-2 rounded-md bg-pine px-4 py-2.5 text-[13px] font-medium uppercase tracking-wider text-white shadow-sm"
                 >
-                  Open your brand
+                  {services ? 'Offer a service' : 'Open your brand'}
                   <ArrowUpRight className="h-4 w-4" />
                 </Link>
                 <Link
-                  to="/sell/login"
+                  to={services ? '/sell/service/login' : '/sell/login'}
                   onClick={() => setMobileOpen(false)}
                   className="flex w-full items-center justify-center gap-2 rounded-md border border-line px-4 py-2.5 text-[13px] font-medium text-ink transition hover:bg-paper"
                 >
                   <LogIn className="h-4 w-4 text-muted" />
-                  Brand log in
+                  {services ? 'Provider log in' : 'Brand log in'}
                 </Link>
               </>
             )}
@@ -176,7 +180,7 @@ export default function SellerLayout() {
             <span className="font-semibold text-white">
               citycart<span className="opacity-60">.</span>
             </span>{' '}
-            for brands
+            {services ? 'for providers' : 'for brands'}
           </p>
           <p className="text-white/50">© {new Date().getFullYear()} CityCart</p>
         </div>

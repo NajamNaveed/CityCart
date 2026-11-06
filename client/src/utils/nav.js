@@ -1,6 +1,14 @@
 // "Where was the visitor before we asked them to sign in?"
 // Only same-site paths are accepted so ?next= can never be used as an open redirect.
-const AUTH_PATHS = ['/login', '/register', '/sell/login', '/sell/apply', '/admin/login']
+const AUTH_PATHS = [
+  '/login',
+  '/register',
+  '/sell/login',
+  '/sell/apply',
+  '/sell/service/login',
+  '/provider/apply',
+  '/admin/login',
+]
 
 export function safeNext(raw, fallback = '/') {
   if (typeof raw !== 'string') return fallback
@@ -13,6 +21,7 @@ export function safeNext(raw, fallback = '/') {
 export function homeFor(role) {
   if (role === 'SUPER_ADMIN' || role === 'ADMIN_PARTNER') return '/admin'
   if (role === 'BRAND_ADMIN' || role === 'BRAND_EMPLOYEE') return '/brand'
+  if (role === 'SERVICE_PROVIDER') return '/provider'
   return '/'
 }
 

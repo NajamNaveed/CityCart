@@ -4,6 +4,7 @@ const {
   register,
   login,
   brandLogin,
+  serviceLogin,
   staffLogin,
   deliveryLogin,
   adminLogin,
@@ -27,6 +28,7 @@ const router = express.Router();
 router.post('/register', authLimiter, register);
 router.post('/login', authLimiter, login); // customers only
 router.post('/brand/login', authLimiter, brandLogin); // BRAND_ADMIN / BRAND_EMPLOYEE only
+router.post('/service/login', authLimiter, serviceLogin); // SERVICE_PROVIDER only
 router.post('/staff/login', authLimiter, staffLogin); // BRAND_EMPLOYEE / PICKER, staff app only
 router.post('/delivery/login', authLimiter, deliveryLogin); // RIDER, delivery app only
 router.post('/admin/login', authLimiter, adminLogin); // SUPER_ADMIN / ADMIN_PARTNER only
@@ -53,7 +55,7 @@ router.patch(
 		next();
 	},
 	authenticate,
-	requireRole(ROLES.BRAND_ADMIN, ROLES.SUPER_ADMIN, ROLES.ADMIN_PARTNER),
+	requireRole(ROLES.BRAND_ADMIN, ROLES.SUPER_ADMIN, ROLES.ADMIN_PARTNER, ROLES.SERVICE_PROVIDER),
 	changePassword
 );
 

@@ -485,6 +485,34 @@ async function notifyAdjustmentExpired(adjustment, order) {
   });
 }
 
+async function notifySuperAdminsOfNewProvider({ providerId, providerName, ownerName }) {
+  await notify({
+    userIds: await superAdminIds(),
+    type: 'SYSTEM_NOTIFICATION',
+    title: 'New service provider registered',
+    message: `${ownerName} applied to offer services as "${providerName}".`,
+    data: { providerId: String(providerId) },
+  });
+}
+
+const PROVIDER_STATUS_MESSAGES = {
+  ACTIVE: 'Your provider account is approved. Customers in your block can now find you.',
+  SUSPENDED: 'Your provider account has been suspended by CityCart.',
+  TERMINATED: 'Your provider account has been terminated by CityCart.',
+};
+
+async function notifyProviderStatusChanged(provider, status) {
+  const message = PROVIDER_STATUS_MESSAGES[status];
+  if (!message || !provider) return;
+  await notify({
+    userIds: [provider.userId],
+    type: 'SYSTEM_NOTIFICATION',
+    title: 'Provider account status changed',
+    message: `${message} (provider "${provider.displayName}")`,
+    data: { providerId: String(provider._id), status },
+  });
+}
+
 async function notifySuperAdminsOfNewBrand({ brandId, brandName, ownerName }) {
   await notify({
     userIds: await superAdminIds(),
@@ -628,6 +656,8 @@ module.exports = {
   notifyPaymentExpired: bestEffort(notifyPaymentExpired),
   notifyBrandOfNewReview: bestEffort(notifyBrandOfNewReview),
   notifySuperAdminsOfNewBrand: bestEffort(notifySuperAdminsOfNewBrand),
+  notifySuperAdminsOfNewProvider: bestEffort(notifySuperAdminsOfNewProvider),
+  notifyProviderStatusChanged: bestEffort(notifyProviderStatusChanged),
   notifyBrandOwnerWelcome: bestEffort(notifyBrandOwnerWelcome),
   notifyBrandTerminated: bestEffort(notifyBrandTerminated),
   notifyBrandStatusChanged: bestEffort(notifyBrandStatusChanged),

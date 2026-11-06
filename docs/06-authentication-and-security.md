@@ -737,6 +737,21 @@ and a provider can never read a brand resource or another provider's records.
 The union of the two tenant types is not a valid scope: a request is either a
 brand request or a provider request.
 
+Phase 2a implements this with `requireServiceTenant`, which refuses every role
+except `SERVICE_PROVIDER` before the controller runs. The signup endpoint is
+public but rate-limited, and it never accepts role, status, verification,
+`providerId` or `brandId` from the client; those are derived by the server.
+The provider id used by every `/services/provider/*` request comes only from
+the validated session.
+
+Email verification and admin approval are deliberately separate for providers:
+proving the inbox is required to sign in and triggers a super-admin
+notification, but it does not change the provider's `PENDING` status. Only the
+super admin's `PATCH /admin/providers/:id/status` approves it, and that endpoint
+is unavailable to `ADMIN_PARTNER`. The one-block-per-month rule is enforced in
+the service layer against `blockChangedAt` (`409 BLOCK_CHANGE_LIMIT`), not only
+hidden in the dashboard.
+
 ---
 
 # 17. Never Trust Client-Supplied Brand IDs

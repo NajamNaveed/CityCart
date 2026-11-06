@@ -2242,6 +2242,126 @@ or line.
 
 ---
 
+# 22g. Service-Provider Endpoints (v3 Phase 2a)
+
+Base:
+
+```text
+/api/v1/services
+```
+
+Service providers are a second tenant type (docs/24 §4). They are never brands:
+no endpoint accepts or returns a `brandId` for them, and every provider query is
+scoped to `req.tenantProviderId` from the session. Phase 2a covers signup,
+profile, one-block area and super-admin approval. Offerings, discovery, booking
+and billing arrive in Phases 2b–3.
+
+## Public
+
+```text
+GET  /services/categories   -> { categories: [{ _id, name, slug, order }] }
+POST /services/apply        -> 201 { message, provider, user }
+```
+
+`POST /services/apply` is rate-limited like the brand application and creates
+the owner `User` (`accountType: SERVICE`, role `SERVICE_PROVIDER`) and its
+`ServiceProvider` in one transaction. Status, verification, role and the tenant
+are never accepted from the client.
+
+```json
+{
+  "owner": {
+    "name": "Sana Khalid",
+    "email": "sana@example.com",
+    "password": "at least 8 characters",
+    "phone": "+92 300 1234567"
+  },
+  "provider": {
+    "displayName": "Sana Home Cleaning",
+    "legalName": "optional, max 150",
+    "categoryId": "<ObjectId>",
+    "cityId": "<ObjectId>",
+    "blockId": "<ObjectId>",
+    "latitude": 31.41,
+    "longitude": 73.11,
+    "startingAtPrice": 150000,
+    "addressLine": "optional, max 300",
+    "phone": "optional; defaults to the owner phone",
+    "bio": "optional, max 1000"
+  }
+}
+```
+
+`startingAtPrice` is an integer in paisa (PKR minor units). The block must be
+active and belong to `cityId`, and the pin must pass the same
+`assertPinInBlock` rule as a shop (`400` otherwise). The provider starts
+`PENDING` / `UNVERIFIED`; the owner cannot sign in until the inbox is verified.
+Verification notifies the super admins but does **not** approve the provider.
+A duplicate `(accountType, email)` or slug answers `409`.
+
+## Provider's own tenant
+
+```text
+GET   /services/provider/me   -> { provider, owner }
+PATCH /services/provider/me   -> { message, provider }
+PATCH /services/provider/block -> { message, provider }
+```
+
+All three require a `SERVICE_PROVIDER` session (`requireServiceTenant` refuses
+every other role). `owner` is an allow-listed object: `_id`, `name`, `email`,
+`emailVerified`, `phone`, `isActive` — never secrets.
+
+`PATCH /provider/me` accepts any subset of `displayName`, `legalName`, `phone`,
+`bio`, `addressLine`, `avatar`, `coverImage`, `startingAtPrice` (paisa). The
+slug and category are immutable in Phase 2a; the city is fixed at signup.
+
+`PATCH /provider/block` requires the pin:
+
+```json
+{ "blockId": "<ObjectId>", "latitude": 31.41, "longitude": 73.11 }
+```
+
+A pin move inside the current block is unlimited. A different block is allowed
+once per UTC calendar month, checked against `blockChangedAt`; the next attempt
+in the same month answers `409 BLOCK_CHANGE_LIMIT`. Existing bookings are never
+rewritten by a block change, and every change is appended to `blockHistory`.
+
+## Platform admin (super admin only)
+
+```text
+GET   /admin/providers?status=&search=&page=&limit=  -> { providers, pagination }
+GET   /admin/providers/:id                           -> { provider, owner }
+PATCH /admin/providers/:id/status                    -> { message, provider }
+```
+
+`status` is one of `PENDING`, `ACTIVE`, `SUSPENDED`, `TERMINATED`; `limit` is
+capped at 50. The detail view joins category, city and block and includes the
+owner's `emailVerified` flag so the reviewer can confirm inbox proof before
+approval.
+
+`PATCH /status` body:
+
+```json
+{ "status": "ACTIVE | SUSPENDED | TERMINATED", "reason": "required for the latter two, 5–500 chars" }
+```
+
+Allowed moves mirror `PROVIDER_STATUS_TRANSITIONS`
+(`server/src/config/serviceProviderStatuses.js`):
+
+```text
+PENDING    -> ACTIVE | SUSPENDED
+ACTIVE     -> SUSPENDED | TERMINATED
+SUSPENDED  -> ACTIVE | TERMINATED
+TERMINATED -> (final)
+```
+
+Approving a provider sets `verification: VERIFIED` and `approvedAt` /
+`approvedBy`; refusing a `PENDING` application sets `SUSPENDED` / `REJECTED`.
+Every move writes an `AdminAction` (`serviceProvider.<status>`) with the reason
+and notifies the owner. An `ADMIN_PARTNER` cannot reach these endpoints.
+
+---
+
 # 23. Analytics Endpoints
 
 Base:

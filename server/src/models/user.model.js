@@ -21,6 +21,7 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const accountTypeForRole = (role) => {
   if (role === 'CUSTOMER') return 'CUSTOMER';
   if (role === 'SUPER_ADMIN' || role === 'ADMIN_PARTNER') return 'PLATFORM_ADMIN';
+  if (role === 'SERVICE_PROVIDER') return 'SERVICE';
   return 'BRAND';
 };
 
@@ -65,7 +66,7 @@ const userSchema = new mongoose.Schema(
     },
     accountType: {
       type: String,
-      enum: ['CUSTOMER', 'BRAND', 'PLATFORM_ADMIN'],
+      enum: ['CUSTOMER', 'BRAND', 'SERVICE', 'PLATFORM_ADMIN'],
       required: true,
       default: function defaultAccountType() {
         return accountTypeForRole(this.role);

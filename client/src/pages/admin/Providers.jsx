@@ -1,0 +1,135 @@
+import { useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { Search, SearchX } from 'lucide-react'
+import api, { getErrorMessage } from '../../services/api'
+import { PageHeader, Pager, StatusBadge, selectClass, tableHead, tableRow, tableShell } from '../../components/brand/Bits'
+import { EmptyState, Skeleton } from '../../components/ui'
+import { formatDate, humanize } from '../../ui'
+
+const STATUSES = ['PENDING', 'ACTIVE', 'SUSPENDED', 'TERMINATED']
+
+export default function Providers() {
+  const [params, setParams] = useSearchParams()
+  const search = params.get('search') || ''
+  const status = STATUSES.includes(params.get('status')) ? params.get('status') : ''
+  const page = Math.max(1, Number(params.get('page')) || 1)
+
+  const [state, setState] = useState({ key: null, providers: [], pagination: null, error: '' })
+  const key = JSON.stringify([search, status, page])
+
+  useEffect(() => {
+    let active = true
+    api
+      .get('/admin/providers', { params: { limit: 20, page, ...(search && { search }), ...(status && { status }) } })
+      .then((res) => active && setState({ key, providers: res.data.providers, pagination: res.data.pagination, error: '' }))
+      .catch((err) => active && setState({ key, providers: [], pagination: null, error: getErrorMessage(err) }))
+    return () => {
+      active = false
+    }
+  }, [search, status, page, key])
+
+  function update(patch) {
+    const next = new URLSearchParams(params)
+    Object.entries({ page: '', ...patch }).forEach(([k, v]) => (v ? next.set(k, v) : next.delete(k)))
+    setParams(next)
+  }
+
+  const loading = state.key !== key
+
+  return (
+    <>
+      <PageHeader title="Service providers" intro="Applications and approved providers on the platform." />
+
+      <div className="mb-5 flex flex-wrap gap-2.5">
+        <form
+          role="search"
+          className="relative min-w-0 flex-1 basis-56"
+          onSubmit={(e) => {
+            e.preventDefault()
+            update({ search: new FormData(e.currentTarget).get('q').toString().trim() })
+          }}
+        >
+          <label htmlFor="q" className="sr-only">
+            Search providers
+          </label>
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden="true" />
+          <input
+            key={search}
+            id="q"
+            name="q"
+            defaultValue={search}
+            placeholder="Search by name"
+            className="h-10 w-full rounded-md border border-line bg-white pl-9 pr-3 text-[13px] text-ink outline-none transition focus:border-ink"
+          />
+        </form>
+        <label htmlFor="status" className="sr-only">
+          Status
+        </label>
+        <select id="status" value={status} onChange={(e) => update({ status: e.target.value })} className={selectClass}>
+          <option value="">All statuses</option>
+          {STATUSES.map((s) => (
+            <option key={s} value={s}>
+              {humanize(s)}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {loading ? (
+        <div className="space-y-2.5">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-16 w-full rounded-lg" />
+          ))}
+        </div>
+      ) : state.error ? (
+        <p className="text-clay">{state.error}</p>
+      ) : state.providers.length === 0 ? (
+        <EmptyState icon={SearchX} title="No providers match." className="rounded-lg border border-dashed border-line bg-white" />
+      ) : (
+        <div className={tableShell}>
+          <table className="w-full min-w-[44rem] text-left text-sm">
+            <thead>
+              <tr className={tableHead}>
+                <th className="px-5 py-3 font-medium">Provider</th>
+                <th className="py-3 pr-4 font-medium">Owner</th>
+                <th className="py-3 pr-4 font-medium">Area</th>
+                <th className="py-3 pr-4 font-medium">Status</th>
+                <th className="py-3 pr-5 font-medium">Applied</th>
+              </tr>
+            </thead>
+            <tbody>
+              {state.providers.map((p) => (
+                <tr key={p._id} className={tableRow}>
+                  <td className="px-5 py-3.5">
+                    <Link to={`/admin/providers/${p._id}`} className="font-medium text-ink transition hover:text-clay">
+                      {p.displayName}
+                    </Link>
+                    <span className="block text-xs text-muted">{p.category?.name || '—'}</span>
+                  </td>
+                  <td className="py-3.5 pr-4">
+                    {p.owner ? (
+                      <>
+                        <span className="block text-ink">{p.owner.name}</span>
+                        <span className="block text-xs text-muted">{p.owner.email}</span>
+                      </>
+                    ) : (
+                      <span className="text-muted">—</span>
+                    )}
+                  </td>
+                  <td className="py-3.5 pr-4 text-muted">
+                    {[p.block?.name, p.city?.name].filter(Boolean).join(', ') || '—'}
+                  </td>
+                  <td className="py-3.5 pr-4">
+                    <StatusBadge value={p.status} />
+                  </td>
+                  <td className="py-3.5 pr-5 text-muted">{formatDate(p.createdAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <Pager pagination={state.pagination} onPage={(p) => update({ page: p > 1 ? String(p) : '' })} />
+    </>
+  )
+}

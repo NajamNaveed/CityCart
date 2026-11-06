@@ -26,7 +26,7 @@ const loginSchema = z.object({
 // Which kind of account the request is about. Customers reset on the
 // shopper sign-in page, brand owners on the seller sign-in page; keeping
 // them apart matters because one email may hold both accounts.
-const portalSchema = z.enum(['customer', 'brand']).optional().default('customer');
+const portalSchema = z.enum(['customer', 'brand', 'service']).optional().default('customer');
 
 const emailRequestSchema = z.object({
   email: z.string().trim().toLowerCase().email('invalid email format'),

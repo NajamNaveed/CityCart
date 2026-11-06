@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { ArrowRight, ArrowUpRight, Banknote, PackageCheck, ShoppingBag, Store, Truck, Users } from 'lucide-react'
 import { Reveal } from '../components/ui'
-import { btnCream, btnCreamOutline, sectionLabel, wrap } from '../ui'
+import { btnCream, btnCreamOutline, btnPine, sectionLabel, wrap } from '../ui'
 
 const STEPS = [
   ['Apply', 'Tell us about you, your brand and your first store. It is one form, and your store goes live as soon as you submit it.'],
@@ -20,8 +20,9 @@ const FEATURES = [
 
 const FAQ = [
   ['What do I need to apply?', 'Your name, email and phone number, a brand name and a short description of what you sell, your city, and the name, address and phone number of your first store.'],
-  ['How do customers pay?', 'Every order is cash on delivery. Nothing is charged online.'],
+  ['How do customers pay?', 'Every order is paid at the door — in cash or through whatever the brand accepts. Nothing is charged online.'],
   ['Can my staff sign in?', 'Yes. You create employee accounts from your dashboard and decide what each one can do. They sign in on the brand log in page.'],
+  ['Can I offer a service instead of a product?', 'Yes. Apply as a service provider with a starting price and the block you work in. Every application is reviewed before it appears to customers.'],
 ]
 
 export default function Sell() {
@@ -116,6 +117,47 @@ export default function Sell() {
             ))}
           </div>
         </div>
+      </section>
+
+      {/* Services */}
+      <section className={`${wrap} py-20`}>
+        <Reveal>
+          <div className="grid items-center gap-10 rounded-2xl border border-line bg-white p-8 sm:p-12 lg:grid-cols-[1.1fr_1fr]">
+            <div>
+              <p className={sectionLabel}>Services on CityCart</p>
+              <h2 className="font-display mt-3 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+                Run a service business, not a shop?
+              </h2>
+              <p className="mt-4 max-w-lg text-[14.5px] leading-relaxed text-muted">
+                Cleaning, plumbing, electrical work, repairs and more. List a starting price, work from one block, and
+                agree every job with the customer directly.
+              </p>
+              <div className="mt-7 flex flex-wrap gap-3">
+                <Link to="/provider/apply" className={btnPine}>
+                  Apply as a provider
+                </Link>
+                <Link
+                  to="/sell/service/login"
+                  className="inline-flex h-11 items-center justify-center rounded-md border border-line px-6 text-[13px] font-medium text-ink transition hover:border-ink"
+                >
+                  Provider log in
+                </Link>
+              </div>
+            </div>
+            <dl className="grid gap-px overflow-hidden rounded-lg border border-line bg-line text-sm">
+              {[
+                ['Fee', '1% monthly, billed after you earn'],
+                ['Area', 'One block in your city'],
+                ['Payment', 'Agreed with each customer'],
+              ].map(([k, v]) => (
+                <div key={k} className="flex items-baseline justify-between gap-6 bg-white px-5 py-4">
+                  <dt className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted">{k}</dt>
+                  <dd className="text-right text-[14.5px] font-medium text-ink">{v}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </Reveal>
       </section>
 
       {/* FAQ */}

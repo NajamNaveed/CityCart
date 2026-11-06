@@ -8,8 +8,10 @@ import { btnPrimary } from '../ui'
 
 export default function ForgotPassword() {
   const [params] = useSearchParams()
-  const portal = params.get('portal') === 'brand' ? 'brand' : 'customer'
+  const requested = params.get('portal')
+  const portal = requested === 'brand' || requested === 'service' ? requested : 'customer'
   const isBrand = portal === 'brand'
+  const isService = portal === 'service'
 
   const [email, setEmail] = useState('')
   const [fieldError, setFieldError] = useState('')
@@ -39,12 +41,12 @@ export default function ForgotPassword() {
     }
   }
 
-  const loginPath = isBrand ? '/sell/login' : '/login'
+  const loginPath = isService ? '/sell/service/login' : isBrand ? '/sell/login' : '/login'
 
   return (
     <AuthShell
       tone={isBrand ? 'pine' : 'sand'}
-      eyebrow={isBrand ? 'Brand password recovery' : 'Password recovery'}
+      eyebrow={isService ? 'Provider password recovery' : isBrand ? 'Brand password recovery' : 'Password recovery'}
       title="Forgot it? It happens."
       intro="We email a single-use link that lets you choose a new password. Nobody at CityCart can see your password."
       points={['Link expires in 60 minutes', 'Works once', 'Signs out other sessions']}

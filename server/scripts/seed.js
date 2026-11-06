@@ -9,7 +9,9 @@ const User = require('../src/models/user.model');
 const City = require('../src/models/city.model');
 const Brand = require('../src/models/brand.model');
 const Store = require('../src/models/store.model');
+const ServiceCategory = require('../src/models/serviceCategory.model');
 const { hashPassword } = require('../src/utils/password');
+const { slugify } = require('../src/utils/slugify');
 const { ROLES } = require('../src/config/roles');
 
 async function getOrCreate(Model, query, data) {
@@ -60,6 +62,17 @@ async function main() {
     description: 'Seeded demo store',
   });
   log.push(['store', store]);
+
+  // Provider onboarding needs at least one active category to choose from
+  // (docs/24 §4.2). The full catalogue tree arrives with discovery in 2b.
+  const providers = ['Home Cleaning', 'Plumbing', 'Electrical', 'Repairs & Maintenance'];
+  for (const [order, name] of providers.entries()) {
+    const slug = slugify(name);
+    log.push([
+      `service category: ${name}`,
+      await getOrCreate(ServiceCategory, { slug }, { name, slug, order }),
+    ]);
+  }
 
   log.forEach(([n, r]) => console.log(`${r.created ? 'created' : 'exists '}  ${n}`));
   console.log('\nLogins:\n  admin@citycart.local / Admin@12345\n  brand@citycart.local / Brand@12345');

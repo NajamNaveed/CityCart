@@ -1,6 +1,6 @@
 # 24 — Marketplace v3: Services, Seller Billing, Redesign, Flutter and Security
 
-Status: **approved 2026-11-06; Phase 0 in progress.** This document is the
+Status: **approved 2026-11-06; Phases 0, 1 and 2a implemented.** This document is the
 authoritative plan for the v3 programme. Where it conflicts with an earlier
 document, this document wins until the earlier document is updated.
 
@@ -311,6 +311,16 @@ one block, a pin inside that block, availability and a starting price. The pin
 must pass the same `assertPinInBlock` rule as a shop. A new provider is
 `PENDING` until the super admin approves it.
 
+Phase 2a implements the tenant, onboarding, block/pin and admin approval only
+(docs/04 §12c, docs/05 §22g): `POST /services/apply`, the provider's own
+`GET/PATCH /services/provider/me` and `PATCH /services/provider/block`, and the
+super-admin list/detail/status endpoints. Availability and offerings land in 2b,
+so signup does not ask for them yet. The owner is a `SERVICE_PROVIDER` user whose
+session carries `providerId`; `requireServiceTenant` refuses every other role.
+The city is fixed at signup, a pin move inside the current block is unlimited,
+and a block change is allowed once per UTC calendar month
+(`409 BLOCK_CHANGE_LIMIT`, audited in `blockHistory`).
+
 ### 4.2 Service catalogue
 
 ```text
@@ -323,6 +333,11 @@ ServiceAvailability providerId, weekday, startMinute, endMinute, slotMinutes,
 
 Offerings are full-service. `startingAtPrice` is a display floor; the binding
 price is the accepted proposal.
+
+Phase 2a ships `ServiceCategory` (seeded, public read-only listing via
+`GET /services/categories`) plus the provider's own `startingAtPrice` on the
+tenant. `ServiceOffering` and `ServiceAvailability` are Phase 2b/2c models and
+are not created yet.
 
 ### 4.3 Discovery and the public page
 

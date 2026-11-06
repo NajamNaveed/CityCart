@@ -1007,15 +1007,15 @@ The full specification and locked decisions are in
 `24-marketplace-v3-plan.md`. This addendum records the order of work.
 
 ```text
-Phase 0  Decisions, spec, doc reconciliation, SEO/SSR spike     IN PROGRESS
-Phase 1  Identity and tenant foundation
+Phase 0  Decisions, spec, doc reconciliation, SEO/SSR spike     DONE
+Phase 1  Identity and tenant foundation                         DONE
          Multi-brand employee memberships, workspace login, deletion and
          anonymization, email reuse, mock gateway removal, security baseline.
 
-Phase 2a Service-provider account and onboarding
+Phase 2a Service-provider account and onboarding                DONE
          SERVICE account type, provider tenant, block + pin, profile, approval.
 
-Phase 2b Service catalogue and discovery
+Phase 2b Service catalogue and discovery                        NEXT
          Categories, offerings, provider pages, map, search, public pages.
 
 Phase 2c Booking lifecycle

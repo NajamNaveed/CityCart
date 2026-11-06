@@ -2,6 +2,7 @@ const User = require('../models/user.model');
 const Employee = require('../models/employee.model');
 const Brand = require('../models/brand.model');
 const AdminPartner = require('../models/adminPartner.model');
+const ServiceProvider = require('../models/serviceProvider.model');
 const { hashPassword, comparePassword } = require('../utils/password');
 const { signToken, verifyToken } = require('../utils/jwt');
 const { ROLES, STAFF_ROLES, STAFF_APP_ROLES, DELIVERY_APP_ROLES } = require('../config/roles');
@@ -91,6 +92,9 @@ const PORTAL_ROLES = Object.freeze({
   staff: STAFF_APP_ROLES,
   delivery: DELIVERY_APP_ROLES,
   admin: [ROLES.SUPER_ADMIN, ROLES.ADMIN_PARTNER],
+  // The seller portal's provider door (docs/24 §4.1). A provider session
+  // never carries a brandId; it carries providerId instead.
+  service: [ROLES.SERVICE_PROVIDER],
 });
 
 const PORTAL_ACCOUNT_TYPES = Object.freeze({
@@ -99,6 +103,7 @@ const PORTAL_ACCOUNT_TYPES = Object.freeze({
   staff: 'BRAND',
   delivery: 'BRAND',
   admin: 'PLATFORM_ADMIN',
+  service: 'SERVICE',
 });
 
 // A workspace token only chooses a membership; it is never a session
@@ -140,7 +145,7 @@ function membershipSummary({ membership, brand }) {
  * Issues a session token. An employee session names the membership (the
  * tenant and the role) rather than the account's home brand, per docs/24 §3.3.
  */
-function issueSessionToken(user, { portal, membership } = {}) {
+function issueSessionToken(user, { portal, membership, provider } = {}) {
   const role = membership ? membershipRole(membership, user) : user.role;
   const brandId = membership ? membership.brandId : user.brandId;
   return signToken(
@@ -149,6 +154,7 @@ function issueSessionToken(user, { portal, membership } = {}) {
       role,
       brandId,
       passwordVersion: user.passwordVersion,
+      ...(provider && { providerId: provider._id }),
       ...(membership && { membershipId: membership._id }),
       // Marks an app token with the app it was issued to, so each app can
       // only ever use its own token (see middleware/authenticate.js).
@@ -221,6 +227,17 @@ async function loginUser({ email, password }, portal = 'customer') {
     }
   }
 
+  // A provider whose tenant is suspended or terminated cannot sign in. A
+  // PENDING provider may sign in: the dashboard shows the pending state and
+  // lets them correct the application while the super admin reviews it.
+  let provider = null;
+  if (user.role === ROLES.SERVICE_PROVIDER) {
+    provider = await ServiceProvider.findOne({ userId: user._id });
+    if (!provider || !['PENDING', 'ACTIVE'].includes(provider.status)) {
+      throw new AuthError(401, GENERIC_LOGIN_ERROR);
+    }
+  }
+
   let membership = null;
   if (user.role === ROLES.BRAND_EMPLOYEE) {
     const memberships = await activeMemberships(user._id);
@@ -249,8 +266,8 @@ async function loginUser({ email, password }, portal = 'customer') {
     membership = memberships[0].membership;
   }
 
-  const token = issueSessionToken(user, { portal, membership });
-  return { user: toSafeUser(user, membership), token };
+  const token = issueSessionToken(user, { portal, membership, provider });
+  return { user: toSafeUser(user, membership, provider), token };
 }
 
 /**
@@ -313,7 +330,7 @@ async function switchWorkspace({ user, brandId, client }) {
  * Deliberately not just spreading the Mongoose document — an allow-list
  * is defense-in-depth on top of the User schema's own toJSON transform.
  */
-function toSafeUser(user, membership) {
+function toSafeUser(user, membership, provider) {
   // On an employee session the active membership (not the account's home
   // brand) decides the role and tenant the dashboard works in.
   const role = membership ? membershipRole(membership, user) : user.role;
@@ -331,6 +348,16 @@ function toSafeUser(user, membership) {
     ...(brandId && { brandId }),
     // The Employee row backing an employee session (one per brand).
     ...(membership && { membershipId: membership._id }),
+    // The provider tenant backing a SERVICE_PROVIDER session. The dashboard
+    // uses the status to show "waiting for approval" before the first load.
+    ...(provider && {
+      providerId: provider._id,
+      provider: {
+        id: provider._id,
+        displayName: provider.displayName,
+        status: provider.status,
+      },
+    }),
     // Only present for staff of a terminated brand, so the UI can show a banner.
     ...(user.accessRestricted && {
       access: { restricted: true, expiresAt: user.accessExpiresAt },

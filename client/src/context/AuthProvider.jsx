@@ -6,6 +6,7 @@ import { AuthContext } from './contexts'
 const LOGIN_PATHS = {
   customer: '/auth/login',
   brand: '/auth/brand/login',
+  service: '/auth/service/login',
   admin: '/auth/admin/login',
 }
 
@@ -15,7 +16,7 @@ const LOGIN_PATHS = {
 // keep their normal persistent session. The short-lived staff cookie on
 // the server is the backstop; this marker is the tab-close detector.
 const STAFF_TAB_KEY = 'citycart.staffTab'
-const STAFF_ROLES = ['BRAND_ADMIN', 'BRAND_EMPLOYEE', 'SUPER_ADMIN', 'ADMIN_PARTNER']
+const STAFF_ROLES = ['BRAND_ADMIN', 'BRAND_EMPLOYEE', 'SUPER_ADMIN', 'ADMIN_PARTNER', 'SERVICE_PROVIDER']
 const isStaff = (role) => STAFF_ROLES.includes(role)
 
 export function AuthProvider({ children }) {
@@ -95,6 +96,14 @@ export function AuthProvider({ children }) {
     return res.data
   }, [])
 
+  // Provider sign-up: owner, provider tenant and its block in one request.
+  // Nothing is discoverable until the inbox is verified and the super admin
+  // approves the application, so no session is issued here either.
+  const applyForService = useCallback(async (payload) => {
+    const res = await api.post('/services/apply', payload)
+    return res.data
+  }, [])
+
   // Re-reads the session after the user changes something about themselves
   // (a partner choosing a password clears mustChangePassword server-side).
   const refresh = useCallback(async () => {
@@ -113,8 +122,8 @@ export function AuthProvider({ children }) {
   }, [])
 
   const value = useMemo(
-    () => ({ user, loading, login, chooseWorkspace, register, applyForBrand, logout, refresh }),
-    [user, loading, login, chooseWorkspace, register, applyForBrand, logout, refresh],
+    () => ({ user, loading, login, chooseWorkspace, register, applyForBrand, applyForService, logout, refresh }),
+    [user, loading, login, chooseWorkspace, register, applyForBrand, applyForService, logout, refresh],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

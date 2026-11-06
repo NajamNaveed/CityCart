@@ -9,8 +9,11 @@ import { btnPrimary } from '../ui'
 export default function VerifyEmail() {
   const [params] = useSearchParams()
   const token = params.get('token') || ''
-  const portal = params.get('portal') === 'brand' ? 'brand' : 'customer'
+  const requested = params.get('portal')
+  const portal = requested === 'brand' || requested === 'service' ? requested : 'customer'
   const isBrand = portal === 'brand'
+  const isService = portal === 'service'
+  const loginPath = isService ? '/sell/service/login' : isBrand ? '/sell/login' : '/login'
   const [state, setState] = useState(token ? 'checking' : 'missing')
   const [error, setError] = useState('')
   const [email, setEmail] = useState('')
@@ -49,13 +52,17 @@ export default function VerifyEmail() {
           <CheckCircle2 className="h-10 w-10 text-pine" aria-hidden="true" />
           <h1 className="font-display mt-4 text-[28px] font-semibold tracking-tight text-ink">Email verified</h1>
           <p className="mt-1.5 text-sm text-muted">
-            Your account is active. Brand owners: your shop is now visible to nearby shoppers.
+            {isService
+              ? 'Your inbox is confirmed. CityCart will review your provider application and let you know when it is approved.'
+              : isBrand
+                ? 'Your account is active. Your shop is now visible to nearby shoppers.'
+                : 'Your account is active. Sign in to start shopping.'}
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
-            <Link to={isBrand ? '/sell/login' : '/login'} className={`${btnPrimary} px-5`}>
-              {isBrand ? 'Brand sign in' : 'Shopper sign in'}
+            <Link to={loginPath} className={`${btnPrimary} px-5`}>
+              {isService ? 'Provider sign in' : isBrand ? 'Brand sign in' : 'Shopper sign in'}
             </Link>
-            {isBrand && (
+            {(isBrand || isService) && (
               <Link
                 to="/login"
                 className="inline-flex h-11 items-center rounded-md border border-line bg-white px-5 text-[13px] font-medium text-ink transition hover:border-ink"
@@ -93,7 +100,7 @@ export default function VerifyEmail() {
           />
           <ResendVerification email={email.trim()} portal={portal} className="mt-3" />
           <p className="mt-6 text-sm text-muted">
-            <Link to={isBrand ? '/sell/login' : '/login'} className="font-medium text-clay underline-offset-4 hover:underline">
+            <Link to={loginPath} className="font-medium text-clay underline-offset-4 hover:underline">
               Back to sign in
             </Link>
           </p>

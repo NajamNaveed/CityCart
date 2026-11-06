@@ -1,5 +1,6 @@
 const User = require('../models/user.model');
 const Employee = require('../models/employee.model');
+const ServiceProvider = require('../models/serviceProvider.model');
 const { signToken, verifyToken } = require('../utils/jwt');
 const { AUTH_COOKIE_NAME, staffAuthCookieOptions } = require('../config/cookie');
 const { ROLES, STAFF_ROLES, STAFF_APP_ROLES, DELIVERY_APP_ROLES } = require('../config/roles');
@@ -124,6 +125,24 @@ async function authenticate(req, res, next) {
       if (membership.brandId) user.brandId = membership.brandId;
     }
 
+    // A provider's tenant is its ServiceProvider row, resolved from the
+    // account on every request (never from the token or the body). A
+    // suspended or terminated provider loses access immediately; PENDING is
+    // allowed so the dashboard can show the application while it is reviewed.
+    if (user.role === ROLES.SERVICE_PROVIDER) {
+      const provider = await ServiceProvider.findOne({ userId: user._id });
+      if (!provider || !['PENDING', 'ACTIVE'].includes(provider.status)) {
+        return res.status(401).json({
+          success: false,
+          message: 'Your provider account is not active.',
+          code: 'PROVIDER_INACTIVE',
+        });
+      }
+      req.provider = provider;
+      req.tenantProviderId = provider._id;
+      req.tenantType = 'SERVICE';
+    }
+
     // Conceptual shape from §11 (req.user = { id, role, brandId }),
     // extended with the full user document so downstream handlers (e.g.
     // GET /auth/me) can read safe profile fields without a second query.
@@ -177,6 +196,7 @@ async function authenticate(req, res, next) {
           brandId: user.brandId,
           passwordVersion: user.passwordVersion,
           ...(req.membership && { membershipId: req.membership._id }),
+          ...(req.provider && { providerId: req.provider._id }),
         },
         { expiresIn: `${require('../config/env').staffSessionHours}h` },
       );

@@ -52,6 +52,7 @@ export function isReadOnlyAdmin(user) {
 export const ADMIN_NAV = [
   ['/admin', 'Overview', true, 'LayoutDashboard', [ADMIN_PERMISSIONS.BRANDS, ADMIN_PERMISSIONS.ORDERS], false],
   ['/admin/brands', 'Brands', false, 'Store', [ADMIN_PERMISSIONS.BRANDS], false],
+  ['/admin/providers', 'Providers', false, 'Wrench', [], true],
   ['/admin/orders', 'Orders', false, 'Package', [ADMIN_PERMISSIONS.ORDERS], false],
   ['/admin/returns', 'Returns', false, 'Undo2', [ADMIN_PERMISSIONS.ORDERS], false],
   ['/admin/reviews', 'Reviews', false, 'Star', [ADMIN_PERMISSIONS.REVIEWS], false],

@@ -12,7 +12,7 @@ const env = require('../config/env');
  */
 
 function signToken(
-  { userId, role, brandId, passwordVersion = 0, client, membershipId, purpose, portal },
+  { userId, role, brandId, providerId, passwordVersion = 0, client, membershipId, purpose, portal },
   { expiresIn } = {}
 ) {
   if (!env.jwtSecret) {
@@ -31,6 +31,7 @@ function signToken(
       userId,
       role,
       brandId: brandId || null,
+      ...(providerId && { providerId }),
       passwordVersion,
       ...(client && { client }),
       ...(membershipId && { membershipId }),

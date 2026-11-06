@@ -166,6 +166,9 @@ const deliveryLogin = appLoginFor('delivery');
 const login = loginFor('customer');
 const brandLogin = loginFor('brand');
 const adminLogin = loginFor('admin');
+// Service providers use the same seller web portal, but their session
+// carries the provider tenant instead of a brand (docs/24 §4.1).
+const serviceLogin = loginFor('service');
 
 /**
  * Second step of a multi-brand employee's sign-in (docs/24 §3.3): exchange
@@ -250,7 +253,7 @@ async function me(req, res, next) {
   // only reachable when that middleware has already confirmed the user
   // is authenticated and active.
   try {
-    const user = toSafeUser(req.user, req.membership);
+    const user = toSafeUser(req.user, req.membership, req.provider);
     // A team member's permissions decide what the dashboard offers them.
     // The membership (not just the account) is the authority, so a person
     // employed by two brands sees the permissions of the active one.
@@ -392,6 +395,7 @@ module.exports = {
   register,
   login,
   brandLogin,
+  serviceLogin,
   staffLogin,
   deliveryLogin,
   adminLogin,

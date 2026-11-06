@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
-import { ChartLine, History, LayoutDashboard, LogOut, MapPin, MapPinned, Menu as MenuIcon, Package, Settings, ShieldCheck, Star, Store, Tags, Undo2, UserCog, UsersRound } from 'lucide-react'
+import { ChartLine, History, LayoutDashboard, LogOut, MapPin, MapPinned, Menu as MenuIcon, Package, Settings, ShieldCheck, Star, Store, Tags, Undo2, UserCog, UsersRound, Wrench } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { adminNavFor, isReadOnlyAdmin } from '../../utils/adminPermissions'
 import NotificationBell from '../NotificationBell'
@@ -8,7 +8,7 @@ import Drawer from '../ui/Drawer'
 import ChangePassword from '../../pages/admin/ChangePassword'
 
 // Icons for the nav entries in utils/adminPermissions.js.
-const ICONS = { LayoutDashboard, Store, Package, Star, MapPin, MapPinned, Tags, ChartLine, UsersRound, Settings, UserCog, History, Undo2 }
+const ICONS = { LayoutDashboard, Store, Wrench, Package, Star, MapPin, MapPinned, Tags, ChartLine, UsersRound, Settings, UserCog, History, Undo2 }
 
 function initials(name = '') {
   return name

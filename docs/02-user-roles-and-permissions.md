@@ -848,6 +848,26 @@ signup on the seller landing. It is a `SERVICE` account type with its own
 itself, create another provider, or act on another provider's resources. A
 super admin approves, suspends, terminates or restores a provider.
 
+Phase 2a rules:
+
+* The owner must verify the inbox before signing in. Verification notifies the
+  super admins but leaves the provider `PENDING`; only the super admin's
+  approval makes it `ACTIVE` and `VERIFIED`.
+* A `PENDING` provider may still sign in and edit its profile and area; it is
+  simply not visible to customers. Every provider role check is
+  `requireServiceTenant`, so a brand, customer or super-admin session can never
+  read or edit a provider tenant through `/services/provider/*`.
+* Approving is allowed from `PENDING` or `SUSPENDED`; suspending is allowed from
+  `PENDING` or `ACTIVE`; terminating is allowed from `ACTIVE` or `SUSPENDED`
+  and is final. Refusing a `PENDING` application sets `SUSPENDED` and marks the
+  verification `REJECTED`.
+* The city is fixed at signup. The provider may move the pin inside its block
+  at any time, but a different block only once per UTC calendar month.
+* Every status change is a super-admin action recorded in the `AdminAction`
+  audit log; an `ADMIN_PARTNER` cannot change provider status.
+
+The endpoint list is in `05-api-specification.md` §22g.
+
 ---
 
 # 20. Protected Actions

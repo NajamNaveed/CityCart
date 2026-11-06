@@ -29,6 +29,7 @@ import MyOrderDetail from './pages/MyOrderDetail'
 import Sell from './pages/Sell'
 import SellerLogin from './pages/SellerLogin'
 import Apply from './pages/Apply'
+import ProviderApply from './pages/ProviderApply'
 import AdminLogin from './pages/AdminLogin'
 import Notifications from './pages/Notifications'
 import NotFound from './pages/NotFound'
@@ -51,10 +52,16 @@ const InventoryHub = lazy(() => import('./pages/brand/InventoryHub'))
 const BrandReviews = lazy(() => import('./pages/brand/Reviews'))
 const BrandReturns = lazy(() => import('./pages/brand/Returns'))
 const BrandReturnDetail = lazy(() => import('./pages/brand/ReturnDetail'))
+const ProviderLayout = lazy(() => import('./components/provider/ProviderLayout'))
+const ProviderOverview = lazy(() => import('./pages/provider/Overview'))
+const ProviderProfile = lazy(() => import('./pages/provider/Profile'))
+const ProviderArea = lazy(() => import('./pages/provider/Area'))
 const AdminLayout = lazy(() => import('./components/admin/AdminLayout'))
 const AdminLanding = lazy(() => import('./pages/admin/Landing'))
 const AdminBrands = lazy(() => import('./pages/admin/Brands'))
 const AdminBrandDetail = lazy(() => import('./pages/admin/BrandDetail'))
+const AdminProviders = lazy(() => import('./pages/admin/Providers'))
+const AdminProviderDetail = lazy(() => import('./pages/admin/ProviderDetail'))
 const AdminOrders = lazy(() => import('./pages/admin/Orders'))
 const AdminOrderDetail = lazy(() => import('./pages/admin/OrderDetail'))
 const AdminReturns = lazy(() => import('./pages/admin/Returns'))
@@ -140,6 +147,18 @@ function App() {
                   <Route element={<GuestRoute />}>
                     <Route path="sell/login" element={<SellerLogin />} />
                     <Route path="sell/apply" element={<Apply />} />
+                    <Route path="sell/service/login" element={<SellerLogin portal="service" />} />
+                    <Route path="provider/apply" element={<ProviderApply />} />
+                  </Route>
+                </Route>
+
+                {/* Provider dashboard: its own layout, one provider account */}
+                <Route element={<ProtectedRoute roles={['SERVICE_PROVIDER']} loginPath="/sell/service/login" />}>
+                  <Route path="provider" element={<ProviderLayout />}>
+                    <Route index element={<ProviderOverview />} />
+                    <Route path="profile" element={<ProviderProfile />} />
+                    <Route path="area" element={<ProviderArea />} />
+                    <Route path="notifications" element={<Notifications />} />
                   </Route>
                 </Route>
 
@@ -190,6 +209,8 @@ function App() {
                     <Route path="analytics" element={<AdminAnalytics />} />
                     <Route path="users" element={<AdminUsers />} />
                     <Route element={<ProtectedRoute roles={['SUPER_ADMIN']} loginPath="/admin/login" />}>
+                      <Route path="providers" element={<AdminProviders />} />
+                      <Route path="providers/:id" element={<AdminProviderDetail />} />
                       <Route path="team" element={<AdminTeam />} />
                       <Route path="activity" element={<AdminActivity />} />
                     </Route>

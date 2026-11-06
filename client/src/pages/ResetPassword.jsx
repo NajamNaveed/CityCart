@@ -9,8 +9,11 @@ import { btnPrimary } from '../ui'
 export default function ResetPassword() {
   const [params] = useSearchParams()
   const token = params.get('token') || ''
-  const isBrand = params.get('portal') === 'brand'
-  const loginPath = isBrand ? '/sell/login' : '/login'
+  const requested = params.get('portal')
+  const portal = requested === 'brand' || requested === 'service' ? requested : 'customer'
+  const isBrand = portal === 'brand'
+  const isService = portal === 'service'
+  const loginPath = isService ? '/sell/service/login' : isBrand ? '/sell/login' : '/login'
 
   const [form, setForm] = useState({ newPassword: '', confirm: '' })
   const [fieldErrors, setFieldErrors] = useState({})
@@ -75,7 +78,7 @@ export default function ResetPassword() {
         <XCircle className="h-10 w-10 text-clay" aria-hidden="true" />
         <h1 className="font-display mt-4 text-[28px] font-semibold tracking-tight text-ink">Open the link from your email</h1>
         <p className="mt-1.5 text-sm text-muted">Reset links expire after 60 minutes and work only once.</p>
-        <Link to={`/forgot-password?portal=${isBrand ? 'brand' : 'customer'}`} className={`${btnPrimary} mt-6 px-5`}>
+        <Link to={`/forgot-password?portal=${portal}`} className={`${btnPrimary} mt-6 px-5`}>
           Request a new link
         </Link>
       </AuthShell>
@@ -127,7 +130,7 @@ export default function ResetPassword() {
       </form>
 
       <p className="mt-6 text-sm text-muted">
-        <Link to={`/forgot-password?portal=${isBrand ? 'brand' : 'customer'}`} className="font-medium text-clay underline-offset-4 hover:underline">
+        <Link to={`/forgot-password?portal=${portal}`} className="font-medium text-clay underline-offset-4 hover:underline">
           Need a new link?
         </Link>
       </p>

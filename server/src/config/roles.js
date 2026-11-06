@@ -20,6 +20,9 @@ const ROLES = Object.freeze({
   // Delivery rider of ONE brand (docs/20). Signs in only through the partner app.
   RIDER: 'RIDER',
   CUSTOMER: 'CUSTOMER',
+  // Owner of one service-provider tenant (docs/24 §4). Brand-like for
+  // sessions and billing, but never a brand and never holds a brandId.
+  SERVICE_PROVIDER: 'SERVICE_PROVIDER',
 });
 
 const ALL_ROLES = Object.values(ROLES);
@@ -34,7 +37,7 @@ const BRAND_SCOPED_ROLES = Object.freeze([
 ]);
 
 // Roles whose sessions are short-lived and per-tab (docs/06 §9 — staff
-// session security): the brand dashboard and the platform admin panel.
+// session security): the seller dashboards and the platform admin panel.
 const STAFF_ROLES = Object.freeze([
   ROLES.BRAND_ADMIN,
   ROLES.BRAND_EMPLOYEE,
@@ -42,6 +45,7 @@ const STAFF_ROLES = Object.freeze([
   ROLES.RIDER,
   ROLES.SUPER_ADMIN,
   ROLES.ADMIN_PARTNER,
+  ROLES.SERVICE_PROVIDER,
 ]);
 
 // The platform admin panel's roles (docs/21 §G). The super admin holds every

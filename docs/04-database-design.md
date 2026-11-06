@@ -133,6 +133,8 @@ deliveries
 reviews
 notifications
 authtokens
+servicecategories
+serviceproviders
 ```
 
 Discovery also uses `blocks` (neighbourhoods inside a city) and `branches`
@@ -144,7 +146,9 @@ Platform-wide configuration is stored in a singleton `platformSettings` collecti
 
 `deliveries` is part of the MVP (see `11-delivery-system.md`), not a future addition — it is required for brand fulfillment and customer tracking as described in `01-product-requirements.md` and `18-development-roadmap.md` (Phase 10).
 
-Additional v3 collections — service providers, bookings, commission entries,
+`servicecategories` and `serviceproviders` are the Phase 2a service-provider
+tenant and its catalogue (§12c). The remaining v3 collections — offerings,
+availability, bookings, proposals, service chat and reviews, commission entries,
 seller invoices and payment claims — are listed in §44 and introduced in the
 phase that needs them. There is no `payouts` collection: the platform bills
 sellers, it does not pay them (docs/15).
@@ -579,6 +583,91 @@ updatedAt
 `createdAt` is indexed descending for the Activity page. Logging is
 best-effort: if the log write fails, the completed action is not turned into an
 error response (the failure is reported on the server console).
+
+---
+
+# 12c. ServiceCategory and ServiceProvider Models (v3 Phase 2a)
+
+## ServiceCategory
+
+Collection:
+
+```text
+servicecategories
+```
+
+The catalogue tree a provider chooses from (`24-marketplace-v3-plan.md` §4.2).
+Same shape and admin conventions as the product `Category` model (§13).
+
+```text
+_id
+name
+slug          unique, derived once from name
+parentId      -> ServiceCategory (null at the root), indexed
+order
+image
+isActive
+createdAt
+updatedAt
+```
+
+Only active categories are listed by `GET /services/categories`, and a provider
+application must reference an active one. The seed creates four root
+categories: Home Cleaning, Plumbing, Electrical, Repairs & Maintenance.
+
+## ServiceProvider
+
+Collection:
+
+```text
+serviceproviders
+```
+
+A tenant of its own (`24-marketplace-v3-plan.md` §4.1). It is **not** a brand:
+it never holds a `brandId`, has exactly one owner and works in one block.
+
+```text
+_id
+userId         -> User, unique (the owner, role SERVICE_PROVIDER)
+displayName
+legalName
+slug           unique, derived once from displayName
+categoryId     -> ServiceCategory, indexed
+cityId         -> City, indexed; fixed at signup
+blockId        -> Block, indexed; exactly one at a time
+location       GeoJSON Point, 2dsphere indexed, required (pin inside blockId)
+addressLine
+phone
+bio
+avatar / coverImage
+startingAtPrice  integer paisa (PKR minor units)
+status           PENDING | ACTIVE | SUSPENDED | TERMINATED (indexed)
+verification     UNVERIFIED | VERIFIED | REJECTED
+ratingAvg / ratingCount
+completedBookings
+rankScore
+billingStatus    ACTIVE | WARNING | RESTRICTED | FROZEN
+blockChangedAt   month of the last BLOCK change (pin moves do not count)
+blockHistory[]   { blockId, changedAt, changedBy }
+approvedBy / approvedAt
+createdAt / updatedAt
+```
+
+Rules enforced by the service layer:
+
+* The application creates the `User` and the `ServiceProvider` in one
+  transaction; a failure leaves neither.
+* `blockId` must be active and belong to `cityId`; the pin must pass
+  `assertPinInBlock`.
+* Status, verification, role and the tenant ids are server-controlled; the
+  client submits only owner/profile fields.
+* A new provider is `PENDING` and `UNVERIFIED`. Verifying the inbox does not
+  change either; the super admin approves it to `ACTIVE` / `VERIFIED`.
+* `blockChangedAt` is set at signup and again only when the provider moves to a
+  different block. A same-month block change answers `409 BLOCK_CHANGE_LIMIT`.
+* The slug and category are immutable in Phase 2a; the city is fixed at signup.
+* `userId` and `slug` are unique indexes, so a provider account or public
+  address is never duplicated even under a race.
 
 ---
 
@@ -1805,8 +1894,6 @@ The architecture allows future collections. The v3 programme
 (`24-marketplace-v3-plan.md`) adds these collections when their phase starts:
 
 ```text
-servicecategories
-serviceproviders
 serviceofferings
 serviceavailabilities
 servicebookings
@@ -1820,6 +1907,9 @@ sellerinvoices
 sellerpaymentclaims
 billingaudits
 ```
+
+`servicecategories` and `serviceproviders` belong to Phase 2a and are already
+implemented (§12c).
 
 Still future and not part of v3:
 

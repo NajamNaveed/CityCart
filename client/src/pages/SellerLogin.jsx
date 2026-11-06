@@ -9,10 +9,44 @@ import { getErrorMessage, getFieldErrors } from '../services/api'
 import { safeNext } from '../utils/nav'
 import { btnPine } from '../ui'
 
-export default function SellerLogin() {
+const COPY = {
+  brand: {
+    eyebrow: 'Brand log in',
+    title: 'Back to running your brand.',
+    intro: 'Owners and staff sign in here to manage products, stock and orders.',
+    points: ['Brand owners and employees only', 'Shoppers sign in from the main store'],
+    heading: 'Brand log in',
+    hint: 'Use the email you applied with, or the one your owner gave you.',
+    signupLead: 'Don’t have a brand yet?',
+    signupLabel: 'Open your brand',
+    signupTo: '/sell/apply',
+    loginPath: '/sell/login',
+    otherLead: 'Offer a service instead?',
+    otherLabel: 'Provider log in',
+    otherTo: '/sell/service/login',
+  },
+  service: {
+    eyebrow: 'Provider log in',
+    title: 'Back to running your service.',
+    intro: 'Service providers sign in here to manage their profile, area and bookings.',
+    points: ['Service providers only', 'CityCart reviews every application', 'Cash or bank transfer, arranged with the customer'],
+    heading: 'Provider log in',
+    hint: 'Use the email you applied with.',
+    signupLead: 'Want to offer a service?',
+    signupLabel: 'Apply as a provider',
+    signupTo: '/provider/apply',
+    loginPath: '/sell/service/login',
+    otherLead: 'Selling products instead?',
+    otherLabel: 'Brand log in',
+    otherTo: '/sell/login',
+  },
+}
+
+export default function SellerLogin({ portal = 'brand' }) {
   const { login, chooseWorkspace } = useAuth()
   const [params] = useSearchParams()
   const hasNext = safeNext(params.get('next'), '') !== ''
+  const copy = COPY[portal] || COPY.brand
 
   const [form, setForm] = useState({ email: '', password: '' })
   const [error, setError] = useState('')
@@ -32,7 +66,7 @@ export default function SellerLogin() {
     setSubmitting(true)
     try {
       // GuestRoute sends the user on to their dashboard once the session exists.
-      await login(form.email, form.password, 'brand')
+      await login(form.email, form.password, portal)
     } catch (err) {
       const data = err.response?.data
       if (data?.code === 'WORKSPACE_REQUIRED') {
@@ -58,16 +92,10 @@ export default function SellerLogin() {
   }
 
   return (
-    <AuthShell
-      tone="pine"
-      eyebrow="Brand log in"
-      title="Back to running your brand."
-      intro="Owners and staff sign in here to manage products, stock and orders."
-      points={['Brand owners and employees only', 'Shoppers sign in from the main store']}
-    >
-      <h1 className="font-display text-[28px] font-semibold tracking-tight text-ink">Brand log in</h1>
+    <AuthShell tone="pine" eyebrow={copy.eyebrow} title={copy.title} intro={copy.intro} points={copy.points}>
+      <h1 className="font-display text-[28px] font-semibold tracking-tight text-ink">{copy.heading}</h1>
       <p className="mt-1.5 text-sm text-muted">
-        {hasNext ? 'Log in to continue where you left off.' : 'Use the email you applied with, or the one your owner gave you.'}
+        {hasNext ? 'Log in to continue where you left off.' : copy.hint}
       </p>
 
       {error && (
@@ -128,7 +156,7 @@ export default function SellerLogin() {
             required
           />
           <div className="flex justify-end">
-            <Link to="/forgot-password?portal=brand" className="text-[13px] font-medium text-pine underline-offset-4 hover:underline">
+            <Link to={`/forgot-password?portal=${portal}`} className="text-[13px] font-medium text-pine underline-offset-4 hover:underline">
               Forgot password?
             </Link>
           </div>
@@ -138,12 +166,18 @@ export default function SellerLogin() {
         </form>
       )}
 
-      {needsVerification && <ResendVerification email={form.email.trim()} portal="brand" className="mt-4" />}
+      {needsVerification && <ResendVerification email={form.email.trim()} portal={portal} className="mt-4" />}
 
       <p className="mt-6 text-sm text-muted">
-        Don’t have a brand yet?{' '}
-        <Link to="/sell/apply" className="font-medium text-pine underline-offset-4 hover:underline">
-          Open your brand
+        {copy.signupLead}{' '}
+        <Link to={copy.signupTo} className="font-medium text-pine underline-offset-4 hover:underline">
+          {copy.signupLabel}
+        </Link>
+      </p>
+      <p className="mt-2 text-sm text-muted">
+        {copy.otherLead}{' '}
+        <Link to={copy.otherTo} className="font-medium text-pine underline-offset-4 hover:underline">
+          {copy.otherLabel}
         </Link>
       </p>
       <p className="mt-2 text-sm text-muted">

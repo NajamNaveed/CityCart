@@ -4,9 +4,9 @@ import { humanize } from '../../ui'
 // Status colours across the dashboard: done/good = green, in progress/needs
 // attention = amber, problems = red, everything else stays quiet.
 const STATUS_TONE = {
-  ACTIVE: 'good', DELIVERED: 'good', CONFIRMED: 'good', PAID: 'good', IN_STOCK: 'good',
+  ACTIVE: 'good', DELIVERED: 'good', CONFIRMED: 'good', PAID: 'good', IN_STOCK: 'good', VERIFIED: 'good',
   READY_FOR_SHIPMENT: 'good', PROCESSING: 'info', RECEIVED: 'good',
-  PENDING: 'warn', LOW_STOCK: 'warn', OUT_OF_STOCK: 'bad', SHIPPED: 'info',
+  PENDING: 'warn', LOW_STOCK: 'warn', UNVERIFIED: 'warn', OUT_OF_STOCK: 'bad', SHIPPED: 'info',
   OUT_FOR_DELIVERY: 'info', IN_TRANSIT: 'info', PICKED_UP: 'info', READY_FOR_PICKUP: 'info',
   REJECTED: 'bad', CANCELLED: 'bad', FAILED: 'bad', RETURNED: 'bad',
   REFUNDED: 'bad', PARTIALLY_REFUNDED: 'warn',
