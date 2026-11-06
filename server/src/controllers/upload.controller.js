@@ -1,4 +1,8 @@
-const { createProductImageSignature, UploadError } = require('../services/upload.service');
+const {
+  createProductImageSignature,
+  createProviderImageSignature,
+  UploadError,
+} = require('../services/upload.service');
 
 // POST /uploads/signature: permission to upload comes from the route (products.create or products.update).
 function signature(req, res, next) {
@@ -19,4 +23,25 @@ function signature(req, res, next) {
   }
 }
 
-module.exports = { signature };
+// POST /uploads/provider-signature: the provider's own offering images. The
+// tenant comes from the SERVICE_PROVIDER session, never from the client.
+function providerSignature(req, res, next) {
+  if (!req.tenantProviderId) {
+    return res
+      .status(403)
+      .json({ success: false, message: 'You are not authorized to perform this action.', code: 'NO_PROVIDER' });
+  }
+
+  try {
+    return res
+      .status(200)
+      .json({ success: true, upload: createProviderImageSignature(req.tenantProviderId) });
+  } catch (err) {
+    if (err instanceof UploadError) {
+      return res.status(err.status).json({ success: false, message: err.message, code: 'UPLOAD_NOT_CONFIGURED' });
+    }
+    return next(err);
+  }
+}
+
+module.exports = { signature, providerSignature };

@@ -1,6 +1,6 @@
 # 24 — Marketplace v3: Services, Seller Billing, Redesign, Flutter and Security
 
-Status: **approved 2026-11-06; Phases 0, 1 and 2a implemented.** This document is the
+Status: **approved 2026-11-06; Phases 0, 1, 2a and 2b implemented.** This document is the
 authoritative plan for the v3 programme. Where it conflicts with an earlier
 document, this document wins until the earlier document is updated.
 
@@ -336,8 +336,12 @@ price is the accepted proposal.
 
 Phase 2a ships `ServiceCategory` (seeded, public read-only listing via
 `GET /services/categories`) plus the provider's own `startingAtPrice` on the
-tenant. `ServiceOffering` and `ServiceAvailability` are Phase 2b/2c models and
-are not created yet.
+tenant. Phase 2b adds `ServiceOffering` (docs/04 §12d): the provider manages
+its own list at `GET/POST/PATCH/DELETE /services/provider/offerings`, the tenant
+and category are copied from the session, the slug is derived once, and delete
+is a soft delete. Admins holding `admin.catalog` manage the catalogue at
+`/admin/service-categories`; a category in use cannot be deactivated, and the
+tree stays two levels deep. `ServiceAvailability` remains a Phase 2c model.
 
 ### 4.3 Discovery and the public page
 
@@ -353,6 +357,17 @@ are not created yet.
   (`OUTSIDE_SERVICE_BLOCK`), not only by the UI.
 * A provider may change block once per calendar month. The server checks
   `blockChangedAt`; existing bookings are unaffected. Admin override is audited.
+
+Phase 2b implements discovery and the public page against this shape:
+`GET /services/discover` takes the shopper's four scopes (`block`, `area`,
+`radius`, `city`, docs/05 §22g) with `categoryId`, `q` and
+`sort=rank|rating|price`; only `ACTIVE` / `VERIFIED` providers are returned and
+each item carries its block centre, distance, starting price and up to three
+offerings. `GET /services/providers/:slug` publishes the same summary plus all
+active offerings, and answers `404` for any non-approved provider. Neither
+endpoint ever returns the provider's pin, phone or address line. The web
+screens are `/services` (list + Leaflet map) and `/services/:slug`.
+Availability, reviews and `OUTSIDE_SERVICE_BLOCK` arrive with Phase 2c.
 
 ### 4.4 Booking lifecycle
 

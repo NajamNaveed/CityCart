@@ -1015,10 +1015,10 @@ Phase 1  Identity and tenant foundation                         DONE
 Phase 2a Service-provider account and onboarding                DONE
          SERVICE account type, provider tenant, block + pin, profile, approval.
 
-Phase 2b Service catalogue and discovery                        NEXT
+Phase 2b Service catalogue and discovery                        DONE
          Categories, offerings, provider pages, map, search, public pages.
 
-Phase 2c Booking lifecycle
+Phase 2c Booking lifecycle                                      NEXT
          Availability, request, chat, proposal, completion, reviews, ranking.
 
 Phase 3  Seller billing

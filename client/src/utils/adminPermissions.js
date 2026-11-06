@@ -59,6 +59,7 @@ export const ADMIN_NAV = [
   ['/admin/cities', 'Cities', false, 'MapPin', [ADMIN_PERMISSIONS.LOCATIONS], false],
   ['/admin/blocks', 'Blocks', false, 'MapPinned', [ADMIN_PERMISSIONS.LOCATIONS], false],
   ['/admin/categories', 'Categories', false, 'Tags', [ADMIN_PERMISSIONS.CATALOG], false],
+  ['/admin/service-categories', 'Service categories', false, 'Wrench', [ADMIN_PERMISSIONS.CATALOG], false],
   ['/admin/catalogue', 'Catalogue', false, 'Package', [ADMIN_PERMISSIONS.CATALOG], false],
   ['/admin/analytics', 'Analytics', false, 'ChartLine', [ADMIN_PERMISSIONS.ANALYTICS], false],
   ['/admin/users', 'Users', false, 'UsersRound', [ADMIN_PERMISSIONS.USERS], false],

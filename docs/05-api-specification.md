@@ -2242,7 +2242,7 @@ or line.
 
 ---
 
-# 22g. Service-Provider Endpoints (v3 Phase 2a)
+# 22g. Service-Provider Endpoints (v3 Phase 2a–2b)
 
 Base:
 
@@ -2253,13 +2253,16 @@ Base:
 Service providers are a second tenant type (docs/24 §4). They are never brands:
 no endpoint accepts or returns a `brandId` for them, and every provider query is
 scoped to `req.tenantProviderId` from the session. Phase 2a covers signup,
-profile, one-block area and super-admin approval. Offerings, discovery, booking
-and billing arrive in Phases 2b–3.
+profile, one-block area and super-admin approval; Phase 2b adds offerings,
+discovery and the public provider page. Booking and billing arrive in Phases
+2c–3.
 
 ## Public
 
 ```text
 GET  /services/categories   -> { categories: [{ _id, name, slug, order }] }
+GET  /services/discover     -> { items, pagination, meta }
+GET  /services/providers/:slug -> { provider }
 POST /services/apply        -> 201 { message, provider, user }
 ```
 
@@ -2299,6 +2302,50 @@ active and belong to `cityId`, and the pin must pass the same
 Verification notifies the super admins but does **not** approve the provider.
 A duplicate `(accountType, email)` or slug answers `409`.
 
+## Public discovery (Phase 2b)
+
+```text
+GET /services/discover
+    ?scope=block|area|radius|city
+    &blockId=            block scope
+    &blockIds=a,b,c      area scope
+    &radiusKm=           radius scope, or a radius around the area origin
+    &lat=&lng=           origin for radius / area
+    &cityId=             city scope
+    &categoryId=&q=&sort=rank|rating|price&page=&limit=
+```
+
+Mirrors the shopper's existing area logic (docs/05 §23): `scope` defaults to
+`city` and `limit` is capped at 30. Missing or contradictory scope parameters
+answer `400`; an unknown block answers `404`. Only `ACTIVE` / `VERIFIED`
+providers are ever returned, and the filter is applied by the server.
+
+`q` searches the provider's display name and bio plus its active offerings'
+title and description (case-insensitive, escaped). `categoryId` filters on the
+provider's own category, not on the offering's.
+
+Each item is the public provider summary: `_id`, `displayName`, `slug`, `bio`,
+`avatar`, `coverImage`, `startingAtPrice`, `ratingAvg`, `ratingCount`,
+`completedBookings`, `isNew`, `category { _id, name, slug }`, `city { _id,
+name }`, `block { _id, name, center, area? }`, `distanceKm` (when an origin is
+known), `offeringCount` and `topOfferings` (up to 3). `pagination` is
+`{ page, limit, total, pages }`; `meta` echoes the resolved scope.
+
+The provider's **pin, phone and `addressLine` are never returned**: the block
+centre is the public, approximate location (docs/24 §4.3).
+
+```text
+GET /services/providers/:slug -> { provider }
+```
+
+The public provider page. `:slug` must match `^[a-z0-9-]+$` (`400` otherwise).
+A pending, suspended, terminated or unknown provider answers `404`, so the
+public cannot enumerate applications. The response adds the provider's active
+offerings (`_id`, `title`, `slug`, `description`, `images`, `startingAtPrice`,
+`durationMinutes`, `attributes`) and placeholder `availability: []` /
+`reviews: []` until Phase 2c. It never includes the pin, phone, address line or
+owner.
+
 ## Provider's own tenant
 
 ```text
@@ -2325,6 +2372,75 @@ A pin move inside the current block is unlimited. A different block is allowed
 once per UTC calendar month, checked against `blockChangedAt`; the next attempt
 in the same month answers `409 BLOCK_CHANGE_LIMIT`. Existing bookings are never
 rewritten by a block change, and every change is appended to `blockHistory`.
+
+## Provider offerings (Phase 2b)
+
+```text
+GET    /services/provider/offerings      -> { offerings }
+POST   /services/provider/offerings      -> 201 { message, offering }
+PATCH  /services/provider/offerings/:id  -> { message, offering }
+DELETE /services/provider/offerings/:id  -> { message, offering }
+```
+
+All four require a `SERVICE_PROVIDER` session (`requireServiceTenant`); every
+query is scoped to `req.tenantProviderId`. `providerId` and `categoryId` are
+never accepted from the body — the server copies the provider's own category on
+create. Editing or deleting another tenant's offering answers `404`.
+
+Create body (at least `title`, `startingAtPrice`, `durationMinutes`):
+
+```json
+{
+  "title": "Deep clean — 3 bedroom",
+  "description": "optional, max 2000",
+  "images": ["https://res.cloudinary.com/..."],
+  "startingAtPrice": 450000,
+  "durationMinutes": 180,
+  "attributes": { "teamSize": 2 },
+  "isActive": true
+}
+```
+
+`startingAtPrice` is an integer in paisa; `durationMinutes` is an integer in
+15–1440; `images` is at most 8 URLs; `attributes` is a flat object of
+string/number/boolean values. A fractional price or an out-of-range duration
+answers `400`; a duplicate title in the same tenant answers `409
+OFFERING_EXISTS`. The slug is derived once from the title and never changes.
+`PATCH` accepts any subset (at least one field). `DELETE` is a soft delete
+(`isActive: false`), and the list returns every offering including inactive
+ones so the provider can re-activate them with `PATCH`.
+
+Uploads use the provider signature:
+
+```text
+POST /api/v1/uploads/provider-signature -> { success, upload: { uploadUrl, apiKey, timestamp, folder, allowedFormats, signature } }
+```
+
+It requires a `SERVICE_PROVIDER` session and signs the folder
+`citycart/providers/<providerId>/offerings`, so the browser can post straight to
+Cloudinary without an authenticated cookie.
+
+## Service categories (platform admin)
+
+Base `/api/v1/admin/service-categories`. Guarded by
+`requireAdminPermission(admin.catalog)` — the same permission as product
+categories, so a `SUPER_ADMIN` or an `ADMIN_PARTNER` holding `admin.catalog` may
+manage them. Provider approval stays super-admin only.
+
+```text
+GET    /admin/service-categories      -> { categories }
+POST   /admin/service-categories      -> 201 { message, category }
+PATCH  /admin/service-categories/:id  -> { message, category }
+DELETE /admin/service-categories/:id  -> { message, category }
+```
+
+The tree is two levels deep (a parent whose own parent is `null`) and only
+active categories can be used by providers. The slug is global and derived
+once, so names are effectively unique. `DELETE` (and deactivating with
+`PATCH { isActive: false }`) is refused with `409` while a provider or a child
+category uses it; an unused category is deactivated (`isActive: false`) and
+disappears from the public `GET /services/categories`. The admin list adds
+`providerCount` and shows inactive categories too.
 
 ## Platform admin (super admin only)
 

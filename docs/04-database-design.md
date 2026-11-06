@@ -671,6 +671,52 @@ Rules enforced by the service layer:
 
 ---
 
+# 12d. ServiceOffering Model (v3 Phase 2b)
+
+Collection:
+
+```text
+serviceofferings
+```
+
+The provider's catalogue (`24-marketplace-v3-plan.md` §4.2). Offerings are
+full-service and belong to exactly one provider tenant.
+
+```text
+_id
+providerId     -> ServiceProvider, indexed
+categoryId     -> ServiceCategory, indexed (copied from the provider on create)
+title
+slug           unique per provider, derived once from title
+description
+images[]       at most 8 URLs
+startingAtPrice integer paisa (PKR minor units)
+durationMinutes 15–1440
+attributes     flat JSON object of primitive values (material, unit, ...)
+isActive       default true
+createdAt / updatedAt
+```
+
+Rules enforced by the service layer:
+
+* `providerId` and `categoryId` are never read from the client: they come from
+  `req.tenantProviderId` and the provider's own category. A brand session is
+  refused with `403 ROLE_NOT_ALLOWED`.
+* The slug is derived once from the title and kept on update, so a published
+  link never changes.
+* `(providerId, slug)` is unique. A duplicate title in the same tenant answers
+  `409 OFFERING_EXISTS`.
+* Prices are whole paisa; a fractional price or a duration outside 15–1440
+  minutes answers `400`.
+* Delete is a soft delete (`isActive: false`), so an offering referenced by a
+  future booking is never removed. Managing an offering of another tenant
+  answers `404`, not `403` (no existence leak).
+
+Discovery reads only `isActive: true` offerings of an `ACTIVE` / `VERIFIED`
+provider. The public serialized offering omits the tenant id and category id.
+
+---
+
 # 13. Category Model
 
 Collection:

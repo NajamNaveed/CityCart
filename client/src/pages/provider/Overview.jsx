@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, CheckCircle2, Clock3, MapPin, Settings, Star } from 'lucide-react'
+import { ArrowRight, CheckCircle2, Clock3, MapPin, Settings, Star, Wrench } from 'lucide-react'
 import api, { getErrorMessage } from '../../services/api'
 import { useAuth } from '../../hooks/useAuth'
 import { PageHeader, StatusBadge } from '../../components/brand/Bits'
@@ -115,7 +115,7 @@ export default function ProviderOverview() {
         </section>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Link
           to="/provider/profile"
           className="group rounded-lg border border-line bg-white p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-ink/20 hover:shadow-lg hover:shadow-ink/5"
@@ -128,6 +128,20 @@ export default function ProviderOverview() {
           </div>
           <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Service profile</p>
           <p className="mt-1.5 truncate text-[15px] font-semibold text-ink">{provider.displayName}</p>
+        </Link>
+
+        <Link
+          to="/provider/offerings"
+          className="group rounded-lg border border-line bg-white p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-ink/20 hover:shadow-lg hover:shadow-ink/5"
+        >
+          <div className="flex items-start justify-between">
+            <span className="flex h-10 w-10 items-center justify-center rounded-md bg-paper text-ink/70">
+              <Wrench className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <ArrowRight className="h-4 w-4 text-muted/50 transition-all duration-300 group-hover:translate-x-0.5 group-hover:text-ink" aria-hidden="true" />
+          </div>
+          <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Services & prices</p>
+          <p className="mt-1.5 text-[15px] font-semibold text-ink">Manage your service list</p>
         </Link>
 
         <Link

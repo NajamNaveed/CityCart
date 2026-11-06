@@ -9,7 +9,10 @@ const User = require('../src/models/user.model');
 const City = require('../src/models/city.model');
 const Brand = require('../src/models/brand.model');
 const Store = require('../src/models/store.model');
+const Block = require('../src/models/block.model');
 const ServiceCategory = require('../src/models/serviceCategory.model');
+const ServiceProvider = require('../src/models/serviceProvider.model');
+const ServiceOffering = require('../src/models/serviceOffering.model');
 const { hashPassword } = require('../src/utils/password');
 const { slugify } = require('../src/utils/slugify');
 const { ROLES } = require('../src/config/roles');
@@ -65,17 +68,89 @@ async function main() {
 
   // Provider onboarding needs at least one active category to choose from
   // (docs/24 §4.2). The full catalogue tree arrives with discovery in 2b.
-  const providers = ['Home Cleaning', 'Plumbing', 'Electrical', 'Repairs & Maintenance'];
-  for (const [order, name] of providers.entries()) {
+  const categories = {};
+  const categoryNames = ['Home Cleaning', 'Plumbing', 'Electrical', 'Repairs & Maintenance'];
+  for (const [order, name] of categoryNames.entries()) {
     const slug = slugify(name);
-    log.push([
-      `service category: ${name}`,
-      await getOrCreate(ServiceCategory, { slug }, { name, slug, order }),
-    ]);
+    const category = await getOrCreate(ServiceCategory, { slug }, { name, slug, order });
+    categories[slug] = category.doc;
+    log.push([`service category: ${name}`, category]);
+  }
+
+  // A published provider with a small catalogue so discovery and the public
+  // page can be tried after `npm run seed` + `npm run seed:blocks`.
+  const block = await Block.findOne({ cityId: city.doc._id, isActive: true }).sort({ name: 1 });
+  if (!block) {
+    console.log('No active block in Faisalabad — run `npm run seed:blocks` to seed the provider too.');
+  } else {
+    const servicePw = process.env.SEED_SERVICE_PASSWORD || 'Service@12345';
+    const owner = await getOrCreate(User, { email: 'service@citycart.local', role: ROLES.SERVICE_PROVIDER }, {
+      name: 'Sana Khalid', email: 'service@citycart.local',
+      passwordHash: await hashPassword(servicePw), role: ROLES.SERVICE_PROVIDER,
+      emailVerifiedAt: new Date(),
+    });
+    log.push(['service owner', owner]);
+
+    const provider = await getOrCreate(ServiceProvider, { slug: 'sana-home-cleaning-demo' }, {
+      userId: owner.doc._id,
+      displayName: 'Sana Home Cleaning',
+      legalName: 'Sana Home Cleaning Services',
+      slug: 'sana-home-cleaning-demo',
+      categoryId: categories['home-cleaning']._id,
+      cityId: city.doc._id,
+      blockId: block._id,
+      location: { type: 'Point', coordinates: block.center.coordinates },
+      addressLine: 'Seeded demo provider',
+      phone: '03001234567',
+      bio: 'Reliable home cleaning in Faisalabad — deep cleans, sofas and move-in jobs.',
+      avatar: 'https://picsum.photos/seed/citycart-provider-avatar/200/200',
+      coverImage: 'https://picsum.photos/seed/citycart-provider-cover/1200/600',
+      startingAtPrice: 250000,
+      status: 'ACTIVE',
+      verification: 'VERIFIED',
+      ratingAvg: 4.8,
+      ratingCount: 24,
+      completedBookings: 30,
+      rankScore: 30,
+      blockChangedAt: new Date(),
+      blockHistory: [{ blockId: block._id, changedAt: new Date(), changedBy: superAdmin.doc._id }],
+      approvedBy: superAdmin.doc._id,
+      approvedAt: new Date(),
+    });
+    log.push(['service provider', provider]);
+
+    const offerings = [
+      {
+        title: 'Deep clean — 2 bedroom', slug: 'deep-clean-2-bedroom', startingAtPrice: 450000,
+        durationMinutes: 180, description: 'Full deep clean of a two-bedroom home, including bathrooms and kitchen.',
+      },
+      {
+        title: 'Sofa shampoo', slug: 'sofa-shampoo', startingAtPrice: 180000,
+        durationMinutes: 90, description: 'Up to five seats, machine shampoo and quick dry.',
+      },
+      {
+        title: 'Move-in deep clean', slug: 'move-in-deep-clean', startingAtPrice: 800000,
+        durationMinutes: 300, description: 'Empty-home clean before you move in, kitchen and bathrooms included.',
+      },
+    ];
+    for (const [index, offering] of offerings.entries()) {
+      log.push([
+        `service offering: ${offering.title}`,
+        await getOrCreate(ServiceOffering, { providerId: provider.doc._id, slug: offering.slug }, {
+          ...offering,
+          providerId: provider.doc._id,
+          categoryId: categories['home-cleaning']._id,
+          images: [`https://picsum.photos/seed/citycart-service-${index + 1}/900/600`],
+        }),
+      ]);
+    }
   }
 
   log.forEach(([n, r]) => console.log(`${r.created ? 'created' : 'exists '}  ${n}`));
-  console.log('\nLogins:\n  admin@citycart.local / Admin@12345\n  brand@citycart.local / Brand@12345');
+  console.log(
+    '\nLogins:\n  admin@citycart.local / Admin@12345\n  brand@citycart.local / Brand@12345' +
+      (block ? '\n  service@citycart.local / Service@12345' : '')
+  );
 }
 
 main()

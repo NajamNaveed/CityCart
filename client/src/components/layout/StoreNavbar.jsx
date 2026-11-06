@@ -256,6 +256,9 @@ export default function StoreNavbar() {
           <NavLink to="/nearby" className={navLink}>
             Nearby
           </NavLink>
+          <NavLink to="/services" className={navLink}>
+            Services
+          </NavLink>
         </nav>
 
         <div className="flex items-center justify-end gap-1.5">
@@ -311,6 +314,9 @@ export default function StoreNavbar() {
             </DrawerLink>
             <DrawerLink to="/nearby" onClick={() => setDrawerOpen(false)}>
               Nearby
+            </DrawerLink>
+            <DrawerLink to="/services" onClick={() => setDrawerOpen(false)}>
+              Services
             </DrawerLink>
             {user?.role === 'CUSTOMER' && (
               <DrawerLink to="/orders" onClick={() => setDrawerOpen(false)}>

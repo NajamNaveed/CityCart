@@ -8,7 +8,14 @@ import { inputClass } from '../../ui'
  * Product photo manager: upload files (click or drag them in), add an image by link,
  * choose the main photo, remove photos. The first image is the main one.
  */
-export default function ImageUploader({ images, onChange, name = 'product' }) {
+export default function ImageUploader({
+  images,
+  onChange,
+  name = 'product',
+  noun = 'product',
+  upload = uploadProductImage,
+  max = MAX_IMAGES,
+}) {
   const fileInput = useRef(null)
   const [uploads, setUploads] = useState([]) // [{ id, name, progress, error }]
   const [message, setMessage] = useState('')
@@ -16,7 +23,7 @@ export default function ImageUploader({ images, onChange, name = 'product' }) {
   const [link, setLink] = useState('')
 
   const busy = uploads.some((u) => !u.error)
-  const room = MAX_IMAGES - images.length
+  const room = max - images.length
 
   const patchUpload = (id, patch) => setUploads((list) => list.map((u) => (u.id === id ? { ...u, ...patch } : u)))
 
@@ -26,7 +33,7 @@ export default function ImageUploader({ images, onChange, name = 'product' }) {
     setMessage('')
 
     if (files.length > room) {
-      setMessage(`You can have up to ${MAX_IMAGES} photos. ${room > 0 ? `Only the first ${room} will be added.` : 'Remove one to add another.'}`)
+      setMessage(`You can have up to ${max} photos. ${room > 0 ? `Only the first ${room} will be added.` : 'Remove one to add another.'}`)
     }
 
     // Upload one after another and add each to the list as soon as it is done.
@@ -38,7 +45,7 @@ export default function ImageUploader({ images, onChange, name = 'product' }) {
       if (problem) continue
 
       try {
-        const url = await uploadProductImage(file, (p) => patchUpload(id, { progress: p }))
+        const url = await upload(file, (p) => patchUpload(id, { progress: p }))
         current = [...current, url]
         onChange(current)
         setUploads((list) => list.filter((u) => u.id !== id))
@@ -59,11 +66,11 @@ export default function ImageUploader({ images, onChange, name = 'product' }) {
       return
     }
     if (images.includes(url)) {
-      setMessage('That image is already on this product.')
+      setMessage(`That image is already on this ${noun}.`)
       return
     }
     if (room <= 0) {
-      setMessage(`You can have up to ${MAX_IMAGES} photos.`)
+      setMessage(`You can have up to ${max} photos.`)
       return
     }
     setMessage('')
@@ -128,7 +135,7 @@ export default function ImageUploader({ images, onChange, name = 'product' }) {
           choose from your computer
         </button>
         <p className="mt-2 text-xs text-muted">
-          JPG, PNG or WebP, up to 5 MB each. {images.length} of {MAX_IMAGES} photos.
+          JPG, PNG or WebP, up to 5 MB each. {images.length} of {max} photos.
         </p>
         <input
           ref={fileInput}
@@ -136,7 +143,7 @@ export default function ImageUploader({ images, onChange, name = 'product' }) {
           accept={ACCEPTED_TYPES.join(',')}
           multiple
           className="sr-only"
-          aria-label="Choose product photos"
+          aria-label={`Choose ${noun} photos`}
           onChange={(e) => {
             addFiles(e.target.files)
             e.target.value = '' // lets the same file be chosen again

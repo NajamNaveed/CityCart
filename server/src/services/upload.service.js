@@ -71,6 +71,30 @@ function createProductImageSignature(brandId, { now = Date.now(), config = env.c
 }
 
 /**
+ * Service providers upload offering images into their own folder. The tenant id
+ * comes from the session (never the request body), so one provider can never
+ * write into another provider's folder.
+ */
+function createProviderImageSignature(providerId, { now = Date.now(), config = env.cloudinary } = {}) {
+  if (!isConfigured(config)) {
+    throw new UploadError(503, 'Image upload is not set up on this server yet.');
+  }
+
+  const timestamp = Math.floor(now / 1000);
+  const folder = `citycart/providers/${providerId}/offerings`;
+  const signedParams = { allowed_formats: ALLOWED_FORMATS, folder, timestamp };
+
+  return {
+    uploadUrl: `https://api.cloudinary.com/v1_1/${config.cloudName}/image/upload`,
+    apiKey: config.apiKey,
+    timestamp,
+    folder,
+    allowedFormats: ALLOWED_FORMATS,
+    signature: signParams(signedParams, config.apiSecret),
+  };
+}
+
+/**
  * The proof of a payment taken at the door is private (docs/21 §I.4). The folder
  * is derived from the brand and delivery only — never from client input — and the
  * upload is `authenticated`, so it cannot be opened without a signed link.
@@ -176,6 +200,7 @@ async function destroyPrivateAsset(publicId, { config = env.cloudinary, fetchImp
 
 module.exports = {
   createProductImageSignature,
+  createProviderImageSignature,
   createPaymentProofSignature,
   createReturnPhotoSignature,
   createProofDownloadUrl,

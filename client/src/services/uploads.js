@@ -20,7 +20,20 @@ export function checkImageFile(file) {
  * Resolves with the image's public https address.
  */
 export async function uploadProductImage(file, onProgress) {
-  const { data } = await api.post('/uploads/signature')
+  return uploadToCloudinary('/uploads/signature', file, onProgress)
+}
+
+/**
+ * Provider offerings live in the provider's own folder, so they use a
+ * different signature endpoint (the server derives the folder from the
+ * session tenant — the browser never chooses it).
+ */
+export async function uploadProviderImage(file, onProgress) {
+  return uploadToCloudinary('/uploads/provider-signature', file, onProgress)
+}
+
+async function uploadToCloudinary(signaturePath, file, onProgress) {
+  const { data } = await api.post(signaturePath)
   const sig = data.upload
 
   const form = new FormData()

@@ -13,6 +13,8 @@ import { GuestRoute, ProtectedRoute } from './components/RouteGuards'
 import Home from './pages/Home'
 import Brands from './pages/Brands'
 import Nearby from './pages/Nearby'
+import Services from './pages/Services'
+import ServiceProvider from './pages/ServiceProvider'
 import ProductDetail from './pages/ProductDetail'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -56,6 +58,7 @@ const ProviderLayout = lazy(() => import('./components/provider/ProviderLayout')
 const ProviderOverview = lazy(() => import('./pages/provider/Overview'))
 const ProviderProfile = lazy(() => import('./pages/provider/Profile'))
 const ProviderArea = lazy(() => import('./pages/provider/Area'))
+const ProviderOfferings = lazy(() => import('./pages/provider/Offerings'))
 const AdminLayout = lazy(() => import('./components/admin/AdminLayout'))
 const AdminLanding = lazy(() => import('./pages/admin/Landing'))
 const AdminBrands = lazy(() => import('./pages/admin/Brands'))
@@ -68,6 +71,7 @@ const AdminReturns = lazy(() => import('./pages/admin/Returns'))
 const AdminCities = lazy(() => import('./pages/admin/Cities'))
 const AdminBlocks = lazy(() => import('./pages/admin/Blocks'))
 const AdminCategories = lazy(() => import('./pages/admin/Categories'))
+const AdminServiceCategories = lazy(() => import('./pages/admin/ServiceCategories'))
 const AdminCatalogue = lazy(() => import('./pages/admin/Catalogue'))
 const AdminSettings = lazy(() => import('./pages/admin/Settings'))
 const AdminAnalytics = lazy(() => import('./pages/admin/Analytics'))
@@ -111,6 +115,8 @@ function App() {
                   <Route index element={<Home />} />
                   <Route path="brands" element={<Brands />} />
                   <Route path="nearby" element={<Nearby />} />
+                  <Route path="services" element={<Services />} />
+                  <Route path="services/:slug" element={<ServiceProvider />} />
                   <Route path="product/:id" element={<ProductDetail />} />
 
                   {/* Email links and password recovery work signed in or out. */}
@@ -156,6 +162,7 @@ function App() {
                 <Route element={<ProtectedRoute roles={['SERVICE_PROVIDER']} loginPath="/sell/service/login" />}>
                   <Route path="provider" element={<ProviderLayout />}>
                     <Route index element={<ProviderOverview />} />
+                    <Route path="offerings" element={<ProviderOfferings />} />
                     <Route path="profile" element={<ProviderProfile />} />
                     <Route path="area" element={<ProviderArea />} />
                     <Route path="notifications" element={<Notifications />} />
@@ -204,6 +211,7 @@ function App() {
                     <Route path="cities" element={<AdminCities />} />
                     <Route path="blocks" element={<AdminBlocks />} />
                     <Route path="categories" element={<AdminCategories />} />
+                    <Route path="service-categories" element={<AdminServiceCategories />} />
                     <Route path="catalogue" element={<AdminCatalogue />} />
                     <Route path="settings" element={<AdminSettings />} />
                     <Route path="analytics" element={<AdminAnalytics />} />
