@@ -10,6 +10,43 @@ const TRUST = [
   { icon: HandCoins, text: 'Cash at the door' },
 ]
 
+function InstagramIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <rect x="3" y="3" width="18" height="18" rx="5.5" />
+      <circle cx="12" cy="12" r="4.2" />
+      <circle cx="17.4" cy="6.6" r="0.9" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+function FacebookIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M14.5 8.5V6.8c0-.9.3-1.3 1.3-1.3h1.7V2.5h-2.5c-2.6 0-4 1.6-4 4.1v1.9H8.5V12h2.5v9.5h3.5V12h2.6l.4-3.5z" />
+    </svg>
+  )
+}
+
+function LinkedInIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M7.5 10.5V20" />
+      <path d="M7.5 6.4v.01" />
+      <path d="M11.5 20v-9.5" />
+      <path d="M11.5 14.6c0-2.6 1.6-4.3 3.9-4.3 2.4 0 3.6 1.7 3.6 4.4V20" />
+    </svg>
+  )
+}
+
+// Placeholder profiles until CityCart has official pages; these become
+// superadmin-managed settings once the accounts exist.
+const SOCIAL_LINKS = [
+  { id: 'instagram', label: 'Instagram', href: 'https://www.instagram.com/', Icon: InstagramIcon },
+  { id: 'facebook', label: 'Facebook', href: 'https://www.facebook.com/', Icon: FacebookIcon },
+  { id: 'linkedin', label: 'LinkedIn', href: 'https://www.linkedin.com/', Icon: LinkedInIcon },
+]
+
 // The giant wordmark at the very bottom. A radial light follows the cursor and
 // is clipped to the letters, so only the text lights up as the pointer passes.
 function FooterWordmark() {
@@ -24,14 +61,18 @@ function FooterWordmark() {
   }
 
   return (
-    <div className="group relative select-none overflow-hidden" aria-hidden="true" onPointerMove={moveGlow}>
-      <p className="foot-watermark text-white/[0.055]">CityCart<span className="text-clay/25">.</span></p>
-      <p
-        ref={glow}
-        className="foot-watermark foot-watermark-glow absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
-      >
-        CityCart.
-      </p>
+    <div className="group relative select-none px-5 pb-10 pt-5" aria-hidden="true" onPointerMove={moveGlow}>
+      <div className="relative mx-auto w-full max-w-[1400px]">
+        <p className="foot-watermark text-white/[0.06]">
+          CityCart<span className="text-clay/30">.</span>
+        </p>
+        <p
+          ref={glow}
+          className="foot-watermark foot-watermark-glow absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+        >
+          CityCart.
+        </p>
+      </div>
     </div>
   )
 }
@@ -59,10 +100,17 @@ export default function StoreFooter({ flush = false }) {
 
       <div className="relative">
         <div className={wrap}>
-          <div className="flex flex-wrap items-end justify-between gap-7 border-b border-white/10 py-12 sm:py-14">
-            <h2 className="font-display max-w-[14ch] text-[32px] font-normal leading-[1.02] tracking-[-0.03em] sm:text-[42px]">
-              Good things, <em className="font-normal italic text-clay">close to home.</em>
-            </h2>
+          <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-7 border-b border-white/10 pb-12 pt-14 sm:pb-14 sm:pt-16">
+            <div>
+              <p className="text-[10.5px] font-semibold uppercase tracking-[0.22em] text-white/40">
+                Start on your street
+              </p>
+              <h2 className="font-display mt-3 text-[34px] font-normal leading-[1.03] tracking-[-0.03em] sm:text-[46px]">
+                Good things,
+                <br />
+                <em className="font-normal italic text-clay">close to home.</em>
+              </h2>
+            </div>
             <div className="flex flex-wrap gap-2.5">
               <Link
                 to="/nearby"
@@ -96,6 +144,20 @@ export default function StoreFooter({ flush = false }) {
                 The marketplace for your block. Local stores, verified pros, and cash at the door — all within 1.5
                 km.
               </p>
+              <div className="mt-6 flex items-center gap-2">
+                {SOCIAL_LINKS.map(({ id, label, href, Icon }) => (
+                  <a
+                    key={id}
+                    href={href}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={`CityCart on ${label}`}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-white/60 transition hover:border-clay hover:bg-clay hover:text-cream"
+                  >
+                    <Icon className="h-4 w-4" aria-hidden="true" />
+                  </a>
+                ))}
+              </div>
               {cities.length > 0 && (
                 <div className="mt-6">
                   <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-white/40">Now serving</p>

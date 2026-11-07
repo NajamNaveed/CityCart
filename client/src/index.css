@@ -109,15 +109,15 @@
 /* Footer wordmark: the base sits almost invisible; the overlay is the same
    text with a cursor-tracked radial light clipped to the letterforms. */
 .foot-watermark {
-  font-family: var(--font-display);
-  font-weight: 500;
-  font-size: clamp(72px, 19vw, 260px);
-  line-height: 0.72;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: clamp(56px, 20vw, 280px);
+  line-height: 1.05;
   letter-spacing: -0.055em;
   text-align: center;
   white-space: nowrap;
   user-select: none;
-  margin-bottom: -0.05em;
+  margin: 0;
 }
 
 .foot-watermark-glow {
