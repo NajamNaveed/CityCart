@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { ArrowRight, HandCoins, MapPin, ShieldCheck } from 'lucide-react'
+import { btn, panelDark } from '../../design'
 
 const PROMISES = [
   {
@@ -22,7 +23,7 @@ const PROMISES = [
 export default function PromiseBand() {
   return (
     <section className="mx-auto w-full max-w-[1200px] px-5 pb-14 pt-14 sm:pt-20" aria-labelledby="promise-title">
-      <div className="relative overflow-hidden rounded-panel bg-noir px-6 py-12 text-cream sm:px-10 lg:px-14 lg:py-16">
+      <div className={`relative overflow-hidden ${panelDark} px-6 py-12 sm:px-10 lg:px-14 lg:py-16`}>
         <div
           aria-hidden="true"
           className="pointer-events-none absolute -right-24 -top-28 h-72 w-72 rounded-full bg-clay/20 blur-3xl"
@@ -49,7 +50,7 @@ export default function PromiseBand() {
             </p>
             <Link
               to="/nearby"
-              className="mt-7 inline-flex h-11 items-center gap-2 rounded-tile bg-cream px-5 text-[12px] font-semibold uppercase tracking-[0.1em] text-noir transition-colors hover:bg-white"
+              className={`mt-7 ${btn('cream')}`}
             >
               Shop your block
               <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />

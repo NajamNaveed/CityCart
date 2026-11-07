@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { ArrowUpRight, MapPin } from 'lucide-react'
 import ProductImage from '../ProductImage'
 import { formatPrice } from '../../ui'
+import { card, cardLift } from '../../design'
 import { formatDistance } from '../../utils/geo'
 
 function initials(name = '') {
@@ -27,7 +28,7 @@ export default function StoreCard({ store, inBlock }) {
   const shopUrl = `/nearby?q=${encodeURIComponent(store.name)}`
 
   return (
-    <article className="group flex h-full flex-col overflow-hidden rounded-card border border-line-warm bg-paper-warm transition duration-300 hover:-translate-y-1 hover:shadow-[0_22px_45px_rgba(21,20,15,0.09)]">
+    <article className={`group flex h-full flex-col overflow-hidden ${card} ${cardLift}`}>
       <Link to={shopUrl} tabIndex={-1} aria-hidden="true" className="relative block overflow-hidden bg-sand">
         <ProductImage src={cover} name={store.name} className="aspect-[4/3] w-full" width={700} />
         <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-cream/90 px-2.5 py-1 text-[10.5px] font-medium text-noir backdrop-blur-sm">

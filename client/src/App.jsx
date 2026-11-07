@@ -39,6 +39,7 @@ import Notifications from './pages/Notifications'
 import NotFound from './pages/NotFound'
 
 // The two dashboards load on demand — shoppers never download them.
+const DesignSystem = lazy(() => import('./pages/DesignSystem'))
 const BrandLayout = lazy(() => import('./components/brand/BrandLayout'))
 const Overview = lazy(() => import('./pages/brand/Overview'))
 const BrandProducts = lazy(() => import('./pages/brand/Products'))
@@ -155,6 +156,9 @@ function App() {
                   <Route element={<ProtectedRoute />}>
                     <Route path="notifications" element={<Notifications />} />
                   </Route>
+
+                  {/* Dev-only reference for the frozen v3 primitives. */}
+                  {import.meta.env.DEV && <Route path="design" element={<DesignSystem />} />}
 
                   <Route path="*" element={<NotFound />} />
                 </Route>

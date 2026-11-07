@@ -27,7 +27,7 @@ export default function Drawer({ open, onClose, title, children, width = 'max-w-
         <div className="fixed inset-0 z-[70]">
           <motion.div
             aria-hidden="true"
-            className="absolute inset-0 bg-ink/55 backdrop-blur-sm"
+            className="absolute inset-0 bg-noir/60 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -38,19 +38,19 @@ export default function Drawer({ open, onClose, title, children, width = 'max-w-
             role="dialog"
             aria-modal="true"
             aria-label={title}
-            className={`absolute inset-y-0 right-0 flex w-full ${width} flex-col bg-white shadow-2xl shadow-ink/20`}
+            className={`absolute inset-y-0 right-0 flex w-full ${width} flex-col bg-paper-warm shadow-2xl shadow-noir/20`}
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
           >
-            <div className="flex items-center justify-between border-b border-line px-5 py-4">
+            <div className="flex items-center justify-between border-b border-line-warm px-5 py-4">
               {title && <h2 className="font-display text-lg font-semibold tracking-tight">{title}</h2>}
               <button
                 type="button"
                 aria-label="Close"
                 onClick={onClose}
-                className="-mr-1.5 rounded-md p-1.5 text-muted transition hover:bg-paper hover:text-ink"
+                className="-mr-1.5 rounded-md p-1.5 text-muted transition hover:bg-canvas hover:text-ink"
               >
                 <X className="h-5 w-5" />
               </button>

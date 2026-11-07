@@ -1,17 +1,15 @@
 import { Link } from 'react-router-dom'
 import { ArrowUpRight, MapPin, Sparkles } from 'lucide-react'
 import Hero from '../components/home/Hero'
-import SectionHead from '../components/home/SectionHead'
 import StoreCard from '../components/home/StoreCard'
 import ProviderCard from '../components/home/ProviderCard'
 import PromiseBand from '../components/home/PromiseBand'
 import ProductCard from '../components/ProductCard'
+import { SectionHead, shell as SHELL } from '../design'
 import { useCity } from '../hooks/useCity'
 import { useNearby } from '../hooks/useNearby'
 import { useHomeFeed } from '../hooks/useHomeFeed'
 import { formatDistance } from '../utils/geo'
-
-const SHELL = 'mx-auto w-full max-w-[1200px] px-5'
 
 function CardSkeleton() {
   return (

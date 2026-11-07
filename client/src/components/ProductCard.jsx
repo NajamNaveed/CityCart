@@ -8,6 +8,7 @@ import { useCart } from '../hooks/useCart'
 import { getErrorMessage } from '../services/api'
 import { loginUrl } from '../utils/nav'
 import { formatPrice } from '../ui'
+import { card, cardLift } from '../design'
 
 // Same per-add ceiling as the product page.
 const MAX_QTY = 10
@@ -60,7 +61,7 @@ export default function ProductCard({ product, brandName, storeLabel, rating }) 
   }
 
   return (
-    <article className="group flex h-full flex-col rounded-card border border-line-warm bg-paper-warm p-2.5 transition duration-300 hover:-translate-y-1 hover:shadow-[0_22px_45px_rgba(21,20,15,0.08)]">
+    <article className={`group flex h-full flex-col ${card} ${cardLift} p-2.5`}>
       <div className="relative overflow-hidden rounded-tile bg-sand">
         <Link to={`/product/${product._id}`} className="block" aria-label={product.name}>
           <ProductImage

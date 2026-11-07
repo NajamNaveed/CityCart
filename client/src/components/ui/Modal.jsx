@@ -27,7 +27,7 @@ export default function Modal({ open, onClose, title, children, maxWidth = 'max-
         <div className="fixed inset-0 z-[70] flex items-end justify-center p-4 sm:items-center">
           <motion.div
             aria-hidden="true"
-            className="absolute inset-0 bg-ink/55 backdrop-blur-sm"
+            className="absolute inset-0 bg-noir/60 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -38,7 +38,7 @@ export default function Modal({ open, onClose, title, children, maxWidth = 'max-
             role="dialog"
             aria-modal="true"
             aria-label={title}
-            className={`relative flex max-h-[calc(100dvh-2rem)] w-full ${maxWidth} flex-col rounded-xl bg-white p-6 shadow-2xl shadow-ink/20`}
+            className={`relative flex max-h-[calc(100dvh-2rem)] w-full ${maxWidth} flex-col rounded-panel bg-paper-warm p-6 shadow-2xl shadow-noir/20`}
             initial={{ opacity: 0, y: 24, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.98 }}
@@ -50,7 +50,7 @@ export default function Modal({ open, onClose, title, children, maxWidth = 'max-
                 type="button"
                 aria-label="Close"
                 onClick={onClose}
-                className="-mr-1.5 -mt-1 rounded-md p-1.5 text-muted transition hover:bg-paper hover:text-ink"
+                className="-mr-1.5 -mt-1 rounded-md p-1.5 text-muted transition hover:bg-canvas hover:text-ink"
               >
                 <X className="h-4.5 w-4.5" />
               </button>

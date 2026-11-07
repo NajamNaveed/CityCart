@@ -12,7 +12,7 @@ const ICONS = {
 const TONES = {
   success: 'border-success/25 [&_svg]:text-success',
   error: 'border-danger/25 [&_svg]:text-danger',
-  info: 'border-line [&_svg]:text-muted',
+  info: 'border-line-warm [&_svg]:text-muted',
 }
 
 export default function Toaster() {
@@ -46,7 +46,7 @@ export default function Toaster() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, x: 24, transition: { duration: 0.18 } }}
               transition={{ duration: 0.25, ease: 'easeOut' }}
-              className={`pointer-events-auto flex items-start gap-2.5 rounded-lg border bg-white px-4 py-3 shadow-lg shadow-ink/10 ${TONES[item.type] || TONES.info}`}
+              className={`pointer-events-auto flex items-start gap-2.5 rounded-card border bg-paper-warm px-4 py-3 shadow-[0_18px_40px_rgba(21,20,15,0.14)] ${TONES[item.type] || TONES.info}`}
             >
               <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <p className="flex-1 text-[13px] leading-snug text-ink">{item.message}</p>

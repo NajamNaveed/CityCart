@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, ArrowUp, ArrowUpRight, HandCoins, MapPin, ShieldCheck, Star } from 'lucide-react'
 import { useCity } from '../../hooks/useCity'
 import { wrap } from '../../ui'
+import { btn, iconBtnLight } from '../../design'
 
 const TRUST = [
   { icon: ShieldCheck, text: 'Verified sellers & pros' },
@@ -114,14 +115,14 @@ export default function StoreFooter({ flush = false }) {
             <div className="flex flex-wrap gap-2.5">
               <Link
                 to="/nearby"
-                className="inline-flex h-11 items-center gap-2 rounded-tile bg-cream px-5 text-[12px] font-semibold uppercase tracking-[0.1em] text-noir transition-colors hover:bg-white"
+                className={btn('cream')}
               >
                 Shop your block
                 <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
               </Link>
               <Link
                 to="/sell"
-                className="inline-flex h-11 items-center gap-2 rounded-tile border border-white/20 px-5 text-[12px] font-semibold uppercase tracking-[0.1em] text-white/80 transition-colors hover:border-white/45 hover:bg-white/5 hover:text-white"
+                className={btn('outlineLight')}
               >
                 Sell with us
               </Link>
@@ -152,7 +153,7 @@ export default function StoreFooter({ flush = false }) {
                     target="_blank"
                     rel="noreferrer"
                     aria-label={`CityCart on ${label}`}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-white/60 transition hover:border-clay hover:bg-clay hover:text-cream"
+                    className={iconBtnLight}
                   >
                     <Icon className="h-4 w-4" aria-hidden="true" />
                   </a>
