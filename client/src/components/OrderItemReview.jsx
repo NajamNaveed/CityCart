@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Star } from 'lucide-react'
 import api, { getErrorMessage } from '../services/api'
 import Stars from './Stars'
-import { btnPrimary, formatDate, inputClass } from '../ui'
+import { formatDate } from '../ui'
+import { btn, fieldClass, fieldLabel } from '../design'
 
 /**
  * The review controls under one delivered order item: write it, then edit or delete it.
@@ -61,9 +62,9 @@ export default function OrderItemReview({ orderId, item, review, onSaved, onDele
 
   if (editing) {
     return (
-      <form onSubmit={save} className="mt-4 space-y-4 rounded-lg border border-line bg-white p-5" noValidate>
+      <form onSubmit={save} className="mt-4 space-y-4 rounded-card border border-line-warm bg-paper-warm p-5" noValidate>
         <div>
-          <p className="mb-2 text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">Your rating</p>
+          <p className={`${fieldLabel} mb-2`}>Your rating</p>
           <div role="radiogroup" aria-label="Rating" className="flex gap-1.5">
             {[1, 2, 3, 4, 5].map((n) => (
               <button
@@ -76,7 +77,7 @@ export default function OrderItemReview({ orderId, item, review, onSaved, onDele
                 className="transition-transform hover:scale-110"
               >
                 <Star
-                  className={`h-7 w-7 ${n <= rating ? 'fill-clay text-clay' : 'fill-transparent text-line'}`}
+                  className={`h-7 w-7 ${n <= rating ? 'fill-clay text-clay' : 'fill-transparent text-line-warm'}`}
                   aria-hidden="true"
                 />
               </button>
@@ -84,27 +85,27 @@ export default function OrderItemReview({ orderId, item, review, onSaved, onDele
           </div>
         </div>
         <div>
-          <label htmlFor={`title-${item.productId}`} className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">
+          <label htmlFor={`title-${item.productId}`} className={fieldLabel}>
             Headline
           </label>
-          <input id={`title-${item.productId}`} value={title} maxLength={100} onChange={(e) => setTitle(e.target.value)} placeholder="Optional, e.g. Soft cloth, true colours" className={`h-11 ${inputClass}`} />
+          <input id={`title-${item.productId}`} value={title} maxLength={100} onChange={(e) => setTitle(e.target.value)} placeholder="Optional, e.g. Soft cloth, true colours" className={fieldClass()} />
         </div>
         <div>
-          <label htmlFor={`comment-${item.productId}`} className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">
+          <label htmlFor={`comment-${item.productId}`} className={fieldLabel}>
             Your review
           </label>
-          <textarea id={`comment-${item.productId}`} rows={4} maxLength={2000} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Optional. What did you like or dislike?" className={`${inputClass} py-3`} />
+          <textarea id={`comment-${item.productId}`} rows={4} maxLength={2000} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Optional. What did you like or dislike?" className={fieldClass({ shape: 'textarea' })} />
         </div>
         {error && (
-          <p role="alert" className="rounded-md bg-clay/5 px-3 py-2 text-sm text-clay">
+          <p role="alert" className="rounded-tile bg-clay/5 px-3 py-2 text-[12.5px] text-clay">
             {error}
           </p>
         )}
         <div className="flex items-center gap-4">
-          <button type="submit" disabled={busy} className={btnPrimary}>
+          <button type="submit" disabled={busy} className={btn('primary', 'md')}>
             {busy ? 'Saving…' : review ? 'Save changes' : 'Post review'}
           </button>
-          <button type="button" onClick={() => setEditing(false)} className="text-[13px] text-muted transition hover:text-ink">
+          <button type="button" onClick={() => setEditing(false)} className="text-[12.5px] font-medium text-ink/55 transition hover:text-ink">
             Cancel
           </button>
         </div>
@@ -114,11 +115,7 @@ export default function OrderItemReview({ orderId, item, review, onSaved, onDele
 
   if (!review) {
     return (
-      <button
-        type="button"
-        onClick={open}
-        className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-line bg-white px-3.5 py-1.5 text-[13px] font-medium text-ink transition hover:border-ink"
-      >
+      <button type="button" onClick={open} className={`${btn('outline', 'sm')} mt-3`}>
         <Star className="h-3.5 w-3.5 text-clay" aria-hidden="true" />
         Write a review
       </button>
@@ -126,19 +123,19 @@ export default function OrderItemReview({ orderId, item, review, onSaved, onDele
   }
 
   return (
-    <div className="mt-3 rounded-lg border border-line bg-white p-4">
+    <div className="mt-3 rounded-card border border-line-warm bg-paper-warm p-4">
       <Stars value={review.rating} />
       {review.title && <p className="mt-1.5 font-medium text-ink">{review.title}</p>}
-      {review.comment && <p className="mt-1 text-[14px] text-muted">{review.comment}</p>}
-      <p className="mt-2 text-xs text-muted">Reviewed {formatDate(review.createdAt)}</p>
-      {review.isApproved === false && <p className="mt-1.5 text-xs text-clay">This review is currently hidden by CityCart.</p>}
-      {error && <p className="mt-1.5 text-xs text-clay">{error}</p>}
-      <div className="mt-2.5 flex items-center gap-4 text-[13px] font-medium">
+      {review.comment && <p className="mt-1 text-[13px] leading-relaxed text-ink/65">{review.comment}</p>}
+      <p className="mt-2 text-[11.5px] text-ink/55">Reviewed {formatDate(review.createdAt)}</p>
+      {review.isApproved === false && <p className="mt-1.5 text-[11.5px] text-clay">This review is currently hidden by CityCart.</p>}
+      {error && <p className="mt-1.5 text-[11.5px] text-clay">{error}</p>}
+      <div className="mt-2.5 flex items-center gap-4 text-[12.5px] font-medium">
         <button type="button" onClick={open} className="text-clay transition hover:text-clay-dark">
           Edit
         </button>
         {confirmDelete ? (
-          <span className="flex items-center gap-3 font-normal text-muted">
+          <span className="flex items-center gap-3 font-normal text-ink/55">
             Delete this review?
             <button type="button" disabled={busy} onClick={remove} className="font-medium text-danger">
               Yes
@@ -148,7 +145,7 @@ export default function OrderItemReview({ orderId, item, review, onSaved, onDele
             </button>
           </span>
         ) : (
-          <button type="button" onClick={() => setConfirmDelete(true)} className="text-muted transition hover:text-danger">
+          <button type="button" onClick={() => setConfirmDelete(true)} className="text-ink/55 transition hover:text-danger">
             Delete
           </button>
         )}

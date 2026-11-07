@@ -6,8 +6,8 @@ const PROBLEM = new Set(['CANCELLED', 'REJECTED', 'FAILED', 'RETURNED', 'REFUNDE
 export default function StatusPill({ value }) {
   return (
     <span
-      className={`inline-block whitespace-nowrap rounded-md border px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.08em] ${
-        PROBLEM.has(value) ? 'border-clay/30 bg-clay/5 text-clay' : 'border-line bg-paper text-ink'
+      className={`inline-block whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] ${
+        PROBLEM.has(value) ? 'border-clay/25 bg-clay/5 text-clay' : 'border-line-warm bg-paper-warm text-ink/70'
       }`}
     >
       {humanize(value)}

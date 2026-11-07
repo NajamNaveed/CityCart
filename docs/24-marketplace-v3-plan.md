@@ -738,6 +738,8 @@ Phase 4 progress (customer web):
 * The v3 tokens and primitives are frozen in `client/src/design`.
 * The landing page, Stores directory (`/nearby`), public storefront
   (`/store/:id`) and product page are rebuilt on those primitives.
+* The purchase funnel — cart, checkout, order placed, order history and order
+  detail (including returns and item reviews) — is rebuilt on those primitives.
 * Customer navigation is **Home · Stores · Services**. The separate Brands tab
   is retired; a brand is reached through its storefront, and the public brand
   and storefront APIs are unchanged.

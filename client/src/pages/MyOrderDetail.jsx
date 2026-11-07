@@ -17,8 +17,8 @@ import OrderItemReview from '../components/OrderItemReview'
 import OrderChangePrompt from '../components/OrderChangePrompt'
 import ProductImage from '../components/ProductImage'
 import DeliveryMap from '../components/DeliveryMap'
-import { Skeleton } from '../components/ui'
-import { formatDateTime, formatPrice, wrap } from '../ui'
+import { ErrorState, Skeleton, btn, display, panel, shell } from '../design'
+import { formatDateTime, formatPrice } from '../ui'
 import { latLngOfGeoPoint } from '../utils/geo'
 import { reasonLabel } from '../utils/returns'
 
@@ -41,12 +41,12 @@ function DeliveryCode({ deliveryId }) {
 
   if (!code) return null
   return (
-    <div className="mt-3.5 rounded-md border border-line bg-white p-4">
-      <p className="text-[12px] text-muted">Your delivery code</p>
+    <div className="mt-3.5 rounded-tile border border-line-warm bg-paper-warm p-4">
+      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-ink/45">Your delivery code</p>
       <p className="mt-1 font-display text-3xl tracking-[0.3em] text-ink" aria-label={`Delivery code ${code.split('').join(' ')}`}>
         {code}
       </p>
-      <p className="mt-2 text-[12.5px] text-muted">
+      <p className="mt-2 text-[12px] leading-relaxed text-ink/50">
         Give this code to the rider when your order arrives. Please do not share it before.
       </p>
     </div>
@@ -81,7 +81,7 @@ function ReceiptNote({ orderId }) {
   if (!receipt) return null
   const by = paidBy(receipt)
   return (
-    <p className="mt-2 text-[12.5px] text-muted">
+    <p className="mt-2 text-[11.5px] text-ink/55">
       Receipt {receipt.receiptNumber}{by ? `, paid by ${by}` : ''}, issued {formatDateTime(receipt.issuedAt)}.
     </p>
   )
@@ -133,39 +133,39 @@ function RiderLocation({ deliveryId, destination }) {
 
   const rider = location ? { lat: location.latitude, lng: location.longitude } : null
   return (
-    <div className="mt-3.5 rounded-md border border-line bg-white p-4">
-      <p className="text-[12px] text-muted">Your rider</p>
+    <div className="mt-3.5 rounded-tile border border-line-warm bg-paper-warm p-4">
+      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-ink/45">Your rider</p>
       {rider ? (
         <>
-          <p className="mt-1 text-sm text-ink">Last seen {minutes < 1 ? 'just now' : `${minutes} min ago`}.</p>
-          <div className="mt-3">
+          <p className="mt-1 text-[13px] text-ink">Last seen {minutes < 1 ? 'just now' : `${minutes} min ago`}.</p>
+          <div className="mt-3 overflow-hidden rounded-tile">
             <DeliveryMap destination={latLngOfGeoPoint(destination)} rider={rider} />
           </div>
-          <p className="mt-2 text-[12.5px] text-muted">
+          <p className="mt-2 text-[12px] leading-relaxed text-ink/50">
             The dot moves while your rider shares their location. They may have other orders to deliver before yours.
           </p>
         </>
       ) : (
-        <p className="mt-1 text-sm text-ink">
+        <p className="mt-1 text-[13px] text-ink">
           Your rider is not sharing their location right now. The map returns when they share it again.
         </p>
       )}
-      {error ? <p className="mt-2 text-[12.5px] text-muted">{error}</p> : null}
+      {error ? <p className="mt-2 text-[12px] text-ink/45">{error}</p> : null}
     </div>
   )
 }
 
 function SectionTitle({ children }) {
   return (
-    <h2 className="border-b border-line pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
+    <h2 className="border-b border-line-warm pb-2.5 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-ink/40">
       {children}
     </h2>
   )
 }
 
-// The order's journey. An icon per step: gray while ahead, yellow while it is
-// the step in progress, green once done — and the line through them fills the
-// same way (a green→yellow gradient leads into the current step).
+// The order's journey. An icon per step: faint while ahead, clay while it is
+// the step in progress, forest once done — and the line through them fills the
+// same way (a forest→clay gradient leads into the current step).
 const STAGES = [
   { status: 'PENDING', label: 'Placed', icon: ReceiptText },
   { status: 'CONFIRMED', label: 'Confirmed', icon: BadgeCheck },
@@ -200,35 +200,33 @@ function ProgressStepper({ history, orderStatus }) {
           const done = i < current
           const isCurrent = i === current
           const time = timeFor(i)
-          // The segment leading into stage i: fully green for done steps, a
-          // green→yellow gradient into the current one, gray ahead of it.
           const segmentTone =
             i === 0
               ? null
               : i < current
-                ? 'bg-success'
+                ? 'bg-forest'
                 : i === current
-                  ? 'bg-gradient-to-r from-success to-warning'
-                  : 'bg-line'
+                  ? 'bg-gradient-to-r from-forest to-clay'
+                  : 'bg-line-warm'
           return (
             <Fragment key={stage.status}>
               {i > 0 && <li aria-hidden="true" className={`mx-1 mt-[17px] h-0.5 flex-1 rounded-full ${segmentTone}`} />}
-              <li className={`flex min-w-[72px] flex-col items-center gap-1.5 text-center ${i > 0 ? '' : ''}`}>
+              <li className="flex min-w-[72px] flex-col items-center gap-1.5 text-center">
                 <span
                   className={`flex h-9 w-9 items-center justify-center rounded-full border-2 transition-colors ${
                     done
-                      ? 'border-success bg-success text-white'
+                      ? 'border-forest bg-forest text-cream'
                       : isCurrent
-                        ? 'border-warning bg-warning-soft text-warning'
-                        : 'border-line bg-white text-muted/60'
+                        ? 'border-clay bg-cream text-clay'
+                        : 'border-line-warm bg-paper-warm text-ink/25'
                   }`}
                 >
                   <Icon className="h-4 w-4" aria-hidden="true" />
                 </span>
-                <span className={`text-[10.5px] font-medium leading-tight sm:text-[11.5px] ${done || isCurrent ? 'text-ink' : 'text-muted/70'}`}>
+                <span className={`text-[10.5px] font-medium leading-tight sm:text-[11.5px] ${done || isCurrent ? 'text-ink' : 'text-ink/35'}`}>
                   {stage.label}
                 </span>
-                {time && <span className="hidden text-[10px] text-muted/70 sm:block">{time}</span>}
+                {time && <span className="hidden text-[10px] text-ink/35 sm:block">{time}</span>}
               </li>
             </Fragment>
           )
@@ -252,38 +250,38 @@ function WhatArrived({ order, returnDoc }) {
         ? 'Your whole order went back to the store.'
         : 'Part of your order came back.'
   return (
-    <div className="mt-3.5 rounded-md border border-line bg-white p-4">
-      <p className="flex items-center gap-2 text-sm font-semibold text-ink">
+    <div className="mt-4 rounded-tile border border-line-warm bg-canvas/60 p-4">
+      <p className="flex items-center gap-2 text-[13px] font-semibold text-ink">
         <RotateCcw className="h-4 w-4 text-clay" aria-hidden="true" />
         {outcome}
       </p>
-      <p className="mt-1 text-[13px] text-muted">
+      <p className="mt-1 text-[12.5px] leading-relaxed text-ink/55">
         {order.fulfilment === 'FULL'
           ? 'All the items you ordered were delivered.'
           : order.fulfilment === 'NONE'
             ? 'The rider took every item back. You are only charged for goods you kept.'
             : `${formatPrice(returned)} of goods went back with the rider. You pay only for what you kept.`}
       </p>
-      <dl className="mt-3 space-y-1.5 text-[13px]">
+      <dl className="mt-3 space-y-1.5 text-[12.5px]">
         {returned > 0 && (
           <div className="flex justify-between">
-            <dt className="text-muted">Goods returned</dt>
+            <dt className="text-ink/50">Goods returned</dt>
             <dd className="text-ink">{formatPrice(returned)}</dd>
           </div>
         )}
         {order.feeRefunded && (
           <div className="flex justify-between">
-            <dt className="text-muted">Delivery fee refunded</dt>
+            <dt className="text-ink/50">Delivery fee refunded</dt>
             <dd className="text-ink">{formatPrice(order.deliveryFee)}</dd>
           </div>
         )}
         {refunded > 0 && (
           <div className="flex justify-between">
-            <dt className="text-muted">Refunded to you</dt>
+            <dt className="text-ink/50">Refunded to you</dt>
             <dd className="text-ink">{formatPrice(refunded)}</dd>
           </div>
         )}
-        <div className="flex justify-between border-t border-line pt-1.5 text-sm font-semibold">
+        <div className="flex justify-between border-t border-line-warm pt-1.5 text-[13px] font-semibold">
           <dt className="text-ink">Final total</dt>
           <dd className="text-ink">{formatPrice(net)}</dd>
         </div>
@@ -377,20 +375,27 @@ export default function MyOrderDetail() {
 
   if (state.id !== id)
     return (
-      <div className={`${wrap} max-w-4xl space-y-4 py-10`}>
-        <Skeleton className="h-10 w-56" />
-        <Skeleton className="h-36 w-full rounded-lg" />
-        <Skeleton className="h-48 w-full rounded-lg" />
+      <div className="bg-canvas">
+        <div className={`${shell} max-w-4xl space-y-4 pb-16 pt-10 sm:pt-14`}>
+          <Skeleton className="h-9 w-40" />
+          <Skeleton className="h-12 w-64" />
+          <Skeleton className="h-36 w-full rounded-panel" />
+          <Skeleton className="h-48 w-full rounded-panel" />
+        </div>
       </div>
     )
 
   if (!state.order) {
     return (
-      <div className={`${wrap} py-16`}>
-        <p className="text-lg font-medium">{state.error}</p>
-        <Link to="/orders" className="mt-4 inline-block text-clay underline underline-offset-4">
-          Back to my orders
-        </Link>
+      <div className="bg-canvas">
+        <div className={`${shell} max-w-4xl pb-16 pt-10 sm:pt-14`}>
+          <ErrorState title="We couldn't load this order" message={state.error} />
+          <p className="mt-5 text-center">
+            <Link to="/orders" className="text-[12.5px] font-medium text-clay underline-offset-4 hover:underline">
+              Back to my orders
+            </Link>
+          </p>
+        </div>
       </div>
     )
   }
@@ -402,252 +407,250 @@ export default function MyOrderDetail() {
   const finalTotal = order.netTotal ?? order.total
 
   return (
-    <div className={`${wrap} max-w-4xl py-10`}>
-      <Link to="/orders" className="inline-flex items-center gap-1 text-[13px] text-muted transition hover:text-ink">
-        <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-        My orders
-      </Link>
-      <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">{order.orderNumber}</h1>
-        <p className="text-sm text-muted">Placed {formatDateTime(order.createdAt)}</p>
-      </div>
+    <div className="bg-canvas">
+      <div className={`${shell} max-w-4xl pb-16 pt-10 sm:pt-14`}>
+        <Link to="/orders" className="inline-flex items-center gap-1 text-[12.5px] font-medium text-ink/50 transition hover:text-ink">
+          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+          My orders
+        </Link>
+        <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <h1 className={display.md}>{order.orderNumber}</h1>
+          <p className="text-[12.5px] text-ink/60">Placed {formatDateTime(order.createdAt)}</p>
+        </div>
 
-      {notice.text && (
-        <p
-          role="status"
-          className={`mt-5 rounded-md px-3.5 py-2.5 text-sm ${
-            notice.tone === 'ok' ? 'bg-success-soft text-success' : 'bg-clay/5 text-clay'
-          }`}
-        >
-          {notice.text}
-        </p>
-      )}
-
-      <div className="mt-5 flex flex-wrap items-center gap-x-7 gap-y-3 text-sm">
-        <span className="flex items-center gap-2">
-          <span className="text-muted">Order</span>
-          <StatusPill value={order.orderStatus} />
-        </span>
-        <span className="flex items-center gap-2">
-          <span className="text-muted">Payment</span>
-          <StatusPill value={payment?.status || order.paymentStatus} />
-        </span>
-        {delivery && (
-          <span className="flex items-center gap-2">
-            <span className="text-muted">Delivery</span>
-            <StatusPill value={delivery.status} />
-          </span>
-        )}
-      </div>
-
-      {adjustment?.status === 'PROPOSED' && (
-        <OrderChangePrompt order={order} adjustment={adjustment} onChanged={refresh} onMessage={setNotice} />
-      )}
-
-      {/* Order progress — full width, above everything else */}
-      <div className="mt-6 rounded-lg border border-line bg-white p-5 sm:p-6">
-        {problem ? (
-          <p className="flex items-center gap-2.5 text-sm text-clay">
-            <TriangleAlert className="h-4.5 w-4.5 shrink-0" aria-hidden="true" />
-            {problem}
+        {notice.text && (
+          <p
+            role="status"
+            className={`mt-5 rounded-tile border px-3.5 py-2.5 text-[12.5px] ${
+              notice.tone === 'ok' ? 'border-forest/20 bg-sage/60 text-forest' : 'border-clay/20 bg-clay/5 text-clay'
+            }`}
+          >
+            {notice.text}
           </p>
-        ) : (
-          <ProgressStepper history={order.statusHistory} orderStatus={order.orderStatus} />
         )}
-        <WhatArrived order={order} returnDoc={returnDoc} />
-      </div>
 
-      <div className="mt-9 grid gap-10 lg:grid-cols-[1fr_17rem]">
-        <section>
-          <SectionTitle>Items</SectionTitle>
-          <ul className="divide-y divide-line">
-            {order.items.map((item) => {
-              const back = returnedByItem.get(String(item._id))
-              const deliveredQty = item.quantity - (back?.quantity || 0)
-              return (
-              <li key={`${item.productId}-${item.sku || ''}`} className="py-4 text-sm">
-                <div className="flex items-start gap-4">
-                  <Link
-                    to={`/product/${item.productId}`}
-                    className="block w-14 shrink-0 overflow-hidden rounded-md bg-sand"
-                  >
-                    <ProductImage src={item.image} name={item.productName} className="aspect-square w-full" />
-                  </Link>
-                  <div className="flex min-w-0 flex-1 flex-wrap justify-between gap-x-4 gap-y-1">
-                    <span>
-                      <Link to={`/product/${item.productId}`} className="font-medium text-ink transition hover:text-clay">
-                        {item.productName}
+        <div className="mt-5 flex flex-wrap items-center gap-x-7 gap-y-3 text-[12.5px]">
+          <span className="flex items-center gap-2">
+            <span className="text-ink/60">Order</span>
+            <StatusPill value={order.orderStatus} />
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="text-ink/60">Payment</span>
+            <StatusPill value={payment?.status || order.paymentStatus} />
+          </span>
+          {delivery && (
+            <span className="flex items-center gap-2">
+              <span className="text-ink/60">Delivery</span>
+              <StatusPill value={delivery.status} />
+            </span>
+          )}
+        </div>
+
+        {adjustment?.status === 'PROPOSED' && (
+          <OrderChangePrompt order={order} adjustment={adjustment} onChanged={refresh} onMessage={setNotice} />
+        )}
+
+        {/* Order progress — full width, above everything else */}
+        <div className={`${panel} mt-6 p-5 sm:p-6`}>
+          {problem ? (
+            <p className="flex items-center gap-2.5 text-[13px] text-clay">
+              <TriangleAlert className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+              {problem}
+            </p>
+          ) : (
+            <ProgressStepper history={order.statusHistory} orderStatus={order.orderStatus} />
+          )}
+          <WhatArrived order={order} returnDoc={returnDoc} />
+        </div>
+
+        <div className="mt-9 grid gap-10 lg:grid-cols-[1fr_17rem]">
+          <section>
+            <SectionTitle>Items</SectionTitle>
+            <ul className="divide-y divide-line-warm">
+              {order.items.map((item) => {
+                const back = returnedByItem.get(String(item._id))
+                const deliveredQty = item.quantity - (back?.quantity || 0)
+                return (
+                  <li key={`${item.productId}-${item.sku || ''}`} className="py-4 text-[13px]">
+                    <div className="flex items-start gap-4">
+                      <Link
+                        to={`/product/${item.productId}`}
+                        className="block w-14 shrink-0 overflow-hidden rounded-tile bg-sand"
+                      >
+                        <ProductImage src={item.image} name={item.productName} className="aspect-square w-full" />
                       </Link>
-                      <span className="block text-muted">
-                        {item.quantity} × {formatPrice(item.unitPrice)}
-                      </span>
-                      {order.fulfilment && (
-                        <span className={`block text-[12px] ${back ? 'text-clay' : 'text-muted'}`}>
-                          {back
-                            ? `${deliveredQty > 0 ? `${deliveredQty} delivered · ` : 'All '}${back.quantity} returned — ${reasonLabel(back.reason)}`
-                            : `${item.quantity} delivered`}
+                      <div className="flex min-w-0 flex-1 flex-wrap justify-between gap-x-4 gap-y-1">
+                        <span>
+                          <Link to={`/product/${item.productId}`} className="font-medium text-ink transition hover:text-clay">
+                            {item.productName}
+                          </Link>
+                          <span className="block text-ink/50">
+                            {item.quantity} × {formatPrice(item.unitPrice)}
+                          </span>
+                          {order.fulfilment && (
+                            <span className={`block text-[11.5px] ${back ? 'text-clay' : 'text-ink/55'}`}>
+                              {back
+                                ? `${deliveredQty > 0 ? `${deliveredQty} delivered · ` : 'All '}${back.quantity} returned — ${reasonLabel(back.reason)}`
+                                : `${item.quantity} delivered`}
+                            </span>
+                          )}
                         </span>
-                      )}
-                    </span>
-                    <span className="font-semibold text-ink">{formatPrice(item.totalPrice)}</span>
+                        <span className="font-semibold text-ink">{formatPrice(item.totalPrice)}</span>
+                      </div>
+                    </div>
+                    {delivered && (
+                      <OrderItemReview
+                        key={reviewOf(item.productId)?._id || 'new'}
+                        orderId={order._id}
+                        item={item}
+                        review={reviewOf(item.productId)}
+                        onSaved={saveReview}
+                        onDeleted={dropReview}
+                      />
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+            <dl className="mt-2 space-y-2 border-t border-line-warm pt-4 text-[13px]">
+              <div className="flex justify-between">
+                <dt className="text-ink/50">Subtotal</dt>
+                <dd className="text-ink">{formatPrice(order.subtotal)}</dd>
+              </div>
+              {order.deliveryFee > 0 && (
+                <div className="flex justify-between">
+                  <dt className="text-ink/50">Delivery</dt>
+                  <dd className="text-ink">{formatPrice(order.deliveryFee)}</dd>
+                </div>
+              )}
+              {order.returnedAmount > 0 && (
+                <div className="flex justify-between">
+                  <dt className="text-ink/50">Returned goods</dt>
+                  <dd className="text-clay">− {formatPrice(order.returnedAmount)}</dd>
+                </div>
+              )}
+              {order.feeRefunded && (
+                <div className="flex justify-between">
+                  <dt className="text-ink/50">Delivery fee refunded</dt>
+                  <dd className="text-clay">− {formatPrice(order.deliveryFee)}</dd>
+                </div>
+              )}
+              <div className="flex justify-between text-[15px] font-semibold">
+                <dt className="text-ink">{order.fulfilment ? 'Final total' : 'Total (cash on delivery)'}</dt>
+                <dd className="text-ink">{formatPrice(order.fulfilment ? finalTotal : order.total)}</dd>
+              </div>
+            </dl>
+            {returnDoc?.refundAmount > 0 && (
+              <p className="mt-2 text-[11.5px] text-ink/55">Refunded to your payment method: {formatPrice(returnDoc.refundAmount)}.</p>
+            )}
+            {payment?.status === 'PAID' && <ReceiptNote orderId={order._id} />}
+
+            {delivery?.paymentPending && (
+              <div className="mt-6 rounded-tile border border-line-warm bg-cream/40 p-4 sm:p-5">
+                <p className="text-[13px] font-semibold text-ink">Payment being checked</p>
+                <p className="mt-1 text-[12.5px] leading-relaxed text-ink/55">
+                  You paid the rider. The brand is checking the payment; your order is complete as soon as it is confirmed.
+                </p>
+              </div>
+            )}
+
+            {order.orderStatus === 'PENDING' && (
+              <div className="mt-8 rounded-tile border border-clay/25 bg-clay/5 p-4 sm:p-5">
+                <div className="flex items-start gap-3">
+                  <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-clay" aria-hidden="true" />
+                  <div className="flex-1">
+                    <p className="text-[13px] font-semibold text-ink">Changed your mind?</p>
+                    <p className="mt-0.5 text-[12.5px] leading-relaxed text-ink/55">
+                      You can cancel until the brand confirms your order. Reserved stock returns automatically.
+                    </p>
+                    {confirming ? (
+                      <div className="mt-3 flex flex-wrap gap-2.5">
+                        <button
+                          type="button"
+                          onClick={cancel}
+                          disabled={busy}
+                          className="inline-flex h-9 items-center rounded-tile bg-danger px-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-white transition hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
+                        >
+                          {busy ? 'Cancelling…' : 'Yes, cancel this order'}
+                        </button>
+                        <button type="button" onClick={() => setConfirming(false)} className={btn('outline', 'sm')}>
+                          Keep it
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirming(true)}
+                        className="mt-3 inline-flex h-9 items-center rounded-tile border border-danger/40 bg-paper-warm px-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-danger transition hover:border-danger"
+                      >
+                        Cancel order
+                      </button>
+                    )}
                   </div>
                 </div>
-                {delivered && (
-                  <OrderItemReview
-                    key={reviewOf(item.productId)?._id || 'new'}
-                    orderId={order._id}
-                    item={item}
-                    review={reviewOf(item.productId)}
-                    onSaved={saveReview}
-                    onDeleted={dropReview}
-                  />
-                )}
-              </li>
-              )
-            })}
-          </ul>
-          <dl className="mt-2 space-y-2 border-t border-ink pt-4 text-sm">
-            <div className="flex justify-between">
-              <dt className="text-muted">Subtotal</dt>
-              <dd className="text-ink">{formatPrice(order.subtotal)}</dd>
-            </div>
-            {order.deliveryFee > 0 && (
-              <div className="flex justify-between">
-                <dt className="text-muted">Delivery</dt>
-                <dd className="text-ink">{formatPrice(order.deliveryFee)}</dd>
               </div>
             )}
-            {order.returnedAmount > 0 && (
-              <div className="flex justify-between">
-                <dt className="text-muted">Returned goods</dt>
-                <dd className="text-clay">− {formatPrice(order.returnedAmount)}</dd>
-              </div>
-            )}
-            {order.feeRefunded && (
-              <div className="flex justify-between">
-                <dt className="text-muted">Delivery fee refunded</dt>
-                <dd className="text-clay">− {formatPrice(order.deliveryFee)}</dd>
-              </div>
-            )}
-            <div className="flex justify-between text-base font-semibold">
-              <dt className="text-ink">{order.fulfilment ? 'Final total' : 'Total (cash on delivery)'}</dt>
-              <dd className="text-ink">{formatPrice(order.fulfilment ? finalTotal : order.total)}</dd>
-            </div>
-          </dl>
-          {returnDoc?.refundAmount > 0 && (
-            <p className="mt-2 text-[12.5px] text-muted">Refunded to your payment method: {formatPrice(returnDoc.refundAmount)}.</p>
-          )}
-          {payment?.status === 'PAID' && <ReceiptNote orderId={order._id} />}
-
-          {delivery?.paymentPending && (
-            <div className="mt-6 rounded-lg border border-line bg-surface p-4 sm:p-5">
-              <p className="text-sm font-semibold text-ink">Payment being checked</p>
-              <p className="mt-1 text-[13px] leading-relaxed text-muted">
-                You paid the rider. The brand is checking the payment; your order is complete as soon as it is confirmed.
-              </p>
-            </div>
-          )}
-
-          {order.orderStatus === 'PENDING' && (
-            <div className="mt-8 rounded-lg border border-warning/30 bg-warning-soft p-4 sm:p-5">
-              <div className="flex items-start gap-3">
-                <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-warning" aria-hidden="true" />
-                <div className="flex-1">
-                  <p className="text-[13.5px] font-semibold text-ink">Changed your mind?</p>
-                  <p className="mt-0.5 text-[13px] leading-relaxed text-muted">
-                    You can cancel until the brand confirms your order. Reserved stock returns automatically.
-                  </p>
-                  {confirming ? (
-                    <div className="mt-3 flex flex-wrap gap-2.5">
-                      <button
-                        type="button"
-                        onClick={cancel}
-                        disabled={busy}
-                        className="inline-flex h-9 items-center rounded-md bg-danger px-4 text-[12.5px] font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-                      >
-                        {busy ? 'Cancelling…' : 'Yes, cancel this order'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirming(false)}
-                        className="inline-flex h-9 items-center rounded-md border border-line bg-white px-4 text-[12.5px] font-medium text-ink transition hover:border-ink"
-                      >
-                        Keep it
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setConfirming(true)}
-                      className="mt-3 inline-flex h-9 items-center rounded-md border border-danger/40 bg-white px-4 text-[12.5px] font-medium text-danger transition hover:border-danger"
-                    >
-                      Cancel order
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        </section>
-
-        <aside className="space-y-9 text-sm">
-          <section>
-            <SectionTitle>
-              <span className="inline-flex items-center gap-1.5">
-                <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
-                Delivering to
-              </span>
-            </SectionTitle>
-            <address className="mt-3.5 not-italic leading-relaxed text-ink/90">
-              <span className="font-medium text-ink">{a.name}</span>
-              <br />
-              {a.address}
-              <br />
-              {[a.city, a.state, a.postalCode].filter(Boolean).join(', ')}
-              <br />
-              {a.phone}
-              {a.additionalInstructions && (
-                <span className="mt-2 block text-muted">Note: {a.additionalInstructions}</span>
-              )}
-            </address>
           </section>
 
-          {delivery && (delivery.trackingReference || delivery.assignedAgent || delivery.status === 'FAILED') && (
+          <aside className="space-y-8 text-[13px]">
             <section>
               <SectionTitle>
                 <span className="inline-flex items-center gap-1.5">
-                  <Truck className="h-3.5 w-3.5" aria-hidden="true" />
-                  Delivery
+                  <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+                  Delivering to
                 </span>
               </SectionTitle>
-              <dl className="mt-3.5 space-y-2.5">
-                {delivery.trackingReference && (
-                  <div>
-                    <dt className="text-muted">Tracking reference</dt>
-                    <dd className="font-medium text-ink">{delivery.trackingReference}</dd>
-                  </div>
+              <address className="mt-3.5 not-italic leading-relaxed text-ink/70">
+                <span className="font-medium text-ink">{a.name}</span>
+                <br />
+                {a.address}
+                <br />
+                {[a.city, a.state, a.postalCode].filter(Boolean).join(', ')}
+                <br />
+                {a.phone}
+                {a.additionalInstructions && (
+                  <span className="mt-2 block text-ink/55">Note: {a.additionalInstructions}</span>
                 )}
-                {delivery.assignedAgent && (
-                  <div>
-                    <dt className="text-muted">Delivered by</dt>
-                    <dd className="font-medium text-ink">{delivery.assignedAgent}</dd>
-                  </div>
-                )}
-              </dl>
-              {delivery.status === 'FAILED' && (
-                <p className="mt-3 rounded-md bg-clay/5 px-3.5 py-2.5 text-[13px] text-clay">
-                  The last delivery attempt did not go through. The brand will try again.
-                </p>
-              )}
+              </address>
             </section>
-          )}
 
-          {delivery?.status === 'OUT_FOR_DELIVERY' && (
-            <RiderLocation deliveryId={delivery._id} destination={order.deliveryLocation} />
-          )}
+            {delivery && (delivery.trackingReference || delivery.assignedAgent || delivery.status === 'FAILED') && (
+              <section>
+                <SectionTitle>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Truck className="h-3.5 w-3.5" aria-hidden="true" />
+                    Delivery
+                  </span>
+                </SectionTitle>
+                <dl className="mt-3.5 space-y-2.5">
+                  {delivery.trackingReference && (
+                    <div>
+                      <dt className="text-ink/55">Tracking reference</dt>
+                      <dd className="font-medium text-ink">{delivery.trackingReference}</dd>
+                    </div>
+                  )}
+                  {delivery.assignedAgent && (
+                    <div>
+                      <dt className="text-ink/55">Delivered by</dt>
+                      <dd className="font-medium text-ink">{delivery.assignedAgent}</dd>
+                    </div>
+                  )}
+                </dl>
+                {delivery.status === 'FAILED' && (
+                  <p className="mt-3 rounded-tile bg-clay/5 px-3.5 py-2.5 text-[12px] text-clay">
+                    The last delivery attempt did not go through. The brand will try again.
+                  </p>
+                )}
+              </section>
+            )}
 
-          {delivery && ON_THE_ROAD.includes(delivery.status) && <DeliveryCode deliveryId={delivery._id} />}
-        </aside>
+            {delivery?.status === 'OUT_FOR_DELIVERY' && (
+              <RiderLocation deliveryId={delivery._id} destination={order.deliveryLocation} />
+            )}
+
+            {delivery && ON_THE_ROAD.includes(delivery.status) && <DeliveryCode deliveryId={delivery._id} />}
+          </aside>
+        </div>
       </div>
     </div>
   )

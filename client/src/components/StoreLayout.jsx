@@ -12,7 +12,12 @@ const isV3Surface = (pathname) =>
   pathname === '/' ||
   pathname === '/nearby' ||
   pathname.startsWith('/store/') ||
-  pathname.startsWith('/product/')
+  pathname.startsWith('/product/') ||
+  pathname === '/cart' ||
+  pathname === '/checkout' ||
+  pathname === '/order-placed' ||
+  pathname === '/orders' ||
+  pathname.startsWith('/orders/')
 
 export default function StoreLayout() {
   const { user } = useAuth()
