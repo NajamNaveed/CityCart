@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useNearby } from '../hooks/useNearby'
 import { useFirstVisitDetect } from '../hooks/useFirstVisitDetect'
@@ -8,6 +8,7 @@ import StoreFooter from './layout/StoreFooter'
 
 export default function StoreLayout() {
   const { user } = useAuth()
+  const { pathname } = useLocation()
   const { autoDetect } = useNearby()
   // Shoppers (guests and customers) are asked for their location once, on a first visit.
   useFirstVisitDetect(autoDetect, !user || user.role === 'CUSTOMER')
@@ -29,7 +30,7 @@ export default function StoreLayout() {
         </PageTransition>
       </main>
 
-      <StoreFooter />
+      <StoreFooter flush={pathname === '/'} />
     </div>
   )
 }

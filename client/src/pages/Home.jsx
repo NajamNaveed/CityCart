@@ -90,7 +90,7 @@ export default function Home() {
 
   return (
     <div className="bg-canvas">
-      <Hero cityName={cityName} areaName={selectedBlocks.length > 0 ? areaName : ''} products={products} />
+      <Hero products={products} />
 
       {/* 01 — Stores */}
       <section className={`${SHELL} pb-14 pt-14 sm:pb-20 sm:pt-20`} aria-labelledby="stores-heading">

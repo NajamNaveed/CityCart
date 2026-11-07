@@ -21,8 +21,8 @@ const PROMISES = [
 
 export default function PromiseBand() {
   return (
-    <section className="mx-auto w-full max-w-[1200px] px-5 pb-4 pt-16 sm:pt-20" aria-labelledby="promise-title">
-      <div className="relative overflow-hidden rounded-panel bg-noir px-6 py-12 text-cream sm:px-10 lg:px-14 lg:py-16">
+    <section className="mx-auto w-full max-w-[1200px] px-5 pb-0 pt-16 sm:pt-20" aria-labelledby="promise-title">
+      <div className="relative overflow-hidden rounded-panel rounded-b-none bg-noir px-6 py-12 text-cream sm:px-10 lg:px-14 lg:py-16">
         <div
           aria-hidden="true"
           className="pointer-events-none absolute -right-24 -top-28 h-72 w-72 rounded-full bg-clay/20 blur-3xl"

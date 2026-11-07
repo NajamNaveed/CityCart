@@ -105,3 +105,29 @@
 .v3-marquee:hover {
   animation-play-state: paused;
 }
+
+/* Footer wordmark: the base sits almost invisible; the overlay is the same
+   text with a cursor-tracked radial light clipped to the letterforms. */
+.foot-watermark {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(72px, 19vw, 260px);
+  line-height: 0.72;
+  letter-spacing: -0.055em;
+  text-align: center;
+  white-space: nowrap;
+  user-select: none;
+  margin-bottom: -0.05em;
+}
+
+.foot-watermark-glow {
+  background-image: radial-gradient(
+    260px circle at var(--mx, 50%) var(--my, 50%),
+    rgba(253, 245, 237, 0.85),
+    rgba(253, 245, 237, 0.22) 42%,
+    rgba(253, 245, 237, 0) 72%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}

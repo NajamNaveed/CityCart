@@ -80,7 +80,7 @@ function BasketCard({ items }) {
   )
 }
 
-export default function Hero({ cityName, areaName, products }) {
+export default function Hero({ products }) {
   const navigate = useNavigate()
   const [term, setTerm] = useState('')
   const basket = useBasket(products)
@@ -91,8 +91,6 @@ export default function Hero({ cityName, areaName, products }) {
     navigate(query ? `/nearby?q=${encodeURIComponent(query)}` : '/nearby')
   }
 
-  const where = areaName || cityName
-
   return (
     <section className="relative overflow-hidden border-b border-line-warm bg-canvas" aria-labelledby="hero-title">
       <div
@@ -100,16 +98,11 @@ export default function Hero({ cityName, areaName, products }) {
         className="pointer-events-none absolute -left-48 -top-48 h-[520px] w-[520px] rounded-full bg-[#fdf6ea] blur-3xl"
       />
 
-      <div className="relative mx-auto grid w-full max-w-[1200px] items-center gap-12 px-5 pb-14 pt-10 lg:grid-cols-[1.04fr_0.96fr] lg:gap-16 lg:pb-20 lg:pt-16">
+      <div className="relative mx-auto grid w-full max-w-[1200px] items-center gap-12 px-5 pb-14 pt-7 lg:grid-cols-[1.04fr_0.96fr] lg:gap-16 lg:pb-20 lg:pt-12">
         <div className="relative z-10 min-w-0">
-          <p className="inline-flex max-w-full items-center gap-2 rounded-full border border-line-warm bg-paper-warm/80 px-3 py-1.5 text-[11px] font-medium text-ink/70">
-            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-clay ring-4 ring-clay/15" />
-            {where ? `${where} · local shops & pros` : 'Local shops & pros'}
-          </p>
-
           <h1
             id="hero-title"
-            className="font-display mt-6 text-[52px] font-semibold leading-[0.94] tracking-[-0.035em] text-ink sm:text-[76px] xl:text-[90px]"
+            className="font-display text-[52px] font-semibold leading-[0.94] tracking-[-0.035em] text-ink sm:text-[76px] xl:text-[90px]"
           >
             One bag.
             <br />
