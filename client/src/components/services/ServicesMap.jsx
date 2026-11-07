@@ -8,7 +8,7 @@ const FALLBACK_CENTER = [31.4504, 73.135]
 
 const pinIcon = L.divIcon({
   className: '',
-  html: '<span style="display:block;width:26px;height:26px;border-radius:50% 50% 50% 0;background:#1e3a2f;transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.45)"><span style="display:block;width:8px;height:8px;margin:7px;border-radius:50%;background:#fff"></span></span>',
+  html: '<span style="display:block;width:26px;height:26px;border-radius:50% 50% 50% 0;background:#1c3a2e;transform:rotate(-45deg);border:2px solid #fffcf6;box-shadow:0 1px 5px rgba(21,20,15,.35)"><span style="display:block;width:8px;height:8px;margin:7px;border-radius:50%;background:#fffcf6"></span></span>',
   iconSize: [26, 26],
   iconAnchor: [13, 26],
   popupAnchor: [0, -26],
@@ -80,7 +80,7 @@ export default function ServicesMap({ items, zones = [], origin, radiusKm, origi
 
     for (const zone of zones) {
       if (!zone.polygon) continue
-      L.polygon(zone.polygon, { color: '#1e3a2f', weight: 2, fillColor: '#1e3a2f', fillOpacity: 0.08, interactive: false }).addTo(layer)
+      L.polygon(zone.polygon, { color: '#1c3a2e', weight: 2, fillColor: '#1c3a2e', fillOpacity: 0.08, interactive: false }).addTo(layer)
       points.push(...zone.polygon)
     }
 
@@ -96,11 +96,11 @@ export default function ServicesMap({ items, zones = [], origin, radiusKm, origi
     if (origin) {
       const here = [origin.lat, origin.lng]
       points.push(here)
-      L.circleMarker(here, { radius: 8, color: '#fff', weight: 2, fillColor: '#3b5b7c', fillOpacity: 1 })
+      L.circleMarker(here, { radius: 8, color: '#fffcf6', weight: 2, fillColor: '#b6472a', fillOpacity: 1 })
         .bindTooltip(originLabel)
         .addTo(layer)
       if (radiusKm) {
-        const circle = L.circle(here, { radius: radiusKm * 1000, color: '#1e3a2f', weight: 1, fillColor: '#1e3a2f', fillOpacity: 0.06 }).addTo(layer)
+        const circle = L.circle(here, { radius: radiusKm * 1000, color: '#1c3a2e', weight: 1, fillColor: '#1c3a2e', fillOpacity: 0.06 }).addTo(layer)
         const bounds = circle.getBounds()
         points.push([bounds.getNorth(), bounds.getEast()], [bounds.getSouth(), bounds.getWest()])
       }
@@ -116,7 +116,7 @@ export default function ServicesMap({ items, zones = [], origin, radiusKm, origi
       ref={container}
       role="region"
       aria-label="Map of service providers"
-      className="isolate z-0 h-[460px] w-full overflow-hidden rounded-lg border border-line"
+      className="isolate z-0 h-[460px] w-full overflow-hidden rounded-panel border border-line-warm"
     />
   )
 }

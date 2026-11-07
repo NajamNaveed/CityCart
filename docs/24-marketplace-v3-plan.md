@@ -1,6 +1,6 @@
 # 24 — Marketplace v3: Services, Seller Billing, Redesign, Flutter and Security
 
-Status: **approved 2026-11-06; Phases 0, 1, 2a, 2b, 2c and 3 implemented. Phase 4 is next.** This document is the
+Status: **approved 2026-11-06; Phases 0, 1, 2a, 2b, 2c and 3 implemented. Phase 4 is in progress: design system, discovery, purchase funnel and services funnel are rebuilt.** This document is the
 authoritative plan for the v3 programme. Where it conflicts with an earlier
 document, this document wins until the earlier document is updated.
 
@@ -740,6 +740,9 @@ Phase 4 progress (customer web):
   (`/store/:id`) and product page are rebuilt on those primitives.
 * The purchase funnel — cart, checkout, order placed, order history and order
   detail (including returns and item reviews) — is rebuilt on those primitives.
+* The services funnel — discovery list and map, public provider page, booking
+  request, booking history and booking detail (proposal, completion, dispute,
+  chat, timeline and review states) — is rebuilt on those primitives.
 * Customer navigation is **Home · Stores · Services**. The separate Brands tab
   is retired; a brand is reached through its storefront, and the public brand
   and storefront APIs are unchanged.

@@ -14,26 +14,27 @@ import {
 import api, { getErrorMessage } from '../services/api'
 import ProductImage from '../components/ProductImage'
 import Stars from '../components/Stars'
+import StatusPill from '../components/StatusPill'
 import BookingChat from '../components/services/BookingChat'
 import BookingTimeline from '../components/services/BookingTimeline'
-import { StatusBadge } from '../components/brand/Bits'
-import { Skeleton } from '../components/ui'
-import { formatPrice, inputClass, wrap } from '../ui'
+import { EmptyState, Field, Skeleton, btn, panel, shell } from '../design'
+import { formatPrice } from '../ui'
 import { bookingWhen, canCancel, durationLabel, priceOf } from '../utils/serviceBookings'
 import { formatKarachiDateTime } from '../utils/serviceSlots'
 
-const labelClass = 'mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted'
-const primaryBtn =
-  'inline-flex h-10 items-center justify-center gap-2 rounded-md bg-ink px-4 text-[13px] font-medium text-white transition hover:bg-ink-soft disabled:cursor-not-allowed disabled:opacity-50'
-const quietBtn =
-  'inline-flex h-10 items-center justify-center gap-2 rounded-md border border-line bg-white px-4 text-[13px] font-medium text-ink transition hover:border-ink disabled:opacity-50'
+const sectionLabel = 'text-[10.5px] font-semibold uppercase tracking-[0.22em] text-ink/45'
+const sectionTitle = 'font-display mt-2 text-[20px] font-semibold tracking-tight text-ink'
 
 function ProposalCard({ booking, onDone }) {
   const proposal = booking.activeProposal
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
   if (!proposal) {
-    return <p className="text-[13px] text-muted">The provider withdrew this proposal. Ask them for a new time in the chat.</p>
+    return (
+      <p className="text-[12.5px] leading-relaxed text-ink/60">
+        The provider withdrew this proposal. Ask them for a new time in the chat.
+      </p>
+    )
   }
 
   async function answer(action) {
@@ -56,20 +57,26 @@ function ProposalCard({ booking, onDone }) {
   }
 
   return (
-    <div className="mt-3 rounded-md border border-warning/30 bg-warning-soft/60 p-4">
-      <p className="text-[13px] font-semibold text-ink">The provider sent you a price</p>
-      <p className="mt-1 font-display text-2xl font-semibold text-ink">{formatPrice(proposal.pricePaisa / 100)}</p>
-      <p className="mt-1 text-[13px] text-ink/80">{proposal.scope}</p>
-      <p className="mt-2 text-[12.5px] text-muted">
+    <div className="rounded-panel border border-clay/25 bg-cream/70 p-4 sm:p-5">
+      <p className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-clay">A price from the provider</p>
+      <p className="mt-1 font-display text-[28px] font-semibold leading-tight tracking-tight text-ink">
+        {formatPrice(proposal.pricePaisa / 100)}
+      </p>
+      <p className="mt-1 text-[13px] leading-relaxed text-ink/70">{proposal.scope}</p>
+      <p className="mt-2 text-[12px] text-ink/55">
         For {formatKarachiDateTime(proposal.scheduledStart)} · reply by {formatKarachiDateTime(proposal.expiresAt)}
       </p>
-      {error && <p role="alert" className="mt-2 text-[12.5px] text-clay">{error}</p>}
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button type="button" onClick={() => answer('accept')} disabled={Boolean(busy)} className={primaryBtn}>
+      {error && (
+        <p role="alert" className="mt-2 text-[12px] text-clay">
+          {error}
+        </p>
+      )}
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button type="button" onClick={() => answer('accept')} disabled={Boolean(busy)} className={btn('primary', 'sm')}>
           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
           {busy === 'accept' ? 'Accepting…' : 'Accept this price'}
         </button>
-        <button type="button" onClick={() => answer('decline')} disabled={Boolean(busy)} className={quietBtn}>
+        <button type="button" onClick={() => answer('decline')} disabled={Boolean(busy)} className={btn('outline', 'sm')}>
           Decline
         </button>
       </div>
@@ -114,50 +121,49 @@ function CompletionActions({ booking, onDone }) {
 
   return (
     <div>
-      <div className="rounded-md bg-paper px-4 py-3 text-[13px] leading-relaxed text-muted">
-        The provider finished the job for <span className="font-medium text-ink">{formatPrice((booking.finalAmountPaisa ?? 0) / 100)}</span>.
-        Confirm the work, or tell CityCart if something is wrong.
+      <div className="rounded-tile bg-canvas px-4 py-3 text-[12.5px] leading-relaxed text-ink/60">
+        The provider finished the job for{' '}
+        <span className="font-semibold text-ink">{formatPrice((booking.finalAmountPaisa ?? 0) / 100)}</span>. Confirm
+        the work, or tell CityCart if something is wrong.
         {booking.autoConfirmAt && (
-          <span className="mt-1 block">
+          <span className="mt-1 block text-ink/45">
             CityCart confirms automatically on {formatKarachiDateTime(booking.autoConfirmAt)} if you do nothing.
           </span>
         )}
       </div>
-      {error && <p role="alert" className="mt-2 text-[13px] text-clay">{error}</p>}
+      {error && (
+        <p role="alert" className="mt-2 text-[12.5px] text-clay">
+          {error}
+        </p>
+      )}
       {mode === 'dispute' ? (
-        <form onSubmit={dispute} className="mt-3 space-y-2">
-          <label htmlFor="dispute-reason" className={labelClass}>
-            What went wrong?
-          </label>
-          <textarea
+        <form onSubmit={dispute} className="mt-4 space-y-3">
+          <Field
+            as="textarea"
+            label="What went wrong?"
             id="dispute-reason"
             rows={3}
             maxLength={1000}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            className={`${inputClass} py-2.5`}
             required
           />
           <div className="flex flex-wrap gap-2">
-            <button
-              type="submit"
-              disabled={Boolean(busy)}
-              className="inline-flex h-10 items-center rounded-md bg-danger px-4 text-[13px] font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-            >
+            <button type="submit" disabled={Boolean(busy)} className={btn('primary', 'md')}>
               {busy === 'dispute' ? 'Sending…' : 'Send dispute to CityCart'}
             </button>
-            <button type="button" onClick={() => setMode('')} className={quietBtn}>
+            <button type="button" onClick={() => setMode('')} className={btn('outline', 'md')}>
               Go back
             </button>
           </div>
         </form>
       ) : (
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button type="button" onClick={confirm} disabled={Boolean(busy)} className={primaryBtn}>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button type="button" onClick={confirm} disabled={Boolean(busy)} className={btn('primary', 'md')}>
             <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
             {busy === 'confirm' ? 'Confirming…' : 'Confirm the job is done'}
           </button>
-          <button type="button" onClick={() => setMode('dispute')} className={`${quietBtn} text-danger`}>
+          <button type="button" onClick={() => setMode('dispute')} className={`${btn('outline', 'md')} text-clay`}>
             <ShieldAlert className="h-4 w-4" aria-hidden="true" />
             Report a problem
           </button>
@@ -192,41 +198,38 @@ function CancelBooking({ booking, onDone }) {
 
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} className={`${quietBtn} w-full text-danger`}>
+      <button type="button" onClick={() => setOpen(true)} className={`${btn('outline', 'md')} w-full text-clay`}>
         Cancel this booking
       </button>
     )
   }
 
   return (
-    <form onSubmit={submit} className="rounded-lg border border-danger/25 bg-white p-4">
+    <form onSubmit={submit} className="rounded-panel border border-clay/25 bg-paper-warm p-5">
       {late && (
         <p className="mb-3 flex items-start gap-2 text-[12.5px] leading-relaxed text-clay">
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           The provider already accepted. This is recorded as a late cancellation.
         </p>
       )}
-      <label htmlFor="cancel-reason" className={labelClass}>
-        Why are you cancelling?
-      </label>
-      <input
+      <Field
+        label="Why are you cancelling?"
         id="cancel-reason"
         value={reason}
         onChange={(e) => setReason(e.target.value)}
         maxLength={500}
-        className={`h-11 ${inputClass}`}
         required
       />
-      {error && <p role="alert" className="mt-2 text-[12.5px] text-clay">{error}</p>}
+      {error && (
+        <p role="alert" className="mt-2 text-[12.5px] text-clay">
+          {error}
+        </p>
+      )}
       <div className="mt-3 flex flex-wrap gap-2">
-        <button
-          type="submit"
-          disabled={busy}
-          className="inline-flex h-10 items-center rounded-md bg-danger px-4 text-[13px] font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-        >
+        <button type="submit" disabled={busy} className={btn('primary', 'md')}>
           {busy ? 'Cancelling…' : 'Yes, cancel it'}
         </button>
-        <button type="button" onClick={() => setOpen(false)} className={quietBtn}>
+        <button type="button" onClick={() => setOpen(false)} className={btn('outline', 'md')}>
           Keep booking
         </button>
       </div>
@@ -260,7 +263,7 @@ function ReviewForm({ booking, onDone }) {
   return (
     <form onSubmit={submit} className="mt-3 space-y-3">
       <div>
-        <p className={labelClass}>Your rating</p>
+        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/55">Your rating</p>
         <div className="flex gap-1">
           {[1, 2, 3, 4, 5].map((value) => (
             <button
@@ -269,8 +272,8 @@ function ReviewForm({ booking, onDone }) {
               onClick={() => setRating(value)}
               aria-label={`${value} ${value === 1 ? 'star' : 'stars'}`}
               aria-pressed={rating === value}
-              className={`flex h-9 w-9 items-center justify-center rounded-md border text-lg transition ${
-                value <= rating ? 'border-clay/40 bg-clay/5 text-clay' : 'border-line text-muted/50 hover:border-ink'
+              className={`flex h-9 w-9 items-center justify-center rounded-tile border text-lg transition ${
+                value <= rating ? 'border-clay/40 bg-clay/5 text-clay' : 'border-line-warm text-ink/25 hover:border-clay/40'
               }`}
             >
               ★
@@ -278,23 +281,23 @@ function ReviewForm({ booking, onDone }) {
           ))}
         </div>
       </div>
-      <div>
-        <label htmlFor="review-comment" className={labelClass}>
-          Comment <span className="normal-case tracking-normal text-muted">(optional)</span>
-        </label>
-        <textarea
-          id="review-comment"
-          rows={3}
-          maxLength={2000}
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          className={`${inputClass} py-2.5`}
-          placeholder="How was the work? This appears on the provider's public page."
-        />
-      </div>
-      {error && <p role="alert" className="text-[12.5px] text-clay">{error}</p>}
-      <button type="submit" disabled={busy} className={primaryBtn}>
-        <Star className="h-4 w-4" aria-hidden="true" />
+      <Field
+        as="textarea"
+        label="Comment"
+        id="review-comment"
+        rows={3}
+        maxLength={2000}
+        value={comment}
+        onChange={(e) => setComment(e.target.value)}
+        hint="Optional. This appears on the provider's public page."
+      />
+      {error && (
+        <p role="alert" className="text-[12.5px] text-clay">
+          {error}
+        </p>
+      )}
+      <button type="submit" disabled={busy} className={btn('primary', 'sm')}>
+        <Star className="h-3.5 w-3.5" aria-hidden="true" />
         {busy ? 'Posting…' : 'Post review'}
       </button>
     </form>
@@ -304,7 +307,7 @@ function ReviewForm({ booking, onDone }) {
 function StatusMessage({ booking }) {
   if (booking.status === 'REQUESTED') {
     return (
-      <p className="text-[13px] leading-relaxed text-muted">
+      <p className="text-[12.5px] leading-relaxed text-ink/60">
         Your request for {formatKarachiDateTime(booking.requestedStart)} has been sent. The provider will accept it or
         send you a price. You can chat once it is accepted.
       </p>
@@ -312,7 +315,7 @@ function StatusMessage({ booking }) {
   }
   if (booking.status === 'PROPOSED') {
     return (
-      <p className="text-[13px] leading-relaxed text-muted">
+      <p className="text-[12.5px] leading-relaxed text-ink/60">
         The provider sent a price and time for your request. Accept it to book the slot, or decline and tell them what
         you would prefer in the chat.
       </p>
@@ -320,7 +323,7 @@ function StatusMessage({ booking }) {
   }
   if (booking.status === 'ACCEPTED') {
     return (
-      <p className="text-[13px] leading-relaxed text-muted">
+      <p className="text-[12.5px] leading-relaxed text-ink/60">
         Agreed at {formatPrice((booking.agreedPricePaisa ?? 0) / 100)} for {formatKarachiDateTime(booking.scheduledStart)}.
         The provider will start the job when they arrive. Pay them at the door.
       </p>
@@ -328,7 +331,7 @@ function StatusMessage({ booking }) {
   }
   if (booking.status === 'IN_PROGRESS') {
     return (
-      <p className="text-[13px] leading-relaxed text-muted">
+      <p className="text-[12.5px] leading-relaxed text-ink/60">
         The job is in progress. When it is finished the provider states the final amount, and you confirm it here.
       </p>
     )
@@ -338,7 +341,7 @@ function StatusMessage({ booking }) {
   }
   if (booking.status === 'CONFIRMED') {
     return (
-      <p className="flex items-start gap-2 text-[13px] leading-relaxed text-success">
+      <p className="flex items-start gap-2 rounded-tile bg-sage/40 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-forest">
         <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
         Confirmed{booking.confirmedBy === 'AUTO' ? ' automatically' : ''} on {formatKarachiDateTime(booking.confirmedAt)}.
         Thank you for using CityCart.
@@ -347,7 +350,7 @@ function StatusMessage({ booking }) {
   }
   if (booking.status === 'DISPUTED') {
     return (
-      <p className="flex items-start gap-2 text-[13px] leading-relaxed text-clay">
+      <p className="flex items-start gap-2 rounded-tile bg-clay/5 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-clay">
         <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
         CityCart is reviewing your dispute. They will contact both sides and record the decision here.
       </p>
@@ -355,13 +358,13 @@ function StatusMessage({ booking }) {
   }
   if (booking.cancellation) {
     return (
-      <p className="text-[13px] leading-relaxed text-muted">
+      <p className="text-[12.5px] leading-relaxed text-ink/60">
         Cancelled by {booking.cancellation.by.toLowerCase()} on {formatKarachiDateTime(booking.cancellation.at)}:{' '}
         {booking.cancellation.reason}
       </p>
     )
   }
-  return <p className="text-[13px] text-muted">This booking is closed.</p>
+  return <p className="text-[12.5px] text-ink/60">This booking is closed.</p>
 }
 
 export default function MyBookingDetail() {
@@ -393,21 +396,32 @@ export default function MyBookingDetail() {
 
   if (state.id !== id) {
     return (
-      <div className={`${wrap} max-w-4xl space-y-4 py-10`}>
-        <Skeleton className="h-10 w-56" />
-        <Skeleton className="h-36 w-full rounded-lg" />
-        <Skeleton className="h-56 w-full rounded-lg" />
+      <div className="bg-canvas">
+        <div className={`${shell} max-w-[1000px] space-y-4 pb-16 pt-8`}>
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-9 w-72" />
+          <Skeleton className="h-40 w-full rounded-panel" />
+          <Skeleton className="h-56 w-full rounded-panel" />
+        </div>
       </div>
     )
   }
 
   if (!state.booking) {
     return (
-      <div className={`${wrap} py-16`}>
-        <p className="text-lg font-medium">{state.error}</p>
-        <Link to="/bookings" className="mt-4 inline-block text-clay underline underline-offset-4">
-          Back to my bookings
-        </Link>
+      <div className="bg-canvas">
+        <div className={`${shell} py-16`}>
+          <EmptyState
+            icon={CalendarCheck}
+            title="Booking not found"
+            message={state.error || 'This booking is not available on your account.'}
+            action={
+              <Link to="/bookings" className={btn('noir', 'md')}>
+                My bookings
+              </Link>
+            }
+          />
+        </div>
       </div>
     )
   }
@@ -417,165 +431,191 @@ export default function MyBookingDetail() {
   const address = booking.address || {}
 
   return (
-    <div className={`${wrap} max-w-4xl py-10`}>
-      <Link to="/bookings" className="inline-flex items-center gap-1 text-[13px] text-muted transition hover:text-ink">
-        <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-        My bookings
-      </Link>
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
-            {booking.offering.title}
-          </h1>
-          <p className="mt-1 text-[13px] text-muted">
-            {booking.bookingNumber} · requested {formatKarachiDateTime(booking.createdAt)}
+    <div className="bg-canvas">
+      <div className={`${shell} max-w-[1000px] pb-16 pt-6 sm:pt-8`}>
+        <Link
+          to="/bookings"
+          className="inline-flex items-center gap-1.5 text-[12px] text-ink/50 transition hover:text-ink"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+          My bookings
+        </Link>
+
+        <header className="mt-4 flex flex-wrap items-start justify-between gap-4">
+          <div className="max-w-2xl">
+            <p className="text-[10.5px] font-semibold uppercase tracking-[0.22em] text-ink/45">
+              Booking {booking.bookingNumber}
+            </p>
+            <h1 className="font-display mt-2 text-[28px] font-semibold leading-tight tracking-[-0.02em] text-ink sm:text-[34px]">
+              {booking.offering.title}
+            </h1>
+            <p className="mt-2 text-[12.5px] text-ink/55">
+              Requested {formatKarachiDateTime(booking.createdAt)}
+            </p>
+          </div>
+          <StatusPill value={booking.status} />
+        </header>
+
+        {notice && (
+          <p
+            role="status"
+            className="mt-5 rounded-tile border border-sage bg-sage/40 px-3.5 py-2.5 text-[12.5px] text-forest"
+          >
+            {notice}
           </p>
-        </div>
-        <StatusBadge value={booking.status} />
-      </div>
+        )}
 
-      {notice && (
-        <p role="status" className="mt-5 rounded-md bg-success-soft px-3.5 py-2.5 text-sm text-success">
-          {notice}
-        </p>
-      )}
-
-      <div className="mt-6 grid gap-8 lg:grid-cols-[1fr_17rem]">
-        <div className="space-y-5">
-          <section className="rounded-lg border border-line bg-white p-5">
-            <div className="flex flex-wrap items-start gap-4">
-              <ProductImage
-                src={booking.offering.image}
-                name={booking.offering.title}
-                className="size-16 shrink-0 rounded-md text-sm"
-              />
-              <div className="min-w-0 flex-1 basis-48">
-                <p className="font-medium text-ink">{booking.offering.title}</p>
-                <p className="mt-0.5 text-[12.5px] text-muted">
-                  {durationLabel(booking.offering.durationMinutes)} · from{' '}
-                  {formatPrice(booking.offering.startingAtPrice / 100)}
-                </p>
-                <p className="mt-2 text-[13px] text-ink">
-                  <span className="text-muted">Appointment: </span>
-                  {formatKarachiDateTime(bookingWhen(booking))}
-                </p>
-                <p className="text-[13px] text-ink">
-                  <span className="text-muted">Price: </span>
-                  {formatPrice(priceOf(booking) / 100)}
-                </p>
+        <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_19rem] lg:gap-8">
+          <div className="space-y-4">
+            <section className={`${panel} p-5 sm:p-6`}>
+              <div className="flex flex-wrap items-start gap-4">
+                <ProductImage
+                  src={booking.offering.image}
+                  name={booking.offering.title}
+                  className="size-16 shrink-0 rounded-tile text-sm"
+                />
+                <div className="min-w-0 flex-1">
+                  <h2 className="font-display text-[18px] font-semibold tracking-tight text-ink">
+                    {booking.offering.title}
+                  </h2>
+                  <p className="mt-1 text-[12px] text-ink/55">
+                    {durationLabel(booking.offering.durationMinutes)} · from{' '}
+                    {formatPrice(booking.offering.startingAtPrice / 100)}
+                  </p>
+                  <dl className="mt-4 grid gap-3 border-t border-line-warm pt-4 text-[12.5px] sm:grid-cols-2">
+                    <div>
+                      <dt className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/40">Appointment</dt>
+                      <dd className="mt-1 font-medium text-ink">{formatKarachiDateTime(bookingWhen(booking))}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/40">Price</dt>
+                      <dd className="mt-1 font-medium text-ink">{formatPrice(priceOf(booking) / 100)}</dd>
+                    </div>
+                  </dl>
+                </div>
               </div>
-            </div>
-            {booking.note && (
-              <p className="mt-4 rounded-md bg-paper px-3.5 py-2.5 text-[13px] leading-relaxed text-muted">
-                Your note: {booking.note}
-              </p>
-            )}
-            {booking.completionNote && (
-              <p className="mt-3 rounded-md bg-paper px-3.5 py-2.5 text-[13px] leading-relaxed text-muted">
-                Provider’s note: {booking.completionNote}
-              </p>
-            )}
-          </section>
+              {booking.note && (
+                <p className="mt-4 rounded-tile bg-canvas px-3.5 py-2.5 text-[12.5px] leading-relaxed text-ink/60">
+                  <span className="font-medium text-ink/70">Your note: </span>
+                  {booking.note}
+                </p>
+              )}
+              {booking.completionNote && (
+                <p className="mt-2 rounded-tile bg-canvas px-3.5 py-2.5 text-[12.5px] leading-relaxed text-ink/60">
+                  <span className="font-medium text-ink/70">Provider’s note: </span>
+                  {booking.completionNote}
+                </p>
+              )}
+            </section>
 
-          <section className="rounded-lg border border-line bg-white p-5">
-            <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">What happens now</h2>
-            <div className="mt-3">
-              <StatusMessage booking={booking} />
-            </div>
-            {booking.status === 'COMPLETED' && (
+            <section className={`${panel} p-5 sm:p-6`}>
+              <p className={sectionLabel}>What happens now</p>
+              <h2 className={sectionTitle}>Next step</h2>
               <div className="mt-3">
-                <CompletionActions booking={booking} onDone={onDone} />
+                <StatusMessage booking={booking} />
               </div>
-            )}
-            {booking.status === 'PROPOSED' && (
-              <div className="mt-4 border-t border-line pt-4">
-                <ProposalCard booking={booking} onDone={onDone} />
-              </div>
-            )}
-            {booking.status === 'CONFIRMED' && (
-              <div className="mt-4 border-t border-line pt-4">
-                <h3 className="text-[13px] font-semibold text-ink">Review {provider.displayName}</h3>
-                {booking.review ? (
-                  <div className="mt-2">
-                    <Stars value={booking.review.rating} />
-                    {booking.review.comment && (
-                      <p className="mt-1 text-[13px] leading-relaxed text-muted">{booking.review.comment}</p>
-                    )}
-                    {booking.review.providerReply?.body && (
-                      <div className="mt-2 rounded-md bg-paper px-3.5 py-2.5 text-[13px] leading-relaxed text-muted">
-                        <span className="font-medium text-ink">The provider replied: </span>
-                        {booking.review.providerReply.body}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <ReviewForm booking={booking} onDone={onReview} />
-                )}
-              </div>
-            )}
-          </section>
+              {booking.status === 'COMPLETED' && (
+                <div className="mt-4">
+                  <CompletionActions booking={booking} onDone={onDone} />
+                </div>
+              )}
+              {booking.status === 'PROPOSED' && (
+                <div className="mt-4">
+                  <ProposalCard booking={booking} onDone={onDone} />
+                </div>
+              )}
+              {booking.status === 'CONFIRMED' && (
+                <div className="mt-4 border-t border-line-warm pt-4">
+                  <h3 className="text-[13px] font-semibold text-ink">Review {provider.displayName}</h3>
+                  {booking.review ? (
+                    <div className="mt-2">
+                      <Stars value={booking.review.rating} />
+                      {booking.review.comment && (
+                        <p className="mt-1.5 text-[13px] leading-relaxed text-ink/65">{booking.review.comment}</p>
+                      )}
+                      {booking.review.providerReply?.body && (
+                        <div className="mt-2 rounded-tile bg-canvas px-3.5 py-2.5 text-[12.5px] leading-relaxed text-ink/60">
+                          <span className="font-semibold text-ink">The provider replied: </span>
+                          {booking.review.providerReply.body}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <ReviewForm booking={booking} onDone={onReview} />
+                  )}
+                </div>
+              )}
+            </section>
 
-          <section className="rounded-lg border border-line bg-white p-5">
-            <h2 className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
-              <MessageCircle className="h-3.5 w-3.5" aria-hidden="true" />
-              Messages
-            </h2>
-            <div className="mt-3">
-              <BookingChat
-                bookingId={booking._id}
-                enabled={booking.canChat}
-                closedText="Chat opens when the provider accepts your request. Until then, they reply with a proposal."
-              />
-            </div>
-          </section>
-
-          <section className="rounded-lg border border-line bg-white p-5">
-            <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">History</h2>
-            <div className="mt-3">
-              <BookingTimeline events={booking.events} />
-            </div>
-          </section>
-
-          {canCancel(booking) && <CancelBooking booking={booking} onDone={onDone} />}
-        </div>
-
-        <aside className="space-y-4">
-          <section className="rounded-lg border border-line bg-white p-5 text-[13px]">
-            <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">Your provider</h2>
-            {provider.slug ? (
-              <Link to={`/services/${provider.slug}`} className="mt-3 flex items-center gap-3">
-                <ProductImage src={provider.avatar} name={provider.displayName} className="size-10 rounded-full text-sm" />
-                <span className="font-medium text-ink hover:underline">{provider.displayName}</span>
-              </Link>
-            ) : (
-              <p className="mt-3 font-medium text-ink">{provider.displayName}</p>
-            )}
-            {provider.phone && (
-              <p className="mt-2 flex items-center gap-2 text-muted">
-                <Phone className="h-3.5 w-3.5" aria-hidden="true" />
-                <a href={`tel:${provider.phone}`} className="hover:text-ink">
-                  {provider.phone}
-                </a>
+            <section className={`${panel} p-5 sm:p-6`}>
+              <h2 className="flex items-center gap-2 font-display text-[20px] font-semibold tracking-tight text-ink">
+                <MessageCircle className="h-4 w-4 text-clay" aria-hidden="true" />
+                Messages
+              </h2>
+              <p className="mt-1 text-[12px] text-ink/50">
+                {booking.canChat ? 'Private chat about this booking.' : 'Chat opens when the provider accepts.'}
               </p>
-            )}
-            <p className="mt-3 flex items-start gap-2 leading-relaxed text-muted">
-              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              <span>
-                {address.addressLine}
-                <br />
-                {[address.blockName, address.city].filter(Boolean).join(', ')}
-              </span>
-            </p>
-            <p className="mt-3 flex items-center gap-2 text-[12.5px] text-muted">
-              <CalendarCheck className="h-3.5 w-3.5" aria-hidden="true" />
-              Pay at the door — no online payment.
-            </p>
-          </section>
+              <div className="mt-4">
+                <BookingChat
+                  bookingId={booking._id}
+                  enabled={booking.canChat}
+                  closedText="Chat opens when the provider accepts your request. Until then, they reply with a proposal."
+                />
+              </div>
+            </section>
 
-          <Link to="/services" className={`${quietBtn} w-full`}>
-            Browse services
-          </Link>
-        </aside>
+            <section className={`${panel} p-5 sm:p-6`}>
+              <h2 className="font-display text-[20px] font-semibold tracking-tight text-ink">History</h2>
+              <div className="mt-4">
+                <BookingTimeline events={booking.events} />
+              </div>
+            </section>
+
+            {canCancel(booking) && <CancelBooking booking={booking} onDone={onDone} />}
+          </div>
+
+          <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start">
+            <section className={`${panel} p-5`}>
+              <p className={sectionLabel}>Your provider</p>
+              {provider.slug ? (
+                <Link to={`/services/${provider.slug}`} className="mt-3 flex items-center gap-3">
+                  <ProductImage src={provider.avatar} name={provider.displayName} className="size-11 rounded-full text-sm" />
+                  <span className="font-display text-[17px] font-semibold tracking-tight text-ink hover:text-clay">
+                    {provider.displayName}
+                  </span>
+                </Link>
+              ) : (
+                <p className="mt-3 font-display text-[17px] font-semibold tracking-tight text-ink">
+                  {provider.displayName}
+                </p>
+              )}
+              {provider.phone && (
+                <p className="mt-3 flex items-center gap-2 text-[12.5px] text-ink/60">
+                  <Phone className="h-3.5 w-3.5 text-clay" aria-hidden="true" />
+                  <a href={`tel:${provider.phone}`} className="transition hover:text-ink">
+                    {provider.phone}
+                  </a>
+                </p>
+              )}
+              <p className="mt-2.5 flex items-start gap-2 text-[12.5px] leading-relaxed text-ink/60">
+                <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-clay" aria-hidden="true" />
+                <span>
+                  {address.addressLine}
+                  <br />
+                  {[address.blockName, address.city].filter(Boolean).join(', ')}
+                </span>
+              </p>
+              <p className="mt-3 flex items-center gap-2 border-t border-line-warm pt-3 text-[11.5px] text-ink/50">
+                <CalendarCheck className="h-3.5 w-3.5 text-clay" aria-hidden="true" />
+                Pay at the door — no online payment.
+              </p>
+            </section>
+
+            <Link to="/services" className={`${btn('outline', 'md')} w-full`}>
+              Browse services
+            </Link>
+          </aside>
+        </div>
       </div>
     </div>
   )

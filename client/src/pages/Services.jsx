@@ -1,16 +1,15 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { LayoutList, LocateFixed, Map as MapIcon, MapPin, Search, Star, Wrench } from 'lucide-react'
+import { ArrowRight, LayoutList, LocateFixed, Map as MapIcon, MapPin, Search, Star, Wrench } from 'lucide-react'
 import api, { getErrorMessage } from '../services/api'
 import { useCity } from '../hooks/useCity'
 import { useNearby } from '../hooks/useNearby'
 import { isRadius } from '../utils/range'
 import RangeSelector from '../components/nearby/RangeSelector'
 import ProductImage from '../components/ProductImage'
-import { selectClass } from '../components/brand/Bits'
-import { EmptyState, Skeleton } from '../components/ui'
+import { EmptyState, ErrorState, PageHeader, Skeleton, btn, card, cardLift, fieldClass, shell } from '../design'
 import { formatDistance } from '../utils/geo'
-import { btnDark, btnOutline, card, formatPrice, inputClass, wrap } from '../ui'
+import { formatPrice } from '../ui'
 
 const ServicesMap = lazy(() => import('../components/services/ServicesMap'))
 
@@ -34,31 +33,31 @@ function nextRange(range) {
 
 function ProviderCard({ provider }) {
   return (
-    <article className={`${card} p-5`}>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-3.5">
+    <article className={`${card} ${cardLift} p-5 sm:p-6`}>
+      <div className="flex flex-wrap items-start justify-between gap-5">
+        <div className="flex min-w-0 items-start gap-4">
           <ProductImage
             src={provider.avatar || provider.coverImage}
             name={provider.displayName}
-            className="size-14 shrink-0 rounded-md text-sm"
+            className="size-16 shrink-0 rounded-tile text-sm"
           />
           <div className="min-w-0">
             <Link
               to={`/services/${provider.slug}`}
-              className="block truncate font-display text-lg font-semibold tracking-tight text-ink hover:text-pine"
+              className="block truncate font-display text-[20px] font-semibold leading-tight tracking-tight text-ink transition hover:text-clay"
             >
               {provider.displayName}
             </Link>
-            <p className="text-[12.5px] text-muted">
+            <p className="mt-1 text-[12px] text-ink/55">
               {provider.category?.name}
               {provider.block?.name && <> · {provider.block.name}</>}
             </p>
-            <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-[12.5px] text-muted">
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-ink/55">
               {provider.ratingCount > 0 ? (
                 <span className="inline-flex items-center gap-1">
                   <Star className="h-3.5 w-3.5 fill-clay text-clay" aria-hidden="true" />
-                  {provider.ratingAvg.toFixed(1)}
-                  <span className="text-muted/80">({provider.ratingCount})</span>
+                  <span className="font-medium text-ink">{provider.ratingAvg.toFixed(1)}</span>
+                  <span>({provider.ratingCount})</span>
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1 text-clay">
@@ -67,35 +66,42 @@ function ProviderCard({ provider }) {
                 </span>
               )}
               {provider.distanceKm !== null && provider.distanceKm !== undefined && (
-                <span>{formatDistance(provider.distanceKm)} away</span>
+                <span className="inline-flex items-center gap-1">
+                  <MapPin className="h-3.5 w-3.5 text-clay/70" aria-hidden="true" />
+                  {formatDistance(provider.distanceKm)} away
+                </span>
               )}
-            </p>
+            </div>
           </div>
         </div>
         <div className="text-right">
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Starting at</p>
-          <p className="text-[15px] font-semibold text-ink">{formatPrice(provider.startingAtPrice / 100)}</p>
-          <Link to={`/services/${provider.slug}`} className="mt-1 inline-block text-[13px] font-medium text-clay hover:underline">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink/40">Starting at</p>
+          <p className="mt-1 font-display text-[19px] font-semibold text-ink">{formatPrice(provider.startingAtPrice / 100)}</p>
+          <Link
+            to={`/services/${provider.slug}`}
+            className="mt-1 inline-flex items-center gap-1 text-[12px] font-medium text-clay underline-offset-4 hover:underline"
+          >
             View services
+            <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
           </Link>
         </div>
       </div>
 
-      {provider.bio && <p className="mt-3 line-clamp-2 text-[13px] text-muted">{provider.bio}</p>}
+      {provider.bio && <p className="mt-4 line-clamp-2 text-[13px] leading-relaxed text-ink/60">{provider.bio}</p>}
 
       {provider.topOfferings?.length > 0 && (
-        <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-3">
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line-warm pt-3.5">
           {provider.topOfferings.map((offering) => (
             <Link
               key={offering._id}
               to={`/services/${provider.slug}`}
-              className="rounded-full border border-line bg-paper px-3 py-1 text-[12px] text-ink/80 transition hover:border-ink hover:text-ink"
+              className="rounded-full border border-line-warm bg-canvas px-3 py-1 text-[11.5px] text-ink/70 transition hover:border-clay/40 hover:text-clay"
             >
               {offering.title}
             </Link>
           ))}
           {provider.offeringCount > provider.topOfferings.length && (
-            <span className="px-1 py-1 text-[12px] text-muted">
+            <span className="px-1 text-[11.5px] text-ink/45">
               +{provider.offeringCount - provider.topOfferings.length} more
             </span>
           )}
@@ -109,7 +115,45 @@ function ResultsSkeleton() {
   return (
     <div className="space-y-4">
       {[0, 1, 2].map((i) => (
-        <Skeleton key={i} className="h-40 w-full rounded-lg" />
+        <div key={i} className={`${card} p-5 sm:p-6`}>
+          <div className="flex items-start gap-4">
+            <Skeleton className="size-16 shrink-0 rounded-tile" />
+            <div className="flex-1 space-y-2.5">
+              <Skeleton className="h-4 w-2/5" />
+              <Skeleton className="h-3 w-1/4" />
+              <Skeleton className="h-3 w-1/3" />
+            </div>
+          </div>
+          <Skeleton className="mt-4 h-3 w-3/4" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function ViewToggle({ view, onChange }) {
+  return (
+    <div
+      role="group"
+      aria-label="Results view"
+      className="inline-flex overflow-hidden rounded-tile border border-line-warm bg-paper-warm text-[12px] font-medium"
+    >
+      {[
+        ['list', 'List', LayoutList],
+        ['map', 'Map', MapIcon],
+      ].map(([value, label, Icon]) => (
+        <button
+          key={value}
+          type="button"
+          aria-pressed={view === value}
+          onClick={() => onChange(value)}
+          className={`inline-flex h-9 items-center gap-1.5 px-3.5 transition ${
+            view === value ? 'bg-noir text-cream' : 'text-ink/60 hover:text-ink'
+          }`}
+        >
+          <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+          {label}
+        </button>
       ))}
     </div>
   )
@@ -125,6 +169,7 @@ export default function Services() {
   const [categoryId, setCategoryId] = useState('')
   const [sort, setSort] = useState('rank')
   const [categories, setCategories] = useState([])
+  const [reload, setReload] = useState(0)
 
   useEffect(() => {
     let active = true
@@ -184,7 +229,7 @@ export default function Services() {
     return () => {
       active = false
     }
-  }, [key, query])
+  }, [key, query, reload])
 
   const loading = Boolean(query) && result.key !== key
   const data = result.key === key ? result.data : null
@@ -198,193 +243,195 @@ export default function Services() {
   }
 
   return (
-    <div className={`${wrap} py-8 sm:py-10`}>
-      <header className="mb-6">
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-ink sm:text-[30px]">Services near you</h1>
-        <p className="mt-1.5 text-[13.5px] text-muted">
-          Cleaning, repairs, beauty and more — book a local provider in your block. Agree the details and the final
-          price directly with them.
-        </p>
-      </header>
+    <div className="bg-canvas">
+      <div className={`${shell} pb-16 pt-10 sm:pt-14`}>
+        <PageHeader
+          eyebrow="Local services"
+          title="Services near"
+          accent="you."
+          lede="Cleaning, repairs, beauty and more — book a provider in your block. Agree the details and the final price directly with them."
+        />
 
-      <form onSubmit={onSearch} role="search" className="flex flex-col gap-3 sm:flex-row">
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden="true" />
-          <label htmlFor="services-search" className="sr-only">
-            Search a service or provider
-          </label>
-          <input
-            id="services-search"
-            type="search"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="Search a service or provider…"
-            className={`h-11 pl-10 ${inputClass}`}
-          />
-        </div>
-        <button type="submit" className={btnDark}>
-          Search
-        </button>
-      </form>
+        <form onSubmit={onSearch} role="search" className="mt-8 flex flex-col gap-2 sm:flex-row">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/40" aria-hidden="true" />
+            <label htmlFor="services-search" className="sr-only">
+              Search a service or provider
+            </label>
+            <input
+              id="services-search"
+              type="search"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="Search a service or provider…"
+              className={fieldClass({ className: 'h-12 pl-10' })}
+            />
+          </div>
+          <button type="submit" className={btn('noir', 'md')}>
+            Search
+          </button>
+        </form>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2.5">
-        <label htmlFor="service-category" className="sr-only">
-          Category
-        </label>
-        <select
-          id="service-category"
-          value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
-          className={selectClass}
-        >
-          <option value="">All services</option>
-          {categories.map((c) => (
-            <option key={c._id} value={c._id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-        <label htmlFor="service-sort" className="sr-only">
-          Sort
-        </label>
-        <select id="service-sort" value={sort} onChange={(e) => setSort(e.target.value)} className={selectClass}>
-          {SORTS.map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-3">
-        <button type="button" onClick={detect} disabled={status === 'detecting'} className={`${btnOutline} h-9`}>
-          <LocateFixed className={`h-4 w-4 ${status === 'detecting' ? 'animate-spin' : ''}`} aria-hidden="true" />
-          {status === 'detecting' ? 'Finding you…' : hasLocation ? 'Update my location' : 'Use my location'}
-        </button>
-        <p className="text-[13px] text-muted">
-          {areaName ? `Looking in ${areaName}` : city ? city.name : 'Location not set'}
-        </p>
-        <RangeSelector />
-      </div>
-
-      {needsArea && cityId && (
-        <p className="mt-4 rounded-md bg-warning-soft px-3.5 py-2.5 text-[13px] text-warning">
-          Choose your area to search only your block. Showing the whole city for now.
-        </p>
-      )}
-
-      {(cityId || view === 'map') && (
-        <div className="mt-6 flex justify-end">
-          <div role="group" aria-label="Results view" className="inline-flex overflow-hidden rounded-md border border-line bg-white text-[13px] font-medium">
-            {[
-              ['list', 'List', LayoutList],
-              ['map', 'Map', MapIcon],
-            ].map(([value, label, Icon]) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={view === value}
-                onClick={() => setView(value)}
-                className={`inline-flex h-9 items-center gap-1.5 px-3.5 transition ${view === value ? 'bg-ink text-white' : 'text-ink/70 hover:text-ink'}`}
-              >
-                <Icon className="h-4 w-4" aria-hidden="true" />
-                {label}
-              </button>
-            ))}
+        <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-3">
+          <button type="button" onClick={detect} disabled={status === 'detecting'} className={btn('outline', 'sm')}>
+            <LocateFixed className={`h-3.5 w-3.5 ${status === 'detecting' ? 'animate-spin' : ''}`} aria-hidden="true" />
+            {status === 'detecting' ? 'Finding you…' : hasLocation ? 'Update my location' : 'Use my location'}
+          </button>
+          <p className="text-[12px] text-ink/55">
+            <MapPin className="mr-1 inline h-3.5 w-3.5 text-clay" aria-hidden="true" />
+            {areaName ? `Looking in ${areaName}` : city ? city.name : 'Location not set'}
+          </p>
+          <div className="w-full sm:w-auto">
+            <RangeSelector />
           </div>
         </div>
-      )}
 
-      <section className="mt-4" aria-live="polite">
-        {view === 'map' ? (
-          <div>
-            <Suspense fallback={<Skeleton className="h-[460px] w-full rounded-lg" />}>
-              <ServicesMap
-                items={items}
-                zones={selectedBlocks}
-                origin={origin}
-                radiusKm={isRadius(range) && origin ? Number(range) : null}
-                originLabel={coords ? 'Your spot' : selectedBlocks.length === 1 ? `Centre of ${areaName}` : 'Search centre'}
-                onOpenProvider={(provider) => navigate(`/services/${provider.slug}`)}
-              />
-            </Suspense>
-            {data?.pagination?.pages > 1 && <p className="mt-2 text-xs text-muted">The map shows the providers on this page of results.</p>}
-          </div>
-        ) : !cityId ? (
-          <EmptyState
-            icon={MapPin}
-            title="Where should we look?"
-            message="Share your location so we can show the service providers in your area."
-            className="rounded-lg border border-dashed border-line bg-white"
-            action={
-              <button type="button" onClick={detect} disabled={status === 'detecting'} className={btnDark}>
-                <LocateFixed className="h-4 w-4" aria-hidden="true" />
-                Use my location
-              </button>
-            }
-          />
-        ) : loading || !query ? (
-          <ResultsSkeleton />
-        ) : error ? (
-          <p className="text-clay">{error}</p>
-        ) : items.length === 0 ? (
-          <EmptyState
-            icon={Wrench}
-            title={q ? `No services for “${q}” within ${rangeLabel(range)}` : `No service providers within ${rangeLabel(range)} yet`}
-            message={
-              range === 'city'
-                ? `Nothing matched in ${city?.name || 'this city'}. Try a different search or category.`
-                : 'Try a wider range to see more providers.'
-            }
-            className="rounded-lg border border-dashed border-line bg-white"
-            action={
-              bigger && (
-                <button type="button" onClick={() => setRange(bigger)} className={btnDark}>
-                  {bigger === 'city' ? 'Search the whole city' : `Try ${bigger} km`}
-                </button>
-              )
-            }
-          />
-        ) : (
-          <>
-            <p className="mb-4 text-[13px] text-muted">
-              {data.pagination.total} {data.pagination.total === 1 ? 'provider' : 'providers'} with{' '}
-              {data.meta.totalOfferings} {data.meta.totalOfferings === 1 ? 'service' : 'services'}
-              {q && <> for “{q}”</>}
-              {isRadius(range) && radiusApplied && <> within {rangeLabel(range)}</>}
-              {areaName && range !== 'block' && <> around {areaName}</>}
-            </p>
-            <div className="space-y-4">
-              {items.map((provider) => (
-                <ProviderCard key={provider._id} provider={provider} />
+        <div className="mt-5 flex flex-wrap items-end gap-3">
+          <div className="w-full sm:w-52">
+            <label htmlFor="service-category" className="mb-1.5 block text-[10.5px] font-semibold uppercase tracking-[0.16em] text-ink/45">
+              Category
+            </label>
+            <select
+              id="service-category"
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+              className={fieldClass({ shape: 'select', className: 'h-10' })}
+            >
+              <option value="">All services</option>
+              {categories.map((c) => (
+                <option key={c._id} value={c._id}>
+                  {c.name}
+                </option>
               ))}
-            </div>
-            {data.pagination.pages > 1 && (
-              <div className="mt-7 flex items-center justify-between text-sm">
-                <button
-                  type="button"
-                  disabled={currentPage <= 1}
-                  onClick={() => setPageForFilters(currentPage - 1)}
-                  className={`${btnOutline} h-9 px-4`}
-                >
-                  Previous
-                </button>
-                <span className="text-muted">
-                  Page {data.pagination.page} of {data.pagination.pages}
-                </span>
-                <button
-                  type="button"
-                  disabled={currentPage >= data.pagination.pages}
-                  onClick={() => setPageForFilters(currentPage + 1)}
-                  className={`${btnOutline} h-9 px-4`}
-                >
-                  Next
-                </button>
-              </div>
-            )}
-          </>
+            </select>
+          </div>
+          <div className="w-full sm:w-56">
+            <label htmlFor="service-sort" className="mb-1.5 block text-[10.5px] font-semibold uppercase tracking-[0.16em] text-ink/45">
+              Sort
+            </label>
+            <select
+              id="service-sort"
+              value={sort}
+              onChange={(e) => setSort(e.target.value)}
+              className={fieldClass({ shape: 'select', className: 'h-10' })}
+            >
+              {SORTS.map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {needsArea && cityId && (
+          <p className="mt-4 rounded-tile border border-clay/20 bg-clay/5 px-3.5 py-2.5 text-[12.5px] text-clay">
+            Choose your area to search only your block. Showing the whole city for now.
+          </p>
         )}
-      </section>
+
+        {(cityId || view === 'map') && (
+          <div className="mt-7 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-[12px] text-muted">
+              {loading
+                ? 'Finding providers…'
+                : data
+                  ? `${data.pagination.total} ${data.pagination.total === 1 ? 'provider' : 'providers'} · ${data.meta.totalOfferings} ${data.meta.totalOfferings === 1 ? 'service' : 'services'}`
+                  : 'Providers near you'}
+            </p>
+            <ViewToggle view={view} onChange={setView} />
+          </div>
+        )}
+
+        <section className="mt-4" aria-live="polite">
+          {view === 'map' ? (
+            <div className="relative overflow-hidden rounded-panel border border-line-warm">
+              <Suspense fallback={<Skeleton className="h-[460px] w-full rounded-none" />}>
+                <ServicesMap
+                  items={items}
+                  zones={selectedBlocks}
+                  origin={origin}
+                  radiusKm={isRadius(range) && origin ? Number(range) : null}
+                  originLabel={coords ? 'Your spot' : selectedBlocks.length === 1 ? `Centre of ${areaName}` : 'Search centre'}
+                  onOpenProvider={(provider) => navigate(`/services/${provider.slug}`)}
+                />
+              </Suspense>
+              {data?.pagination?.pages > 1 && (
+                <p className="px-3 pb-2 pt-1 text-[11.5px] text-muted">The map shows the providers on this page of results.</p>
+              )}
+            </div>
+          ) : !cityId ? (
+            <EmptyState
+              icon={MapPin}
+              title="Where should we look?"
+              message="Share your location so we can show the service providers in your area."
+              action={
+                <button type="button" onClick={detect} disabled={status === 'detecting'} className={btn('noir', 'md')}>
+                  <LocateFixed className="h-4 w-4" aria-hidden="true" />
+                  Use my location
+                </button>
+              }
+            />
+          ) : loading || !query ? (
+            <ResultsSkeleton />
+          ) : error ? (
+            <ErrorState message={error} onRetry={() => setReload((n) => n + 1)} />
+          ) : items.length === 0 ? (
+            <EmptyState
+              icon={Wrench}
+              title={q ? `No services for “${q}” within ${rangeLabel(range)}` : `No service providers within ${rangeLabel(range)} yet`}
+              message={
+                range === 'city'
+                  ? `Nothing matched in ${city?.name || 'this city'}. Try a different search or category.`
+                  : 'Try a wider range to see more providers.'
+              }
+              action={
+                bigger && (
+                  <button type="button" onClick={() => setRange(bigger)} className={btn('noir', 'md')}>
+                    {bigger === 'city' ? 'Search the whole city' : `Try ${bigger} km`}
+                  </button>
+                )
+              }
+            />
+          ) : (
+            <>
+              <p className="mb-4 text-[12px] text-muted">
+                {q && <>Results for “{q}” · </>}
+                {isRadius(range) && radiusApplied && <>Within {rangeLabel(range)} · </>}
+                {areaName && range !== 'block' && <>Around {areaName}</>}
+              </p>
+              <div className="space-y-4">
+                {items.map((provider) => (
+                  <ProviderCard key={provider._id} provider={provider} />
+                ))}
+              </div>
+              {data.pagination.pages > 1 && (
+                <div className="mt-8 flex items-center justify-between gap-3 text-[12.5px]">
+                  <button
+                    type="button"
+                    disabled={currentPage <= 1}
+                    onClick={() => setPageForFilters(currentPage - 1)}
+                    className={btn('outline', 'sm')}
+                  >
+                    Previous
+                  </button>
+                  <span className="text-muted">
+                    Page {data.pagination.page} of {data.pagination.pages}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={currentPage >= data.pagination.pages}
+                    onClick={() => setPageForFilters(currentPage + 1)}
+                    className={btn('outline', 'sm')}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </section>
+      </div>
     </div>
   )
 }

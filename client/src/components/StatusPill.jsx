@@ -1,6 +1,6 @@
 import { humanize } from '../ui'
 
-const PROBLEM = new Set(['CANCELLED', 'REJECTED', 'FAILED', 'RETURNED', 'REFUNDED'])
+const PROBLEM = new Set(['CANCELLED', 'REJECTED', 'FAILED', 'RETURNED', 'REFUNDED', 'DECLINED', 'DISPUTED'])
 
 // Neutral status label for the shopper side (the brand dashboard has its own pine badges).
 export default function StatusPill({ value }) {

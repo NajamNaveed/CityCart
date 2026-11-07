@@ -1,34 +1,21 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CalendarClock, MapPin } from 'lucide-react'
+import { CalendarClock, LocateFixed, MapPin } from 'lucide-react'
 import api, { getErrorMessage, getFieldErrors } from '../../services/api'
 import { useAuth } from '../../hooks/useAuth'
-import Field from '../Field'
-import CoordinatesField from '../CoordinatesField'
-import { Skeleton } from '../ui'
-import { formatPrice, inputClass } from '../../ui'
-import { parseLatLng } from '../../utils/geo'
-import {
-  availableSlots,
-  karachiInputToIso,
-} from '../../utils/serviceSlots'
-
-const labelClass = 'mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted'
-
-function durationLabel(minutes) {
-  if (minutes < 60) return `${minutes} min`
-  const hours = Math.floor(minutes / 60)
-  const rest = minutes % 60
-  return rest ? `${hours} h ${rest} min` : `${hours} h`
-}
+import { Field, Skeleton, btn, fieldLabel } from '../../design'
+import { formatPrice } from '../../ui'
+import { getDevicePosition, parseLatLng } from '../../utils/geo'
+import { availableSlots, karachiInputToIso } from '../../utils/serviceSlots'
+import { durationLabel } from '../../utils/serviceBookings'
 
 function SignedOut() {
   return (
     <div className="mt-3">
-      <p className="text-[13px] leading-relaxed text-muted">
+      <p className="text-[12.5px] leading-relaxed text-ink/60">
         Sign in with a customer account to request a time. The provider replies with a price.
       </p>
-      <Link to="/login" className="mt-3 inline-flex h-10 items-center rounded-md bg-ink px-4 text-[13px] font-medium text-white transition hover:bg-ink-soft">
+      <Link to="/login" className={`mt-3 ${btn('noir', 'sm')}`}>
         Sign in to book
       </Link>
     </div>
@@ -50,6 +37,8 @@ export default function BookingRequest({ provider }) {
   const [mode, setMode] = useState('saved')
   const [addressId, setAddressId] = useState('')
   const [manual, setManual] = useState({ fullName: '', phone: '', addressLine: '', coordinates: '' })
+  const [locating, setLocating] = useState(false)
+  const [pinNote, setPinNote] = useState('')
   const [slot, setSlot] = useState('')
   const [customStart, setCustomStart] = useState('')
   const [note, setNote] = useState('')
@@ -96,17 +85,24 @@ export default function BookingRequest({ provider }) {
   }, [slots])
 
   if (user?.role !== 'CUSTOMER') {
-    return <div className="mt-3 text-[13px] text-muted">
-      {user ? 'Only customer accounts can book a service.' : <SignedOut />}
-    </div>
+    return (
+      <div className="mt-3 text-[12.5px] text-ink/60">
+        {user ? 'Only customer accounts can book a service.' : <SignedOut />}
+      </div>
+    )
   }
 
   if (done) {
     return (
-      <div className="mt-3 rounded-md bg-success-soft px-4 py-3 text-[13px] text-success">
-        <p className="font-medium">Request sent — booking {done.bookingNumber}.</p>
-        <p className="mt-1">The provider will accept, or send a price. You can chat once it is accepted.</p>
-        <Link to={`/bookings/${done._id}`} className="mt-2 inline-block font-medium underline">
+      <div className="mt-3 rounded-panel border border-sage bg-sage/40 p-4">
+        <p className="font-display text-[16px] font-semibold text-forest">Request sent — booking {done.bookingNumber}.</p>
+        <p className="mt-1 text-[12.5px] leading-relaxed text-forest/80">
+          The provider will accept, or send a price. You can chat once it is accepted.
+        </p>
+        <Link
+          to={`/bookings/${done._id}`}
+          className="mt-3 inline-block text-[12.5px] font-semibold text-forest underline underline-offset-4"
+        >
           Open this booking
         </Link>
       </div>
@@ -114,7 +110,7 @@ export default function BookingRequest({ provider }) {
   }
 
   if (offerings.length === 0) {
-    return <p className="mt-3 text-[13px] text-muted">This provider has not published a service list yet.</p>
+    return <p className="mt-3 text-[12.5px] text-ink/60">This provider has not published a service list yet.</p>
   }
 
   const selectedAddress = eligible.find((a) => a._id === addressId)
@@ -122,6 +118,19 @@ export default function BookingRequest({ provider }) {
   function chooseOffering(id) {
     setOfferingId(id)
     setMessage('')
+  }
+
+  async function useMyLocation() {
+    setLocating(true)
+    setPinNote('')
+    try {
+      const { lat, lng } = await getDevicePosition({ maximumAge: 0 })
+      setManual((m) => ({ ...m, coordinates: `${lat}, ${lng}` }))
+    } catch (err) {
+      setPinNote(err.message)
+    } finally {
+      setLocating(false)
+    }
   }
 
   async function onSubmit(event) {
@@ -179,70 +188,70 @@ export default function BookingRequest({ provider }) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="mt-3 space-y-4" noValidate>
-      <div>
-        <label htmlFor="service-offering" className={labelClass}>
-          Service
-        </label>
-        <select
-          id="service-offering"
-          value={offering?._id || ''}
-          onChange={(e) => chooseOffering(e.target.value)}
-          className={`h-10 ${inputClass}`}
-        >
-          {offerings.map((item) => (
-            <option key={item._id} value={item._id}>
-              {item.title} — from {formatPrice(item.startingAtPrice / 100)}
-            </option>
-          ))}
-        </select>
-        {offering && (
-          <p className="mt-1 text-[12px] text-muted">
-            {durationLabel(offering.durationMinutes)} usually · price agreed with the provider
-          </p>
-        )}
-      </div>
+    <form onSubmit={onSubmit} className="mt-4 space-y-4" noValidate>
+      <Field
+        as="select"
+        label="Service"
+        id="service-offering"
+        value={offering?._id || ''}
+        onChange={(e) => chooseOffering(e.target.value)}
+        hint={
+          offering
+            ? `${durationLabel(offering.durationMinutes)} usually · price agreed with the provider`
+            : undefined
+        }
+      >
+        {offerings.map((item) => (
+          <option key={item._id} value={item._id}>
+            {item.title} — from {formatPrice(item.startingAtPrice / 100)}
+          </option>
+        ))}
+      </Field>
 
-      <div>
-        <label htmlFor="service-slot" className={labelClass}>
-          Date and time <span className="normal-case tracking-normal text-muted">(Pakistan time)</span>
-        </label>
-        {provider.availability?.isPublished ? (
-          slots.length > 0 ? (
-            <select id="service-slot" value={slot} onChange={(e) => setSlot(e.target.value)} className={`h-10 ${inputClass}`} required>
-              {slots.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <p className="rounded-md bg-paper px-3.5 py-2.5 text-[13px] text-muted">
-              No open times in the next ten days. Try another service, or check back after the provider updates their hours.
-            </p>
-          )
+      {provider.availability?.isPublished ? (
+        slots.length > 0 ? (
+          <Field
+            as="select"
+            label="Date and time"
+            id="service-slot"
+            value={slot}
+            onChange={(e) => setSlot(e.target.value)}
+            hint="Pakistan time."
+            error={fieldErrors.scheduledStart}
+            required
+          >
+            {slots.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </Field>
         ) : (
-          <>
-            <input
-              id="service-slot"
-              type="datetime-local"
-              value={customStart}
-              onChange={(e) => setCustomStart(e.target.value)}
-              className={`h-10 ${inputClass}`}
-              required
-            />
-            <p className="mt-1 text-[12px] text-muted">
-              This provider has not published working hours, so ask for any future time. They confirm the slot.
+          <div>
+            <p className={fieldLabel}>Date and time</p>
+            <p className="rounded-tile bg-canvas px-3.5 py-2.5 text-[12.5px] text-ink/55">
+              No open times in the next ten days. Try another service, or check back after the provider updates their
+              hours.
             </p>
-          </>
-        )}
-        {fieldErrors.scheduledStart && <p className="mt-1 text-[12px] text-danger">{fieldErrors.scheduledStart}</p>}
-      </div>
+          </div>
+        )
+      ) : (
+        <Field
+          label="Date and time"
+          id="service-slot"
+          type="datetime-local"
+          value={customStart}
+          onChange={(e) => setCustomStart(e.target.value)}
+          hint="Pakistan time. This provider has no fixed hours, so ask for any future time and they confirm the slot."
+          error={fieldErrors.scheduledStart}
+          required
+        />
+      )}
 
       <div>
-        <p className={labelClass}>Where is the job?</p>
+        <p className={fieldLabel}>Where is the job?</p>
         {!addresses.loaded ? (
-          <Skeleton className="h-16 w-full rounded-md" />
+          <Skeleton className="h-16 w-full rounded-tile" />
         ) : (
           <>
             {eligible.length > 0 && (
@@ -250,8 +259,10 @@ export default function BookingRequest({ provider }) {
                 {eligible.map((item) => (
                   <label
                     key={item._id}
-                    className={`flex cursor-pointer gap-2.5 rounded-md border p-3 text-[13px] transition ${
-                      mode === 'saved' && addressId === item._id ? 'border-ink bg-paper' : 'border-line bg-white'
+                    className={`flex cursor-pointer gap-2.5 rounded-tile border p-3 text-[12.5px] transition ${
+                      mode === 'saved' && addressId === item._id
+                        ? 'border-clay/50 bg-cream/60'
+                        : 'border-line-warm bg-canvas/40'
                     }`}
                   >
                     <input
@@ -262,33 +273,33 @@ export default function BookingRequest({ provider }) {
                         setMode('saved')
                         setAddressId(item._id)
                       }}
-                      className="mt-0.5 h-4 w-4 accent-ink"
+                      className="mt-0.5 h-4 w-4 accent-clay"
                     />
                     <span className="min-w-0">
                       <span className="block font-medium text-ink">
                         {item.label} · {item.fullName}
                       </span>
-                      <span className="block truncate text-muted">
+                      <span className="block truncate text-ink/55">
                         {item.addressLine}, {item.city}
                       </span>
                     </span>
                   </label>
                 ))}
-                <label className="flex cursor-pointer items-center gap-2.5 rounded-md border border-line bg-white p-3 text-[13px]">
+                <label className="flex cursor-pointer items-center gap-2.5 rounded-tile border border-line-warm bg-canvas/40 p-3 text-[12.5px]">
                   <input
                     type="radio"
                     name="booking-address"
                     checked={mode === 'manual'}
                     onChange={() => setMode('manual')}
-                    className="h-4 w-4 accent-ink"
+                    className="h-4 w-4 accent-clay"
                   />
                   Use a different address
                 </label>
               </div>
             )}
             {eligible.length === 0 && (
-              <p className="mb-2 flex items-start gap-1.5 rounded-md bg-paper px-3 py-2 text-[12.5px] text-muted">
-                <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <p className="flex items-start gap-1.5 rounded-tile bg-canvas px-3 py-2 text-[12px] text-ink/55">
+                <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-clay" aria-hidden="true" />
                 This provider works only in {provider.block?.name || 'one block'}. Enter an address inside that block.
               </p>
             )}
@@ -311,6 +322,7 @@ export default function BookingRequest({ provider }) {
             label="Phone"
             id="booking-phone"
             name="phone"
+            type="tel"
             value={manual.phone}
             onChange={(e) => setManual((m) => ({ ...m, phone: e.target.value }))}
             error={fieldErrors.phone}
@@ -325,35 +337,47 @@ export default function BookingRequest({ provider }) {
             error={fieldErrors.addressLine}
             required
           />
-          <CoordinatesField
-            id="booking-coordinates"
-            label="Pin"
-            value={manual.coordinates}
-            onChange={(value) => setManual((m) => ({ ...m, coordinates: value }))}
-            error={fieldErrors.coordinates}
-            hint="The exact spot is shared with the provider only after they accept."
-            required
-          />
+          <div>
+            <Field
+              label="Pin"
+              id="booking-coordinates"
+              name="booking-coordinates"
+              inputMode="decimal"
+              autoComplete="off"
+              placeholder="31.4186, 73.0790"
+              value={manual.coordinates}
+              onChange={(e) => setManual((m) => ({ ...m, coordinates: e.target.value }))}
+              error={fieldErrors.coordinates || pinNote}
+              hint="The exact spot is shared with the provider only after they accept."
+              required
+            />
+            <button
+              type="button"
+              onClick={useMyLocation}
+              disabled={locating}
+              className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-medium text-clay transition hover:text-clay-dark disabled:opacity-50"
+            >
+              <LocateFixed className={`h-3.5 w-3.5 ${locating ? 'animate-spin' : ''}`} aria-hidden="true" />
+              {locating ? 'Finding location…' : 'Use my current location'}
+            </button>
+          </div>
         </div>
       )}
 
-      <div>
-        <label htmlFor="booking-note" className={labelClass}>
-          Note for the provider <span className="normal-case tracking-normal text-muted">(optional)</span>
-        </label>
-        <textarea
-          id="booking-note"
-          rows={2}
-          maxLength={1000}
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="Anything they should know before quoting?"
-          className={`${inputClass} py-2.5`}
-        />
-      </div>
+      <Field
+        as="textarea"
+        label="Note for the provider"
+        id="booking-note"
+        rows={2}
+        maxLength={1000}
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder="Anything they should know before quoting?"
+        hint="Optional."
+      />
 
       {message && (
-        <p role="alert" className="rounded-md bg-clay/5 px-3 py-2 text-[13px] text-clay">
+        <p role="alert" className="rounded-tile border border-clay/25 bg-clay/5 px-3 py-2 text-[12.5px] text-clay">
           {message}
         </p>
       )}
@@ -361,14 +385,12 @@ export default function BookingRequest({ provider }) {
       <button
         type="submit"
         disabled={saving || (provider.availability?.isPublished && slots.length === 0)}
-        className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-ink px-5 text-[13px] font-medium text-white transition hover:bg-ink-soft disabled:cursor-not-allowed disabled:opacity-40"
+        className={`${btn('noir', 'md')} w-full`}
       >
         <CalendarClock className="h-4 w-4" aria-hidden="true" />
         {saving ? 'Sending…' : 'Request this time'}
       </button>
-      <p className="text-center text-[11.5px] text-muted">
-        No payment is taken here. Pay the provider at the door.
-      </p>
+      <p className="text-center text-[11px] text-ink/45">No payment is taken here. Pay the provider at the door.</p>
     </form>
   )
 }
