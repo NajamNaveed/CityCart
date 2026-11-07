@@ -21,20 +21,17 @@ const PROMISES = [
 
 export default function PromiseBand() {
   return (
-    <section
-      className="relative overflow-hidden rounded-t-panel bg-noir pb-16 pt-14 text-cream sm:pt-20 lg:pb-20"
-      aria-labelledby="promise-title"
-    >
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-32 -top-32 h-80 w-80 rounded-full bg-clay/15 blur-3xl"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -bottom-40 -left-24 h-80 w-80 rounded-full bg-cream/10 blur-3xl"
-      />
+    <section className="mx-auto w-full max-w-[1200px] px-5 pb-14 pt-14 sm:pt-20" aria-labelledby="promise-title">
+      <div className="relative overflow-hidden rounded-panel bg-noir px-6 py-12 text-cream sm:px-10 lg:px-14 lg:py-16">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-24 -top-28 h-72 w-72 rounded-full bg-clay/20 blur-3xl"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -bottom-32 -left-20 h-72 w-72 rounded-full bg-cream/10 blur-3xl"
+        />
 
-      <div className="relative mx-auto w-full max-w-[1200px] px-5">
         <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-cream/45">The CityCart promise</p>

@@ -292,8 +292,12 @@ export default function StoreFooter({ flush = false }) {
               Built for your block <span className="text-white/75">· one street at a time</span>
             </span>
           </div>
+        </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 py-5 text-[11px] text-white/40">
+        <FooterWordmark />
+
+        <div className={wrap}>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 py-7 text-[11px] text-white/40">
             <p>© {new Date().getFullYear()} CityCart. All rights reserved.</p>
             <p className="hidden sm:block">Cash on delivery on every order</p>
             <button
@@ -306,8 +310,6 @@ export default function StoreFooter({ flush = false }) {
             </button>
           </div>
         </div>
-
-        <FooterWordmark />
       </div>
     </footer>
   )
