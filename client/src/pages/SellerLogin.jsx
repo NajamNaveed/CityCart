@@ -2,12 +2,11 @@ import { useState } from 'react'
 import { Building2, ChevronLeft } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import AuthShell from '../components/AuthShell'
-import Field from '../components/Field'
 import ResendVerification from '../components/ResendVerification'
 import { useAuth } from '../hooks/useAuth'
 import { getErrorMessage, getFieldErrors } from '../services/api'
 import { safeNext } from '../utils/nav'
-import { btnPine } from '../ui'
+import { Button, Field, display, textLink } from '../design'
 
 const COPY = {
   brand: {
@@ -93,21 +92,10 @@ export default function SellerLogin({ portal = 'brand' }) {
 
   return (
     <AuthShell tone="pine" eyebrow={copy.eyebrow} title={copy.title} intro={copy.intro} points={copy.points}>
-      <h1 className="font-display text-[28px] font-semibold tracking-tight text-ink">{copy.heading}</h1>
-      <p className="mt-1.5 text-sm text-muted">
-        {hasNext ? 'Log in to continue where you left off.' : copy.hint}
-      </p>
-
-      {error && (
-        <p role="alert" className="mt-6 rounded-md bg-clay/5 px-3.5 py-2.5 text-sm text-clay">
-          {error}
-        </p>
-      )}
-
       {workspace ? (
-        <div className="mt-8">
-          <h2 className="font-display text-xl font-semibold tracking-tight text-ink">Choose a workspace</h2>
-          <p className="mt-1.5 text-sm text-muted">
+        <div>
+          <h1 className={display.sm}>Choose a workspace</h1>
+          <p className="mt-2 text-[13px] leading-relaxed text-ink/55">
             {form.email.trim()} is a team member at more than one brand. Pick the one you want to work in.
           </p>
           <ul className="mt-5 space-y-2.5">
@@ -117,14 +105,14 @@ export default function SellerLogin({ portal = 'brand' }) {
                   type="button"
                   disabled={submitting}
                   onClick={() => onChooseWorkspace(m.brandId)}
-                  className="flex w-full items-center gap-3 rounded-md border border-line bg-white px-4 py-3.5 text-left transition hover:border-pine disabled:opacity-60"
+                  className="flex w-full items-center gap-3 rounded-tile border border-line-warm bg-paper-warm px-4 py-3.5 text-left transition hover:border-ink/30 disabled:opacity-60"
                 >
-                  <span className="grid h-9 w-9 place-items-center rounded-md bg-pine/10 text-pine">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-tile bg-sand text-clay">
                     <Building2 className="h-4 w-4" aria-hidden="true" />
                   </span>
                   <span className="min-w-0">
-                    <span className="block truncate font-medium text-ink">{m.brandName}</span>
-                    <span className="block text-[12.5px] text-muted">
+                    <span className="block truncate text-[13.5px] font-medium text-ink">{m.brandName}</span>
+                    <span className="block text-[11.5px] text-ink/50">
                       {m.role === 'PICKER' ? 'Picker' : 'Team member'}
                     </span>
                   </span>
@@ -135,57 +123,72 @@ export default function SellerLogin({ portal = 'brand' }) {
           <button
             type="button"
             onClick={() => setWorkspace(null)}
-            className="mt-5 inline-flex items-center gap-1.5 text-[13px] font-medium text-muted hover:text-ink"
+            className="mt-5 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-ink/50 transition hover:text-ink"
           >
             <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
             Use a different account
           </button>
         </div>
       ) : (
-        <form onSubmit={onSubmit} className="mt-8 space-y-5" noValidate>
-          <Field label="Email" id="email" name="email" type="email" autoComplete="email" value={form.email} onChange={onChange} error={fieldErrors.email} required />
-          <Field
-            label="Password"
-            id="password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            value={form.password}
-            onChange={onChange}
-            error={fieldErrors.password}
-            required
-          />
-          <div className="flex justify-end">
-            <Link to={`/forgot-password?portal=${portal}`} className="text-[13px] font-medium text-pine underline-offset-4 hover:underline">
-              Forgot password?
-            </Link>
-          </div>
-          <button type="submit" disabled={submitting} className={`${btnPine} w-full`}>
-            {submitting ? 'Logging in…' : 'Log in'}
-          </button>
-        </form>
+        <>
+          <h1 className={display.sm}>{copy.heading}</h1>
+          <p className="mt-2 text-[13px] leading-relaxed text-ink/55">
+            {hasNext ? 'Log in to continue where you left off.' : copy.hint}
+          </p>
+
+          {error && (
+            <p role="alert" className="mt-5 rounded-tile border border-clay/30 bg-clay/5 px-3.5 py-2.5 text-[13px] leading-relaxed text-clay">
+              {error}
+            </p>
+          )}
+
+          <form onSubmit={onSubmit} className="mt-7 space-y-5" noValidate>
+            <Field label="Email" id="email" name="email" type="email" autoComplete="email" value={form.email} onChange={onChange} error={fieldErrors.email} required />
+            <Field
+              label="Password"
+              id="password"
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              value={form.password}
+              onChange={onChange}
+              error={fieldErrors.password}
+              required
+            />
+            <div className="-mt-1 flex justify-end">
+              <Link to={`/forgot-password?portal=${portal}`} className={textLink}>
+                Forgot password?
+              </Link>
+            </div>
+            <Button type="submit" tone="noir" size="lg" disabled={submitting} className="w-full">
+              {submitting ? 'Logging in…' : 'Log in'}
+            </Button>
+          </form>
+
+          {needsVerification && <ResendVerification email={form.email.trim()} portal={portal} className="mt-4" />}
+        </>
       )}
 
-      {needsVerification && <ResendVerification email={form.email.trim()} portal={portal} className="mt-4" />}
-
-      <p className="mt-6 text-sm text-muted">
-        {copy.signupLead}{' '}
-        <Link to={copy.signupTo} className="font-medium text-pine underline-offset-4 hover:underline">
-          {copy.signupLabel}
-        </Link>
-      </p>
-      <p className="mt-2 text-sm text-muted">
-        {copy.otherLead}{' '}
-        <Link to={copy.otherTo} className="font-medium text-pine underline-offset-4 hover:underline">
-          {copy.otherLabel}
-        </Link>
-      </p>
-      <p className="mt-2 text-sm text-muted">
-        Shopping instead?{' '}
-        <Link to="/login" className="font-medium text-pine underline-offset-4 hover:underline">
-          Customer sign in
-        </Link>
-      </p>
+      <div className="mt-7 space-y-2 border-t border-line-warm pt-5 text-[12.5px] text-ink/55">
+        <p>
+          {copy.signupLead}{' '}
+          <Link to={copy.signupTo} className={textLink}>
+            {copy.signupLabel}
+          </Link>
+        </p>
+        <p>
+          {copy.otherLead}{' '}
+          <Link to={copy.otherTo} className={textLink}>
+            {copy.otherLabel}
+          </Link>
+        </p>
+        <p>
+          Shopping instead?{' '}
+          <Link to="/login" className={textLink}>
+            Customer sign in
+          </Link>
+        </p>
+      </div>
     </AuthShell>
   )
 }

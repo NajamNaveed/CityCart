@@ -1,32 +1,19 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { MailCheck } from 'lucide-react'
-import Field from '../components/Field'
-import ResendVerification from '../components/ResendVerification'
-import { Skeleton } from '../components/ui'
 import { useAuth } from '../hooks/useAuth'
 import { useCity } from '../hooks/useCity'
 import api, { getErrorMessage, getFieldErrors } from '../services/api'
 import { insidePolygon, parseLatLng } from '../utils/geo'
-import { btnPine, inputClass, sectionLabel, wrap } from '../ui'
+import { Field, Skeleton, fieldLabel } from '../design'
+import { ApplySent, ApplyShell, FormSection, SubmitRow } from '../components/seller/ApplyShell'
 
 // Leaflet is downloaded only when the applicant reaches the map.
 const AreaMap = lazy(() => import('../components/nearby/AreaMap'))
 
-const labelClass = 'mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-muted'
-
-function Section({ number, title, children }) {
-  return (
-    <fieldset className="rounded-lg border border-line bg-white p-6">
-      <legend className="sr-only">{title}</legend>
-      <div className="flex items-baseline gap-3">
-        <span className="font-display text-lg font-semibold text-pine">0{number}</span>
-        <h2 className="text-[17px] font-semibold tracking-tight text-ink">{title}</h2>
-      </div>
-      <div className="mt-6 grid gap-5 sm:grid-cols-2">{children}</div>
-    </fieldset>
-  )
-}
+const POINTS = [
+  'Your city is fixed at signup; your block can change once a month',
+  'Customers see a starting price, then agree the job with you',
+  '1% of completed bookings, invoiced monthly',
+]
 
 // Rupees typed by the applicant -> integer paisa the API stores.
 function toPaisa(text) {
@@ -190,73 +177,34 @@ export default function ProviderApply() {
 
   if (sentTo) {
     return (
-      <div className={`${wrap} grid gap-14 py-14 lg:grid-cols-[1fr_2fr] lg:py-20`}>
-        <aside className="lg:sticky lg:top-28 lg:h-fit">
-          <p className={sectionLabel}>Application received</p>
-          <h1 className="font-display mt-4 text-4xl font-semibold leading-[1.1] tracking-tight text-ink">
-            Verify your email, then we review.
-          </h1>
-          <p className="mt-5 text-[15px] leading-relaxed text-muted">
-            Your provider account and service profile are created. After you prove the inbox, a CityCart admin reviews
-            the application. Only approved providers appear to customers.
-          </p>
-        </aside>
-
-        <div className="rounded-lg border border-line bg-white p-6 sm:p-8">
-          <MailCheck className="h-10 w-10 text-pine" aria-hidden="true" />
-          <h2 className="font-display mt-4 text-[28px] font-semibold tracking-tight text-ink">Check your inbox</h2>
-          <p className="mt-1.5 text-sm leading-relaxed text-muted">
-            We sent a verification link to <span className="font-medium text-ink">{sentTo}</span>. It works once and
-            expires in 24 hours. Sign in after verifying to see your review status.
-          </p>
-          <div className="mt-6 rounded-lg bg-paper px-4 py-3 text-[13px] leading-relaxed text-muted">
-            Your profile stays hidden until two things happen: your email is verified, and a CityCart admin approves
-            your application. You will be notified either way.
-          </div>
-          <ResendVerification email={sentTo} portal="service" className="mt-5" />
-          <p className="mt-6 text-sm text-muted">
-            Already verified?{' '}
-            <Link to="/sell/service/login" className="font-medium text-pine underline-offset-4 hover:underline">
-              Log in to your dashboard
-            </Link>
-          </p>
-        </div>
-      </div>
+      <ApplySent
+        kicker="Application received"
+        title="Verify your email, then we review."
+        intro="Your provider account and service profile are created. After you prove the inbox, a CityCart admin reviews the application. Only approved providers appear to customers."
+        email={sentTo}
+        note="Your profile stays hidden until two things happen: your email is verified, and a CityCart admin approves your application. You will be notified either way."
+        portal="service"
+        login={{ to: '/sell/service/login', label: 'Log in to your dashboard' }}
+      />
     )
   }
 
   return (
-    <div className={`${wrap} grid gap-14 py-14 lg:grid-cols-[1fr_2fr] lg:py-20`}>
-      <aside className="lg:sticky lg:top-28 lg:h-fit">
-        <p className={sectionLabel}>Offer a service</p>
-        <h1 className="font-display mt-4 text-4xl font-semibold leading-[1.1] tracking-tight text-ink">
-          Tell us what you do.
-        </h1>
-        <p className="mt-5 text-[15px] leading-relaxed text-muted">
-          Cleaning, plumbing, electrical work, repairs — list your service with a starting price and the area you
-          work in. Customers book a slot and agree the final price with you directly.
-        </p>
-        <ul className="mt-8 space-y-2 text-sm text-muted">
-          <li>Your city is fixed at signup.</li>
-          <li>You may change your block once a month.</li>
-          <li>CityCart takes 1% monthly, billed after you start earning.</li>
-        </ul>
-        <p className="mt-8 text-sm text-muted">
-          Already applied?{' '}
-          <Link to="/sell/service/login" className="font-medium text-pine underline-offset-4 hover:underline">
-            Provider log in
-          </Link>
-        </p>
-      </aside>
-
+    <ApplyShell
+      kicker="Offer a service"
+      title="Tell us what you do."
+      intro="Cleaning, plumbing, electrical work, repairs — list your service with a starting price and the area you work in. Customers book a slot and agree the final price with you directly."
+      points={POINTS}
+      login={{ lead: 'Already applied?', to: '/sell/service/login', label: 'Provider log in' }}
+    >
       <form onSubmit={onSubmit} className="space-y-5" noValidate>
         {error && (
-          <p role="alert" className="rounded-md bg-clay/5 px-3.5 py-2.5 text-sm text-clay">
+          <p role="alert" className="rounded-tile border border-clay/30 bg-clay/5 px-4 py-3 text-[13px] text-clay">
             {error}
           </p>
         )}
 
-        <Section number={1} title="About you">
+        <FormSection number={1} title="About you" hint="The account owner and how we reach you.">
           <Field label="Your name" id="ownerName" name="ownerName" autoComplete="name" value={form.ownerName} onChange={onChange} error={fieldErrors['owner.name']} required />
           <Field label="Phone" id="ownerPhone" name="ownerPhone" type="tel" autoComplete="tel" placeholder="+92 300 1234567" value={form.ownerPhone} onChange={onChange} error={fieldErrors['owner.phone']} required />
           <Field label="Email" id="ownerEmail" name="ownerEmail" type="email" autoComplete="email" value={form.ownerEmail} onChange={onChange} error={fieldErrors['owner.email']} required />
@@ -272,13 +220,13 @@ export default function ProviderApply() {
             error={fieldErrors['owner.password']}
             required
           />
-          <p className="text-xs leading-relaxed text-muted sm:col-span-2">
+          <p className="text-[11.5px] leading-relaxed text-ink/45 sm:col-span-2">
             Already have a CityCart account with this email? That address is already taken for services — use another
             one, or sign in to it first.
           </p>
-        </Section>
+        </FormSection>
 
-        <Section number={2} title="Your service">
+        <FormSection number={2} title="Your service" hint="How customers will find and understand what you do.">
           <Field
             label="Service name"
             id="displayName"
@@ -298,33 +246,24 @@ export default function ProviderApply() {
             error={fieldErrors['provider.legalName']}
             placeholder="Shown to CityCart admins only"
           />
-          <div>
-            <label htmlFor="categoryId" className={labelClass}>
-              Service category
-            </label>
-            <select
-              id="categoryId"
-              name="categoryId"
-              value={form.categoryId}
-              onChange={onChange}
-              className={`h-11 ${inputClass} ${fieldErrors['provider.categoryId'] ? 'border-clay' : ''}`}
-              required
-            >
-              <option value="">Choose a category</option>
-              {categories.map((c) => (
-                <option key={c._id} value={c._id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-            {fieldErrors['provider.categoryId'] ? (
-              <p className="mt-1.5 text-xs text-clay">{fieldErrors['provider.categoryId']}</p>
-            ) : categoriesError ? (
-              <p className="mt-1.5 text-xs text-clay">{categoriesError}</p>
-            ) : categories.length === 0 ? (
-              <p className="mt-1.5 text-xs text-muted">Services are not open yet. Contact CityCart support.</p>
-            ) : null}
-          </div>
+          <Field
+            as="select"
+            label="Service category"
+            id="categoryId"
+            name="categoryId"
+            value={form.categoryId}
+            onChange={onChange}
+            error={fieldErrors['provider.categoryId'] || categoriesError}
+            hint={categories.length === 0 && !categoriesError ? 'Services are not open yet. Contact CityCart support.' : undefined}
+            required
+          >
+            <option value="">Choose a category</option>
+            {categories.map((c) => (
+              <option key={c._id} value={c._id}>
+                {c.name}
+              </option>
+            ))}
+          </Field>
           <Field
             label="Starting price (Rs)"
             id="startingAtPrice"
@@ -340,80 +279,71 @@ export default function ProviderApply() {
             placeholder="e.g. 1500"
             required
           />
-          <div className="sm:col-span-2">
-            <label htmlFor="bio" className={labelClass}>
-              What you offer
-            </label>
-            <textarea
-              id="bio"
-              name="bio"
-              rows={4}
-              value={form.bio}
-              onChange={onChange}
-              placeholder="Describe your service, experience and what a customer should expect."
-              className={`${inputClass} py-3 ${fieldErrors['provider.bio'] ? 'border-clay' : ''}`}
-            />
-            {fieldErrors['provider.bio'] && <p className="mt-1.5 text-xs text-clay">{fieldErrors['provider.bio']}</p>}
-          </div>
-        </Section>
+          <Field
+            as="textarea"
+            label="What you offer"
+            id="bio"
+            name="bio"
+            rows={4}
+            className="sm:col-span-2"
+            value={form.bio}
+            onChange={onChange}
+            placeholder="Describe your service, experience and what a customer should expect."
+            error={fieldErrors['provider.bio']}
+          />
+        </FormSection>
 
-        <Section number={3} title="Your service area">
-          <div>
-            <label htmlFor="cityId" className={labelClass}>
-              City
-            </label>
-            <select id="cityId" name="cityId" value={cityId} onChange={onChange} className={`h-11 ${inputClass} ${fieldErrors['provider.cityId'] ? 'border-clay' : ''}`} required>
-              <option value="">Choose a city</option>
-              {cities.map((c) => (
-                <option key={c._id} value={c._id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-            {fieldErrors['provider.cityId'] ? (
-              <p className="mt-1.5 text-xs text-clay">{fieldErrors['provider.cityId']}</p>
-            ) : (
-              <p className="mt-1.5 text-xs text-muted">Your city cannot change later. Choose carefully.</p>
-            )}
-          </div>
-          <div>
-            <label htmlFor="blockId" className={labelClass}>
-              Area / block
-            </label>
-            <select
-              id="blockId"
-              name="blockId"
-              value={form.blockId}
-              onChange={onChange}
-              className={`h-11 ${inputClass} ${fieldErrors['provider.blockId'] ? 'border-clay' : ''}`}
-              required
-            >
-              <option value="">{cityId ? 'Choose the area you work in' : 'Choose a city first'}</option>
-              {blocks.map((b) => (
-                <option key={b._id} value={b._id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-            {fieldErrors['provider.blockId'] ? (
-              <p className="mt-1.5 text-xs text-clay">{fieldErrors['provider.blockId']}</p>
-            ) : blocksError ? (
-              <p className="mt-1.5 text-xs text-clay">{blocksError}</p>
-            ) : cityId && blocks.length === 0 ? (
-              <p className="mt-1.5 text-xs text-muted">No areas are set up in this city yet. Contact CityCart support.</p>
-            ) : (
-              <p className="mt-1.5 text-xs text-muted">The neighbourhood you will serve. Changeable once a month.</p>
-            )}
-          </div>
+        <FormSection number={3} title="Your service area" hint="Where you work. Customers only see the block until you accept a booking.">
+          <Field
+            as="select"
+            label="City"
+            id="cityId"
+            name="cityId"
+            value={cityId}
+            onChange={onChange}
+            error={fieldErrors['provider.cityId']}
+            hint="Your city cannot change later. Choose carefully."
+            required
+          >
+            <option value="">Choose a city</option>
+            {cities.map((c) => (
+              <option key={c._id} value={c._id}>
+                {c.name}
+              </option>
+            ))}
+          </Field>
+          <Field
+            as="select"
+            label="Area / block"
+            id="blockId"
+            name="blockId"
+            value={form.blockId}
+            onChange={onChange}
+            error={fieldErrors['provider.blockId'] || blocksError}
+            hint={
+              cityId && blocks.length === 0 && !blocksError
+                ? 'No areas are set up in this city yet. Contact CityCart support.'
+                : 'The neighbourhood you will serve. Changeable once a month.'
+            }
+            required
+          >
+            <option value="">{cityId ? 'Choose the area you work in' : 'Choose a city first'}</option>
+            {blocks.map((b) => (
+              <option key={b._id} value={b._id}>
+                {b.name}
+              </option>
+            ))}
+          </Field>
+
           <div className="sm:col-span-2">
-            <p className={labelClass}>Your pin on the map</p>
+            <p className={fieldLabel}>Your pin on the map</p>
             {form.blockId ? (
               <>
-                <p className="mb-2 text-[13px] text-muted">
+                <p className="mb-2 text-[12px] leading-relaxed text-ink/55">
                   {selectedBlock?.name} is highlighted. Tap inside it to place your pin. Customers only see your block
                   until you accept a booking.
                 </p>
-                <Suspense fallback={<Skeleton className="h-[300px] w-full rounded-lg" />}>
+                <Suspense fallback={<Skeleton className="h-[300px] w-full" />}>
                   <AreaMap
                     key={form.blockId}
                     zones={zones}
@@ -425,47 +355,43 @@ export default function ProviderApply() {
                   />
                 </Suspense>
                 {outside ? (
-                  <p className="mt-2 text-xs text-clay" aria-live="polite">
+                  <p className="mt-2 text-[11.5px] text-clay" aria-live="polite">
                     This pin is outside {selectedBlock.name}. Tap inside the highlighted outline.
                   </p>
                 ) : fieldErrors['provider.latitude'] ? (
-                  <p className="mt-2 text-xs text-clay">{fieldErrors['provider.latitude']}</p>
+                  <p className="mt-2 text-[11.5px] text-clay">{fieldErrors['provider.latitude']}</p>
                 ) : pin ? null : (
-                  <p className="mt-2 text-xs text-muted">Your pin is required.</p>
+                  <p className="mt-2 text-[11.5px] text-muted">Your pin is required.</p>
                 )}
               </>
             ) : (
-              <p className="rounded-md bg-paper px-3.5 py-3 text-[13px] text-muted">
+              <p className="rounded-tile border border-dashed border-line-warm bg-canvas px-4 py-3 text-[12.5px] text-ink/50">
                 Choose an area to place your pin on the map.
               </p>
             )}
           </div>
-          <div className="sm:col-span-2">
-            <label htmlFor="addressLine" className={labelClass}>
-              Address or landmark (optional)
-            </label>
-            <textarea
-              id="addressLine"
-              name="addressLine"
-              rows={2}
-              value={form.addressLine}
-              onChange={onChange}
-              placeholder="Street, landmark — shared only with customers who book you"
-              className={`${inputClass} py-3 ${fieldErrors['provider.addressLine'] ? 'border-clay' : ''}`}
-            />
-            {fieldErrors['provider.addressLine'] && <p className="mt-1.5 text-xs text-clay">{fieldErrors['provider.addressLine']}</p>}
-          </div>
-        </Section>
 
-        <div className="flex flex-wrap items-center gap-4 pt-2">
-          <button type="submit" disabled={submitting} className={`${btnPine} w-full sm:w-auto sm:min-w-64`}>
-            {submitting ? 'Submitting your application…' : 'Apply as a provider'}
-          </button>
-          <p className="text-xs text-muted">
-            By continuing you agree to CityCart&rsquo;s provider terms and the 1% monthly fee once you start earning.
-          </p>
-        </div>
+          <Field
+            as="textarea"
+            label="Address or landmark (optional)"
+            id="addressLine"
+            name="addressLine"
+            rows={2}
+            className="sm:col-span-2"
+            value={form.addressLine}
+            onChange={onChange}
+            placeholder="Street, landmark — shared only with customers who book you"
+            error={fieldErrors['provider.addressLine']}
+          />
+        </FormSection>
+
+        <SubmitRow
+          submitting={submitting}
+          note="By continuing you agree to CityCart’s provider terms and the 1% fee on completed bookings."
+        >
+          {submitting ? 'Submitting your application…' : 'Apply as a provider'}
+        </SubmitRow>
       </form>
-    </div>
+    </ApplyShell>
   )
 }

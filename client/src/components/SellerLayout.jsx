@@ -1,15 +1,43 @@
 import { useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
-import { ArrowUpRight, LayoutDashboard, LogIn, LogOut, Menu as MenuIcon, ShoppingBag, Store } from 'lucide-react'
+import {
+  ArrowUpRight,
+  LayoutDashboard,
+  LogIn,
+  LogOut,
+  Menu as MenuIcon,
+  ShoppingBag,
+  Store,
+  Wrench,
+} from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import Drawer from './ui/Drawer'
-import { btnPine, wrap } from '../ui'
+import { Button, shell } from '../design'
 import { homeFor } from '../utils/nav'
 
 const navLink = ({ isActive }) =>
-  `text-[13px] font-medium transition-colors ${
-    isActive ? 'text-pine' : 'text-ink/60 hover:text-ink'
+  `relative text-[13px] font-medium transition-colors ${
+    isActive ? 'text-ink' : 'text-ink/55 hover:text-ink'
   }`
+
+function FooterColumn({ title, children }) {
+  return (
+    <div>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-cream/40">{title}</p>
+      <ul className="mt-4 space-y-2.5">{children}</ul>
+    </div>
+  )
+}
+
+function FooterLink({ to, children }) {
+  return (
+    <li>
+      <Link to={to} className="text-[13px] text-cream/55 transition-colors hover:text-cream">
+        {children}
+      </Link>
+    </li>
+  )
+}
 
 export default function SellerLayout() {
   const { user, logout } = useAuth()
@@ -18,144 +46,163 @@ export default function SellerLayout() {
   const isSeller = user && user.role !== 'CUSTOMER'
   // The same shell serves the brand and provider doors; the copy follows the door.
   const services = pathname.startsWith('/provider') || pathname.startsWith('/sell/service')
+  const overview = pathname === '/sell'
+  const door = overview ? 'For sellers' : services ? 'For providers' : 'For brands'
+  // On an application form the main action points at the other door, which is
+  // the only useful next step while this form is already open.
+  const primary = pathname.startsWith('/provider/apply')
+    ? { to: '/sell/apply', label: 'Open your brand' }
+    : pathname.startsWith('/sell/apply')
+      ? { to: '/provider/apply', label: 'Offer a service' }
+      : { to: '/sell/apply', label: 'Open your brand' }
+  const login = services ? '/sell/service/login' : '/sell/login'
+
+  const closeMenu = () => setMobileOpen(false)
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-20 border-b border-line bg-white/95 backdrop-blur">
-        <div className={`${wrap} flex h-16 items-center justify-between gap-4`}>
-          <div className="flex items-center gap-2">
+    <div className="flex min-h-screen flex-col bg-canvas">
+      <header className="sticky top-0 z-40 border-b border-line-warm bg-paper-warm/90 backdrop-blur-md">
+        <div className={`${shell} flex h-16 items-center justify-between gap-4`}>
+          <div className="flex min-w-0 items-center gap-1">
             <button
               type="button"
-              aria-label="Open brand menu"
+              aria-label="Open seller menu"
               onClick={() => setMobileOpen(true)}
-              className="-ml-2 flex h-9 w-9 items-center justify-center rounded-md text-ink transition hover:bg-paper sm:hidden"
+              className="-ml-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-tile text-ink transition hover:bg-canvas lg:hidden"
             >
               <MenuIcon className="h-5 w-5" />
             </button>
-            <Link to="/sell" className="flex items-baseline gap-2 shrink-0">
-              <span className="text-[20px] font-semibold tracking-tight text-ink sm:text-[22px]">
-                citycart<span className="text-pine">.</span>
+            <Link
+              to="/sell"
+              aria-label="CityCart for sellers"
+              className="inline-flex min-w-0 items-baseline gap-2"
+            >
+              <span className="text-[22px] font-semibold tracking-tight text-ink">
+                CityCart<span className="text-clay">.</span>
               </span>
-              <span className="text-[10.5px] font-medium uppercase tracking-[0.18em] text-pine sm:text-[11px]">
-                {services ? 'for providers' : 'for brands'}
+              <span className="hidden rounded-full border border-line-warm bg-sand/60 px-2.5 py-1 text-[9.5px] font-semibold uppercase tracking-[0.16em] text-ink/55 sm:inline">
+                {door}
               </span>
             </Link>
           </div>
 
-          {/* Desktop Navigation */}
-          <nav className="hidden items-center gap-6 sm:flex">
-            <Link to="/" className="text-[13px] font-medium text-ink/60 transition hover:text-ink">
-              Shop CityCart
-            </Link>
-            {isSeller ? (
-              <>
-                <NavLink to={homeFor(user.role)} className={navLink}>
-                  Dashboard
-                </NavLink>
-                <button
-                  type="button"
-                  onClick={logout}
-                  className="inline-flex h-9 items-center rounded-md border border-line px-3.5 text-[12.5px] font-medium text-ink transition hover:border-ink"
-                >
-                  Sign out
-                </button>
-              </>
-            ) : (
-              <>
-                <NavLink to={services ? '/sell/service/login' : '/sell/login'} className={navLink}>
-                  {services ? 'Provider log in' : 'Brand log in'}
-                </NavLink>
-                <Link to={services ? '/provider/apply' : '/sell/apply'} className={`${btnPine} h-9 px-4 text-[12px]`}>
-                  {services ? 'Offer a service' : 'Open your brand'}
-                </Link>
-              </>
+          <nav aria-label="Seller" className="hidden items-center gap-7 lg:flex">
+            <NavLink to="/sell" end className={navLink}>
+              Overview
+            </NavLink>
+            <NavLink to="/sell/apply" className={navLink}>
+              Sell products
+            </NavLink>
+            <NavLink to="/provider/apply" className={navLink}>
+              Offer services
+            </NavLink>
+            {isSeller && (
+              <NavLink to={homeFor(user.role)} className={navLink}>
+                Dashboard
+              </NavLink>
             )}
           </nav>
 
-          {/* Mobile Quick Action */}
-          <div className="flex items-center gap-2 sm:hidden">
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Link
+              to="/"
+              className="mr-1 hidden items-center gap-1 text-[12.5px] font-medium text-ink/55 transition-colors hover:text-ink xl:flex"
+            >
+              Shop CityCart
+              <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </Link>
             {isSeller ? (
-              <Link
-                to={homeFor(user.role)}
-                className="inline-flex h-8 items-center rounded-md bg-pine px-3 text-[11.5px] font-medium uppercase tracking-wider text-white"
-              >
-                Dashboard
-              </Link>
-
+              <Button tone="outline" size="sm" onClick={logout} className="hidden sm:inline-flex">
+                Sign out
+              </Button>
             ) : (
               <Link
-                to={services ? '/provider/apply' : '/sell/apply'}
-                className="inline-flex h-8 items-center rounded-md bg-pine px-3 text-[11.5px] font-medium uppercase tracking-wider text-white"
+                to={login}
+                className="hidden rounded-tile px-3 py-2 text-[12.5px] font-medium text-ink/70 transition-colors hover:bg-canvas hover:text-ink sm:block"
               >
-                {services ? 'Offer service' : 'Open brand'}
+                {services ? 'Provider log in' : 'Brand log in'}
               </Link>
             )}
+            <Button
+              to={isSeller ? homeFor(user.role) : primary.to}
+              tone="noir"
+              size="sm"
+              className="max-w-[9.5rem] truncate px-3 text-[10.5px] sm:max-w-none sm:px-4 sm:text-[11px]"
+            >
+              {isSeller ? 'Dashboard' : primary.label}
+            </Button>
           </div>
         </div>
       </header>
 
-      {/* Mobile Drawer */}
-      <Drawer open={mobileOpen} onClose={() => setMobileOpen(false)} title={services ? 'Provider portal' : 'Brand portal'}>
-        <div className="space-y-4">
-          <div className="space-y-1">
-            <Link
-              to="/"
-              onClick={() => setMobileOpen(false)}
-              className="flex items-center gap-2.5 rounded-md px-3 py-2.5 text-[13.5px] font-medium text-ink/70 transition hover:bg-paper hover:text-ink"
-            >
-              <ShoppingBag className="h-4 w-4 text-muted" />
-              Shop CityCart Marketplace
-            </Link>
+      <Drawer open={mobileOpen} onClose={() => setMobileOpen(false)} title="Sell on CityCart">
+        <div className="space-y-5">
+          <nav aria-label="Seller mobile" className="space-y-1">
             <Link
               to="/sell"
-              onClick={() => setMobileOpen(false)}
-              className="flex items-center gap-2.5 rounded-md bg-cream/50 px-3 py-2.5 text-[13.5px] font-medium text-pine transition hover:bg-cream"
+              onClick={closeMenu}
+              className="flex items-center gap-2.5 rounded-tile px-3 py-2.5 text-[13.5px] font-medium text-ink transition hover:bg-canvas"
             >
-              <Store className="h-4 w-4 text-pine" />
-              Sell on CityCart (Overview)
+              <Store className="h-4 w-4 text-clay" aria-hidden="true" />
+              Seller overview
             </Link>
-          </div>
+            <Link
+              to="/sell/apply"
+              onClick={closeMenu}
+              className="flex items-center gap-2.5 rounded-tile px-3 py-2.5 text-[13.5px] font-medium text-ink transition hover:bg-canvas"
+            >
+              <ShoppingBag className="h-4 w-4 text-clay" aria-hidden="true" />
+              Sell products
+            </Link>
+            <Link
+              to="/provider/apply"
+              onClick={closeMenu}
+              className="flex items-center gap-2.5 rounded-tile px-3 py-2.5 text-[13.5px] font-medium text-ink transition hover:bg-canvas"
+            >
+              <Wrench className="h-4 w-4 text-clay" aria-hidden="true" />
+              Offer services
+            </Link>
+            <Link
+              to="/"
+              onClick={closeMenu}
+              className="flex items-center gap-2.5 rounded-tile px-3 py-2.5 text-[13.5px] font-medium text-ink transition hover:bg-canvas"
+            >
+              <ArrowUpRight className="h-4 w-4 text-clay" aria-hidden="true" />
+              Shop CityCart
+            </Link>
+          </nav>
 
-          <div className="border-t border-line pt-4 space-y-2">
+          <div className="space-y-2 border-t border-line-warm pt-5">
             {isSeller ? (
               <>
-                <Link
-                  to={homeFor(user.role)}
-                  onClick={() => setMobileOpen(false)}
-                  className="flex w-full items-center justify-center gap-2 rounded-md bg-pine px-4 py-2.5 text-[13px] font-medium uppercase tracking-wider text-white"
-                >
-                  <LayoutDashboard className="h-4 w-4" />
-                  Go to Dashboard
-                </Link>
+                <Button to={homeFor(user.role)} tone="noir" size="md" className="w-full" onClick={closeMenu}>
+                  <LayoutDashboard className="h-4 w-4" aria-hidden="true" />
+                  Go to dashboard
+                </Button>
                 <button
                   type="button"
                   onClick={() => {
                     setMobileOpen(false)
                     logout()
                   }}
-                  className="flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-left text-[13.5px] font-medium text-clay transition hover:bg-paper"
+                  className="flex w-full items-center justify-center gap-2 rounded-tile border border-line-warm px-4 py-2.5 text-[12.5px] font-semibold uppercase tracking-[0.1em] text-clay transition hover:bg-canvas"
                 >
-                  <LogOut className="h-4 w-4" />
+                  <LogOut className="h-4 w-4" aria-hidden="true" />
                   Sign out
                 </button>
               </>
             ) : (
               <>
-                <Link
-                  to={services ? '/provider/apply' : '/sell/apply'}
-                  onClick={() => setMobileOpen(false)}
-                  className="flex w-full items-center justify-center gap-2 rounded-md bg-pine px-4 py-2.5 text-[13px] font-medium uppercase tracking-wider text-white shadow-sm"
-                >
-                  {services ? 'Offer a service' : 'Open your brand'}
-                  <ArrowUpRight className="h-4 w-4" />
-                </Link>
-                <Link
-                  to={services ? '/sell/service/login' : '/sell/login'}
-                  onClick={() => setMobileOpen(false)}
-                  className="flex w-full items-center justify-center gap-2 rounded-md border border-line px-4 py-2.5 text-[13px] font-medium text-ink transition hover:bg-paper"
-                >
-                  <LogIn className="h-4 w-4 text-muted" />
+                <Button to={services ? '/sell/service/login' : '/sell/login'} tone="noir" size="md" className="w-full" onClick={closeMenu}>
+                  <LogIn className="h-4 w-4" aria-hidden="true" />
                   {services ? 'Provider log in' : 'Brand log in'}
+                </Button>
+                <Link
+                  to={services ? '/sell/login' : '/sell/service/login'}
+                  onClick={closeMenu}
+                  className="block rounded-tile border border-line-warm px-4 py-2.5 text-center text-[12.5px] font-semibold uppercase tracking-[0.1em] text-ink/70 transition hover:bg-canvas"
+                >
+                  {services ? 'Brand log in' : 'Provider log in'}
                 </Link>
               </>
             )}
@@ -164,7 +211,7 @@ export default function SellerLayout() {
       </Drawer>
 
       {user?.access?.restricted && (
-        <div className="bg-clay px-4 py-2 text-center text-sm text-white">
+        <div className="bg-clay px-4 py-2 text-center text-[12.5px] text-white">
           This brand has been terminated. The account is read-only until{' '}
           {new Date(user.access.expiresAt).toLocaleString()}.
         </div>
@@ -174,15 +221,43 @@ export default function SellerLayout() {
         <Outlet />
       </main>
 
-      <footer className="bg-pine text-white/75">
-        <div className={`${wrap} flex flex-wrap items-center justify-between gap-4 py-8 text-sm`}>
-          <p>
-            <span className="font-semibold text-white">
-              citycart<span className="opacity-60">.</span>
-            </span>{' '}
-            {services ? 'for providers' : 'for brands'}
-          </p>
-          <p className="text-white/50">© {new Date().getFullYear()} CityCart</p>
+      <footer className="bg-noir text-cream">
+        <div className={`${shell} py-12 sm:py-14`}>
+          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_1fr]">
+            <div>
+              <p className="text-[22px] font-semibold tracking-tight">
+                CityCart<span className="text-clay">.</span>
+              </p>
+              <p className="mt-3 max-w-xs text-[13px] leading-relaxed text-cream/50">
+                The block marketplace. Local stores, verified pros, cash at the door — all within 1.5 km.
+              </p>
+              <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.2em] text-cream/40">
+                For sellers
+              </p>
+            </div>
+            <FooterColumn title="Sell products">
+              <FooterLink to="/sell/apply">Open your store</FooterLink>
+              <FooterLink to="/sell/login">Brand log in</FooterLink>
+              <FooterLink to="/sell">How selling works</FooterLink>
+            </FooterColumn>
+            <FooterColumn title="Offer services">
+              <FooterLink to="/provider/apply">Apply as a provider</FooterLink>
+              <FooterLink to="/sell/service/login">Provider log in</FooterLink>
+              <FooterLink to="/services">Shop services</FooterLink>
+            </FooterColumn>
+            <FooterColumn title="CityCart">
+              <FooterLink to="/">Shop the marketplace</FooterLink>
+              <FooterLink to="/login">Customer sign in</FooterLink>
+              <FooterLink to="/register">Create an account</FooterLink>
+            </FooterColumn>
+          </div>
+          <div className="mt-11 flex flex-wrap items-center justify-between gap-3 border-t border-cream/10 pt-5 text-[11.5px] text-cream/40">
+            <p>© {new Date().getFullYear()} CityCart. All rights reserved.</p>
+            <Link to="/" className="inline-flex items-center gap-1.5 transition-colors hover:text-cream">
+              Shop CityCart
+              <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </Link>
+          </div>
         </div>
       </footer>
     </div>

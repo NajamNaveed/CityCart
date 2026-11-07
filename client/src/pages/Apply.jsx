@@ -1,38 +1,25 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { MailCheck } from 'lucide-react'
-import Field from '../components/Field'
-import ResendVerification from '../components/ResendVerification'
-import { Skeleton } from '../components/ui'
 import { useAuth } from '../hooks/useAuth'
 import { useCity } from '../hooks/useCity'
 import { useNameAvailability } from '../hooks/useNameAvailability'
 import api, { getErrorMessage, getFieldErrors } from '../services/api'
 import { insidePolygon, parseLatLng } from '../utils/geo'
-import { btnPine, inputClass, sectionLabel, wrap } from '../ui'
+import { Field, Skeleton, fieldLabel } from '../design'
+import { ApplySent, ApplyShell, FormSection, SubmitRow } from '../components/seller/ApplyShell'
 
 // Leaflet is downloaded only when the owner reaches the map in the form.
 const AreaMap = lazy(() => import('../components/nearby/AreaMap'))
 
-const labelClass = 'mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-muted'
-
-function Section({ number, title, children }) {
-  return (
-    <fieldset className="rounded-lg border border-line bg-white p-6">
-      <legend className="sr-only">{title}</legend>
-      <div className="flex items-baseline gap-3">
-        <span className="font-display text-lg font-semibold text-pine">0{number}</span>
-        <h2 className="text-[17px] font-semibold tracking-tight text-ink">{title}</h2>
-      </div>
-      <div className="mt-6 grid gap-5 sm:grid-cols-2">{children}</div>
-    </fieldset>
-  )
-}
+const POINTS = [
+  'One form creates your account, your brand and your first shop',
+  'Your shop goes live as soon as you verify your email',
+  '1% of completed sales, invoiced monthly',
+]
 
 // Turns the live name check into the hint line under a field.
 function availabilityHint(status, label) {
   if (status === 'checking') return 'Checking…'
-  if (status === 'available') return <span className="text-pine">{label} name is available</span>
+  if (status === 'available') return <span className="text-forest">{label} name is available</span>
   return null
 }
 
@@ -172,68 +159,34 @@ export default function Apply() {
 
   if (sentTo) {
     return (
-      <div className={`${wrap} grid gap-14 py-14 lg:grid-cols-[1fr_2fr] lg:py-20`}>
-        <aside className="lg:sticky lg:top-28 lg:h-fit">
-          <p className={sectionLabel}>Almost open</p>
-          <h1 className="font-display mt-4 text-4xl font-semibold leading-[1.1] tracking-tight text-ink">
-            Verify your email to go live.
-          </h1>
-          <p className="mt-5 text-[15px] leading-relaxed text-muted">
-            Your brand, account and first shop are created. Open the link we just emailed and your shop becomes visible
-            to nearby shoppers.
-          </p>
-        </aside>
-
-        <div className="rounded-lg border border-line bg-white p-6 sm:p-8">
-          <MailCheck className="h-10 w-10 text-pine" aria-hidden="true" />
-          <h2 className="font-display mt-4 text-[28px] font-semibold tracking-tight text-ink">Check your inbox</h2>
-          <p className="mt-1.5 text-sm leading-relaxed text-muted">
-            We sent a verification link to <span className="font-medium text-ink">{sentTo}</span>. It works once and
-            expires in 24 hours. You can sign in and open your dashboard after verifying.
-          </p>
-          <div className="mt-6 rounded-lg bg-paper px-4 py-3 text-[13px] leading-relaxed text-muted">
-            Your shop stays hidden from shoppers until then. If the email does not arrive within a few minutes, check
-            spam or send it again.
-          </div>
-          <ResendVerification email={sentTo} portal="brand" className="mt-5" />
-          <p className="mt-6 text-sm text-muted">
-            Already verified?{' '}
-            <Link to="/sell/login" className="font-medium text-pine underline-offset-4 hover:underline">
-              Log in to your dashboard
-            </Link>
-          </p>
-        </div>
-      </div>
+      <ApplySent
+        kicker="Almost open"
+        title="Verify your email to go live."
+        intro="Your brand, account and first shop are created. Open the link we just emailed and your shop becomes visible to nearby shoppers."
+        email={sentTo}
+        note="Your shop stays hidden from shoppers until then. If the email does not arrive within a few minutes, check spam or send it again."
+        portal="brand"
+        login={{ to: '/sell/login', label: 'Log in to your dashboard' }}
+      />
     )
   }
 
   return (
-    <div className={`${wrap} grid gap-14 py-14 lg:grid-cols-[1fr_2fr] lg:py-20`}>
-      <aside className="lg:sticky lg:top-28 lg:h-fit">
-        <p className={sectionLabel}>Open your brand</p>
-        <h1 className="font-display mt-4 text-4xl font-semibold leading-[1.1] tracking-tight text-ink">
-          Tell us about your brand.
-        </h1>
-        <p className="mt-5 text-[15px] leading-relaxed text-muted">
-          One form creates your owner account, your brand and your first shop. Confirm your email and the shop goes
-          live for nearby shoppers — no separate store setup.
-        </p>
-        <p className="mt-8 text-sm text-muted">
-          Already have a brand?{' '}
-          <Link to="/sell/login" className="font-medium text-pine underline-offset-4 hover:underline">
-            Log in
-          </Link>
-        </p>
-      </aside>
-
+    <ApplyShell
+      kicker="Open your brand"
+      title="Tell us about your brand."
+      intro="One form creates your owner account, your brand and your first shop. Confirm your email and the shop goes live for nearby shoppers — no separate store setup."
+      points={POINTS}
+      login={{ lead: 'Already have a brand?', to: '/sell/login', label: 'Log in' }}
+    >
       <form onSubmit={onSubmit} className="space-y-5" noValidate>
         {error && (
-          <p role="alert" className="rounded-md bg-clay/5 px-3.5 py-2.5 text-sm text-clay">
+          <p role="alert" className="rounded-tile border border-clay/30 bg-clay/5 px-4 py-3 text-[13px] text-clay">
             {error}
           </p>
         )}
 
-        <Section number={1} title="About you">
+        <FormSection number={1} title="About you" hint="The owner account and how we reach you.">
           <Field label="Your name" id="ownerName" name="ownerName" autoComplete="name" value={form.ownerName} onChange={onChange} error={fieldErrors['owner.name']} required />
           <Field label="Phone" id="ownerPhone" name="ownerPhone" type="tel" autoComplete="tel" placeholder="+92 300 1234567" value={form.ownerPhone} onChange={onChange} error={fieldErrors['owner.phone']} required />
           <Field label="Email" id="ownerEmail" name="ownerEmail" type="email" autoComplete="email" value={form.ownerEmail} onChange={onChange} error={fieldErrors['owner.email']} required />
@@ -249,9 +202,9 @@ export default function Apply() {
             error={fieldErrors['owner.password']}
             required
           />
-        </Section>
+        </FormSection>
 
-        <Section number={2} title="Your brand">
+        <FormSection number={2} title="Your brand" hint="What shoppers see on your brand page.">
           <Field
             label="Brand name"
             id="brandName"
@@ -262,43 +215,44 @@ export default function Apply() {
             hint={availabilityHint(brandStatus, 'Brand')}
             required
           />
-          <div>
-            <label htmlFor="cityId" className={labelClass}>
-              City
-            </label>
-            <select id="cityId" name="cityId" value={cityId} onChange={onChange} className={`h-11 ${inputClass} ${fieldErrors['brand.cityId'] ? 'border-clay' : ''}`} required>
-              <option value="">Choose a city</option>
-              {cities.map((c) => (
-                <option key={c._id} value={c._id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-            {fieldErrors['brand.cityId'] && <p className="mt-1.5 text-xs text-clay">{fieldErrors['brand.cityId']}</p>}
-          </div>
-          <div className="sm:col-span-2">
-            <label htmlFor="description" className={labelClass}>
-              What do you sell?
-            </label>
-            <textarea
-              id="description"
-              name="description"
-              rows={4}
-              value={form.description}
-              onChange={onChange}
-              placeholder="A few sentences customers will see on your brand page."
-              className={`${inputClass} py-3 ${fieldErrors['brand.description'] ? 'border-clay' : ''}`}
-              required
-            />
-            {fieldErrors['brand.description'] ? (
-              <p className="mt-1.5 text-xs text-clay">{fieldErrors['brand.description']}</p>
-            ) : (
-              <p className="mt-1.5 text-xs text-muted">At least 10 characters.</p>
-            )}
-          </div>
-        </Section>
+          <Field
+            as="select"
+            label="City"
+            id="cityId"
+            name="cityId"
+            value={cityId}
+            onChange={onChange}
+            error={fieldErrors['brand.cityId']}
+            required
+          >
+            <option value="">Choose a city</option>
+            {cities.map((c) => (
+              <option key={c._id} value={c._id}>
+                {c.name}
+              </option>
+            ))}
+          </Field>
+          <Field
+            as="textarea"
+            label="What do you sell?"
+            id="description"
+            name="description"
+            rows={4}
+            className="sm:col-span-2"
+            value={form.description}
+            onChange={onChange}
+            placeholder="A few sentences customers will see on your brand page."
+            error={fieldErrors['brand.description']}
+            hint="At least 10 characters."
+            required
+          />
+        </FormSection>
 
-        <Section number={3} title="Your first shop">
+        <FormSection
+          number={3}
+          title="Your first shop"
+          hint="The shop that receives orders, inside one block of your city."
+        >
           <Field
             label="Shop name"
             id="shopName"
@@ -309,44 +263,38 @@ export default function Apply() {
             placeholder="e.g. Main Bazaar shop"
             required
           />
-          <div>
-            <label htmlFor="blockId" className={labelClass}>
-              Area / block
-            </label>
-            <select
-              id="blockId"
-              name="blockId"
-              value={form.blockId}
-              onChange={onBlockChange}
-              className={`h-11 ${inputClass} ${fieldErrors['branch.blockId'] ? 'border-clay' : ''}`}
-              required
-            >
-              <option value="">{cityId ? 'Choose your shop’s area' : 'Choose a city first'}</option>
-              {blocks.map((b) => (
-                <option key={b._id} value={b._id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-            {fieldErrors['branch.blockId'] ? (
-              <p className="mt-1.5 text-xs text-clay">{fieldErrors['branch.blockId']}</p>
-            ) : blocksError ? (
-              <p className="mt-1.5 text-xs text-clay">{blocksError}</p>
-            ) : cityId && blocks.length === 0 ? (
-              <p className="mt-1.5 text-xs text-muted">No areas are set up in this city yet. Contact CityCart support.</p>
-            ) : (
-              <p className="mt-1.5 text-xs text-muted">The neighbourhood where shoppers will find your shop.</p>
-            )}
-          </div>
+          <Field
+            as="select"
+            label="Area / block"
+            id="blockId"
+            name="blockId"
+            value={form.blockId}
+            onChange={onBlockChange}
+            error={fieldErrors['branch.blockId'] || blocksError}
+            hint={
+              cityId && blocks.length === 0 && !blocksError
+                ? 'No areas are set up in this city yet. Contact CityCart support.'
+                : 'The neighbourhood where shoppers will find your shop.'
+            }
+            required
+          >
+            <option value="">{cityId ? 'Choose your shop’s area' : 'Choose a city first'}</option>
+            {blocks.map((b) => (
+              <option key={b._id} value={b._id}>
+                {b.name}
+              </option>
+            ))}
+          </Field>
+
           <div className="sm:col-span-2">
-            <p className={labelClass}>Shop location on the map</p>
+            <p className={fieldLabel}>Shop location on the map</p>
             {form.blockId ? (
               <>
-                <p className="mb-2 text-[13px] text-muted">
+                <p className="mb-2 text-[12px] leading-relaxed text-ink/55">
                   {selectedBlock?.name} is highlighted. Tap inside it to place your shop’s pin — the pin decides the
                   distances shoppers see.
                 </p>
-                <Suspense fallback={<Skeleton className="h-[300px] w-full rounded-lg" />}>
+                <Suspense fallback={<Skeleton className="h-[300px] w-full" />}>
                   <AreaMap
                     key={form.blockId}
                     zones={zones}
@@ -358,66 +306,67 @@ export default function Apply() {
                   />
                 </Suspense>
                 {outside ? (
-                  <p className="mt-2 text-xs text-clay" aria-live="polite">
+                  <p className="mt-2 text-[11.5px] text-clay" aria-live="polite">
                     This pin is outside {selectedBlock.name}. Tap inside the highlighted outline.
                   </p>
                 ) : fieldErrors['branch.latitude'] ? (
-                  <p className="mt-2 text-xs text-clay">{fieldErrors['branch.latitude']}</p>
+                  <p className="mt-2 text-[11.5px] text-clay">{fieldErrors['branch.latitude']}</p>
                 ) : pin ? null : (
-                  <p className="mt-2 text-xs text-muted">Optional — skip this and the middle of the area is used.</p>
+                  <p className="mt-2 text-[11.5px] text-muted">Optional — skip this and the middle of the area is used.</p>
                 )}
                 {/* A pin the owner cannot place — including one outside the area — can always be cleared. */}
                 {pin && (
                   <button
                     type="button"
                     onClick={() => setForm((f) => ({ ...f, coords: '' }))}
-                    className="mt-2 text-xs font-medium text-ink/70 transition hover:text-ink"
+                    className="mt-2 text-[11.5px] font-medium text-clay underline-offset-4 hover:underline"
                   >
                     Use the middle of {selectedBlock.name}
                   </button>
                 )}
               </>
             ) : (
-              <p className="rounded-md bg-paper px-3.5 py-3 text-[13px] text-muted">
+              <p className="rounded-tile border border-dashed border-line-warm bg-canvas px-4 py-3 text-[12.5px] text-ink/50">
                 Choose an area to pin your shop on the map.
               </p>
             )}
           </div>
-          <div className="sm:col-span-2">
-            <label htmlFor="shopAddress" className={labelClass}>
-              Street address (optional)
-            </label>
-            <textarea
-              id="shopAddress"
-              name="shopAddress"
-              rows={2}
-              value={form.shopAddress}
+
+          <Field
+            as="textarea"
+            label="Street address (optional)"
+            id="shopAddress"
+            name="shopAddress"
+            rows={2}
+            className="sm:col-span-2"
+            value={form.shopAddress}
+            onChange={onChange}
+            placeholder="Street, landmark — helps riders find you"
+            error={fieldErrors['branch.address']}
+          />
+
+          <label className="flex items-center gap-3 text-[13px] text-ink/70 sm:col-span-2">
+            <input
+              type="checkbox"
+              name="samePhone"
+              checked={form.samePhone}
               onChange={onChange}
-              placeholder="Street, landmark — helps riders find you"
-              className={`${inputClass} py-3 ${fieldErrors['branch.address'] ? 'border-clay' : ''}`}
+              className="size-4 rounded border-line-warm accent-[#1c3a2e]"
             />
-            {fieldErrors['branch.address'] && <p className="mt-1.5 text-xs text-clay">{fieldErrors['branch.address']}</p>}
-          </div>
-          <div className="sm:col-span-2">
-            <label className="flex items-center gap-3 text-sm">
-              <input type="checkbox" name="samePhone" checked={form.samePhone} onChange={onChange} className="size-4 accent-[#1e3a2f]" />
-              Use my phone number for the shop
-            </label>
-          </div>
+            Use my phone number for the shop
+          </label>
           {!form.samePhone && (
             <Field label="Shop phone" id="shopPhone" name="shopPhone" type="tel" value={form.shopPhone} onChange={onChange} error={fieldErrors['branch.phone']} />
           )}
-        </Section>
+        </FormSection>
 
-        <div className="flex flex-wrap items-center gap-4 pt-2">
-          <button type="submit" disabled={submitting} className={`${btnPine} w-full sm:w-auto sm:min-w-64`}>
-            {submitting ? 'Creating your shop…' : 'Open your brand'}
-          </button>
-          <p className="text-xs text-muted">
-            By continuing you agree to sell through CityCart and to deliver the orders you accept.
-          </p>
-        </div>
+        <SubmitRow
+          submitting={submitting}
+          note="By continuing you agree to sell through CityCart and to deliver the orders you accept."
+        >
+          {submitting ? 'Creating your shop…' : 'Open your brand'}
+        </SubmitRow>
       </form>
-    </div>
+    </ApplyShell>
   )
 }

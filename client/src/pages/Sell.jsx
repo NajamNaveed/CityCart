@@ -1,203 +1,555 @@
 import { Link } from 'react-router-dom'
-import { ArrowRight, ArrowUpRight, Banknote, PackageCheck, ShoppingBag, Store, Truck, Users } from 'lucide-react'
+import {
+  ArrowUpRight,
+  Banknote,
+  Check,
+  PackageCheck,
+  Percent,
+  ReceiptText,
+  ShoppingBag,
+  Store,
+  Truck,
+  Users,
+  Wrench,
+} from 'lucide-react'
 import { Reveal } from '../components/ui'
-import { btnCream, btnCreamOutline, btnPine, sectionLabel, wrap } from '../ui'
+import {
+  SectionHead,
+  accent,
+  body,
+  btn,
+  display,
+  eyebrow,
+  eyebrowOnDark,
+  lede,
+  shell as SHELL,
+  textLink,
+} from '../design'
+
+const TRUST = [
+  { icon: Percent, text: '1% per completed sale' },
+  { icon: ReceiptText, text: 'No listing or monthly fee' },
+  { icon: Banknote, text: 'Cash at the door — yours' },
+]
+
+const DOORS = [
+  {
+    id: 'products',
+    icon: Store,
+    eyebrow: 'For shops & studios',
+    title: 'Sell products',
+    text: 'A storefront for what you make or stock. Customers browse your shelf from their block and check out across several shops at once.',
+    points: [
+      'Your own brand page and storefront',
+      'Stock that is reserved the moment an order is placed',
+      'One order per brand — only yours arrives',
+      'Team accounts with per-person limits',
+    ],
+    cta: { to: '/sell/apply', label: 'Open your store' },
+    login: { to: '/sell/login', label: 'Brand log in' },
+    tone: 'light',
+  },
+  {
+    id: 'services',
+    icon: Wrench,
+    eyebrow: 'For plumbers, cleaners & pros',
+    title: 'Offer services',
+    text: 'A profile customers can book, one block at a time. They see your starting price, pick a slot and agree the details with you.',
+    points: [
+      'A public profile with your starting price',
+      'Bookings inside the block you work in',
+      'Proposals, chat and completion in one thread',
+      'Reviews from real, completed jobs',
+    ],
+    cta: { to: '/provider/apply', label: 'Apply as a provider' },
+    login: { to: '/sell/service/login', label: 'Provider log in' },
+    tone: 'dark',
+  },
+]
 
 const STEPS = [
-  ['Apply', 'Tell us about you, your brand and your first store. It is one form, and your store goes live as soon as you submit it.'],
-  ['Stock your shelves', 'Add products with prices and images, choose their category, and set how many you have in stock.'],
-  ['Fulfil orders', 'Accept an order, pack it, hand it to delivery. Customers pay in cash when it arrives.'],
+  [
+    'Apply once',
+    'One form creates your account and your first shop — or your service profile. Add the block you work from as you go.',
+  ],
+  [
+    'Set out your shelf',
+    'Add products with prices and photos, or list your services with a starting price. Stock is reserved at checkout, so nothing oversells.',
+  ],
+  [
+    'Get paid at the door',
+    'Accept the order or confirm the slot, then hand it over. Customers pay in cash — CityCart never holds your money.',
+  ],
 ]
 
 const FEATURES = [
-  { icon: Store, title: 'Your own storefront', text: 'Customers in your city find your brand page, browse your products and add them to your cart.' },
   { icon: PackageCheck, title: 'Stock that cannot oversell', text: 'Every order reserves stock the moment it is placed, so two customers can never buy the last item.' },
   { icon: ShoppingBag, title: 'Only your orders', text: 'When a customer shops several brands at once, each brand receives its own separate order. You only ever see yours.' },
   { icon: Users, title: 'A team with limits', text: 'Add employees and choose exactly what each one may do: products, stock, orders or deliveries.' },
   { icon: Truck, title: 'Delivery you can follow', text: 'Move an order from accepted to packed, shipped and delivered, with every step recorded.' },
-  { icon: Banknote, title: 'Cash on delivery, recorded', text: 'Payment is marked as received when the order is delivered, and refunds are tracked against it.' },
+]
+
+const ORDERS = [
+  { name: 'Ayesha Malik', item: 'Stoneware set ×2', total: 'PKR 2,900', when: 'just now' },
+  { name: 'Farah Khan', item: 'Mug ×1', total: 'PKR 1,450', when: '12 min' },
+  { name: 'Hamza R.', item: 'Vase ×1', total: 'PKR 3,200', when: '28 min' },
+]
+
+const STATS = [
+  ['1%', 'of each completed sale'],
+  ['PKR 0', 'to list or join'],
+  ['1.5 km', 'your whole market'],
 ]
 
 const FAQ = [
-  ['What do I need to apply?', 'Your name, email and phone number, a brand name and a short description of what you sell, your city, and the name, address and phone number of your first store.'],
-  ['How do customers pay?', 'Every order is paid at the door — in cash or through whatever the brand accepts. Nothing is charged online.'],
-  ['Can my staff sign in?', 'Yes. You create employee accounts from your dashboard and decide what each one can do. They sign in on the brand log in page.'],
-  ['Can I offer a service instead of a product?', 'Yes. Apply as a service provider with a starting price and the block you work in. Every application is reviewed before it appears to customers.'],
+  [
+    'What do I need to apply?',
+    'Your name, email and phone number, and a password. Shops add a brand name, a short description, their city and their first shop. Service providers add a service name, a category, a starting price and the block they work in.',
+  ],
+  [
+    'How do customers pay?',
+    'At the door. Orders are cash on delivery and service jobs are settled directly with the customer. CityCart does not hold your money or run an escrow.',
+  ],
+  [
+    'What does CityCart charge?',
+    '1% of each completed order or booking, invoiced monthly. There is no listing fee, no monthly fee and no ad spend.',
+  ],
+  [
+    'When do I appear to customers?',
+    'Shops go live as soon as the owner verifies their email. Service providers are reviewed by a CityCart admin first, then appear to customers in their block.',
+  ],
+  [
+    'Can my staff sign in?',
+    'Yes. You create employee accounts from your dashboard and choose what each one may do. They sign in on the brand log in page.',
+  ],
+  [
+    'Can I do both products and services?',
+    'They are separate accounts, because a shop and a service profile are different businesses. If you do both, apply with a different email for each one.',
+  ],
 ]
+
+function HeroOrderCard() {
+  return (
+    <div className="relative z-10 mx-4 -mt-16 rounded-card border border-line-warm bg-paper-warm p-4 shadow-[0_24px_60px_rgba(21,20,15,0.2)] sm:absolute sm:bottom-6 sm:left-6 sm:mx-0 sm:mt-0 sm:w-[264px]">
+      <div className="flex items-center justify-between gap-3">
+        <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
+          <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-sage ring-4 ring-sage/40" />
+          New order
+        </p>
+        <span className="text-[10.5px] text-muted">2 min ago</span>
+      </div>
+      <p className="font-display mt-2.5 text-[22px] font-semibold leading-none tracking-tight text-ink">PKR 2,900</p>
+      <p className="mt-1.5 text-[11.5px] text-muted">Ayesha Malik · stoneware set ×2</p>
+      <div className="mt-3 flex items-center justify-between border-t border-line-warm pt-2.5">
+        <span className="text-[10px] uppercase tracking-[0.14em] text-muted">Pay at door</span>
+        <span className="rounded-full bg-noir px-2.5 py-1 text-[9.5px] font-semibold uppercase tracking-[0.12em] text-cream">
+          Cash
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function DashboardMock() {
+  return (
+    <div className="relative">
+      <div className="overflow-hidden rounded-panel bg-noir p-5 text-cream shadow-[0_30px_70px_rgba(21,20,15,0.25)] sm:p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-cream/40">This month</p>
+            <p className="font-display mt-2 text-[30px] font-semibold leading-none tracking-tight sm:text-[34px]">
+              PKR 184,500
+            </p>
+            <p className="mt-2 text-[11.5px] text-cream/50">Clay House Studio</p>
+          </div>
+          <span className="rounded-full bg-sage/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-sage">
+            +18%
+          </span>
+        </div>
+
+        <div className="mt-5 border-t border-cream/10 pt-4">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-cream/40">Today’s orders</p>
+            <p className="text-[10.5px] text-cream/35">3 new</p>
+          </div>
+          <ul className="mt-3 space-y-3">
+            {ORDERS.map((order) => (
+              <li key={order.name} className="flex items-baseline justify-between gap-3">
+                <span className="min-w-0">
+                  <span className="block truncate text-[12.5px] font-medium text-cream">{order.name}</span>
+                  <span className="block truncate text-[10.5px] text-cream/45">{order.item}</span>
+                </span>
+                <span className="shrink-0 text-right">
+                  <span className="block text-[12px] font-semibold tabular-nums text-cream/90">{order.total}</span>
+                  <span className="block text-[10px] text-cream/35">{order.when}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="mt-4 flex items-center justify-between rounded-tile bg-cream/5 px-3 py-2.5">
+          <span className="text-[10px] uppercase tracking-[0.14em] text-cream/45">Paid at door</span>
+          <span className="text-[11px] font-medium text-cream/75">PKR 7,550 today</span>
+        </div>
+      </div>
+      <div className="absolute -bottom-5 -right-3 hidden rotate-[2deg] rounded-tile border border-line-warm bg-paper-warm px-4 py-3 shadow-[0_18px_40px_rgba(21,20,15,0.16)] sm:block">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">Billing</p>
+        <p className="mt-1 text-[12px] font-medium text-ink">1% · invoiced monthly</p>
+      </div>
+    </div>
+  )
+}
+
+function DoorCard({ door, index }) {
+  const Icon = door.icon
+  const dark = door.tone === 'dark'
+  return (
+    <Reveal delay={index * 0.08} className="h-full">
+      <article
+        className={`relative flex h-full flex-col overflow-hidden rounded-panel p-6 sm:p-8 ${
+          dark ? 'bg-forest-deep text-cream' : 'border border-line-warm bg-paper-warm'
+        }`}
+      >
+        {dark && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-sage/10 blur-3xl"
+          />
+        )}
+        <div className="relative flex items-start justify-between gap-4">
+          <span
+            className={`flex h-11 w-11 items-center justify-center rounded-tile ${
+              dark ? 'border border-cream/15 bg-cream/5 text-cream' : 'bg-sand text-clay'
+            }`}
+          >
+            <Icon className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <span
+            className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${dark ? 'text-cream/40' : 'text-ink/40'}`}
+          >
+            {door.eyebrow}
+          </span>
+        </div>
+
+        <h3 className="font-display relative mt-6 text-[30px] font-semibold leading-none tracking-tight sm:text-[34px]">
+          {door.title}
+        </h3>
+        <p className={`relative mt-3 max-w-sm text-[13px] leading-relaxed ${dark ? 'text-cream/60' : 'text-ink/60'}`}>
+          {door.text}
+        </p>
+
+        <ul className="relative mt-6 space-y-2.5">
+          {door.points.map((point) => (
+            <li key={point} className="flex items-start gap-2.5 text-[12.5px] leading-relaxed">
+              <span
+                className={`mt-0.5 flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full ${
+                  dark ? 'bg-cream/10 text-cream' : 'bg-sage text-forest'
+                }`}
+              >
+                <Check className="h-3 w-3" strokeWidth={2.5} aria-hidden="true" />
+              </span>
+              <span className={dark ? 'text-cream/75' : 'text-ink/70'}>{point}</span>
+            </li>
+          ))}
+        </ul>
+
+        <div className="relative mt-auto flex flex-wrap items-center gap-x-5 gap-y-3 pt-8">
+          <Link to={door.cta.to} className={btn(dark ? 'cream' : 'noir', 'md')}>
+            {door.cta.label}
+            <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+          </Link>
+          <Link
+            to={door.login.to}
+            className={`text-[12px] font-medium underline-offset-4 transition hover:underline ${
+              dark ? 'text-cream/55 hover:text-cream' : 'text-ink/50 hover:text-ink'
+            }`}
+          >
+            {door.login.label}
+          </Link>
+        </div>
+      </article>
+    </Reveal>
+  )
+}
 
 export default function Sell() {
   return (
     <>
       {/* Hero */}
-      <section className="relative overflow-hidden bg-ink text-white">
+      <section className="relative overflow-hidden border-b border-line-warm bg-canvas" aria-labelledby="sell-title">
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -right-24 top-0 h-96 w-96 rounded-full bg-pine/60 blur-3xl"
+          className="pointer-events-none absolute -left-48 -top-48 h-[520px] w-[520px] rounded-full bg-[#fdf6ea] blur-3xl"
         />
-        <div className={`${wrap} relative grid items-end gap-12 py-20 lg:grid-cols-[1.4fr_1fr] lg:py-28`}>
-          <Reveal>
-            <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/50">Sell on CityCart</p>
-            <h1 className="font-display mt-5 text-[42px] font-semibold leading-[1.06] tracking-tight sm:text-6xl">
-              Open your brand
-              <br />
-              in your city&rsquo;s
-              <br />
-              <span className="text-cream/85">marketplace.</span>
+
+        <div className="relative mx-auto grid w-full max-w-[1200px] items-center gap-12 px-5 pb-16 pt-10 sm:pt-14 lg:grid-cols-[1.04fr_0.96fr] lg:gap-16 lg:pb-20 lg:pt-16">
+          <div className="relative z-10 min-w-0">
+            <p className={eyebrow}>Sell on CityCart</p>
+            <h1
+              id="sell-title"
+              className="font-display mt-5 text-[42px] font-semibold leading-[0.96] tracking-[-0.035em] text-ink sm:text-[58px] lg:text-[66px]"
+            >
+              Your street already trusts you.{' '}
+              <em className="font-normal italic text-clay">Let the block find you.</em>
             </h1>
-            <p className="mt-6 max-w-xl text-[16.5px] leading-relaxed text-white/70">
-              Give your products a storefront, reach shoppers who already browse local brands, and run orders, stock
-              and your team from one place.
+
+            <p className="mt-6 max-w-[46ch] text-[15px] leading-relaxed text-ink/65 sm:text-[16px]">
+              Start a storefront or a service profile with one form. The customers are already shopping within{' '}
+              <strong className="whitespace-nowrap font-semibold text-ink">1.5 km</strong> — and they pay in cash when
+              the order reaches their door.
             </p>
-            <div className="mt-9 flex flex-wrap gap-3">
-              <Link to="/sell/apply" className={btnCream}>
-                Open your brand
+
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link to="/sell/apply" className={btn('noir', 'lg')}>
+                Open your store
                 <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
               </Link>
-              <a href="#how" className={btnCreamOutline}>
-                See how it works
-              </a>
+              <Link to="/provider/apply" className={btn('outline', 'lg')}>
+                Offer a service
+              </Link>
             </div>
-          </Reveal>
-          <Reveal delay={0.15}>
-            <dl className="grid grid-cols-1 gap-px overflow-hidden rounded-lg bg-white/15 text-sm">
-              {[
-                ['Setup', 'One form, live on submit'],
-                ['Payments', 'Cash on delivery'],
-                ['Orders', 'One order per brand'],
-              ].map(([k, v]) => (
-                <div key={k} className="flex items-baseline justify-between gap-6 bg-ink/95 px-5 py-4">
-                  <dt className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/50">{k}</dt>
-                  <dd className="text-right text-[15px] font-medium text-white">{v}</dd>
-                </div>
+
+            <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2.5">
+              {TRUST.map(({ icon: Icon, text }) => (
+                <li key={text} className="flex items-center gap-2 text-[12.5px] font-medium text-ink/60">
+                  <Icon className="h-4 w-4 text-clay" aria-hidden="true" />
+                  {text}
+                </li>
               ))}
-            </dl>
-          </Reveal>
+            </ul>
+          </div>
+
+          <div className="relative mx-auto w-full min-w-0 max-w-[560px] lg:max-w-none">
+            <div className="relative aspect-[4/3] overflow-hidden rounded-panel bg-sand sm:aspect-[16/11]">
+              <img
+                src="/images/hero-handoff.jpg"
+                alt="A delivery rider handing a paper bag of fresh groceries to a customer at her door"
+                width="640"
+                height="800"
+                fetchPriority="high"
+                className="h-full w-full object-cover"
+              />
+              <span className="absolute right-4 top-4 rounded-full bg-cream/90 px-3 py-1.5 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-noir backdrop-blur-sm">
+                Your counter, on their street
+              </span>
+            </div>
+            <HeroOrderCard />
+          </div>
+        </div>
+
+        <div className="relative border-t border-line-warm bg-cream/70">
+          <dl className={`${SHELL} grid grid-cols-3 divide-x divide-line-warm`}>
+            {STATS.map(([value, label]) => (
+              <div key={label} className="px-3 py-5 text-center sm:px-6 sm:py-6">
+                <dt className="sr-only">{label}</dt>
+                <dd>
+                  <span className="font-display block text-[24px] font-semibold leading-none tracking-tight text-ink sm:text-[30px]">
+                    {value}
+                  </span>
+                  <span className="mt-1.5 block text-[10px] font-medium uppercase tracking-[0.12em] text-ink/45 sm:text-[10.5px]">
+                    {label}
+                  </span>
+                </dd>
+              </div>
+            ))}
+          </dl>
         </div>
       </section>
 
-      {/* How it works */}
-      <section id="how" className={`${wrap} scroll-mt-24 py-20`}>
-        <Reveal>
-          <p className={sectionLabel}>How it works</p>
-          <h2 className="font-display mt-3 max-w-2xl text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-            From application to first order in three steps.
-          </h2>
-        </Reveal>
-        <div className="mt-12 grid gap-4 md:grid-cols-3">
-          {STEPS.map(([title, text], i) => (
-            <Reveal key={title} delay={i * 0.08} className="h-full">
-              <div className="h-full rounded-lg border border-line bg-white p-7">
-                <span className="font-display text-5xl font-light text-pine/30">0{i + 1}</span>
-                <h3 className="mt-6 text-[16px] font-semibold text-ink">{title}</h3>
-                <p className="mt-2 text-[13.5px] leading-relaxed text-muted">{text}</p>
-              </div>
-            </Reveal>
+      {/* Two doors */}
+      <section id="doors" className={`${SHELL} scroll-mt-24 py-14 sm:py-20`} aria-labelledby="doors-heading">
+        <SectionHead
+          id="doors-heading"
+          index="01"
+          eyebrow="Two ways to sell"
+          title="A storefront, or a service profile."
+          accent="Same block."
+          lede="Pick the door that matches what you do. Each one has its own application, its own dashboard and its own kind of customer."
+        />
+        <div className="grid gap-5 lg:grid-cols-2">
+          {DOORS.map((door, index) => (
+            <DoorCard key={door.id} door={door} index={index} />
           ))}
         </div>
       </section>
 
-      {/* Features */}
-      <section className="mt-6 border-y border-line bg-sand/60">
-        <div className={`${wrap} py-20`}>
-          <Reveal>
-            <p className={sectionLabel}>What you get</p>
-            <h2 className="font-display mt-3 max-w-2xl text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-              The tools to run a brand, without the busywork.
-            </h2>
-          </Reveal>
-          <div className="mt-12 grid gap-x-10 gap-y-10 md:grid-cols-2 lg:grid-cols-3">
-            {FEATURES.map(({ icon: Icon, title, text }, i) => (
-              <Reveal key={title} delay={Math.min(i, 5) * 0.06}>
-                <div className="flex h-10 w-10 items-center justify-center rounded-md bg-white text-pine shadow-sm shadow-ink/5">
-                  <Icon className="h-5 w-5" aria-hidden="true" />
+      {/* How it works */}
+      <section className="border-y border-line-warm bg-cream" aria-labelledby="steps-heading">
+        <div className={`${SHELL} py-14 sm:py-20`}>
+          <SectionHead
+            id="steps-heading"
+            index="02"
+            eyebrow="How it works"
+            title="From application to first order."
+            lede="Three steps, whether you are putting a shelf online or taking bookings for the first time."
+          />
+          <div className="grid gap-4 md:grid-cols-3">
+            {STEPS.map(([title, text], index) => (
+              <Reveal key={title} delay={index * 0.08} className="h-full">
+                <div className="h-full rounded-card border border-line-warm bg-paper-warm p-6">
+                  <span className="font-display block text-[44px] font-light leading-none text-clay/30">
+                    0{index + 1}
+                  </span>
+                  <h3 className="mt-5 text-[15px] font-semibold text-ink">{title}</h3>
+                  <p className={`mt-2 ${body}`}>{text}</p>
                 </div>
-                <h3 className="mt-4 text-[15.5px] font-semibold text-ink">{title}</h3>
-                <p className="mt-2 text-[13.5px] leading-relaxed text-muted">{text}</p>
               </Reveal>
             ))}
+          </div>
+          <div className="mt-5 grid gap-3 rounded-card border border-dashed border-line-warm bg-paper-warm/60 px-5 py-4 text-[12px] leading-relaxed text-ink/55 sm:grid-cols-2 sm:gap-8">
+            <p>
+              <span className="font-semibold text-ink/75">Shops:</span> live as soon as you verify your email.
+            </p>
+            <p>
+              <span className="font-semibold text-ink/75">Providers:</span> reviewed by a CityCart admin before
+              customers see the profile.
+            </p>
           </div>
         </div>
       </section>
 
-      {/* Services */}
-      <section className={`${wrap} py-20`}>
-        <Reveal>
-          <div className="grid items-center gap-10 rounded-2xl border border-line bg-white p-8 sm:p-12 lg:grid-cols-[1.1fr_1fr]">
-            <div>
-              <p className={sectionLabel}>Services on CityCart</p>
-              <h2 className="font-display mt-3 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-                Run a service business, not a shop?
-              </h2>
-              <p className="mt-4 max-w-lg text-[14.5px] leading-relaxed text-muted">
-                Cleaning, plumbing, electrical work, repairs and more. List a starting price, work from one block, and
-                agree every job with the customer directly.
-              </p>
-              <div className="mt-7 flex flex-wrap gap-3">
-                <Link to="/provider/apply" className={btnPine}>
-                  Apply as a provider
-                </Link>
-                <Link
-                  to="/sell/service/login"
-                  className="inline-flex h-11 items-center justify-center rounded-md border border-line px-6 text-[13px] font-medium text-ink transition hover:border-ink"
-                >
-                  Provider log in
-                </Link>
-              </div>
-            </div>
-            <dl className="grid gap-px overflow-hidden rounded-lg border border-line bg-line text-sm">
-              {[
-                ['Fee', '1% monthly, billed after you earn'],
-                ['Area', 'One block in your city'],
-                ['Payment', 'Agreed with each customer'],
-              ].map(([k, v]) => (
-                <div key={k} className="flex items-baseline justify-between gap-6 bg-white px-5 py-4">
-                  <dt className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted">{k}</dt>
-                  <dd className="text-right text-[14.5px] font-medium text-ink">{v}</dd>
-                </div>
+      {/* Dashboard */}
+      <section className={`${SHELL} py-14 sm:py-20`} aria-labelledby="dashboard-heading">
+        <div className="grid items-center gap-10 lg:grid-cols-[1fr_1.05fr] lg:gap-16">
+          <Reveal className="min-w-0">
+            <p className={eyebrow}>
+              <span className="text-clay">03</span>
+              <span aria-hidden="true" className="mx-2.5 inline-block h-px w-6 bg-line-warm align-middle" />
+              Your counter
+            </p>
+            <h2 id="dashboard-heading" className={`${display.md} mt-3`}>
+              Orders, stock and payouts <em className={accent}>in one place.</em>
+            </h2>
+            <p className={`mt-4 max-w-lg ${lede}`}>
+              The dashboard is built around the work you actually do: a new order, a shelf to top up, a rider to meet,
+              a bill that arrives once a month.
+            </p>
+            <ul className="mt-8 grid gap-x-8 gap-y-6 sm:grid-cols-2">
+              {FEATURES.map(({ icon: Icon, title, text }) => (
+                <li key={title}>
+                  <span className="flex h-9 w-9 items-center justify-center rounded-tile bg-sand text-clay">
+                    <Icon className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                  <h3 className="mt-3 text-[13.5px] font-semibold text-ink">{title}</h3>
+                  <p className="mt-1.5 text-[12px] leading-relaxed text-ink/60">{text}</p>
+                </li>
               ))}
+            </ul>
+            <Link to="/sell/apply" className={`${textLink} mt-8 inline-flex items-center gap-1.5 text-[12.5px]`}>
+              Open your store
+              <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </Link>
+          </Reveal>
+          <Reveal delay={0.1} className="min-w-0">
+            <DashboardMock />
+          </Reveal>
+        </div>
+      </section>
+
+      {/* Pricing */}
+      <section className={`${SHELL} pb-14 sm:pb-20`} aria-labelledby="pricing-heading">
+        <div className="rounded-panel border border-line-warm bg-paper-warm p-6 sm:p-10">
+          <div className="grid gap-8 lg:grid-cols-[1fr_1.3fr] lg:gap-14">
+            <div>
+              <p className={eyebrow}>Simple pricing</p>
+              <h2 id="pricing-heading" className={`${display.md} mt-3`}>
+                One percent. <em className={accent}>That’s the whole bill.</em>
+              </h2>
+              <p className={`mt-4 max-w-sm ${lede}`}>
+                No listing fee, no monthly fee, no ad spend. You pay a share of the orders and bookings you actually
+                complete.
+              </p>
+            </div>
+            <dl className="grid gap-6 sm:grid-cols-3 sm:gap-4">
+              <div className="rounded-card bg-sand/50 px-5 py-6">
+                <dt className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink/45">Per sale</dt>
+                <dd className="font-display mt-2 text-[34px] font-semibold leading-none tracking-tight text-ink">1%</dd>
+                <dd className="mt-2 text-[11.5px] leading-relaxed text-ink/55">
+                  Of each completed order or booking.
+                </dd>
+              </div>
+              <div className="rounded-card border border-line-warm px-5 py-6">
+                <dt className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink/45">To list</dt>
+                <dd className="font-display mt-2 text-[34px] font-semibold leading-none tracking-tight text-ink">
+                  PKR 0
+                </dd>
+                <dd className="mt-2 text-[11.5px] leading-relaxed text-ink/55">
+                  You only pay once you have sold.
+                </dd>
+              </div>
+              <div className="rounded-card border border-line-warm px-5 py-6">
+                <dt className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink/45">Monthly</dt>
+                <dd className="font-display mt-2 text-[34px] font-semibold leading-none tracking-tight text-ink">
+                  PKR 0
+                </dd>
+                <dd className="mt-2 text-[11.5px] leading-relaxed text-ink/55">
+                  No subscription, no ad spend.
+                </dd>
+              </div>
             </dl>
           </div>
-        </Reveal>
+          <p className="mt-8 border-t border-dashed border-line-warm pt-5 text-[11.5px] leading-relaxed text-muted">
+            Bills are issued monthly and due within 7 days. Cash stays with you — CityCart never holds customer money.
+          </p>
+        </div>
       </section>
 
       {/* FAQ */}
-      <section className={`${wrap} grid gap-12 py-20 lg:grid-cols-[1fr_1.5fr]`}>
-        <Reveal>
-          <p className={sectionLabel}>Questions</p>
-          <h2 className="font-display mt-3 text-3xl font-semibold tracking-tight text-ink">Before you apply</h2>
-        </Reveal>
-        <Reveal delay={0.1}>
-          <dl className="divide-y divide-line rounded-lg border border-line bg-white px-6">
-            {FAQ.map(([q, a]) => (
-              <div key={q} className="py-6">
-                <dt className="text-[15.5px] font-semibold text-ink">{q}</dt>
-                <dd className="mt-2 text-[13.5px] leading-relaxed text-muted">{a}</dd>
+      <section className={`${SHELL} pb-16 sm:pb-24`} aria-labelledby="faq-heading">
+        <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:gap-16">
+          <div>
+            <p className={eyebrow}>Questions</p>
+            <h2 id="faq-heading" className={`${display.md} mt-3`}>
+              Before you apply.
+            </h2>
+            <p className={`mt-4 max-w-sm ${lede}`}>
+              Everything you need to know before the form. If something is still unclear, ask us first — the form takes
+              one sitting.
+            </p>
+            <Link to="/sell/apply" className={`${btn('noir', 'md')} mt-7`}>
+              Open your store
+              <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </Link>
+          </div>
+          <dl className="divide-y divide-line-warm border-y border-line-warm">
+            {FAQ.map(([question, answer]) => (
+              <div key={question} className="py-4 sm:py-5">
+                <dt className="text-[14px] font-semibold text-ink">{question}</dt>
+                <dd className={`mt-2 ${body}`}>{answer}</dd>
               </div>
             ))}
           </dl>
-        </Reveal>
+        </div>
       </section>
 
-      {/* Closing band */}
-      <section className={`${wrap} pb-4`}>
+      {/* Closing */}
+      <section className={`${SHELL} pb-16 sm:pb-20`}>
         <Reveal>
-          <div className="relative overflow-hidden rounded-2xl bg-pine px-6 py-16 text-center text-white sm:px-14">
-            <div aria-hidden="true" className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-cream/10 blur-3xl" />
-            <div aria-hidden="true" className="pointer-events-none absolute -bottom-28 -right-20 h-80 w-80 rounded-full bg-black/20 blur-3xl" />
+          <div className="relative overflow-hidden rounded-panel bg-noir px-6 py-14 text-center text-cream sm:px-14 sm:py-16">
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-clay/25 blur-3xl"
+            />
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute -bottom-28 -right-20 h-80 w-80 rounded-full bg-cream/10 blur-3xl"
+            />
             <div className="relative">
-              <h2 className="font-display mx-auto max-w-2xl text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">
-                Your customers are already shopping local.
+              <p className={eyebrowOnDark}>Sell on CityCart</p>
+              <h2 className="font-display mx-auto mt-4 max-w-2xl text-[30px] font-semibold leading-[1.02] tracking-tight sm:text-[42px]">
+                Your block is already shopping.
               </h2>
-              <p className="mx-auto mt-4 max-w-lg text-[15px] text-white/70">
-                One form is all it takes to put your brand in front of them.
+              <p className="mx-auto mt-4 max-w-lg text-[13.5px] leading-relaxed text-cream/60">
+                One form puts your shop — or your service — in front of them.
               </p>
               <div className="mt-8 flex flex-wrap justify-center gap-3">
-                <Link to="/sell/apply" className={btnCream}>
-                  Open your brand
+                <Link to="/sell/apply" className={btn('cream', 'lg')}>
+                  Open your store
+                  <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
                 </Link>
-                <Link to="/sell/login" className={btnCreamOutline}>
-                  Brand log in
-                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                <Link to="/provider/apply" className={btn('outlineLight', 'lg')}>
+                  Offer a service
                 </Link>
               </div>
             </div>
