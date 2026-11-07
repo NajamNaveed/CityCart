@@ -14,11 +14,11 @@ export default function StoreFooter() {
   }
 
   return (
-    <footer className="mt-24 bg-ink text-white">
+    <footer className="mt-20 bg-noir text-white">
       <div className={`${wrap} grid gap-12 py-16 md:grid-cols-[1.5fr_1fr_1fr_1.3fr]`}>
         <div>
-          <p className="text-[24px] font-semibold tracking-tight">
-            citycart<span className="text-clay">.</span>
+          <p className="font-display text-[26px] font-semibold tracking-[-0.02em]">
+            CityCart<span className="text-clay">.</span>
           </p>
           <p className="mt-4 max-w-xs text-[13.5px] leading-relaxed text-white/60">
             A marketplace for local brands. Shop by city, fill one cart from several of them, and pay when your
@@ -93,7 +93,7 @@ export default function StoreFooter() {
           </p>
           <Link
             to="/sell"
-            className="mt-5 inline-flex h-10 items-center gap-1.5 rounded-md bg-cream px-5 text-[12.5px] font-medium uppercase tracking-[0.08em] text-ink transition hover:bg-white"
+            className="mt-5 inline-flex h-10 items-center gap-1.5 rounded-tile bg-cream px-5 text-[12.5px] font-medium uppercase tracking-[0.08em] text-noir transition hover:bg-white"
           >
             Start selling
             <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />

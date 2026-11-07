@@ -50,7 +50,7 @@ function SearchForm({ className = '', autoFocus = false, onSubmitted }) {
           type="search"
           autoFocus={autoFocus}
           placeholder="Search products…"
-          className="h-9.5 w-full rounded-md border border-line bg-paper pl-9 pr-3.5 text-[13px] text-ink placeholder-muted/50 outline-none transition focus:border-ink focus:bg-white focus:ring-2 focus:ring-ink/10"
+          className="h-9.5 w-full rounded-tile border border-line-warm bg-canvas pl-9 pr-3.5 text-[13px] text-ink placeholder-muted/50 outline-none transition focus:border-ink focus:bg-white focus:ring-2 focus:ring-ink/10"
         />
       </div>
     </form>
@@ -63,7 +63,7 @@ function CartLink() {
     <Link
       to="/cart"
       aria-label={`Cart${itemCount > 0 ? ` (${itemCount} items)` : ''}`}
-      className="relative flex h-9 w-9 items-center justify-center rounded-md text-ink transition hover:bg-paper"
+      className="relative flex h-9 w-9 items-center justify-center rounded-md text-ink transition hover:bg-canvas"
     >
       <ShoppingBag className="h-[18px] w-[18px]" aria-hidden="true" />
       {itemCount > 0 && (
@@ -80,7 +80,7 @@ function OrdersLink() {
     <Link
       to="/orders"
       aria-label="My orders"
-      className="flex h-9 w-9 items-center justify-center rounded-md text-ink transition hover:bg-paper"
+      className="flex h-9 w-9 items-center justify-center rounded-md text-ink transition hover:bg-canvas"
     >
       <Package className="h-[18px] w-[18px]" aria-hidden="true" />
     </Link>
@@ -93,7 +93,7 @@ function MessagesLink() {
     <Link
       to="/chat"
       aria-label={unread > 0 ? `Messages, ${unread} unread` : 'Messages'}
-      className="relative flex h-9 w-9 items-center justify-center rounded-md text-ink transition hover:bg-paper"
+      className="relative flex h-9 w-9 items-center justify-center rounded-md text-ink transition hover:bg-canvas"
     >
       <MessageCircle className="h-[18px] w-[18px]" aria-hidden="true" />
       {unread > 0 && (
@@ -110,7 +110,7 @@ function MenuLink({ to, icon: Icon, children, onClick }) {
     <NavLink
       to={to}
       onClick={onClick}
-      className="flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-ink transition hover:bg-paper"
+      className="flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-ink transition hover:bg-canvas"
     >
       <Icon className="h-4 w-4 text-muted" aria-hidden="true" />
       {children}
@@ -127,7 +127,7 @@ function AccountMenu({ user, logout }) {
           type="button"
           onClick={toggle}
           aria-expanded={open}
-          className="flex items-center gap-2 rounded-md py-1 pl-1 pr-2 transition hover:bg-paper"
+          className="flex items-center gap-2 rounded-md py-1 pl-1 pr-2 transition hover:bg-canvas"
         >
           <span className="flex h-8 w-8 items-center justify-center rounded-full bg-ink text-[12px] font-semibold text-white">
             {initials(user.name)}
@@ -168,7 +168,7 @@ function AccountMenu({ user, logout }) {
                 close()
                 logout()
               }}
-              className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] text-clay transition hover:bg-paper"
+              className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] text-clay transition hover:bg-canvas"
             >
               <LogOut className="h-4 w-4" aria-hidden="true" />
               Sign out
@@ -185,7 +185,7 @@ function DrawerLink({ to, children, onClick }) {
     <NavLink
       to={to}
       onClick={onClick}
-      className="block rounded-md px-3 py-2.5 text-[14px] font-medium text-ink transition hover:bg-paper"
+      className="block rounded-md px-3 py-2.5 text-[14px] font-medium text-ink transition hover:bg-canvas"
     >
       {children}
     </NavLink>
@@ -239,19 +239,26 @@ export default function StoreNavbar() {
   const isStaff = user && user.role !== 'CUSTOMER'
 
   return (
-    <header className="sticky top-0 z-40 border-b border-line bg-white/90 backdrop-blur-md">
+    <header className="sticky top-0 z-40 border-b border-line-warm bg-paper-warm/90 backdrop-blur-md">
       <div className="mx-auto grid h-16 w-full max-w-7xl grid-cols-[1fr_auto_1fr] items-center gap-4 px-5">
         <div className="flex items-center gap-1">
           <button
             type="button"
             aria-label="Open menu"
             onClick={() => setDrawerOpen(true)}
-            className="-ml-2 flex h-9 w-9 items-center justify-center rounded-md text-ink transition hover:bg-paper lg:hidden"
+            className="-ml-2 flex h-9 w-9 items-center justify-center rounded-md text-ink transition hover:bg-canvas lg:hidden"
           >
             <MenuIcon className="h-5 w-5" />
           </button>
-          <Link to="/" className="text-[22px] font-semibold tracking-tight text-ink">
-            citycart<span className="text-clay">.</span>
+          <Link
+            to="/"
+            className="group inline-flex items-baseline text-[22px] font-semibold tracking-tight text-ink"
+            aria-label="CityCart home"
+          >
+            <span className="transition-transform duration-300 ease-out group-hover:-translate-y-0.5">CityCart</span>
+            <span className="text-clay transition-transform duration-300 ease-out group-hover:-translate-y-1 group-hover:scale-125 group-hover:drop-shadow-[0_0_7px_rgba(184,71,42,0.55)]">
+              .
+            </span>
           </Link>
         </div>
 
@@ -273,7 +280,7 @@ export default function StoreNavbar() {
 
         <div className="flex items-center justify-end gap-1.5">
           <SearchForm className="hidden w-44 lg:block" />
-          <span className="mx-1 hidden h-5 w-px bg-line lg:block" aria-hidden="true" />
+          <span className="mx-1 hidden h-5 w-px bg-line-warm lg:block" aria-hidden="true" />
           {/* On small screens these three live inside the menu drawer instead. */}
           <div className="hidden items-center gap-1.5 lg:flex">
             <NotificationBell />
@@ -295,13 +302,13 @@ export default function StoreNavbar() {
             <div className="hidden shrink-0 items-center gap-1 sm:flex">
               <Link
                 to="/login"
-                className="whitespace-nowrap rounded-md px-3.5 py-2 text-[13.5px] font-medium text-ink transition hover:bg-paper"
+                className="whitespace-nowrap rounded-md px-3.5 py-2 text-[13.5px] font-medium text-ink transition hover:bg-canvas"
               >
                 Sign in
               </Link>
               <Link
                 to="/register"
-                className="ml-1 inline-flex h-9 items-center whitespace-nowrap rounded-md bg-ink px-4 text-[12.5px] font-medium tracking-wide text-white transition hover:bg-ink-soft"
+                className="ml-1 inline-flex h-9 items-center whitespace-nowrap rounded-tile bg-noir px-4 text-[12.5px] font-medium tracking-wide text-white transition hover:bg-noir-soft"
               >
                 Get started
               </Link>
@@ -368,7 +375,7 @@ export default function StoreNavbar() {
                     setDrawerOpen(false)
                     logout()
                   }}
-                  className="flex w-full items-center gap-2 rounded-md border border-line px-4 py-2.5 text-[13px] font-medium text-clay transition hover:bg-paper"
+                  className="flex w-full items-center gap-2 rounded-md border border-line px-4 py-2.5 text-[13px] font-medium text-clay transition hover:bg-canvas"
                 >
                   <LogOut className="h-4 w-4" aria-hidden="true" />
                   Sign out

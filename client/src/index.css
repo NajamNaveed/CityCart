@@ -32,6 +32,22 @@
   --color-danger-soft: #fef3f2;
   --color-info: #175cd3;
   --color-info-soft: #eff6ff;
+
+  /* v3 customer surfaces: warm paper, deep forest and a true warm black.
+     These are the approved v3 landing tokens; older pages keep the cool set
+     above until their own redesign lands. */
+  --color-canvas: #f8f2e7;
+  --color-paper-warm: #fffcf6;
+  --color-line-warm: #e7ddcb;
+  --color-noir: #15140f;
+  --color-noir-soft: #24211b;
+  --color-forest: #1c3a2e;
+  --color-forest-deep: #0e241b;
+  --color-sage: #dce5d8;
+
+  --radius-tile: 10px;
+  --radius-card: 14px;
+  --radius-panel: 20px;
 }
 
 @layer base {
@@ -71,4 +87,21 @@
 
 @utility text-balance {
   text-wrap: balance;
+}
+
+/* The landing's black ticker. Duplicated content is marked aria-hidden, so the
+   loop is purely visual; it pauses on hover and under reduced motion. */
+@keyframes v3-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.v3-marquee {
+  animation: v3-marquee 46s linear infinite;
+}
+.v3-marquee:hover {
+  animation-play-state: paused;
 }

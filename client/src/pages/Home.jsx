@@ -1,172 +1,225 @@
-import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { HandCoins, MapPin, ShoppingBasket } from 'lucide-react'
+import { ArrowUpRight, MapPin, Sparkles } from 'lucide-react'
+import Hero from '../components/home/Hero'
+import SectionHead from '../components/home/SectionHead'
+import StoreCard from '../components/home/StoreCard'
+import ProviderCard from '../components/home/ProviderCard'
+import PromiseBand from '../components/home/PromiseBand'
+import ProductCard from '../components/ProductCard'
 import { useCity } from '../hooks/useCity'
-import { useBrands } from '../hooks/useBrands'
-import BrandMarquee from '../components/home/BrandMarquee'
-import SectionHeader from '../components/SectionHeader'
-import { Reveal } from '../components/ui'
-import { btnOutline, btnPrimary, sectionLabel, wrap } from '../ui'
+import { useNearby } from '../hooks/useNearby'
+import { useHomeFeed } from '../hooks/useHomeFeed'
+import { formatDistance } from '../utils/geo'
 
-const HEADLINES = ['Paid on delivery.', 'From brands near you.', 'In one single cart.']
+const SHELL = 'mx-auto w-full max-w-[1200px] px-5'
 
-const TRUST = [
-  { icon: HandCoins, text: 'Pay on delivery' },
-  { icon: ShoppingBasket, text: 'One cart, many brands' },
-  { icon: MapPin, text: 'Local brands by city' },
-]
-
-// The headline's last line cycles through the value propositions.
-function RotatingHeadline({ words }) {
-  const [index, setIndex] = useState(0)
-  const reduced = useReducedMotion()
-
-  useEffect(() => {
-    if (reduced) return undefined
-    const timer = setInterval(() => setIndex((v) => (v + 1) % words.length), 3200)
-    return () => clearInterval(timer)
-  }, [reduced, words.length])
-
+function CardSkeleton() {
   return (
-    // The wrapper clips during the slide, so descenders (y, g, p…) get their
-    // line box back via a touch of bottom padding, balanced by a negative margin.
-    <span className="relative -mb-[0.16em] inline-block overflow-hidden pb-[0.16em] align-bottom">
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.span
-          key={index}
-          initial={reduced ? false : { y: '70%', opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: '-70%', opacity: 0 }}
-          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-          className="inline-block"
+    <div className="overflow-hidden rounded-card border border-line-warm bg-paper-warm p-2.5">
+      <div className="aspect-[4/3] w-full animate-pulse rounded-tile bg-sand/70" />
+      <div className="space-y-2.5 p-3">
+        <div className="h-4 w-2/3 animate-pulse rounded bg-sand" />
+        <div className="h-3 w-1/2 animate-pulse rounded bg-sand/70" />
+        <div className="h-8 w-full animate-pulse rounded-full bg-sand/50" />
+      </div>
+    </div>
+  )
+}
+
+function EmptyNote({ children, to, linkLabel, className = '' }) {
+  return (
+    <div
+      className={`rounded-card border border-dashed border-line-warm bg-paper-warm/70 px-6 py-10 text-center ${className}`}
+    >
+      <p className="text-[14px] text-ink/60">{children}</p>
+      {to && (
+        <Link
+          to={to}
+          className="mt-4 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-clay hover:underline"
         >
-          {words[index]}
-        </motion.span>
-      </AnimatePresence>
-    </span>
+          {linkLabel}
+          <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+        </Link>
+      )}
+    </div>
+  )
+}
+
+function ServiceCta() {
+  return (
+    <div className="relative flex h-full flex-col justify-between overflow-hidden rounded-card bg-noir p-6 text-cream">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full bg-clay/25 blur-3xl"
+      />
+      <div className="relative">
+        <span className="inline-flex h-9 w-9 items-center justify-center rounded-tile border border-cream/15 bg-cream/5 text-clay">
+          <Sparkles className="h-4 w-4" aria-hidden="true" />
+        </span>
+        <h3 className="font-display mt-5 text-[24px] font-semibold leading-tight tracking-tight">
+          A pro for the job,
+          <br />
+          <em className="font-normal italic text-clay">from your block.</em>
+        </h3>
+        <p className="mt-3 text-[13px] leading-relaxed text-cream/55">
+          Cleaning, plumbing, electrical work and more. Every provider works one block at a time.
+        </p>
+      </div>
+      <Link
+        to="/services"
+        className="relative mt-6 inline-flex h-10 w-fit items-center gap-2 rounded-full bg-cream px-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-noir transition-colors hover:bg-white"
+      >
+        Browse services
+        <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+      </Link>
+    </div>
   )
 }
 
 export default function Home() {
-  const { city, cityId } = useCity()
-  const { brands, loading: brandsLoading } = useBrands(cityId)
+  const { city, cities } = useCity()
+  const { selectedBlocks, blockIds, areaName } = useNearby()
+  const { city: feedCity, stores, products, providers, loading, failed } = useHomeFeed(blockIds)
+
+  const cityName = feedCity?.name || city?.name || cities[0]?.name || ''
+  const where = (selectedBlocks.length > 0 && areaName) || cityName
+  const blockSet = new Set(blockIds.map(String))
+  const inBlock = (store) => (store.branches || []).some((branch) => blockSet.has(String(branch.blockId)))
+  const visibleStores = stores.slice(0, 6)
+  const visibleProviders = providers.slice(0, 3)
 
   return (
-    <>
-      {/* Hero */}
-      <section className="relative overflow-hidden border-b border-line">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -right-32 -top-40 h-[480px] w-[480px] rounded-full bg-cream blur-3xl"
-        />
-        <div className={`${wrap} relative py-16 lg:py-24`}>
-          <Reveal>
-            <p className={sectionLabel}>{city ? `Shopping in ${city.name}` : 'The CityCart marketplace'}</p>
-            <h1 className="font-display mt-5 text-[44px] font-semibold leading-[1.05] tracking-tight text-ink sm:text-6xl">
-              Local brands.
-              <br />
-              One cart.
-              <br />
-              <span className="text-clay">
-                <RotatingHeadline words={HEADLINES} />
-              </span>
-            </h1>
-            <p className="mt-6 max-w-lg text-[16.5px] leading-relaxed text-muted">
-              Browse independent brands in your city, fill a single cart from several of them, and pay in cash when
-              your order arrives.
-            </p>
-            <div className="mt-9 flex flex-wrap items-center gap-3">
-              <Link to="/nearby" className={btnPrimary}>
-                Browse nearby shops
-              </Link>
-              <Link to="/brands" className={btnOutline}>
-                Browse brands
-              </Link>
-            </div>
-            <ul className="mt-10 flex flex-wrap gap-x-7 gap-y-2.5">
-              {TRUST.map(({ icon: Icon, text }) => (
-                <li key={text} className="flex items-center gap-2 text-[13px] font-medium text-muted">
-                  <Icon className="h-4 w-4 text-clay" aria-hidden="true" />
-                  {text}
-                </li>
-              ))}
-            </ul>
-          </Reveal>
-        </div>
-      </section>
+    <div className="bg-canvas">
+      <Hero cityName={cityName} areaName={selectedBlocks.length > 0 ? areaName : ''} products={products} />
 
-      {/* Brands — endless marquee, centre card rises */}
-      <section id="brands" className="scroll-mt-24 pt-16">
-        <div className={wrap}>
-          <Reveal>
-          <SectionHeader
-            eyebrow="Marketplace"
-            title={city ? `Brands in ${city.name}` : 'Brands on CityCart'}
-            to="/brands"
-            linkLabel="All brands"
-          />
-          </Reveal>
-        </div>
-        {brandsLoading ? (
-          <div className="flex gap-6 overflow-hidden px-5 py-5">
-            {[0, 1, 2, 3, 4].map((i) => (
-              <div
-                key={i}
-                className="h-[23.5rem] w-80 shrink-0 animate-pulse rounded-2xl border border-line/70 bg-white p-3"
-              >
-                <div className="h-44 w-full rounded-xl bg-sand/60" />
-                <div className="space-y-3 p-4">
-                  <div className="h-5 w-2/3 rounded bg-sand/80" />
-                  <div className="h-3.5 w-full rounded bg-sand/50" />
-                  <div className="h-3.5 w-4/5 rounded bg-sand/40" />
-                </div>
-              </div>
+      {/* 01 — Stores */}
+      <section className={`${SHELL} pb-14 pt-14 sm:pb-20 sm:pt-20`} aria-labelledby="stores-heading">
+        <SectionHead
+          id="stores-heading"
+          index="01"
+          eyebrow="Shop your block"
+          title="Stores on your street."
+          accent="Not across town."
+          lede={
+            where
+              ? `Shops within walking distance of ${where}. Each one packs and delivers its own order — you pay each at the door.`
+              : 'Local shops inside 1.5 km. Each one packs and delivers its own order — you pay each at the door.'
+          }
+          to="/nearby"
+          linkLabel="All shops"
+        />
+        {failed ? (
+          <EmptyNote to="/nearby" linkLabel="Open the shop directory">
+            We couldn&apos;t load the block just now. You can still browse shops near you.
+          </EmptyNote>
+        ) : loading ? (
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {[0, 1, 2].map((key) => (
+              <CardSkeleton key={key} />
             ))}
           </div>
-        ) : brands.length === 0 ? (
-          <p className={`${wrap} text-[15px] text-muted`}>No brands are selling here yet.</p>
+        ) : visibleStores.length === 0 ? (
+          <EmptyNote to="/brands" linkLabel="Browse every brand">
+            No shops are live {cityName ? `in ${cityName}` : 'here'} yet. The block is still opening up.
+          </EmptyNote>
         ) : (
-          <BrandMarquee brands={brands} />
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {visibleStores.map((store) => (
+              <StoreCard key={store._id} store={store} inBlock={inBlock(store)} />
+            ))}
+          </div>
+        )}
+
+        {where && (
+          <p className="mt-6 flex items-center gap-2 text-[12px] text-muted">
+            <MapPin className="h-3.5 w-3.5 text-clay" aria-hidden="true" />
+            {selectedBlocks.length > 0
+              ? `Shops in ${where} come first. Deliveries stay inside 1.5 km.`
+              : `Showing shops across ${cityName}. Set your block on the shops page to narrow it down.`}
+          </p>
         )}
       </section>
 
-      {/* Closing band before the footer */}
-      <section className={`${wrap} pb-4 pt-20`}>
-        <Reveal>
-          <div className="relative overflow-hidden rounded-2xl bg-ink px-6 py-16 text-center text-white sm:px-14">
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-clay/25 blur-3xl"
-            />
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute -bottom-28 -right-20 h-80 w-80 rounded-full bg-cream/10 blur-3xl"
-            />
-            <div className="relative">
-              <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/50">Why CityCart</p>
-              <h2 className="font-display mx-auto mt-4 max-w-2xl text-3xl font-semibold leading-tight tracking-tight sm:text-[40px]">
-                Everything local, gathered in one basket.
-              </h2>
-              <p className="mx-auto mt-5 max-w-xl text-[15px] leading-relaxed text-white/65">
-                Order from the brands on your street the way you would from anywhere online — one cart, one
-                checkout, cash in hand at the door.
-              </p>
-              <div className="mt-8 flex flex-wrap justify-center gap-3">
-                <Link to="/nearby" className={btnPrimary}>
-                  Start shopping
-                </Link>
-                <Link
-                  to="/brands"
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-white/25 px-6 text-[13px] font-medium uppercase tracking-[0.08em] text-white transition-colors hover:border-white/60"
-                >
-                  Meet the brands
-                </Link>
-              </div>
+      {/* 02 — Products */}
+      <section className="border-y border-line-warm bg-cream" aria-labelledby="shelf-heading">
+        <div className={`${SHELL} py-14 sm:py-20`}>
+          <SectionHead
+            id="shelf-heading"
+            index="02"
+            eyebrow="On the shelf"
+            title="Picked from"
+            accent="your block."
+            lede="Small-batch things stocked within walking distance. Add from a few shops — one bag, several stops."
+            to="/nearby"
+            linkLabel="Browse the shelf"
+          />
+          {loading ? (
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+              {[0, 1, 2, 3].map((key) => (
+                <CardSkeleton key={key} />
+              ))}
             </div>
-          </div>
-        </Reveal>
+          ) : products.length === 0 ? (
+            <EmptyNote to="/nearby" linkLabel="Search shops near you">
+              {failed
+                ? 'The shelf could not be loaded just now.'
+                : 'The shelf is being stocked. Check the shops near you in the meantime.'}
+            </EmptyNote>
+          ) : (
+            <div className="grid grid-cols-2 gap-4 sm:gap-5 lg:grid-cols-4">
+              {products.map((product) => (
+                <ProductCard
+                  key={product._id}
+                  product={product}
+                  storeLabel={`${product.brandName}${
+                    product.distanceKm !== null && product.distanceKm !== undefined
+                      ? ` · ${formatDistance(product.distanceKm)}`
+                      : ''
+                  }`}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </section>
-    </>
+
+      {/* 03 — Services */}
+      <section className={`${SHELL} py-14 sm:py-20`} aria-labelledby="services-heading">
+        <SectionHead
+          id="services-heading"
+          index="03"
+          eyebrow="Around the corner"
+          title="Pros who know"
+          accent="your street."
+          lede="Vetted providers who work one block at a time. See a starting price, then book a slot that suits you."
+          to="/services"
+          linkLabel="All services"
+        />
+        {loading ? (
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {[0, 1, 2].map((key) => (
+              <CardSkeleton key={key} />
+            ))}
+          </div>
+        ) : visibleProviders.length === 0 ? (
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <EmptyNote className="sm:col-span-2" to="/services" linkLabel="Meet the pros">
+              No providers are live {cityName ? `in ${cityName}` : 'here'} yet. Services are opening block by
+              block.
+            </EmptyNote>
+            <ServiceCta />
+          </div>
+        ) : (
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {visibleProviders.map((provider) => (
+              <ProviderCard key={provider._id} provider={provider} />
+            ))}
+            {visibleProviders.length < 3 && <ServiceCta />}
+          </div>
+        )}
+      </section>
+
+      <PromiseBand />
+    </div>
   )
 }

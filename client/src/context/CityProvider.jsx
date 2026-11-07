@@ -15,6 +15,7 @@ function readStoredCity() {
 // Holds the active cities and the visitor's chosen city ('' = all cities).
 export function CityProvider({ children }) {
   const [cities, setCities] = useState([])
+  const [ready, setReady] = useState(false)
   const [stored, setStored] = useState(readStoredCity)
 
   useEffect(() => {
@@ -25,6 +26,7 @@ export function CityProvider({ children }) {
       // SPA page — that must read as "no cities", not crash the navbar.
       .then((res) => active && setCities(Array.isArray(res.data?.cities) ? res.data.cities : []))
       .catch(() => {})
+      .finally(() => active && setReady(true))
     return () => {
       active = false
     }
@@ -43,7 +45,10 @@ export function CityProvider({ children }) {
   }, [])
 
   const city = cities.find((c) => c._id === cityId) || null
-  const value = useMemo(() => ({ cities, city, cityId, setCityId }), [cities, city, cityId, setCityId])
+  const value = useMemo(
+    () => ({ cities, city, cityId, setCityId, citiesReady: ready }),
+    [cities, city, cityId, setCityId, ready],
+  )
 
   return <CityContext.Provider value={value}>{children}</CityContext.Provider>
 }
