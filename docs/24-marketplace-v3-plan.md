@@ -1,6 +1,6 @@
 # 24 — Marketplace v3: Services, Seller Billing, Redesign, Flutter and Security
 
-Status: **approved 2026-11-06; Phases 0, 1, 2a, 2b, 2c and 3 implemented. Phase 4 is in progress: design system, discovery, purchase funnel and services funnel are rebuilt.** This document is the
+Status: **approved 2026-11-06; Phases 0, 1, 2a, 2b, 2c and 3 implemented. Phase 4 is in progress: design system, discovery, purchase funnel, services funnel and the account/communication screens are rebuilt.** This document is the
 authoritative plan for the v3 programme. Where it conflicts with an earlier
 document, this document wins until the earlier document is updated.
 
@@ -743,11 +743,18 @@ Phase 4 progress (customer web):
 * The services funnel — discovery list and map, public provider page, booking
   request, booking history and booking detail (proposal, completion, dispute,
   chat, timeline and review states) — is rebuilt on those primitives.
+* The account and communication screens — sign in, register, forgot/reset
+  password, email verification and resend, saved addresses, messages (list and
+  thread), notifications, 404 and the error boundary — are rebuilt on those
+  primitives, sharing one inset auth frame for customer and seller portals.
 * Customer navigation is **Home · Stores · Services**. The separate Brands tab
   is retired; a brand is reached through its storefront, and the public brand
   and storefront APIs are unchanged.
 * v3 surfaces end on the footer directly — no strip of page background between
   the page and the footer.
+* Help and legal pages stay on their current copy until approved policy text,
+  the registered entity details and a real support contact are supplied; they
+  are not redesigned ahead of that.
 
 ### 6.3 Seller landing and dashboards
 

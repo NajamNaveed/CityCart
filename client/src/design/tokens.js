@@ -97,5 +97,6 @@ export function badge(tone = 'soft') {
 export const statePanel =
   'flex flex-col items-center justify-center rounded-panel border border-dashed border-line-warm bg-paper-warm px-6 py-16 text-center'
 export const stateIcon = 'flex h-12 w-12 items-center justify-center rounded-tile bg-sand text-clay'
+export const stateIconOk = 'flex h-12 w-12 items-center justify-center rounded-tile bg-sage text-forest'
 
 export const skeleton = 'animate-pulse rounded-tile bg-line-warm/60'

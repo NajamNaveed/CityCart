@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { CheckCircle2, XCircle } from 'lucide-react'
+import { CheckCircle2, MailCheck, XCircle } from 'lucide-react'
 import AuthShell from '../components/AuthShell'
+import { Button, Field, display, stateIcon, stateIconOk, textLink } from '../design'
 import ResendVerification from '../components/ResendVerification'
 import api, { getErrorMessage } from '../services/api'
-import { btnPrimary } from '../ui'
 
 export default function VerifyEmail() {
   const [params] = useSearchParams()
@@ -42,33 +42,35 @@ export default function VerifyEmail() {
     >
       {state === 'checking' && (
         <>
-          <h1 className="font-display text-[28px] font-semibold tracking-tight text-ink">Verifying…</h1>
-          <p className="mt-1.5 text-sm text-muted">One moment while we confirm your link.</p>
+          <span className={stateIcon}>
+            <MailCheck className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <h1 className={`mt-4 ${display.sm}`}>Verifying…</h1>
+          <p className="mt-2 text-[13px] leading-relaxed text-ink/55">One moment while we confirm your link.</p>
         </>
       )}
 
       {state === 'done' && (
         <>
-          <CheckCircle2 className="h-10 w-10 text-pine" aria-hidden="true" />
-          <h1 className="font-display mt-4 text-[28px] font-semibold tracking-tight text-ink">Email verified</h1>
-          <p className="mt-1.5 text-sm text-muted">
+          <span className={stateIconOk}>
+            <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <h1 className={`mt-4 ${display.sm}`}>Email verified</h1>
+          <p className="mt-2 text-[13px] leading-relaxed text-ink/55">
             {isService
               ? 'Your inbox is confirmed. CityCart will review your provider application and let you know when it is approved.'
               : isBrand
                 ? 'Your account is active. Your shop is now visible to nearby shoppers.'
                 : 'Your account is active. Sign in to start shopping.'}
           </p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <Link to={loginPath} className={`${btnPrimary} px-5`}>
+          <div className="mt-6 flex flex-wrap gap-2.5">
+            <Button to={loginPath} tone="noir" size="lg">
               {isService ? 'Provider sign in' : isBrand ? 'Brand sign in' : 'Shopper sign in'}
-            </Link>
+            </Button>
             {(isBrand || isService) && (
-              <Link
-                to="/login"
-                className="inline-flex h-11 items-center rounded-md border border-line bg-white px-5 text-[13px] font-medium text-ink transition hover:border-ink"
-              >
+              <Button to="/login" tone="outline" size="lg">
                 Shopper sign in
-              </Link>
+              </Button>
             )}
           </div>
         </>
@@ -76,31 +78,32 @@ export default function VerifyEmail() {
 
       {(state === 'failed' || state === 'missing') && (
         <>
-          <XCircle className="h-10 w-10 text-clay" aria-hidden="true" />
-          <h1 className="font-display mt-4 text-[28px] font-semibold tracking-tight text-ink">
+          <span className={stateIcon}>
+            <XCircle className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <h1 className={`mt-4 ${display.sm}`}>
             {state === 'missing' ? 'This page needs a link' : 'That link did not work'}
           </h1>
-          <p className="mt-1.5 text-sm text-muted">
+          <p className="mt-2 text-[13px] leading-relaxed text-ink/55">
             {state === 'missing'
               ? 'Open the verification link from your email, or request a new one below.'
               : `${error} Verification links work once and expire after 24 hours.`}
           </p>
 
-          <label htmlFor="verify-email" className="mt-6 mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">
-            Your email
-          </label>
-          <input
-            id="verify-email"
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            className="h-11 w-full rounded-md border border-line bg-white px-3.5 text-sm text-ink outline-none focus:border-ink"
-          />
+          <div className="mt-6">
+            <Field
+              label="Your email"
+              id="verify-email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+            />
+          </div>
           <ResendVerification email={email.trim()} portal={portal} className="mt-3" />
-          <p className="mt-6 text-sm text-muted">
-            <Link to={loginPath} className="font-medium text-clay underline-offset-4 hover:underline">
+          <p className="mt-6 border-t border-line-warm pt-5 text-[13px] text-ink/55">
+            <Link to={loginPath} className={textLink}>
               Back to sign in
             </Link>
           </p>

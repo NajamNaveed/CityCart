@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import api, { getErrorMessage } from '../services/api'
+import { Button } from '../design'
 
 /**
  * "Didn't get it?" control shown after sign-up and when an unverified
@@ -24,19 +25,14 @@ export default function ResendVerification({ email, portal = 'customer', classNa
 
   return (
     <div className={className}>
-      <button
-        type="button"
-        onClick={resend}
-        disabled={state !== 'idle'}
-        className="inline-flex h-10 items-center rounded-md border border-line bg-white px-4 text-[13px] font-medium text-ink transition hover:border-ink disabled:cursor-default disabled:opacity-60"
-      >
+      <Button tone="outline" size="sm" onClick={resend} disabled={state !== 'idle'}>
         {state === 'sending' ? 'Sending…' : state === 'sent' ? 'Verification email sent' : 'Resend verification email'}
-      </button>
+      </Button>
       {state === 'sent' && (
-        <p className="mt-2 text-xs text-muted">Check your inbox and spam folder. Only the newest link works.</p>
+        <p className="mt-2 text-[11.5px] text-muted">Check your inbox and spam folder. Only the newest link works.</p>
       )}
       {error && (
-        <p role="alert" className="mt-2 text-xs text-clay">
+        <p role="alert" className="mt-2 text-[11.5px] text-clay">
           {error}
         </p>
       )}

@@ -1,4 +1,4 @@
-import { Outlet, useLocation } from 'react-router-dom'
+import { Outlet } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useNearby } from '../hooks/useNearby'
 import { useFirstVisitDetect } from '../hooks/useFirstVisitDetect'
@@ -6,26 +6,8 @@ import PageTransition from './ui/PageTransition'
 import StoreNavbar from './layout/StoreNavbar'
 import StoreFooter from './layout/StoreFooter'
 
-// v3 surfaces carry their own canvas and bottom spacing, so the footer meets
-// them directly instead of leaving a strip of page background above it.
-const isV3Surface = (pathname) =>
-  pathname === '/' ||
-  pathname === '/nearby' ||
-  pathname.startsWith('/store/') ||
-  pathname.startsWith('/product/') ||
-  pathname === '/cart' ||
-  pathname === '/checkout' ||
-  pathname === '/order-placed' ||
-  pathname === '/orders' ||
-  pathname.startsWith('/orders/') ||
-  pathname === '/services' ||
-  pathname.startsWith('/services/') ||
-  pathname === '/bookings' ||
-  pathname.startsWith('/bookings/')
-
 export default function StoreLayout() {
   const { user } = useAuth()
-  const { pathname } = useLocation()
   const { autoDetect } = useNearby()
   // Shoppers (guests and customers) are asked for their location once, on a first visit.
   useFirstVisitDetect(autoDetect, !user || user.role === 'CUSTOMER')
@@ -47,7 +29,7 @@ export default function StoreLayout() {
         </PageTransition>
       </main>
 
-      <StoreFooter flush={isV3Surface(pathname)} />
+      <StoreFooter flush />
     </div>
   )
 }

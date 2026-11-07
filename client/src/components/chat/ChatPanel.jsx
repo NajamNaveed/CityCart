@@ -12,7 +12,7 @@ const PAGE = 30
 
 function Avatar({ name, image, size = 'h-10 w-10' }) {
   return image ? (
-    <img src={image} alt="" className={`${size} shrink-0 rounded-full border border-line object-cover`} />
+    <img src={image} alt="" className={`${size} shrink-0 rounded-full border border-line-warm object-cover`} />
   ) : (
     <span aria-hidden="true" className={`${size} flex shrink-0 items-center justify-center rounded-full bg-sand text-sm font-semibold text-clay`}>
       {initialOf(name)}
@@ -23,13 +23,13 @@ function Avatar({ name, image, size = 'h-10 w-10' }) {
 // A product mentioned in a message (or about to be attached to the next one).
 function ProductChip({ product, onRemove }) {
   return (
-    <div className="flex items-center gap-2.5 rounded-md border border-line bg-white p-2 pr-3 text-left">
-      <ProductImage src={product.image} name={product.name} width={80} className="h-10 w-10 shrink-0 rounded" />
+    <div className="flex items-center gap-2.5 rounded-tile border border-line-warm bg-paper-warm p-2 pr-3 text-left">
+      <ProductImage src={product.image} name={product.name} width={80} className="h-10 w-10 shrink-0 rounded-lg" />
       <span className="min-w-0 flex-1">
         <Link to={`/product/${product._id}`} className="block truncate text-[13px] font-medium text-ink hover:underline">
           {product.name}
         </Link>
-        <span className="block text-xs text-muted">{formatPrice(product.price)}{!product.available && ' · No longer available'}</span>
+        <span className="block text-[11px] text-muted">{formatPrice(product.price)}{!product.available && ' · No longer available'}</span>
       </span>
       {onRemove && (
         <button type="button" onClick={onRemove} aria-label="Remove attached product" className="text-muted transition hover:text-ink">
@@ -45,7 +45,7 @@ function ProductChip({ product, onRemove }) {
 function Bubble({ message, showSender }) {
   return (
     <div className={`flex flex-col ${message.mine ? 'items-end' : 'items-start'}`}>
-      <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-[14px] leading-relaxed sm:max-w-[75%] ${message.mine ? 'rounded-br-md bg-ink text-white' : 'rounded-bl-md bg-paper text-ink'}`}>
+      <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-[14px] leading-relaxed sm:max-w-[75%] ${message.mine ? 'rounded-br-md bg-noir text-cream' : 'rounded-bl-md border border-line-warm bg-paper-warm text-ink'}`}>
         {message.product && (
           <div className="mb-2 text-ink">
             <ProductChip product={message.product} />
@@ -53,7 +53,7 @@ function Bubble({ message, showSender }) {
         )}
         <p className="whitespace-pre-wrap break-words">{message.body}</p>
       </div>
-      <p className="mt-1 px-1 text-[11px] text-muted">
+      <p className="mt-1 px-1 text-[10.5px] text-ink/40">
         {showSender && message.sentBy ? `${message.sentBy} · ` : ''}
         {clockTime(message.createdAt)}
       </p>
@@ -317,25 +317,27 @@ export default function ChatPanel({ mode, canReply = true }) {
   const rows = messages.map((m, i) => ({ m, divider: i === 0 || dayLabel(messages[i - 1].createdAt) !== dayLabel(m.createdAt) }))
 
   return (
-    <div className="grid h-[calc(100dvh-11rem)] min-h-[460px] overflow-hidden rounded-lg border border-line bg-white md:grid-cols-[320px_1fr]">
+    <div className="grid h-[calc(100dvh-15rem)] min-h-[460px] overflow-hidden rounded-panel border border-line-warm bg-paper-warm md:grid-cols-[320px_1fr]">
       {/* Conversations */}
-      <aside className={`min-h-0 flex-col border-line md:flex md:border-r ${threadOpen ? 'hidden' : 'flex'}`} aria-label="Conversations">
+      <aside className={`min-h-0 min-w-0 flex-col border-line-warm md:flex md:border-r ${threadOpen ? 'hidden' : 'flex'}`} aria-label="Conversations">
         <div className="min-h-0 flex-1 overflow-y-auto">
           {list.loading ? (
             <div className="p-5">
               <Spinner label="Loading conversations…" />
             </div>
           ) : list.error ? (
-            <p className="p-5 text-sm text-clay">{list.error}</p>
+            <p className="p-5 text-[13px] text-clay">{list.error}</p>
           ) : list.items.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-              <MessageCircle className="h-8 w-8 text-muted/50" aria-hidden="true" />
-              <p className="mt-3 font-display text-lg font-semibold text-ink">No conversations yet</p>
-              <p className="mt-1 text-[13px] text-muted">
+            <div className="flex h-full flex-col items-center justify-center px-6 py-12 text-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-tile bg-sand text-clay">
+                <MessageCircle className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <p className="font-display mt-4 text-[19px] font-semibold tracking-tight text-ink">No conversations yet</p>
+              <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink/55">
                 {isBrand ? 'When a customer messages your brand, it shows up here.' : 'Open a product and choose “Chat with seller” to ask a question.'}
               </p>
               {!isBrand && (
-                <Link to="/nearby" className="mt-4 text-[13px] font-medium text-clay underline">
+                <Link to="/nearby" className="mt-4 text-[12.5px] font-medium text-clay underline-offset-4 hover:underline">
                   Browse nearby shops
                 </Link>
               )}
@@ -348,21 +350,21 @@ export default function ChatPanel({ mode, canReply = true }) {
                     type="button"
                     onClick={() => open(c._id)}
                     aria-current={c._id === selected}
-                    className={`flex w-full items-center gap-3 border-b border-line px-4 py-3.5 text-left transition hover:bg-paper ${c._id === selected ? 'bg-paper' : ''}`}
+                    className={`flex w-full items-center gap-3 border-b border-line-warm px-4 py-3.5 text-left transition hover:bg-canvas ${c._id === selected ? 'bg-canvas' : ''}`}
                   >
                     <Avatar name={c.with.name} image={c.with.image} />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-baseline justify-between gap-2">
                         <span className={`truncate text-[14px] ${c.unread ? 'font-semibold text-ink' : 'font-medium text-ink'}`}>{c.with.name}</span>
-                        <span className="shrink-0 text-[11px] text-muted">{listTime(c.lastMessageAt)}</span>
+                        <span className="shrink-0 text-[10.5px] text-ink/40">{listTime(c.lastMessageAt)}</span>
                       </span>
                       <span className="mt-0.5 flex items-center justify-between gap-2">
-                        <span className={`truncate text-[13px] ${c.unread ? 'text-ink' : 'text-muted'}`}>
+                        <span className={`truncate text-[12.5px] ${c.unread ? 'text-ink/70' : 'text-ink/45'}`}>
                           {c.lastSenderRole === mySide ? 'You: ' : ''}
                           {c.lastMessagePreview}
                         </span>
                         {c.unread > 0 && (
-                          <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-clay px-1.5 text-[11px] font-semibold text-white">
+                          <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-clay px-1.5 text-[10.5px] font-semibold text-white">
                             {c.unread > 9 ? '9+' : c.unread}
                           </span>
                         )}
@@ -373,7 +375,7 @@ export default function ChatPanel({ mode, canReply = true }) {
               ))}
               {list.page < list.pages && (
                 <li className="p-3 text-center">
-                  <button type="button" onClick={() => loadList(list.page + 1)} className="text-[13px] font-medium text-clay underline">
+                  <button type="button" onClick={() => loadList(list.page + 1)} className="text-[12.5px] font-medium text-clay underline-offset-4 hover:underline">
                     Show more conversations
                   </button>
                 </li>
@@ -386,43 +388,45 @@ export default function ChatPanel({ mode, canReply = true }) {
       {/* Thread */}
       <section className={`min-h-0 min-w-0 flex-col md:flex ${threadOpen ? 'flex' : 'hidden'}`} aria-label="Conversation">
         {!threadOpen ? (
-          <div className="hidden h-full flex-col items-center justify-center text-center md:flex">
-            <MessageCircle className="h-9 w-9 text-muted/40" aria-hidden="true" />
-            <p className="mt-3 text-sm text-muted">{contextError || 'Choose a conversation to read it.'}</p>
+          <div className="hidden h-full flex-col items-center justify-center px-6 text-center md:flex">
+            <span className="flex h-12 w-12 items-center justify-center rounded-tile bg-sand text-clay">
+              <MessageCircle className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <p className="mt-4 text-[13px] text-ink/55">{contextError || 'Choose a conversation to read it.'}</p>
           </div>
         ) : (
           <>
-            <header className="flex items-center gap-3 border-b border-line px-4 py-3">
-              <button type="button" onClick={back} aria-label="Back to conversations" className="-ml-1 flex h-9 w-9 items-center justify-center rounded-md text-ink hover:bg-paper md:hidden">
+            <header className="flex items-center gap-3 border-b border-line-warm px-4 py-3">
+              <button type="button" onClick={back} aria-label="Back to conversations" className="-ml-1 flex h-9 w-9 items-center justify-center rounded-md text-ink transition hover:bg-canvas md:hidden">
                 <ArrowLeft className="h-5 w-5" aria-hidden="true" />
               </button>
               {counterpart && <Avatar name={counterpart.name} image={counterpart.image} size="h-9 w-9" />}
               <p className="min-w-0 flex-1 truncate font-display text-[17px] font-semibold text-ink">{counterpart ? counterpart.name : ''}</p>
             </header>
 
-            <div ref={scroller} role="log" aria-live="polite" aria-label="Messages" className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
+            <div ref={scroller} role="log" aria-live="polite" aria-label="Messages" className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-canvas/40 px-4 py-4">
               {!threadReady ? (
                 <Spinner label="Loading messages…" />
               ) : thread.error ? (
-                <p className="text-sm text-clay">{thread.error}</p>
+                <p className="text-[13px] text-clay">{thread.error}</p>
               ) : (
                 <>
                   {thread.hasMore && !starting && (
                     <div className="text-center">
-                      <button type="button" onClick={loadEarlier} disabled={loadingEarlier} className="text-[13px] font-medium text-clay underline disabled:opacity-50">
+                      <button type="button" onClick={loadEarlier} disabled={loadingEarlier} className="text-[12.5px] font-medium text-clay underline-offset-4 hover:underline disabled:opacity-50">
                         {loadingEarlier ? 'Loading…' : 'Show earlier messages'}
                       </button>
                     </div>
                   )}
                   {starting && messages.length === 0 && (
                     <div className="mx-auto max-w-sm space-y-3 pt-4 text-center">
-                      <p className="text-[13.5px] text-muted">Ask {context.brand.name} about this product. They usually reply in the chat.</p>
+                      <p className="text-[12.5px] leading-relaxed text-ink/55">Ask {context.brand.name} about this product. They usually reply in the chat.</p>
                       <ProductChip product={context.product} />
                     </div>
                   )}
                   {rows.map(({ m, divider }) => (
                     <div key={m._id} className="space-y-3">
-                      {divider && <p className="text-center text-[11px] font-medium uppercase tracking-[0.12em] text-muted">{dayLabel(m.createdAt)}</p>}
+                      {divider && <p className="text-center text-[10px] font-medium uppercase tracking-[0.16em] text-ink/40">{dayLabel(m.createdAt)}</p>}
                       <Bubble message={m} showSender={isBrand} />
                     </div>
                   ))}
@@ -430,7 +434,7 @@ export default function ChatPanel({ mode, canReply = true }) {
               )}
             </div>
 
-            <form onSubmit={onSend} className="border-t border-line p-3">
+            <form onSubmit={onSend} className="border-t border-line-warm bg-paper-warm p-3">
               {!canReply ? (
                 <p className="px-1 py-2 text-[13px] text-muted">You can read messages, but you do not have permission to reply.</p>
               ) : !canSend ? (
@@ -446,7 +450,7 @@ export default function ChatPanel({ mode, canReply = true }) {
                     </div>
                   )}
                   {sendError && (
-                    <p role="alert" className="mb-2 rounded-md bg-clay/5 px-3 py-2 text-[13px] text-clay">
+                    <p role="alert" className="mb-2 rounded-tile border border-clay/30 bg-clay/5 px-3 py-2 text-[12.5px] text-clay">
                       {sendError}
                     </p>
                   )}
@@ -462,19 +466,19 @@ export default function ChatPanel({ mode, canReply = true }) {
                       maxLength={MAX_MESSAGE_LENGTH}
                       rows={2}
                       placeholder="Write a message…"
-                      className="min-h-[44px] flex-1 resize-none rounded-md border border-line bg-white px-3.5 py-2.5 text-[14px] text-ink outline-none transition focus:border-ink"
+                      className="min-h-[44px] flex-1 resize-none rounded-tile border border-line-warm bg-canvas/40 px-3.5 py-2.5 text-[13.5px] text-ink outline-none transition placeholder:text-muted/60 focus:border-ink/40 focus:bg-white focus:ring-2 focus:ring-ink/10"
                     />
                     <button
                       type="submit"
                       disabled={!draft.trim() || sending}
-                      className="flex h-11 items-center gap-1.5 rounded-md bg-ink px-4 text-[13px] font-medium text-white transition hover:bg-ink-soft disabled:opacity-40"
+                      className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-tile bg-noir px-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-cream transition-colors hover:bg-noir-soft disabled:pointer-events-none disabled:opacity-40"
                     >
                       <Send className="h-4 w-4" aria-hidden="true" />
                       {sending ? 'Sending…' : 'Send'}
                     </button>
                   </div>
                   {draft.length > MAX_MESSAGE_LENGTH * 0.8 && (
-                    <p className="mt-1 text-right text-[11px] text-muted">
+                    <p className="mt-1 text-right text-[10.5px] text-ink/40">
                       {draft.length}/{MAX_MESSAGE_LENGTH}
                     </p>
                   )}

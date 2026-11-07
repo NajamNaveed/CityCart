@@ -1,12 +1,11 @@
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import AuthShell from '../components/AuthShell'
-import Field from '../components/Field'
+import { Button, Field, display, textLink } from '../design'
 import ResendVerification from '../components/ResendVerification'
 import { useAuth } from '../hooks/useAuth'
 import { getErrorMessage, getFieldErrors } from '../services/api'
 import { registerUrl, safeNext } from '../utils/nav'
-import { btnPrimary } from '../ui'
 
 export default function Login() {
   const { login } = useAuth()
@@ -44,14 +43,14 @@ export default function Login() {
       title="Good to see you again."
       intro="Sign in to add to your cart, place orders and follow them to your door."
     >
-      <h1 className="font-display text-[28px] font-semibold tracking-tight text-ink">Sign in</h1>
-      <p className="mt-1.5 text-sm text-muted">
+      <h1 className={display.sm}>Sign in</h1>
+      <p className="mt-2 text-[13px] leading-relaxed text-ink/55">
         {next ? 'Sign in to pick up where you left off.' : 'Use the email you registered with.'}
       </p>
 
-      <form onSubmit={onSubmit} className="mt-8 space-y-5" noValidate>
+      <form onSubmit={onSubmit} className="mt-7 space-y-5" noValidate>
         {error && (
-          <p role="alert" className="rounded-md bg-clay/5 px-3.5 py-2.5 text-sm text-clay">
+          <p role="alert" className="rounded-tile border border-clay/30 bg-clay/5 px-3.5 py-2.5 text-[13px] leading-relaxed text-clay">
             {error}
           </p>
         )}
@@ -78,20 +77,20 @@ export default function Login() {
           required
         />
         <div className="flex justify-end">
-          <Link to="/forgot-password?portal=customer" className="text-[13px] font-medium text-clay underline-offset-4 hover:underline">
+          <Link to="/forgot-password?portal=customer" className={`text-[12.5px] ${textLink}`}>
             Forgot password?
           </Link>
         </div>
-        <button type="submit" disabled={submitting} className={`${btnPrimary} w-full`}>
+        <Button type="submit" tone="noir" size="lg" disabled={submitting} className="w-full">
           {submitting ? 'Signing in…' : 'Sign in'}
-        </button>
+        </Button>
       </form>
 
       {needsVerification && <ResendVerification email={form.email.trim()} portal="customer" className="mt-4" />}
 
-      <p className="mt-6 text-sm text-muted">
+      <p className="mt-6 border-t border-line-warm pt-5 text-[13px] text-ink/55">
         New to CityCart?{' '}
-        <Link to={next ? registerUrl(next) : '/register'} className="font-medium text-clay underline-offset-4 hover:underline">
+        <Link to={next ? registerUrl(next) : '/register'} className={textLink}>
           Create an account
         </Link>
       </p>

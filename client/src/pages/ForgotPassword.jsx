@@ -2,9 +2,8 @@ import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { MailCheck } from 'lucide-react'
 import AuthShell from '../components/AuthShell'
-import Field from '../components/Field'
+import { Button, Field, display, stateIcon, textLink } from '../design'
 import api, { getErrorMessage } from '../services/api'
-import { btnPrimary } from '../ui'
 
 export default function ForgotPassword() {
   const [params] = useSearchParams()
@@ -53,26 +52,30 @@ export default function ForgotPassword() {
     >
       {sent ? (
         <>
-          <MailCheck className="h-10 w-10 text-pine" aria-hidden="true" />
-          <h1 className="font-display mt-4 text-[28px] font-semibold tracking-tight text-ink">Check your inbox</h1>
-          <p className="mt-1.5 text-sm leading-relaxed text-muted">
+          <span className={stateIcon}>
+            <MailCheck className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <h1 className={`mt-4 ${display.sm}`}>Check your inbox</h1>
+          <p className="mt-2 text-[13px] leading-relaxed text-ink/55">
             If <span className="font-medium text-ink">{email.trim()}</span> belongs to a CityCart account, a reset link is
             on its way. It expires in 60 minutes.
           </p>
-          <p className="mt-6 text-sm text-muted">
-            <Link to={loginPath} className="font-medium text-clay underline-offset-4 hover:underline">
+          <p className="mt-6 border-t border-line-warm pt-5 text-[13px] text-ink/55">
+            <Link to={loginPath} className={textLink}>
               Back to sign in
             </Link>
           </p>
         </>
       ) : (
         <>
-          <h1 className="font-display text-[28px] font-semibold tracking-tight text-ink">Reset your password</h1>
-          <p className="mt-1.5 text-sm text-muted">Enter the email on your account and we’ll send a recovery link.</p>
+          <h1 className={display.sm}>Reset your password</h1>
+          <p className="mt-2 text-[13px] leading-relaxed text-ink/55">
+            Enter the email on your account and we’ll send a recovery link.
+          </p>
 
-          <form onSubmit={onSubmit} className="mt-8 space-y-5" noValidate>
+          <form onSubmit={onSubmit} className="mt-7 space-y-5" noValidate>
             {error && (
-              <p role="alert" className="rounded-md bg-clay/5 px-3.5 py-2.5 text-sm text-clay">
+              <p role="alert" className="rounded-tile border border-clay/30 bg-clay/5 px-3.5 py-2.5 text-[13px] leading-relaxed text-clay">
                 {error}
               </p>
             )}
@@ -87,14 +90,14 @@ export default function ForgotPassword() {
               error={fieldError}
               required
             />
-            <button type="submit" disabled={submitting} className={`${btnPrimary} w-full`}>
+            <Button type="submit" tone="noir" size="lg" disabled={submitting} className="w-full">
               {submitting ? 'Sending…' : 'Send reset link'}
-            </button>
+            </Button>
           </form>
 
-          <p className="mt-6 text-sm text-muted">
+          <p className="mt-6 border-t border-line-warm pt-5 text-[13px] text-ink/55">
             Remembered it?{' '}
-            <Link to={loginPath} className="font-medium text-clay underline-offset-4 hover:underline">
+            <Link to={loginPath} className={textLink}>
               Sign in
             </Link>
           </p>
