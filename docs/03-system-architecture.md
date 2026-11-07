@@ -590,7 +590,7 @@ The customer shopping flow is:
 ```text
 Browse City
     ↓
-Browse Brands
+Browse Stores
     ↓
 Browse Products
     ↓

@@ -6,6 +6,14 @@ import PageTransition from './ui/PageTransition'
 import StoreNavbar from './layout/StoreNavbar'
 import StoreFooter from './layout/StoreFooter'
 
+// v3 surfaces carry their own canvas and bottom spacing, so the footer meets
+// them directly instead of leaving a strip of page background above it.
+const isV3Surface = (pathname) =>
+  pathname === '/' ||
+  pathname === '/nearby' ||
+  pathname.startsWith('/store/') ||
+  pathname.startsWith('/product/')
+
 export default function StoreLayout() {
   const { user } = useAuth()
   const { pathname } = useLocation()
@@ -30,7 +38,7 @@ export default function StoreLayout() {
         </PageTransition>
       </main>
 
-      <StoreFooter flush={pathname === '/'} />
+      <StoreFooter flush={isV3Surface(pathname)} />
     </div>
   )
 }

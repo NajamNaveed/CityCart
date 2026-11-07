@@ -13,6 +13,7 @@ import { GuestRoute, ProtectedRoute } from './components/RouteGuards'
 import Home from './pages/Home'
 import Brands from './pages/Brands'
 import Nearby from './pages/Nearby'
+import StorePage from './pages/StorePage'
 import Services from './pages/Services'
 import ServiceProvider from './pages/ServiceProvider'
 import ProductDetail from './pages/ProductDetail'
@@ -126,6 +127,7 @@ function App() {
                   <Route index element={<Home />} />
                   <Route path="brands" element={<Brands />} />
                   <Route path="nearby" element={<Nearby />} />
+                  <Route path="store/:id" element={<StorePage />} />
                   <Route path="services" element={<Services />} />
                   <Route path="services/:slug" element={<ServiceProvider />} />
                   <Route path="product/:id" element={<ProductDetail />} />

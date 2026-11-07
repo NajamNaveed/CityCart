@@ -267,11 +267,8 @@ export default function StoreNavbar() {
           <NavLink to="/" end className={navLink}>
             Home
           </NavLink>
-          <NavLink to="/brands" className={navLink}>
-            Brands
-          </NavLink>
           <NavLink to="/nearby" className={navLink}>
-            Nearby
+            Stores
           </NavLink>
           <NavLink to="/services" className={navLink}>
             Services
@@ -326,11 +323,8 @@ export default function StoreNavbar() {
             <DrawerLink to="/" onClick={() => setDrawerOpen(false)}>
               Home
             </DrawerLink>
-            <DrawerLink to="/brands" onClick={() => setDrawerOpen(false)}>
-              Brands
-            </DrawerLink>
             <DrawerLink to="/nearby" onClick={() => setDrawerOpen(false)}>
-              Nearby
+              Stores
             </DrawerLink>
             <DrawerLink to="/services" onClick={() => setDrawerOpen(false)}>
               Services

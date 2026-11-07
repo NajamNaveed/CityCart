@@ -12,8 +12,10 @@ const PRESETS = [
 ]
 
 const pill = (active) =>
-  `h-9 whitespace-nowrap rounded-full border px-3.5 text-[13px] font-medium transition ${
-    active ? 'border-ink bg-ink text-white' : 'border-line bg-white text-ink/75 hover:border-ink hover:text-ink'
+  `h-9 whitespace-nowrap rounded-full border px-3.5 text-[12.5px] font-medium transition ${
+    active
+      ? 'border-noir bg-noir text-cream'
+      : 'border-line-warm bg-paper-warm text-ink/60 hover:border-ink/40 hover:text-ink'
   }`
 
 // How far to search: own block, a preset radius, a custom number of km, or the whole city.
@@ -51,7 +53,7 @@ export default function RangeSelector({ onChange }) {
           {label}
         </button>
       ))}
-      <label className={`flex h-9 items-center gap-1.5 rounded-full border px-3 text-[13px] transition ${custom ? 'border-ink bg-ink text-white' : 'border-line bg-white text-ink/75'}`}>
+      <label className={`flex h-9 items-center gap-1.5 rounded-full border px-3 text-[12.5px] transition ${custom ? 'border-noir bg-noir text-cream' : 'border-line-warm bg-paper-warm text-ink/60'}`}>
         <span className="sr-only">Custom distance in kilometres</span>
         <input
           type="number"

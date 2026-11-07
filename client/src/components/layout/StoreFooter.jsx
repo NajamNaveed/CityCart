@@ -187,15 +187,7 @@ export default function StoreFooter({ flush = false }) {
                     to="/nearby"
                     className="inline-block text-white/70 transition-[color,padding] duration-200 hover:pl-1 hover:text-white"
                   >
-                    Shops near you
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    to="/brands"
-                    className="inline-block text-white/70 transition-[color,padding] duration-200 hover:pl-1 hover:text-white"
-                  >
-                    Brands
+                    Stores near you
                   </Link>
                 </li>
                 <li>

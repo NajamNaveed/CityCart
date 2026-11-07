@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { BadgeCheck } from 'lucide-react'
 import Stars from './Stars'
-import { formatDate, sectionLabel, wrap } from '../ui'
+import { formatDate } from '../ui'
+import { btn, eyebrow, shell } from '../design'
 
 function initials(name = '') {
   return name
@@ -20,7 +21,7 @@ function ReviewBody({ comment }) {
   return (
     <>
       <p
-        className="mt-1 text-[14.5px] leading-relaxed text-muted"
+        className="mt-1 text-[14.5px] leading-relaxed text-ink/60"
         style={
           clampable && !expanded
             ? { display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }
@@ -47,8 +48,9 @@ export default function ReviewsSection({ data }) {
   const { loading, reviews, summary, hasMore, loadingMore, loadMore } = data
 
   return (
-    <section id="reviews" className={`${wrap} scroll-mt-24 border-t border-line py-14`}>
-      <p className={sectionLabel}>Reviews</p>
+    <section id="reviews" className="scroll-mt-24 border-t border-line-warm bg-canvas py-14">
+      <div className={shell}>
+        <p className={eyebrow}>Reviews</p>
       <h2 className="font-display mt-2 text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
         What customers say
       </h2>
@@ -56,22 +58,22 @@ export default function ReviewsSection({ data }) {
       {loading ? (
         <div className="mt-8 h-36 animate-pulse rounded-lg bg-sand" />
       ) : summary.count === 0 ? (
-        <p className="mt-6 max-w-xl text-[15px] leading-relaxed text-muted">
+        <p className="mt-6 max-w-xl text-[15px] leading-relaxed text-ink/60">
           No reviews yet. Customers can review a product once their order has been delivered.
         </p>
       ) : (
         <div className="mt-9 grid gap-10 lg:grid-cols-[17rem_1fr]">
           {/* Summary card */}
-          <div className="h-fit rounded-lg border border-line bg-white p-6 lg:sticky lg:top-24">
+          <div className="h-fit rounded-card border border-line-warm bg-paper-warm p-6 lg:sticky lg:top-24">
             <p className="font-display text-5xl font-semibold text-ink">{summary.average.toFixed(1)}</p>
             <Stars value={summary.average} className="mt-2.5 text-lg" />
-            <p className="mt-2 text-[13px] text-muted">
+            <p className="mt-2 text-[13px] text-ink/55">
               Based on {summary.count} {summary.count === 1 ? 'review' : 'reviews'}
             </p>
             <dl className="mt-6 space-y-2 text-[13px]">
               {[5, 4, 3, 2, 1].map((star) => (
                 <div key={star} className="flex items-center gap-3">
-                  <dt className="w-8 text-muted">{star} ★</dt>
+                  <dt className="w-8 text-ink/55">{star} ★</dt>
                   <dd className="flex-1">
                     <span className="block h-1.5 overflow-hidden rounded-full bg-sand">
                       <span
@@ -80,7 +82,7 @@ export default function ReviewsSection({ data }) {
                       />
                     </span>
                   </dd>
-                  <dd className="w-6 text-right text-muted">{summary.distribution[star]}</dd>
+                  <dd className="w-6 text-right text-ink/55">{summary.distribution[star]}</dd>
                 </div>
               ))}
             </dl>
@@ -89,7 +91,7 @@ export default function ReviewsSection({ data }) {
           {/* Review list — paginated by useProductReviews (5 at a time) */}
           <div className="space-y-4">
             {reviews.map((review) => (
-              <article key={review._id} className="rounded-lg border border-line bg-white p-5">
+              <article key={review._id} className="rounded-card border border-line-warm bg-paper-warm p-5">
                 <div className="flex items-start gap-3.5">
                   <span
                     aria-hidden="true"
@@ -100,11 +102,11 @@ export default function ReviewsSection({ data }) {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                       <Stars value={review.rating} />
-                      <p className="text-xs text-muted">{formatDate(review.createdAt)}</p>
+                      <p className="text-xs text-ink/50">{formatDate(review.createdAt)}</p>
                     </div>
                     {review.title && <p className="mt-1.5 font-medium text-ink">{review.title}</p>}
                     <ReviewBody comment={review.comment} />
-                    <p className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+                    <p className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink/50">
                       <span className="font-medium text-ink/80">{review.reviewerName}</span>
                       {review.verifiedPurchase && (
                         <span className="inline-flex items-center gap-1 text-success">
@@ -122,7 +124,7 @@ export default function ReviewsSection({ data }) {
                 type="button"
                 onClick={loadMore}
                 disabled={loadingMore}
-                className="inline-flex h-10 w-full items-center justify-center rounded-md border border-line bg-white text-[13px] font-medium text-ink transition hover:border-ink disabled:opacity-50"
+                className={`w-full ${btn('outline', 'md')} disabled:opacity-50`}
               >
                 {loadingMore ? 'Loading…' : 'Show more reviews'}
               </button>
@@ -130,6 +132,7 @@ export default function ReviewsSection({ data }) {
           </div>
         </div>
       )}
+      </div>
     </section>
   )
 }

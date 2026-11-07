@@ -733,6 +733,17 @@ notifications, auth, help, legal pages, 404/500.
 New: service discovery, service category, provider page, availability and
 booking flow, booking detail, service chat, service reviews.
 
+Phase 4 progress (customer web):
+
+* The v3 tokens and primitives are frozen in `client/src/design`.
+* The landing page, Stores directory (`/nearby`), public storefront
+  (`/store/:id`) and product page are rebuilt on those primitives.
+* Customer navigation is **Home · Stores · Services**. The separate Brands tab
+  is retired; a brand is reached through its storefront, and the public brand
+  and storefront APIs are unchanged.
+* v3 surfaces end on the footer directly — no strip of page background between
+  the page and the footer.
+
 ### 6.3 Seller landing and dashboards
 
 * `/sell` becomes one landing with two clear doors: **Sell products** (brand)

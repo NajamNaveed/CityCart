@@ -41,8 +41,8 @@ export default function AlsoSoldBy({ catalogProductId, currentProductId }) {
 
   if (!area) {
     return (
-      <section className="mt-12 border-t border-line pt-8">
-        <p className="text-[13px] text-muted">
+      <section className="mt-12 border-t border-line-warm pt-8">
+        <p className="text-[13px] text-ink/55">
           Choose your area to see the other stores that sell this product.{' '}
           <Link to="/nearby" className="font-medium text-ink underline underline-offset-4">
             Choose area
@@ -59,17 +59,17 @@ export default function AlsoSoldBy({ catalogProductId, currentProductId }) {
 
   if (result.status === 404) {
     return (
-      <section className="mt-12 border-t border-line pt-8">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Also sold by</h2>
-        <p className="mt-2 text-[13px] text-muted">This product isn’t sold by any store in your area.</p>
+      <section className="mt-12 border-t border-line-warm pt-8">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/45">Also sold by</h2>
+        <p className="mt-2 text-[13px] text-ink/55">This product isn’t sold by any store in your area.</p>
       </section>
     )
   }
 
   if (result.status !== 200) {
     return (
-      <section className="mt-12 border-t border-line pt-8">
-        <p className="text-[13px] text-muted">
+      <section className="mt-12 border-t border-line-warm pt-8">
+        <p className="text-[13px] text-ink/55">
           {result.error || 'Other stores could not be loaded.'}{' '}
           <button type="button" onClick={() => setAttempt((n) => n + 1)} className="font-medium text-ink underline underline-offset-4">
             Try again
@@ -81,32 +81,32 @@ export default function AlsoSoldBy({ catalogProductId, currentProductId }) {
 
   if (offers.length === 0) {
     return result.item ? (
-      <section className="mt-12 border-t border-line pt-8">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Also sold by</h2>
-        <p className="mt-2 text-[13px] text-muted">Only sold at this store in your area.</p>
+      <section className="mt-12 border-t border-line-warm pt-8">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/45">Also sold by</h2>
+        <p className="mt-2 text-[13px] text-ink/55">Only sold at this store in your area.</p>
       </section>
     ) : null
   }
 
   return (
-    <section className="mt-12 border-t border-line pt-8" aria-labelledby="also-sold-by">
+    <section className="mt-12 border-t border-line-warm pt-8" aria-labelledby="also-sold-by">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="also-sold-by" className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+        <h2 id="also-sold-by" className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/45">
           Also sold by
         </h2>
-        <Link to="/nearby" className="text-[12.5px] text-muted transition hover:text-ink">
+        <Link to="/nearby" className="text-[12.5px] text-ink/55 transition hover:text-ink">
           Change area
         </Link>
       </div>
-      <p className="mt-1 text-[12.5px] text-muted">The same product at other stores in your area.</p>
-      <ul className="mt-3 divide-y divide-line rounded-lg border border-line bg-white px-5">
+      <p className="mt-1 text-[12.5px] text-ink/55">The same product at other stores in your area.</p>
+      <ul className="mt-3 divide-y divide-line-warm rounded-card border border-line-warm bg-paper-warm px-5">
         {offers.map((offer) => (
           <li key={offer.productId} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-3 text-[13px]">
             <span className="min-w-0">
               <Link to={`/product/${offer.productId}`} className="font-medium text-ink hover:underline">
                 {offer.brandName}
               </Link>
-              <span className="ml-2 text-muted">
+              <span className="ml-2 text-ink/50">
                 {[
                   offer.nearestKm !== null && offer.nearestKm !== undefined && `${formatDistance(offer.nearestKm)} away`,
                   offer.branchCount > 1 && `${offer.branchCount} shops`,
@@ -117,7 +117,7 @@ export default function AlsoSoldBy({ catalogProductId, currentProductId }) {
             </span>
             <span className="shrink-0">
               {offer.availability === 'OUT_OF_STOCK' && <span className="mr-2 text-clay">Sold out</span>}
-              {offer.compareAtPrice > offer.price && <span className="mr-1.5 text-muted line-through">{formatPrice(offer.compareAtPrice)}</span>}
+              {offer.compareAtPrice > offer.price && <span className="mr-1.5 text-ink/45 line-through">{formatPrice(offer.compareAtPrice)}</span>}
               <span className="font-semibold text-ink">{formatPrice(offer.price)}</span>
             </span>
           </li>

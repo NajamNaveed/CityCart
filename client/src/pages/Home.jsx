@@ -117,7 +117,7 @@ export default function Home() {
             ))}
           </div>
         ) : visibleStores.length === 0 ? (
-          <EmptyNote to="/brands" linkLabel="Browse every brand">
+          <EmptyNote to="/nearby" linkLabel="Browse every store">
             No shops are live {cityName ? `in ${cityName}` : 'here'} yet. The block is still opening up.
           </EmptyNote>
         ) : (

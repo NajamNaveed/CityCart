@@ -781,7 +781,7 @@ Open CityCart
      ↓
 Select City
      ↓
-Browse Brands
+Browse Stores
      ↓
 Open Brand Store
      ↓

@@ -25,7 +25,7 @@ export default function StoreCard({ store, inBlock }) {
   const blockNames = [...new Set(branches.map((branch) => branch.blockName).filter(Boolean))]
   const where = formatDistance(store.nearestKm) || blockNames[0] || 'Nearby'
   const popular = products.slice(0, 3).map((product) => product.name)
-  const shopUrl = `/nearby?q=${encodeURIComponent(store.name)}`
+  const shopUrl = `/store/${store._id}`
 
   return (
     <article className={`group flex h-full flex-col overflow-hidden ${card} ${cardLift}`}>
