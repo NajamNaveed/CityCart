@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, Layers, LayoutList, LocateFixed, Map as MapIcon, MapPin, Search, Star, Wrench } from 'lucide-react'
 import api, { getErrorMessage } from '../services/api'
 import { useCity } from '../hooks/useCity'
+import { useCityDirectory } from '../hooks/useCityDirectory'
 import { useMapFocus } from '../hooks/useMapFocus'
 import { useNearby } from '../hooks/useNearby'
 import { isRadius } from '../utils/range'
@@ -165,17 +166,27 @@ function ViewToggle({ view, onChange }) {
 export default function Services() {
   const navigate = useNavigate()
   const { city, cityId, cities } = useCity()
-  const { selectedBlocks, blockIds, blocks, areaName, coords, origin, range, setRange, blocksReady, detect, status } = useNearby()
+  const { selectedBlocks, blockIds, blocks, areaName, coords, pinned, origin, range, setRange, blocksReady, detect, setPin, status } = useNearby()
   const { focus, chooseCity } = useMapFocus(blocks)
   const [view, setView] = useState('list')
   const [blockLayer, setBlockLayer] = useState('all') // 'all' | 'mine' | 'off'
   const [providerLayer, setProviderLayer] = useState('all') // 'all' | 'mine' | 'off'
+  const [picking, setPicking] = useState(false)
   const [draft, setDraft] = useState('')
   const [q, setQ] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [sort, setSort] = useState('rank')
   const [categories, setCategories] = useState([])
   const [reload, setReload] = useState(0)
+  // "All providers" on the map means the whole city, even while the list keeps
+  // searching inside the shopper's block.
+  const cityProviders = useCityDirectory({
+    cityId,
+    kind: 'providers',
+    enabled: view === 'map' && providerLayer === 'all',
+    q,
+    categoryId,
+  })
 
   useEffect(() => {
     let active = true
@@ -194,6 +205,16 @@ export default function Services() {
   const hasLocation = hasArea || Boolean(coords)
   const needsArea = range === 'block' && !hasArea
   const radiusApplied = isRadius(range) && Boolean(origin)
+  const openMapPicker = () => {
+    setView('map')
+    setPicking(true)
+  }
+  // A tap moves the shopper's spot only while they are choosing it.
+  const handleMapPick = (lat, lng) => {
+    if (!picking && hasLocation) return
+    setPicking(false)
+    setPin(lat, lng)
+  }
 
   const filterKey = JSON.stringify([cityId, blockIds, coords, range, q, categoryId, sort])
   const [pageState, setPageState] = useState({ filterKey, page: 1 })
@@ -245,7 +266,8 @@ export default function Services() {
   const blockSet = new Set(blockIds.map(String))
   const inMyBlock = (provider) => blockSet.has(String(provider.block?._id))
   const zones = blockLayer === 'all' ? blocks : blockLayer === 'mine' ? selectedBlocks : []
-  const mapProviders = providerLayer === 'all' ? items : providerLayer === 'mine' ? items.filter(inMyBlock) : []
+  const mapProviders =
+    providerLayer === 'all' ? (cityProviders ?? items) : providerLayer === 'mine' ? items.filter(inMyBlock) : []
 
   function onSearch(e) {
     e.preventDefault()
@@ -335,8 +357,11 @@ export default function Services() {
         </div>
 
         {needsArea && cityId && (
-          <p className="mt-4 rounded-tile border border-clay/20 bg-clay/5 px-3.5 py-2.5 text-[12.5px] text-clay">
-            Choose your area to search only your block. Showing the whole city for now.
+          <p className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-tile border border-clay/20 bg-clay/5 px-3.5 py-2.5 text-[12.5px] text-clay">
+            <span>Choose your area to search only your block. Showing the whole city for now.</span>
+            <button type="button" onClick={openMapPicker} className="font-semibold underline">
+              Choose on the map
+            </button>
           </p>
         )}
 
@@ -355,14 +380,25 @@ export default function Services() {
 
         <section className="mt-4" aria-live="polite">
           {view === 'map' ? (
-            <div className="relative overflow-hidden rounded-panel border border-line-warm">
+            <div className="relative isolate z-0 overflow-hidden rounded-panel border border-line-warm">
               <Suspense fallback={<Skeleton className="h-[460px] w-full rounded-none" />}>
                 <ServicesMap
                   items={mapProviders}
                   zones={zones}
                   origin={origin}
                   radiusKm={isRadius(range) && origin ? Number(range) : null}
-                  originLabel={coords ? 'Your spot' : selectedBlocks.length === 1 ? `Centre of ${areaName}` : 'Search centre'}
+                  originLabel={
+                    coords
+                      ? pinned
+                        ? 'Your chosen spot'
+                        : 'Your spot'
+                      : selectedBlocks.length === 1
+                        ? `Centre of ${areaName}`
+                        : 'Search centre'
+                  }
+                  pin={coords && pinned ? coords : null}
+                  pickable={picking || !hasLocation}
+                  onPick={handleMapPick}
                   onOpenProvider={(provider) => navigate(`/services/${provider.slug}`)}
                   focus={focus}
                 />
@@ -389,7 +425,22 @@ export default function Services() {
                     onCycle: () => setProviderLayer(nextLayerState),
                   },
                 ]}
-              />
+              >
+                <button
+                  type="button"
+                  aria-pressed={picking}
+                  onClick={() => setPicking((v) => !v)}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-tile border border-line-warm bg-paper-warm/95 px-3 text-[11.5px] font-medium text-ink shadow-sm backdrop-blur transition hover:border-ink/40"
+                >
+                  <MapPin className="h-3.5 w-3.5 text-clay" aria-hidden="true" />
+                  {picking ? 'Cancel' : 'Choose location'}
+                </button>
+              </MapLayers>
+              {(picking || !hasLocation) && (
+                <p className="pointer-events-none absolute bottom-3 left-1/2 z-10 w-max max-w-[90%] -translate-x-1/2 rounded-full bg-noir/90 px-3.5 py-1.5 text-center text-[12px] text-cream shadow">
+                  {picking ? 'Tap the map to set your location.' : 'Tap the map to choose where you are.'}
+                </p>
+              )}
               {data?.pagination?.pages > 1 && (
                 <p className="px-3 pb-2 pt-1 text-[11.5px] text-muted">The map shows the providers on this page of results.</p>
               )}
@@ -400,10 +451,16 @@ export default function Services() {
               title="Where should we look?"
               message="Share your location so we can show the service providers in your area."
               action={
-                <button type="button" onClick={detect} disabled={status === 'detecting'} className={btn('noir', 'md')}>
-                  <LocateFixed className="h-4 w-4" aria-hidden="true" />
-                  Use my location
-                </button>
+                <div className="flex flex-wrap justify-center gap-2.5">
+                  <button type="button" onClick={detect} disabled={status === 'detecting'} className={btn('noir', 'md')}>
+                    <LocateFixed className="h-4 w-4" aria-hidden="true" />
+                    Use my location
+                  </button>
+                  <button type="button" onClick={openMapPicker} className={btn('outline', 'md')}>
+                    <MapIcon className="h-4 w-4" aria-hidden="true" />
+                    Open the map
+                  </button>
+                </div>
               }
             />
           ) : loading || !query ? (

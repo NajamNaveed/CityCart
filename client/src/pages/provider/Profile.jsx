@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api, { getErrorMessage, getFieldErrors } from '../../services/api'
 import Field from '../../components/Field'
+import ImageUploader from '../../components/brand/ImageUploader'
 import { Notice, PageHeader } from '../../components/brand/Bits'
+import { uploadProviderImage } from '../../services/uploads'
 import { Skeleton } from '../../components/ui'
 import { btnPine, inputClass } from '../../ui'
 
@@ -19,7 +21,7 @@ function toPaisa(text) {
 
 export default function ProviderProfile() {
   const [state, setState] = useState({ loaded: false, provider: null, error: '' })
-  const [form, setForm] = useState({ displayName: '', phone: '', bio: '', addressLine: '', startingAtPrice: '' })
+  const [form, setForm] = useState({ displayName: '', phone: '', bio: '', addressLine: '', startingAtPrice: '', avatar: '', coverImage: '' })
   const [fieldErrors, setFieldErrors] = useState({})
   const [message, setMessage] = useState({ text: '', tone: 'ok' })
   const [saving, setSaving] = useState(false)
@@ -38,6 +40,8 @@ export default function ProviderProfile() {
           bio: provider.bio || '',
           addressLine: provider.addressLine || '',
           startingAtPrice: toRupees(provider.startingAtPrice),
+          avatar: provider.avatar || '',
+          coverImage: provider.coverImage || '',
         })
       })
       .catch((err) => active && setState({ loaded: true, provider: null, error: getErrorMessage(err) }))
@@ -70,6 +74,8 @@ export default function ProviderProfile() {
         bio: form.bio.trim() || null,
         addressLine: form.addressLine.trim(),
         startingAtPrice: price,
+        avatar: form.avatar || null,
+        coverImage: form.coverImage || null,
       })
       setState((s) => ({ ...s, provider: res.data.provider }))
       setMessage({ text: 'Service profile updated.', tone: 'ok' })
@@ -112,6 +118,43 @@ export default function ProviderProfile() {
 
       <div className="grid gap-8 lg:grid-cols-[1fr_18rem]">
         <form onSubmit={onSubmit} className="space-y-5 rounded-card border border-line-warm bg-paper-warm p-6" noValidate>
+          <div className="space-y-5 rounded-tile border border-line-warm bg-sand/40 p-4">
+            <div>
+              <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-ink/55">Page visuals</h2>
+              <p className="mt-1 text-[12.5px] leading-relaxed text-ink/55">
+                Your banner tops your public service page; the profile photo sits beside your name and in listings.
+              </p>
+            </div>
+            <div>
+              <p className={labelClass}>Banner</p>
+              <ImageUploader
+                images={form.coverImage ? [form.coverImage] : []}
+                onChange={(imgs) => setForm((f) => ({ ...f, coverImage: imgs[0] || '' }))}
+                name={form.displayName || 'provider'}
+                linkId="cover-image-link"
+                noun="banner"
+                upload={uploadProviderImage}
+                max={1}
+                showMain={false}
+                previewClass="aspect-[16/6]"
+                layoutClass="grid-cols-1"
+              />
+            </div>
+            <div>
+              <p className={labelClass}>Profile photo</p>
+              <ImageUploader
+                images={form.avatar ? [form.avatar] : []}
+                onChange={(imgs) => setForm((f) => ({ ...f, avatar: imgs[0] || '' }))}
+                name={form.displayName || 'provider'}
+                linkId="avatar-image-link"
+                noun="profile photo"
+                upload={uploadProviderImage}
+                max={1}
+                showMain={false}
+                layoutClass="grid-cols-1 sm:max-w-[12rem]"
+              />
+            </div>
+          </div>
           <Field
             label="Service name"
             id="displayName"

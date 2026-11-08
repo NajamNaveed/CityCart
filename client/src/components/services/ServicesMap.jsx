@@ -14,6 +14,15 @@ const pinIcon = L.divIcon({
   popupAnchor: [0, -26],
 })
 
+// The shopper's own spot, in the colour no provider pin uses.
+const chosenPinIcon = L.divIcon({
+  className: '',
+  html: '<span style="display:block;width:26px;height:26px;border-radius:50% 50% 50% 0;background:#b6472a;transform:rotate(-45deg);border:2px solid #fffcf6;box-shadow:0 1px 5px rgba(21,20,15,.35)"><span style="display:block;width:8px;height:8px;margin:7px;border-radius:50%;background:#fffcf6"></span></span>',
+  iconSize: [26, 26],
+  iconAnchor: [13, 26],
+  popupAnchor: [0, -26],
+})
+
 // Built with DOM nodes and textContent, never HTML strings, so a provider's
 // name can never inject markup.
 function popupFor(provider, onOpenProvider) {
@@ -51,12 +60,30 @@ function popupFor(provider, onOpenProvider) {
 /**
  * Approved providers pinned at their block centre — the only location that is
  * public before a booking is accepted. Tapping a pin opens the provider page.
+ * With `pickable`, a tap instead sets the shopper's own spot.
  */
-export default function ServicesMap({ items, zones = [], origin, radiusKm, originLabel = 'Search centre', onOpenProvider, focus = null }) {
+export default function ServicesMap({
+  items,
+  zones = [],
+  origin,
+  radiusKm,
+  originLabel = 'Search centre',
+  onOpenProvider,
+  pin,
+  pickable = false,
+  onPick,
+  focus = null,
+}) {
   const container = useRef(null)
   const mapRef = useRef(null)
   const layerRef = useRef(null)
   const focusKeyRef = useRef('')
+  const pickableRef = useRef(pickable)
+  const onPickRef = useRef(onPick)
+  useEffect(() => {
+    pickableRef.current = pickable
+    onPickRef.current = onPick
+  })
 
   useEffect(() => {
     const map = L.map(container.current, { scrollWheelZoom: false }).setView(FALLBACK_CENTER, 12)
@@ -64,6 +91,9 @@ export default function ServicesMap({ items, zones = [], origin, radiusKm, origi
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(map)
+    map.on('click', (e) => {
+      if (pickableRef.current) onPickRef.current?.(e.latlng.lat, e.latlng.lng)
+    })
     layerRef.current = L.layerGroup().addTo(map)
     mapRef.current = map
     return () => {
@@ -71,6 +101,10 @@ export default function ServicesMap({ items, zones = [], origin, radiusKm, origi
       mapRef.current = null
     }
   }, [])
+
+  useEffect(() => {
+    if (container.current) container.current.style.cursor = pickable ? 'crosshair' : ''
+  }, [pickable])
 
   useEffect(() => {
     const map = mapRef.current
@@ -107,10 +141,18 @@ export default function ServicesMap({ items, zones = [], origin, radiusKm, origi
       }
     }
 
+    if (pin) {
+      const spot = [pin.lat, pin.lng]
+      points.push(spot)
+      L.marker(spot, { icon: chosenPinIcon, title: 'Your chosen spot', bubblingMouseEvents: false })
+        .bindTooltip('Your chosen spot')
+        .addTo(layer)
+    }
+
     if (points.length === 0) map.setView(FALLBACK_CENTER, 12)
     else if (points.length === 1) map.setView(points[0], 14)
     else map.fitBounds(L.latLngBounds(points), { padding: [40, 40], maxZoom: 15 })
-  }, [items, zones, origin, radiusKm, originLabel, onOpenProvider])
+  }, [items, zones, origin, radiusKm, originLabel, onOpenProvider, pin])
 
   // City picks frame the whole city before the new results narrow it down.
   useEffect(() => {
@@ -125,7 +167,7 @@ export default function ServicesMap({ items, zones = [], origin, radiusKm, origi
     <div
       ref={container}
       role="region"
-      aria-label="Map of service providers"
+      aria-label={pickable ? 'Map for choosing your location' : 'Map of service providers'}
       className="isolate z-0 h-[460px] w-full overflow-hidden rounded-panel border border-line-warm"
     />
   )

@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Layers, LayoutGrid, LocateFixed, Map as MapIcon, MapPin, Search, Store as StoreIcon } from 'lucide-react'
 import api, { getErrorMessage } from '../services/api'
 import { useCity } from '../hooks/useCity'
+import { useCityDirectory } from '../hooks/useCityDirectory'
 import { useMapFocus } from '../hooks/useMapFocus'
 import { useNearby } from '../hooks/useNearby'
 import { isRadius } from '../utils/range'
@@ -92,6 +93,14 @@ export default function Nearby() {
   const { city, cityId, cities } = useCity()
   const { selectedBlocks, blockIds, blocks, areaName, coords, pinned, origin, range, setRange, blocksReady, detect, setPin, status } = useNearby()
   const { focus, chooseCity } = useMapFocus(blocks)
+  // "All stores" on the map means the whole city, even while the list keeps
+  // searching inside the shopper's block.
+  const cityStores = useCityDirectory({
+    cityId,
+    kind: 'stores',
+    enabled: view === 'map' && storeLayer === 'all',
+    q,
+  })
 
   const [draft, setDraft] = useState(q)
   // A search sent from the navbar arrives as a new query string; show it in the box.
@@ -178,7 +187,7 @@ export default function Nearby() {
   const blockSet = new Set(blockIds.map(String))
   const inBlock = (store) => (store.branches || []).some((branch) => blockSet.has(String(branch.blockId)))
   const zones = blockLayer === 'all' ? blocks : blockLayer === 'mine' ? selectedBlocks : []
-  const mapStores = storeLayer === 'all' ? items : storeLayer === 'mine' ? items.filter(inBlock) : []
+  const mapStores = storeLayer === 'all' ? (cityStores ?? items) : storeLayer === 'mine' ? items.filter(inBlock) : []
 
   return (
     <div className="bg-canvas">
@@ -264,7 +273,7 @@ export default function Nearby() {
 
         <section className="mt-4" aria-live="polite">
           {view === 'map' ? (
-            <div className="relative overflow-hidden rounded-panel border border-line-warm">
+            <div className="relative isolate z-0 overflow-hidden rounded-panel border border-line-warm">
               <Suspense fallback={<Skeleton className="h-[460px] w-full rounded-none" />}>
                 <NearbyMap
                   items={mapStores}
@@ -313,7 +322,7 @@ export default function Nearby() {
                 </button>
               </MapLayers>
               {(picking || !hasLocation) && (
-                <p className="pointer-events-none absolute bottom-3 left-1/2 z-[1000] w-max max-w-[90%] -translate-x-1/2 rounded-full bg-noir/90 px-3.5 py-1.5 text-center text-[12px] text-cream shadow">
+                <p className="pointer-events-none absolute bottom-3 left-1/2 z-10 w-max max-w-[90%] -translate-x-1/2 rounded-full bg-noir/90 px-3.5 py-1.5 text-center text-[12px] text-cream shadow">
                   {picking ? 'Tap the map to set your location.' : 'Tap the map to choose where you shop.'}
                 </p>
               )}

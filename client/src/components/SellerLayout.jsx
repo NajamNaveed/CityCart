@@ -2,23 +2,52 @@ import { useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import {
   ArrowUpRight,
+  ChevronDown,
   LayoutDashboard,
   LogIn,
   LogOut,
   Menu as MenuIcon,
   ShoppingBag,
-  Store,
   Wrench,
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import Drawer from './ui/Drawer'
-import { Button, shell } from '../design'
+import Menu from './ui/Menu'
+import { Button, btn, shell } from '../design'
 import { homeFor } from '../utils/nav'
 
 const navLink = ({ isActive }) =>
   `relative text-[13px] font-medium transition-colors ${
     isActive ? 'text-ink' : 'text-ink/55 hover:text-ink'
   }`
+
+const menuItem = 'block rounded-tile px-3 py-2.5 transition-colors hover:bg-canvas'
+const drawerHeading = 'px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-ink/40'
+const drawerLink =
+  'flex items-center gap-2.5 rounded-tile px-3 py-2.5 text-[13.5px] font-medium text-ink transition hover:bg-canvas'
+
+function DoorItems({ close, kind }) {
+  const doors =
+    kind === 'login'
+      ? [
+          { to: '/sell/login', title: 'Brand log in', note: 'Run your store workspace' },
+          { to: '/sell/service/login', title: 'Provider log in', note: 'Manage your service work' },
+        ]
+      : [
+          { to: '/sell/apply', title: 'Sell products', note: 'Open a brand storefront' },
+          { to: '/provider/apply', title: 'Offer services', note: 'Join as a local provider' },
+        ]
+  return (
+    <div className="p-1.5">
+      {doors.map((door) => (
+        <Link key={door.to} to={door.to} onClick={close} className={menuItem}>
+          <span className="block text-[13px] font-medium text-ink">{door.title}</span>
+          <span className="mt-0.5 block text-[11.5px] text-ink/55">{door.note}</span>
+        </Link>
+      ))}
+    </div>
+  )
+}
 
 function FooterColumn({ title, children }) {
   return (
@@ -46,16 +75,7 @@ export default function SellerLayout() {
   const isSeller = user && user.role !== 'CUSTOMER'
   // The same shell serves the brand and provider doors; the copy follows the door.
   const services = pathname.startsWith('/provider') || pathname.startsWith('/sell/service')
-  const overview = pathname === '/sell'
-  const door = overview ? 'For sellers' : services ? 'For providers' : 'For brands'
-  // On an application form the main action points at the other door, which is
-  // the only useful next step while this form is already open.
-  const primary = pathname.startsWith('/provider/apply')
-    ? { to: '/sell/apply', label: 'Open your brand' }
-    : pathname.startsWith('/sell/apply')
-      ? { to: '/provider/apply', label: 'Offer a service' }
-      : { to: '/sell/apply', label: 'Open your brand' }
-  const login = services ? '/sell/service/login' : '/sell/login'
+  const door = pathname === '/sell' ? 'For sellers' : services ? 'For providers' : 'For brands'
 
   const closeMenu = () => setMobileOpen(false)
 
@@ -87,15 +107,6 @@ export default function SellerLayout() {
           </div>
 
           <nav aria-label="Seller" className="hidden items-center gap-7 lg:flex">
-            <NavLink to="/sell" end className={navLink}>
-              Overview
-            </NavLink>
-            <NavLink to="/sell/apply" className={navLink}>
-              Sell products
-            </NavLink>
-            <NavLink to="/provider/apply" className={navLink}>
-              Offer services
-            </NavLink>
             {isSeller && (
               <NavLink to={homeFor(user.role)} className={navLink}>
                 Dashboard
@@ -112,25 +123,54 @@ export default function SellerLayout() {
               <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
             </Link>
             {isSeller ? (
-              <Button tone="outline" size="sm" onClick={logout} className="hidden sm:inline-flex">
-                Sign out
-              </Button>
+              <>
+                <Button tone="outline" size="sm" onClick={logout} className="hidden sm:inline-flex">
+                  Sign out
+                </Button>
+                <Button to={homeFor(user.role)} tone="noir" size="sm">
+                  Dashboard
+                </Button>
+              </>
             ) : (
-              <Link
-                to={login}
-                className="hidden rounded-tile px-3 py-2 text-[12.5px] font-medium text-ink/70 transition-colors hover:bg-canvas hover:text-ink sm:block"
-              >
-                {services ? 'Provider log in' : 'Brand log in'}
-              </Link>
+              <>
+                <div className="hidden sm:block">
+                  <Menu
+                    width="w-60"
+                    trigger={({ open, toggle }) => (
+                      <button
+                        type="button"
+                        onClick={toggle}
+                        aria-haspopup="menu"
+                        aria-expanded={open}
+                        className="inline-flex items-center gap-1.5 rounded-tile px-3 py-2 text-[12.5px] font-medium text-ink/70 transition-colors hover:bg-canvas hover:text-ink"
+                      >
+                        Log in
+                        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
+                      </button>
+                    )}
+                  >
+                    {({ close }) => <DoorItems close={close} kind="login" />}
+                  </Menu>
+                </div>
+                <Menu
+                  width="w-60"
+                  trigger={({ open, toggle }) => (
+                    <button
+                      type="button"
+                      onClick={toggle}
+                      aria-haspopup="menu"
+                      aria-expanded={open}
+                      className={`${btn('noir', 'sm')} px-3 text-[10.5px] sm:px-4 sm:text-[11px]`}
+                    >
+                      Get started
+                      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
+                    </button>
+                  )}
+                >
+                  {({ close }) => <DoorItems close={close} kind="apply" />}
+                </Menu>
+              </>
             )}
-            <Button
-              to={isSeller ? homeFor(user.role) : primary.to}
-              tone="noir"
-              size="sm"
-              className="max-w-[9.5rem] truncate px-3 text-[10.5px] sm:max-w-none sm:px-4 sm:text-[11px]"
-            >
-              {isSeller ? 'Dashboard' : primary.label}
-            </Button>
           </div>
         </div>
       </header>
@@ -138,35 +178,26 @@ export default function SellerLayout() {
       <Drawer open={mobileOpen} onClose={() => setMobileOpen(false)} title="Sell on CityCart">
         <div className="space-y-5">
           <nav aria-label="Seller mobile" className="space-y-1">
-            <Link
-              to="/sell"
-              onClick={closeMenu}
-              className="flex items-center gap-2.5 rounded-tile px-3 py-2.5 text-[13.5px] font-medium text-ink transition hover:bg-canvas"
-            >
-              <Store className="h-4 w-4 text-clay" aria-hidden="true" />
-              Seller overview
-            </Link>
-            <Link
-              to="/sell/apply"
-              onClick={closeMenu}
-              className="flex items-center gap-2.5 rounded-tile px-3 py-2.5 text-[13.5px] font-medium text-ink transition hover:bg-canvas"
-            >
+            <p className={drawerHeading}>Get started</p>
+            <Link to="/sell/apply" onClick={closeMenu} className={drawerLink}>
               <ShoppingBag className="h-4 w-4 text-clay" aria-hidden="true" />
               Sell products
             </Link>
-            <Link
-              to="/provider/apply"
-              onClick={closeMenu}
-              className="flex items-center gap-2.5 rounded-tile px-3 py-2.5 text-[13.5px] font-medium text-ink transition hover:bg-canvas"
-            >
+            <Link to="/provider/apply" onClick={closeMenu} className={drawerLink}>
               <Wrench className="h-4 w-4 text-clay" aria-hidden="true" />
               Offer services
             </Link>
-            <Link
-              to="/"
-              onClick={closeMenu}
-              className="flex items-center gap-2.5 rounded-tile px-3 py-2.5 text-[13.5px] font-medium text-ink transition hover:bg-canvas"
-            >
+            <p className={`${drawerHeading} pt-4`}>Log in</p>
+            <Link to="/sell/login" onClick={closeMenu} className={drawerLink}>
+              <LogIn className="h-4 w-4 text-clay" aria-hidden="true" />
+              Brand log in
+            </Link>
+            <Link to="/sell/service/login" onClick={closeMenu} className={drawerLink}>
+              <LogIn className="h-4 w-4 text-clay" aria-hidden="true" />
+              Provider log in
+            </Link>
+            <p className={`${drawerHeading} pt-4`}>CityCart</p>
+            <Link to="/" onClick={closeMenu} className={drawerLink}>
               <ArrowUpRight className="h-4 w-4 text-clay" aria-hidden="true" />
               Shop CityCart
             </Link>
@@ -193,17 +224,14 @@ export default function SellerLayout() {
               </>
             ) : (
               <>
-                <Button to={services ? '/sell/service/login' : '/sell/login'} tone="noir" size="md" className="w-full" onClick={closeMenu}>
-                  <LogIn className="h-4 w-4" aria-hidden="true" />
-                  {services ? 'Provider log in' : 'Brand log in'}
+                <Button to="/sell/apply" tone="noir" size="md" className="w-full" onClick={closeMenu}>
+                  <ShoppingBag className="h-4 w-4" aria-hidden="true" />
+                  Sell products
                 </Button>
-                <Link
-                  to={services ? '/sell/login' : '/sell/service/login'}
-                  onClick={closeMenu}
-                  className="block rounded-tile border border-line-warm px-4 py-2.5 text-center text-[12.5px] font-semibold uppercase tracking-[0.1em] text-ink/70 transition hover:bg-canvas"
-                >
-                  {services ? 'Brand log in' : 'Provider log in'}
-                </Link>
+                <Button to="/provider/apply" tone="outline" size="md" className="w-full" onClick={closeMenu}>
+                  <Wrench className="h-4 w-4" aria-hidden="true" />
+                  Offer services
+                </Button>
               </>
             )}
           </div>

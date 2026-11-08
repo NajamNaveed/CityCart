@@ -84,7 +84,7 @@ The app keeps one state: `{ blockIds: [1..n], origin: {lat, lng, source: gps|pin
 4. **Zero blocks (border or outside):** the app says so, shows the nearest blocks as chips and on the map, and the customer chooses one or more.
 5. **Pick my own location:** a pin mode. The customer taps the map (for example in D Ground while sitting in Samanabad). The app resolves the blocks at that pin and switches to them. That pin also becomes the delivery location. No address-search service is used, only the pin.
 6. **Range pills (kept):** 2 km, 5 km, 10 km, and **Whole block**. Applied around the origin and only to stores inside the selected block(s).
-7. **Map shows:** the selected block shape(s) in distinct colours, the radius circle, the origin pin, and **only the stores that pass the filter**. Two layer buttons cycle **everything → my block/my stores → hidden**, and a city picker moves the view to that city's blocks without changing the customer's saved spot.
+7. **Map shows:** the selected block shape(s) in distinct colours, the radius circle, the origin pin, and **only the stores that pass the filter**. Two layer buttons cycle **the whole city → my block/my stores → hidden**; “All” means every active store in the chosen city, not just the current page of list results. A city picker moves the view to that city's blocks without changing the customer's saved spot.
 
 **Server**
 - `GET /blocks/at?lat&lng` (built as `/blocks/at` rather than `/discover/blocks`) returns the blocks containing the point (0, 1 or many) plus the nearest blocks when there are none.

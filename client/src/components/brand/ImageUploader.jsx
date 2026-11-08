@@ -15,6 +15,10 @@ export default function ImageUploader({
   noun = 'product',
   upload = uploadProductImage,
   max = MAX_IMAGES,
+  showMain = true,
+  previewClass = 'aspect-square',
+  layoutClass = 'grid-cols-2 gap-4 sm:grid-cols-4',
+  linkId = 'image-link',
 }) {
   const fileInput = useRef(null)
   const [uploads, setUploads] = useState([]) // [{ id, name, progress, error }]
@@ -33,7 +37,7 @@ export default function ImageUploader({
     setMessage('')
 
     if (files.length > room) {
-      setMessage(`You can have up to ${max} photos. ${room > 0 ? `Only the first ${room} will be added.` : 'Remove one to add another.'}`)
+      setMessage(`You can have up to ${max} ${max === 1 ? noun : 'photos'}. ${room > 0 ? `Only the first ${room} will be added.` : 'Remove one to add another.'}`)
     }
 
     // Upload one after another and add each to the list as soon as it is done.
@@ -70,7 +74,7 @@ export default function ImageUploader({
       return
     }
     if (room <= 0) {
-      setMessage(`You can have up to ${max} photos.`)
+      setMessage(`You can have up to ${max} ${max === 1 ? noun : 'photos'}.`)
       return
     }
     setMessage('')
@@ -84,23 +88,24 @@ export default function ImageUploader({
   return (
     <div>
       {images.length > 0 && (
-        <ul className="mb-5 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <ul className={`mb-5 grid ${layoutClass}`}>
           {images.map((src, index) => (
             <li key={src}>
               <div className="relative overflow-hidden bg-sand">
-                <ProductImage src={src} name={name} className="aspect-square w-full" />
-                {index === 0 && (
+                <ProductImage src={src} name={name} className={`${previewClass} w-full`} />
+                {showMain && index === 0 && (
                   <span className="absolute left-2 top-2 bg-noir px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.1em] text-cream">Main</span>
                 )}
               </div>
-              <div className="mt-2 flex justify-between text-[12px] font-medium">
-                {index === 0 ? (
-                  <span className="text-ink/55">Main photo</span>
-                ) : (
-                  <button type="button" disabled={busy} onClick={() => makeMain(index)} className="text-forest hover:underline disabled:text-ink/55">
-                    Make main
-                  </button>
-                )}
+              <div className={`mt-2 flex text-[12px] font-medium ${showMain ? 'justify-between' : 'justify-end'}`}>
+                {showMain &&
+                  (index === 0 ? (
+                    <span className="text-ink/55">Main photo</span>
+                  ) : (
+                    <button type="button" disabled={busy} onClick={() => makeMain(index)} className="text-forest hover:underline disabled:text-ink/55">
+                      Make main
+                    </button>
+                  ))}
                 <button type="button" disabled={busy} onClick={() => remove(index)} className="text-clay hover:underline disabled:text-ink/55">
                   Remove
                 </button>
@@ -110,6 +115,7 @@ export default function ImageUploader({
         </ul>
       )}
 
+      {room > 0 ? (
       <div
         onDragOver={(e) => {
           e.preventDefault()
@@ -125,7 +131,7 @@ export default function ImageUploader({
           dragging ? 'border-forest bg-forest/5' : 'border-line-warm bg-sand/50'
         }`}
       >
-        <p className="text-sm text-ink">Drag photos here, or</p>
+        <p className="text-sm text-ink">Drag an image here, or</p>
         <button
           type="button"
           disabled={room <= 0}
@@ -135,7 +141,7 @@ export default function ImageUploader({
           choose from your computer
         </button>
         <p className="mt-2 text-xs text-ink/55">
-          JPG, PNG or WebP, up to 5 MB each. {images.length} of {max} photos.
+          JPG, PNG or WebP, up to 5 MB each. {images.length} of {max} {max === 1 ? noun : 'photos'}.
         </p>
         <input
           ref={fileInput}
@@ -150,6 +156,11 @@ export default function ImageUploader({
           }}
         />
       </div>
+      ) : (
+        <p className="rounded-card border border-dashed border-line-warm bg-sand/50 px-5 py-4 text-center text-[12px] text-ink/50">
+          {max === 1 ? 'One image is already set.' : `All ${max} photos are set.`} Remove it to choose another.
+        </p>
+      )}
 
       {uploads.length > 0 && (
         <ul className="mt-4 space-y-2 text-sm" aria-live="polite">
@@ -177,15 +188,17 @@ export default function ImageUploader({
         </p>
       )}
 
-      <form onSubmit={addLink} className="mt-5 flex flex-wrap items-center gap-3">
-        <label htmlFor="image-link" className="sr-only">
-          Add an image by link
-        </label>
-        <input id="image-link" value={link} onChange={(e) => setLink(e.target.value)} placeholder="Or paste a link to an image" className={`h-10 min-w-0 flex-1 basis-60 ${inputClass}`} />
-        <button type="submit" className="text-[13px] font-medium text-forest hover:underline">
-          Add link
-        </button>
-      </form>
+      {room > 0 && (
+        <form onSubmit={addLink} className="mt-5 flex flex-wrap items-center gap-3">
+          <label htmlFor={linkId} className="sr-only">
+            Add an image by link
+          </label>
+          <input id={linkId} value={link} onChange={(e) => setLink(e.target.value)} placeholder="Or paste a link to an image" className={`h-10 min-w-0 flex-1 basis-60 ${inputClass}`} />
+          <button type="submit" className="text-[13px] font-medium text-forest hover:underline">
+            Add link
+          </button>
+        </form>
+      )}
     </div>
   )
 }

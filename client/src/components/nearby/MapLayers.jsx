@@ -7,16 +7,16 @@ const NEXT_LABEL = { all: 'only mine', mine: 'off', off: 'everything' }
 // view, plus one button per layer that cycles everything -> mine -> hidden.
 export default function MapLayers({ cities = [], cityId, onCityChange, layers = [], children }) {
   return (
-    <div className="absolute right-3 top-3 z-[1000] flex max-w-[calc(100%-1.5rem)] flex-col items-end gap-2">
+    <div className="absolute right-3 top-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-col items-end gap-2">
       {cities.length > 0 && (
-        <label className="relative inline-flex items-center">
+        <label className="relative inline-flex h-9 items-center rounded-tile border border-line-warm bg-paper-warm/95 pl-8 pr-8 shadow-sm backdrop-blur">
           <span className="sr-only">City shown on the map</span>
           <MapPin className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-clay" aria-hidden="true" />
           <select
             value={cityId}
             onChange={(event) => onCityChange(event.target.value)}
             title="Selecting a city moves the map, not your saved location"
-            className="h-9 appearance-none rounded-tile border border-line-warm bg-paper-warm/95 pl-8 pr-7 text-[11.5px] font-medium text-ink shadow-sm outline-none backdrop-blur transition focus:border-ink/40"
+            className="h-full max-w-[9.5rem] cursor-pointer appearance-none overflow-hidden text-ellipsis whitespace-nowrap bg-transparent text-[11.5px] font-medium text-ink outline-none"
           >
             {!cityId && <option value="">Choose a city</option>}
             {cities.map((city) => (
@@ -25,7 +25,10 @@ export default function MapLayers({ cities = [], cityId, onCityChange, layers = 
               </option>
             ))}
           </select>
-          <ChevronDown className="pointer-events-none absolute right-2 h-3.5 w-3.5 text-ink/45" aria-hidden="true" />
+          <ChevronDown
+            className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink/45"
+            aria-hidden="true"
+          />
         </label>
       )}
 

@@ -128,23 +128,79 @@ const FAQ = [
   ],
 ]
 
-function HeroOrderCard() {
+function ActivityRow({ icon: Icon, label, name, detail, amount, when }) {
   return (
-    <div className="relative z-10 mx-4 -mt-16 rounded-card border border-line-warm bg-paper-warm p-4 shadow-[0_24px_60px_rgba(21,20,15,0.2)] sm:absolute sm:bottom-6 sm:left-6 sm:mx-0 sm:mt-0 sm:w-[264px]">
-      <div className="flex items-center justify-between gap-3">
-        <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
-          <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-sage ring-4 ring-sage/40" />
-          New order
-        </p>
-        <span className="text-[10.5px] text-muted">2 min ago</span>
-      </div>
-      <p className="font-display mt-2.5 text-[22px] font-semibold leading-none tracking-tight text-ink">PKR 2,900</p>
-      <p className="mt-1.5 text-[11.5px] text-muted">Ayesha Malik · stoneware set ×2</p>
-      <div className="mt-3 flex items-center justify-between border-t border-line-warm pt-2.5">
-        <span className="text-[10px] uppercase tracking-[0.14em] text-muted">Pay at door</span>
-        <span className="rounded-full bg-noir px-2.5 py-1 text-[9.5px] font-semibold uppercase tracking-[0.12em] text-cream">
-          Cash
+    <div className="flex items-center gap-3 rounded-tile border border-line-warm bg-paper-warm px-3.5 py-3">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-tile bg-sand text-clay">
+        <Icon className="h-4 w-4" aria-hidden="true" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-2">
+          <span className="truncate text-[12.5px] font-semibold text-ink">{name}</span>
+          <span className="shrink-0 rounded-full bg-canvas px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-ink/45">
+            {label}
+          </span>
         </span>
+        <span className="mt-0.5 block truncate text-[11px] text-ink/50">{detail}</span>
+      </span>
+      <span className="shrink-0 text-right">
+        <span className="block text-[12px] font-semibold tabular-nums text-ink">{amount}</span>
+        <span className="block text-[10px] text-ink/40">{when}</span>
+      </span>
+    </div>
+  )
+}
+
+function SellerDayBoard() {
+  return (
+    <div className="relative">
+      <div className="relative overflow-hidden rounded-panel border border-line-warm bg-sand/70 p-4 shadow-[0_24px_60px_rgba(21,20,15,0.10)] sm:p-6">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-20 -top-20 h-52 w-52 rounded-full bg-paper-warm/80 blur-3xl"
+        />
+        <div className="relative flex items-center justify-between gap-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink/45">Your counter</p>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-line-warm bg-paper-warm px-2.5 py-1 text-[9.5px] font-semibold uppercase tracking-[0.12em] text-ink/55">
+            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-sage ring-4 ring-sage/30" />
+            Live
+          </span>
+        </div>
+
+        <p className="font-display relative mt-4 text-[26px] font-semibold leading-[1.05] tracking-tight text-ink sm:text-[30px]">
+          A quiet morning, <em className="font-normal italic text-clay">handled.</em>
+        </p>
+        <p className="relative mt-2 max-w-[34ch] text-[12.5px] leading-relaxed text-ink/55">
+          Product orders and service bookings land in the same day, on the same street.
+        </p>
+
+        <div className="relative mt-5 space-y-2.5">
+          <ActivityRow
+            icon={ShoppingBag}
+            label="Shop"
+            name="Ayesha Malik"
+            detail="Stoneware set ×2 · collect in 25 min"
+            amount="PKR 2,900"
+            when="2 min ago"
+          />
+          <ActivityRow
+            icon={Wrench}
+            label="Service"
+            name="Hamza R."
+            detail="Deep clean · Saturday, 10:00"
+            amount="PKR 4,500"
+            when="18 min ago"
+          />
+        </div>
+
+        <div className="relative mt-4 flex items-center justify-between rounded-tile border border-line-warm bg-paper-warm px-4 py-3">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/45">Paid at the door</span>
+          <span className="text-[12px] font-semibold tabular-nums text-ink">PKR 7,400 today</span>
+        </div>
+      </div>
+      <div className="absolute -bottom-4 right-4 hidden rotate-[1.5deg] rounded-tile border border-line-warm bg-paper-warm px-4 py-2.5 shadow-[0_18px_40px_rgba(21,20,15,0.14)] sm:block">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/45">Every completed sale</p>
+        <p className="mt-0.5 text-[12px] font-medium text-ink">1% · PKR 0 to list</p>
       </div>
     </div>
   )
@@ -320,21 +376,8 @@ export default function Sell() {
             </ul>
           </div>
 
-          <div className="relative mx-auto w-full min-w-0 max-w-[560px] lg:max-w-none">
-            <div className="relative aspect-[4/3] overflow-hidden rounded-panel bg-sand sm:aspect-[16/11]">
-              <img
-                src="/images/hero-handoff.jpg"
-                alt="A delivery rider handing a paper bag of fresh groceries to a customer at her door"
-                width="640"
-                height="800"
-                fetchPriority="high"
-                className="h-full w-full object-cover"
-              />
-              <span className="absolute right-4 top-4 rounded-full bg-cream/90 px-3 py-1.5 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-noir backdrop-blur-sm">
-                Your counter, on their street
-              </span>
-            </div>
-            <HeroOrderCard />
+          <div className="relative mx-auto w-full min-w-0 max-w-[560px] pb-6 lg:max-w-none">
+            <SellerDayBoard />
           </div>
         </div>
 

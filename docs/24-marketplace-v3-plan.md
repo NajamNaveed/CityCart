@@ -826,6 +826,14 @@ Phase 4 progress (customer web):
 * `/sell` becomes one landing with two clear doors: **Sell products** (brand)
   and **Offer services** (provider), each with its own signup structure and
   login.
+* The seller header offers exactly two actions: a **Log in** menu (brand or
+  provider) and a **Get started** menu (brand form or provider form). There are
+  no separate Overview, Sell products or Offer services links; sellers who are
+  signed in get a Dashboard link instead.
+* The seller hero pairs its message with a working-day board — one product
+  order and one service booking side by side — rather than a single photograph.
+* Provider profiles let the owner set a banner and a profile photo, uploaded to
+  the provider's own media folder and saved with the rest of the profile.
 * Brand, provider and super-admin dashboards get a usability pass:
   consistent navigation, clearer labels, better tables, bulk actions where
   needed, inline help, empty/loading/error states, keyboard support and a
