@@ -1,7 +1,10 @@
 import { Compass } from 'lucide-react'
 import { Button, EmptyState, eyebrow, shell } from '../design'
+import { usePageMeta } from '../hooks/usePageMeta'
 
 export default function NotFound() {
+  usePageMeta({ title: 'Page not found', noindex: true })
+
   return (
     <div className="bg-canvas">
       <div className={`${shell} flex min-h-[56vh] flex-col justify-center py-16 sm:py-20`}>

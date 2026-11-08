@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import AuthShell from '../components/AuthShell'
 import ResendVerification from '../components/ResendVerification'
 import { useAuth } from '../hooks/useAuth'
+import { usePageMeta } from '../hooks/usePageMeta'
 import { getErrorMessage, getFieldErrors } from '../services/api'
 import { safeNext } from '../utils/nav'
 import { Button, Field, display, textLink } from '../design'
@@ -42,6 +43,7 @@ const COPY = {
 }
 
 export default function SellerLogin({ portal = 'brand' }) {
+  usePageMeta({ title: 'Seller sign in', noindex: true })
   const { login, chooseWorkspace } = useAuth()
   const [params] = useSearchParams()
   const hasNext = safeNext(params.get('next'), '') !== ''

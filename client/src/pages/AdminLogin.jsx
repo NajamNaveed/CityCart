@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { ShieldCheck } from 'lucide-react'
 import Field from '../components/Field'
 import { useAuth } from '../hooks/useAuth'
+import { usePageMeta } from '../hooks/usePageMeta'
 import { getErrorMessage, getFieldErrors } from '../services/api'
 import { btnDark } from '../ui'
 
 // Deliberately unlinked from every public page: reachable only by typing /admin/login.
 // It also lives outside the shop and seller layouts, so it shows nothing but the form.
 export default function AdminLogin() {
+  usePageMeta({ title: 'Admin sign in', noindex: true })
   const { login } = useAuth()
   const [form, setForm] = useState({ email: '', password: '' })
   const [error, setError] = useState('')

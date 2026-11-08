@@ -7,6 +7,8 @@ import Stars from '../components/Stars'
 import BookingRequest from '../components/services/BookingRequest'
 import { EmptyState, Skeleton, btn, card, panel, shell } from '../design'
 import { useAuth } from '../hooks/useAuth'
+import { usePageMeta } from '../hooks/usePageMeta'
+import { breadcrumbLd, serviceLd } from '../utils/seo'
 import { formatKarachiDate, minuteLabel } from '../utils/serviceSlots'
 import { durationLabel } from '../utils/serviceBookings'
 import { formatPrice } from '../ui'
@@ -33,6 +35,32 @@ export default function ServiceProvider() {
       active = false
     }
   }, [slug])
+
+  const loadedProvider = state.slug === slug ? state.provider : null
+  const providerName = loadedProvider?.displayName || 'Service provider'
+  const categoryName = loadedProvider?.category?.name
+  const blockName = loadedProvider?.block?.name
+
+  usePageMeta({
+    title: loadedProvider ? (categoryName ? `${providerName} · ${categoryName}` : providerName) : 'Service provider',
+    description:
+      loadedProvider?.bio ||
+      (loadedProvider
+        ? `Book ${providerName} for ${categoryName || 'local'} services${blockName ? ` in ${blockName}` : ''}. See starting prices and request a time slot on CityCart.`
+        : undefined),
+    image: loadedProvider?.coverImage || loadedProvider?.avatar || undefined,
+    noindex: state.loaded && state.slug === slug && !state.provider,
+    jsonLd: loadedProvider
+      ? [
+          serviceLd({ provider: loadedProvider, path: `/services/${slug}` }),
+          breadcrumbLd([
+            { name: 'Home', path: '/' },
+            { name: 'Services', path: '/services' },
+            { name: providerName, path: `/services/${slug}` },
+          ]),
+        ]
+      : null,
+  })
 
   if (!state.loaded || state.slug !== slug) {
     return (

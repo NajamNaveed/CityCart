@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import { lazy, Suspense, useEffect } from 'react'
 import { AuthProvider } from './context/AuthProvider'
 import { CityProvider } from './context/CityProvider'
@@ -9,38 +9,47 @@ import { ChatProvider } from './context/ChatProvider'
 import { Toaster } from './components/ui'
 import StoreLayout from './components/StoreLayout'
 import SellerLayout from './components/SellerLayout'
-import { GuestRoute, ProtectedRoute } from './components/RouteGuards'
+import { GuestRoute, NoIndexLayout, ProtectedRoute } from './components/RouteGuards'
 import Home from './pages/Home'
-import Brands from './pages/Brands'
 import Nearby from './pages/Nearby'
-import StorePage from './pages/StorePage'
-import Services from './pages/Services'
-import ServiceProvider from './pages/ServiceProvider'
-import ProductDetail from './pages/ProductDetail'
-import Login from './pages/Login'
-import Register from './pages/Register'
-import VerifyEmail from './pages/VerifyEmail'
-import ForgotPassword from './pages/ForgotPassword'
-import ResetPassword from './pages/ResetPassword'
-import Cart from './pages/Cart'
-import Checkout from './pages/Checkout'
-import OrderPlaced from './pages/OrderPlaced'
-import MyOrders from './pages/MyOrders'
-import MyBookings from './pages/MyBookings'
-import MyBookingDetail from './pages/MyBookingDetail'
-import MyAddresses from './pages/MyAddresses'
-import Chat from './pages/Chat'
-import MyOrderDetail from './pages/MyOrderDetail'
 import Sell from './pages/Sell'
-import SellerLogin from './pages/SellerLogin'
-import Apply from './pages/Apply'
-import ProviderApply from './pages/ProviderApply'
-import AdminLogin from './pages/AdminLogin'
-import Notifications from './pages/Notifications'
 import NotFound from './pages/NotFound'
+
+// Reached from a card or a link rather than the initial screen, so these
+// route chunks load on demand.
+const Brands = lazy(() => import('./pages/Brands'))
+const StorePage = lazy(() => import('./pages/StorePage'))
+const Services = lazy(() => import('./pages/Services'))
+const ServiceProvider = lazy(() => import('./pages/ServiceProvider'))
+const ProductDetail = lazy(() => import('./pages/ProductDetail'))
+
+// Account, auth and application screens are never on the first screen, so a
+// guest reading the shop does not download them.
+const Login = lazy(() => import('./pages/Login'))
+const Register = lazy(() => import('./pages/Register'))
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail'))
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
+const ResetPassword = lazy(() => import('./pages/ResetPassword'))
+const Cart = lazy(() => import('./pages/Cart'))
+const Checkout = lazy(() => import('./pages/Checkout'))
+const OrderPlaced = lazy(() => import('./pages/OrderPlaced'))
+const MyOrders = lazy(() => import('./pages/MyOrders'))
+const MyBookings = lazy(() => import('./pages/MyBookings'))
+const MyBookingDetail = lazy(() => import('./pages/MyBookingDetail'))
+const MyAddresses = lazy(() => import('./pages/MyAddresses'))
+const Chat = lazy(() => import('./pages/Chat'))
+const MyOrderDetail = lazy(() => import('./pages/MyOrderDetail'))
+const SellerLogin = lazy(() => import('./pages/SellerLogin'))
+const Apply = lazy(() => import('./pages/Apply'))
+const ProviderApply = lazy(() => import('./pages/ProviderApply'))
+const AdminLogin = lazy(() => import('./pages/AdminLogin'))
+const Notifications = lazy(() => import('./pages/Notifications'))
 
 // The two dashboards load on demand — shoppers never download them.
 const DesignSystem = lazy(() => import('./pages/DesignSystem'))
+const Help = lazy(() => import('./pages/Help'))
+const Contact = lazy(() => import('./pages/Contact'))
+const PolicyPage = lazy(() => import('./pages/legal/PolicyPage'))
 const BrandLayout = lazy(() => import('./components/brand/BrandLayout'))
 const Overview = lazy(() => import('./pages/brand/Overview'))
 const BrandProducts = lazy(() => import('./pages/brand/Products'))
@@ -100,6 +109,12 @@ function RouteFallback() {
 
 const BRAND_ROLES = ['BRAND_ADMIN', 'BRAND_EMPLOYEE']
 
+// A brand's public page used to live at /brands/:id; storefronts replaced it.
+function RetiredBrandLink() {
+  const { id } = useParams()
+  return <Navigate to={`/store/${id}`} replace />
+}
+
 // Every navigation starts at the top of the new page. 'instant' overrides the
 // site's smooth-scroll CSS, which would otherwise animate the jump.
 function ScrollToTop() {
@@ -130,14 +145,29 @@ function App() {
                   <Route path="brands" element={<Brands />} />
                   <Route path="nearby" element={<Nearby />} />
                   <Route path="store/:id" element={<StorePage />} />
+
+                  {/* Retired URLs from earlier versions of the shop. */}
+                  <Route path="shop" element={<Navigate to="/nearby" replace />} />
+                  <Route path="brands/:id" element={<RetiredBrandLink />} />
                   <Route path="services" element={<Services />} />
                   <Route path="services/:slug" element={<ServiceProvider />} />
                   <Route path="product/:id" element={<ProductDetail />} />
 
+                  {/* Support and the draft legal pages are public. */}
+                  <Route path="help" element={<Help />} />
+                  <Route path="contact" element={<Contact />} />
+                  <Route path="privacy" element={<PolicyPage page="privacy" />} />
+                  <Route path="terms" element={<PolicyPage page="terms" />} />
+                  <Route path="refund-policy" element={<PolicyPage page="refund-policy" />} />
+                  <Route path="seller-agreement" element={<PolicyPage page="seller-agreement" />} />
+                  <Route path="provider-agreement" element={<PolicyPage page="provider-agreement" />} />
+
                   {/* Email links and password recovery work signed in or out. */}
-                  <Route path="verify-email" element={<VerifyEmail />} />
-                  <Route path="forgot-password" element={<ForgotPassword />} />
-                  <Route path="reset-password" element={<ResetPassword />} />
+                  <Route element={<NoIndexLayout />}>
+                    <Route path="verify-email" element={<VerifyEmail />} />
+                    <Route path="forgot-password" element={<ForgotPassword />} />
+                    <Route path="reset-password" element={<ResetPassword />} />
+                  </Route>
 
                   <Route element={<GuestRoute />}>
                     <Route path="login" element={<Login />} />

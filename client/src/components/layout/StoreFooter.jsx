@@ -271,7 +271,7 @@ export default function StoreFooter({ flush = false }) {
             </nav>
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-3 border-y border-white/10 py-5 text-[11px] text-white/45">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-white/10 py-5 text-[11px] text-white/45">
             {TRUST.map(({ icon: Icon, text }, index) => (
               <div key={text} className="flex items-center gap-4">
                 {index > 0 && <span aria-hidden="true" className="h-3 w-px bg-white/15" />}
@@ -285,6 +285,26 @@ export default function StoreFooter({ flush = false }) {
               Built for your block <span className="text-white/75">· one street at a time</span>
             </span>
           </div>
+
+          <nav
+            aria-label="Help and legal"
+            className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-white/10 py-5 text-[11.5px] text-white/50"
+          >
+            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">Help & legal</span>
+            {[
+              ['/help', 'Help'],
+              ['/contact', 'Contact'],
+              ['/privacy', 'Privacy'],
+              ['/terms', 'Terms'],
+              ['/refund-policy', 'Refund & returns'],
+              ['/seller-agreement', 'Seller agreement'],
+              ['/provider-agreement', 'Provider agreement'],
+            ].map(([to, label]) => (
+              <Link key={to} to={to} className="transition hover:text-white">
+                {label}
+              </Link>
+            ))}
+          </nav>
         </div>
 
         <FooterWordmark />

@@ -4,9 +4,11 @@ import { CheckCircle2, MailCheck, XCircle } from 'lucide-react'
 import AuthShell from '../components/AuthShell'
 import { Button, Field, display, stateIcon, stateIconOk, textLink } from '../design'
 import ResendVerification from '../components/ResendVerification'
+import { usePageMeta } from '../hooks/usePageMeta'
 import api, { getErrorMessage } from '../services/api'
 
 export default function VerifyEmail() {
+  usePageMeta({ title: 'Verify your email', noindex: true })
   const [params] = useSearchParams()
   const token = params.get('token') || ''
   const requested = params.get('portal')

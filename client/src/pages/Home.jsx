@@ -9,6 +9,8 @@ import { SectionHead, shell as SHELL } from '../design'
 import { useCity } from '../hooks/useCity'
 import { useNearby } from '../hooks/useNearby'
 import { useHomeFeed } from '../hooks/useHomeFeed'
+import { usePageMeta } from '../hooks/usePageMeta'
+import { organizationLd, websiteLd } from '../utils/seo'
 import { formatDistance } from '../utils/geo'
 
 function CardSkeleton() {
@@ -75,6 +77,7 @@ function ServiceCta() {
 }
 
 export default function Home() {
+  usePageMeta({ title: 'Local brands, one cart', jsonLd: [organizationLd(), websiteLd()] })
   const { city, cities } = useCity()
   const { selectedBlocks, blockIds, areaName } = useNearby()
   const { city: feedCity, stores, products, providers, loading, failed } = useHomeFeed(blockIds)

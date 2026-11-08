@@ -81,6 +81,13 @@ export default function SellerLayout() {
 
   return (
     <div className="flex min-h-screen flex-col bg-canvas">
+      <a
+        href="#seller-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[80] focus:rounded-tile focus:bg-noir focus:px-4 focus:py-2 focus:text-[12px] focus:font-semibold focus:text-cream"
+      >
+        Skip to content
+      </a>
+
       <header className="sticky top-0 z-40 border-b border-line-warm bg-paper-warm/90 backdrop-blur-md">
         <div className={`${shell} flex h-16 items-center justify-between gap-4`}>
           <div className="flex min-w-0 items-center gap-1">
@@ -245,7 +252,7 @@ export default function SellerLayout() {
         </div>
       )}
 
-      <main className="flex-1">
+      <main id="seller-content" tabIndex={-1} className="flex-1">
         <Outlet />
       </main>
 

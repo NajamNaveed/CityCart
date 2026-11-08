@@ -2,6 +2,8 @@
   "rewrites": [
     { "source": "/api/:path*", "destination": "https://citycart-n51q.onrender.com/api/:path*" },
     { "source": "/socket.io/:path*", "destination": "https://citycart-n51q.onrender.com/socket.io/:path*" },
+    { "source": "/sitemap.xml", "destination": "https://citycart-n51q.onrender.com/sitemap.xml" },
+    { "source": "/robots.txt", "destination": "https://citycart-n51q.onrender.com/robots.txt" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

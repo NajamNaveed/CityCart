@@ -575,6 +575,26 @@ PATCH /api/v1/admin/settings
 
 Settings are persisted in the singleton platform settings document. The API validates supported fields and does not accept a client-supplied tenant or singleton key.
 
+The Help and Contact pages read a public-safe subset with no authentication:
+
+```text
+GET /api/v1/settings/public
+→ { settings: { platformName, supportEmail, supportPhone } }
+```
+
+This endpoint never returns commission, billing, announcement or maintenance settings.
+
+## Crawler files
+
+Served from the site root rather than `/api/v1`, so crawlers read them on the public domain. `client/vercel.json` rewrites both paths to the API service.
+
+```text
+GET /sitemap.xml
+GET /robots.txt
+```
+
+`sitemap.xml` lists the public pages plus every ACTIVE brand storefront, every ACTIVE product inside an ACTIVE brand, and every verified provider that is not frozen. Entries use the first `CLIENT_URL` value as their origin. `robots.txt` disallows account, dashboard and recovery areas and points at the sitemap. Both are public and read-only.
+
 ## Analytics
 
 Brand analytics is available at `GET /api/v1/brand/analytics` (also `GET /api/v1/analytics/brand` for the analytics module convention) to `BRAND_ADMIN` and employees with `analytics.view`. Scope is derived from the authenticated user's brand. Super Admin platform analytics is available at `GET /api/v1/admin/analytics` (also `GET /api/v1/analytics/admin`). Both endpoints accept optional UTC date-only `from` and `to` query parameters in `YYYY-MM-DD` format; the default is the last 30 days.

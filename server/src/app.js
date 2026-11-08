@@ -6,6 +6,7 @@ const helmet = require('helmet');
 const env = require('./config/env');
 const { corsOptions } = require('./config/cors');
 const healthRoutes = require('./routes/health.routes');
+const sitemapRoutes = require('./routes/sitemap.routes');
 const authRoutes = require('./routes/auth.routes');
 const cityRoutes = require('./routes/city.routes');
 const blockRoutes = require('./routes/block.routes');
@@ -43,6 +44,7 @@ const reviewRoutes = require('./routes/review.routes');
 const adminReviewRoutes = require('./routes/adminReview.routes');
 const notificationRoutes = require('./routes/notification.routes');
 const adminSettingsRoutes = require('./routes/adminSettings.routes');
+const publicSettingsRoutes = require('./routes/publicSettings.routes');
 const analyticsRoutes = require('./routes/analytics.routes');
 const adminUsersRoutes = require('./routes/adminUsers.routes');
 const adminPartnerRoutes = require('./routes/adminPartner.routes');
@@ -80,6 +82,10 @@ app.use(cookieParser());
 
 // Foundation-level health check (see docs/18-development-roadmap.md, Phase 0/1)
 app.use('/health', healthRoutes);
+
+// Crawler files at the site root (Vercel rewrites /sitemap.xml and
+// /robots.txt to this service).
+app.use('/', sitemapRoutes);
 
 // Versioned API base. Matches only the exact base path so it does not
 // shadow business routers mounted under /api/v1/* in later phases (see
@@ -130,6 +136,7 @@ app.use('/api/v1/admin/reviews', adminReviewRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/admin/billing', adminBillingRoutes);
 app.use('/api/v1/billing', billingRoutes);
+app.use('/api/v1/settings', publicSettingsRoutes);
 app.use('/api/v1/admin', adminSettingsRoutes);
 app.use('/api/v1/admin', adminUsersRoutes);
 app.use('/api/v1/admin/partners', adminPartnerRoutes);

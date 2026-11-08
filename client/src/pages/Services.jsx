@@ -6,6 +6,7 @@ import { useCity } from '../hooks/useCity'
 import { useCityDirectory } from '../hooks/useCityDirectory'
 import { useMapFocus } from '../hooks/useMapFocus'
 import { useNearby } from '../hooks/useNearby'
+import { usePageMeta } from '../hooks/usePageMeta'
 import { isRadius } from '../utils/range'
 import { nextLayerState } from '../utils/layerState'
 import MapLayers from '../components/nearby/MapLayers'
@@ -164,6 +165,12 @@ function ViewToggle({ view, onChange }) {
 }
 
 export default function Services() {
+  usePageMeta({
+    title: 'Services & pros near you',
+    description:
+      'Find cleaners, plumbers, electricians and more in your block. See a starting price, request a slot and agree the details in one thread.',
+  })
+
   const navigate = useNavigate()
   const { city, cityId, cities } = useCity()
   const { selectedBlocks, blockIds, blocks, areaName, coords, pinned, origin, range, setRange, blocksReady, detect, setPin, status } = useNearby()

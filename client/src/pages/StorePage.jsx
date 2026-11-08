@@ -5,6 +5,8 @@ import api, { getErrorMessage } from '../services/api'
 import ProductCard from '../components/ProductCard'
 import ProductImage from '../components/ProductImage'
 import { EmptyState, ErrorState, Skeleton, badge, btn, panel, shell } from '../design'
+import { usePageMeta } from '../hooks/usePageMeta'
+import { breadcrumbLd, storeLd } from '../utils/seo'
 
 const DAYS = [
   ['mon', 'Monday'],
@@ -65,6 +67,36 @@ export default function StorePage() {
       active = false
     }
   }, [id, reload])
+
+  const loaded = state.id === id ? state.data : null
+  const storeName = loaded?.store?.name || loaded?.brand?.name || 'Store'
+  const storeDescription = loaded?.store?.description || loaded?.brand?.description
+  const storeImage = loaded?.store?.banner || loaded?.brand?.coverImage
+
+  usePageMeta({
+    title: loaded ? storeName : 'Store',
+    description: storeDescription,
+    image: storeImage || undefined,
+    noindex: state.id === id && !state.data,
+    jsonLd: loaded
+      ? [
+          storeLd({
+            name: storeName,
+            description: storeDescription,
+            image: storeImage,
+            address: loaded.store?.address,
+            phone: contactValue(loaded.store?.contact, ['phone', 'phoneNumber', 'mobile']),
+            email: contactValue(loaded.store?.contact, ['email']),
+            path: `/store/${id}`,
+          }),
+          breadcrumbLd([
+            { name: 'Home', path: '/' },
+            { name: 'Stores', path: '/nearby' },
+            { name: storeName, path: `/store/${id}` },
+          ]),
+        ]
+      : null,
+  })
 
   if (state.id !== id) {
     return (

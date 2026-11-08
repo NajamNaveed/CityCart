@@ -5,10 +5,12 @@ import AuthShell from '../components/AuthShell'
 import { Button, Field, display, stateIcon, textLink } from '../design'
 import ResendVerification from '../components/ResendVerification'
 import { useAuth } from '../hooks/useAuth'
+import { usePageMeta } from '../hooks/usePageMeta'
 import { getErrorMessage, getFieldErrors } from '../services/api'
 import { loginUrl, safeNext } from '../utils/nav'
 
 export default function Register() {
+  usePageMeta({ title: 'Create an account', noindex: true })
   const { register } = useAuth()
   const [params] = useSearchParams()
   const next = safeNext(params.get('next'), '')

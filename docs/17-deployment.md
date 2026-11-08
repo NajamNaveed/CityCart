@@ -103,6 +103,37 @@ Admin secrets
 
 in frontend environment variables.
 
+### 4.1 Search-engine metadata and crawler files
+
+The site is a client-rendered SPA on Vercel. Per-page metadata is written at
+runtime by `usePageMeta`; `client/index.html` carries static Open Graph and
+Twitter fallbacks for crawlers that do not run JavaScript.
+
+Set `VITE_SITE_URL` to the public origin (for example
+`https://citycart.example`) so canonical and Open Graph URLs are absolute. When
+it is unset the hook falls back to `window.location.origin`.
+
+`GET /sitemap.xml` and `GET /robots.txt` are served by the Express API from
+its root, not under `/api/v1`. `client/vercel.json` rewrites both paths to the
+Render host so they resolve on the public domain ahead of the SPA catch-all:
+
+```text
+/sitemap.xml -> https://<api-host>/sitemap.xml
+/robots.txt  -> https://<api-host>/robots.txt
+```
+
+Both files derive their origin from the first `CLIENT_URL` entry. After a
+domain change, update `CLIENT_URL` on Render, the two rewrite destinations in
+`client/vercel.json`, and `VITE_SITE_URL` on Vercel.
+
+The sitemap is generated per request from public data: active stores, active
+products belonging to active stores, and active verified providers that are not
+billing-frozen. Private and transactional paths are disallowed in `robots.txt`.
+
+Server-side rendering was evaluated and deferred (see
+`docs/24-marketplace-v3-plan.md`, section 6.4). Social previews remain the
+static fallback until SSR or prerendering ships.
+
 ---
 
 ## 5. Backend Deployment
@@ -781,6 +812,7 @@ Phase 7 ships the three-app marketplace: the website, the shopper app, the Staff
 | Render | `CLOUDINARY_*` | optional; private proof/return photos need all three |
 | Render | `PUSH_ENABLED`, `EXPO_ACCESS_TOKEN` | optional; push is off without them |
 | Vercel | `VITE_API_URL` | **empty** — the client calls `/api/v1` same-origin |
+| Vercel | `VITE_SITE_URL` | public origin, for absolute canonical and Open Graph URLs |
 | Vercel | (file) `client/vercel.json` | destination must be the live Render host |
 | Vercel | Deployment Protection | **off**, otherwise API calls redirect to a Vercel login |
 | EAS | `EXPO_PUBLIC_API_URL` | the Render URL, same value for all three apps |

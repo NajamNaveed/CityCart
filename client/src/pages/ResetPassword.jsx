@@ -3,9 +3,11 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { CheckCircle2, XCircle } from 'lucide-react'
 import AuthShell from '../components/AuthShell'
 import { Button, Field, display, stateIcon, stateIconOk, textLink } from '../design'
+import { usePageMeta } from '../hooks/usePageMeta'
 import api, { getErrorMessage } from '../services/api'
 
 export default function ResetPassword() {
+  usePageMeta({ title: 'Choose a new password', noindex: true })
   const [params] = useSearchParams()
   const token = params.get('token') || ''
   const requested = params.get('portal')

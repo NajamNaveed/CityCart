@@ -16,6 +16,7 @@ import {
 import api, { getErrorMessage } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import { useCart } from '../hooks/useCart'
+import { usePageMeta } from '../hooks/usePageMeta'
 import ProductImage from '../components/ProductImage'
 import { optimizedUrl } from '../components/optimizeImage'
 import ReviewsSection from '../components/ReviewsSection'
@@ -25,6 +26,7 @@ import { useProductReviews } from '../hooks/useProductReviews'
 import { EmptyState } from '../design'
 import { Modal, Reveal } from '../components/ui'
 import { loginUrl } from '../utils/nav'
+import { breadcrumbLd, productLd } from '../utils/seo'
 import { btn, eyebrow, panel, shell } from '../design'
 import { formatPrice } from '../ui'
 
@@ -541,6 +543,28 @@ export default function ProductDetail() {
       active = false
     }
   }, [id])
+
+  const product = data.id === id ? data.product : null
+  const brand = data.id === id ? data.brand : null
+
+  usePageMeta({
+    title: product ? product.name : 'Product',
+    description: product?.description ? product.description.slice(0, 160) : undefined,
+    image: product?.images?.[0],
+    type: 'product',
+    noindex: data.id === id && !data.product,
+    jsonLd: product
+      ? [
+          productLd({ product, brand, path: `/product/${id}` }),
+          breadcrumbLd([
+            { name: 'Home', path: '/' },
+            { name: 'Stores', path: '/nearby' },
+            { name: brand?.name || 'Store', path: `/store/${product.brandId}` },
+            { name: product.name, path: `/product/${id}` },
+          ]),
+        ]
+      : null,
+  })
 
   if (data.id !== id) {
     return (

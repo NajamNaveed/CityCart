@@ -6,6 +6,7 @@ import { useCity } from '../hooks/useCity'
 import { useCityDirectory } from '../hooks/useCityDirectory'
 import { useMapFocus } from '../hooks/useMapFocus'
 import { useNearby } from '../hooks/useNearby'
+import { usePageMeta } from '../hooks/usePageMeta'
 import { isRadius } from '../utils/range'
 import { nextLayerState } from '../utils/layerState'
 import MapLayers from '../components/nearby/MapLayers'
@@ -82,6 +83,12 @@ function ViewToggle({ view, onChange }) {
 }
 
 export default function Nearby() {
+  usePageMeta({
+    title: 'Stores near you',
+    description:
+      'Browse local shops in your city block — groceries, fashion, home and more. One cart across several stores, with cash on delivery.',
+  })
+
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
   const [view, setView] = useState('list') // 'list' | 'map'

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { ArrowUpRight, Search, SearchX, Store } from 'lucide-react'
 import { useCity } from '../hooks/useCity'
 import { useBrands } from '../hooks/useBrands'
+import { usePageMeta } from '../hooks/usePageMeta'
 import { EmptyState, Reveal, Skeleton } from '../components/ui'
 import { sectionLabel, wrap } from '../ui'
 
@@ -16,6 +17,11 @@ function monogram(name = '') {
 }
 
 export default function Brands() {
+  usePageMeta({
+    title: 'Local brands',
+    description: 'Independent brands selling through CityCart, city by city. Find a storefront and shop its shelf.',
+  })
+
   const { city, cityId } = useCity()
   const { brands, loading } = useBrands(cityId)
   const [query, setQuery] = useState('')

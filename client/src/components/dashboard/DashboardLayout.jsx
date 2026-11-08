@@ -222,7 +222,11 @@ export default function DashboardLayout({
           )}
         </aside>
 
-        <main id="dashboard-content" className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
+        <main
+          id="dashboard-content"
+          tabIndex={-1}
+          className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-10"
+        >
           <div className={`mx-auto w-full ${maxWidth}`}>{children ?? <Outlet />}</div>
         </main>
       </div>

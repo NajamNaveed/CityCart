@@ -4,10 +4,12 @@ import AuthShell from '../components/AuthShell'
 import { Button, Field, display, textLink } from '../design'
 import ResendVerification from '../components/ResendVerification'
 import { useAuth } from '../hooks/useAuth'
+import { usePageMeta } from '../hooks/usePageMeta'
 import { getErrorMessage, getFieldErrors } from '../services/api'
 import { registerUrl, safeNext } from '../utils/nav'
 
 export default function Login() {
+  usePageMeta({ title: 'Sign in', noindex: true })
   const { login } = useAuth()
   const [params] = useSearchParams()
   const next = safeNext(params.get('next'), '')

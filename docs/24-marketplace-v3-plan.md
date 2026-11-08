@@ -817,9 +817,12 @@ Phase 4 progress (customer web):
   and storefront APIs are unchanged.
 * v3 surfaces end on the footer directly — no strip of page background between
   the page and the footer.
-* Help and legal pages stay on their current copy until approved policy text,
-  the registered entity details and a real support contact are supplied; they
-  are not redesigned ahead of that.
+* Help and legal pages ship as draft shells: Help and Contact use the platform
+  support email, and the policy pages state plainly that the text is being
+  finalised and is not approved terms. Replace the copy when approved policy
+  text, the registered entity details and a real support contact are supplied;
+  the shells are wired into the footer and sitemap, but not treated as legal
+  advice.
 
 ### 6.3 Seller landing and dashboards
 
@@ -846,6 +849,32 @@ Phase 4 progress (customer web):
 The current Vite SPA cannot give reliable per-page metadata for product,
 provider and service pages. The approved direction is **server rendering for
 public pages** while authenticated dashboards remain client-rendered.
+
+**November 2026 decision: SSR is deferred.** The owner chose to finish the web
+surface on the existing Vercel static deployment rather than migrate to React
+Router 7 framework mode in this phase. The SPA now ships:
+
+* a `usePageMeta` hook (`client/src/hooks/usePageMeta.js`) that writes title,
+  description, robots, canonical, Open Graph and Twitter tags plus JSON-LD
+  scripts from one place, using `VITE_SITE_URL` (falling back to the page
+  origin) for absolute URLs;
+* static OG/Twitter fallback tags in `client/index.html` so crawlers that do not
+  execute JavaScript still see a title, description and image;
+* one `robots` meta per route: public catalogue pages are `index, follow`;
+  auth, cart, checkout, orders, dashboards, chat and 404 are `noindex`;
+* JSON-LD for Organization and WebSite (home), Product and BreadcrumbList
+  (product page), LocalBusiness (store page) and Service (provider page);
+* `GET /sitemap.xml` and `GET /robots.txt` served by the Express API from the
+  public domain root, with Vercel rewrites forwarding them. The sitemap lists
+  static pages plus active stores, active products and verified providers;
+* clean, stable URLs with redirects for the retired `/shop` and `/brands/:id`.
+
+Server-rendered content for crawlers therefore remains the one unmet SEO
+deliverable. Social unfurls use the static fallback until SSR or prerendering
+ships.
+
+Revisit conditional on traffic: if organic search or social previews become a
+priority, resume the SSR spike below.
 
 Preferred option (Phase 4 spike):
 
@@ -895,6 +924,9 @@ without a rebuild.
 * Core Web Vitals budgets on the customer home, product and provider pages.
 * Cloudinary responsive images, lazy loading, explicit dimensions.
 * Route-level code splitting; no dashboard code in the public bundle.
+  Implemented with lazy routes plus Rolldown `codeSplitting` groups for React,
+  framer-motion and lucide; the entry chunk is ~254 kB (~72 kB gzip) and the
+  map library loads only on map screens.
 * Cache headers for static assets; SSR HTML cached briefly where safe.
 * Error tracking and structured server logs; no PII in logs.
 * Uptime and health checks; database index review before launch.

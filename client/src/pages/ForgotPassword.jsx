@@ -3,9 +3,11 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { MailCheck } from 'lucide-react'
 import AuthShell from '../components/AuthShell'
 import { Button, Field, display, stateIcon, textLink } from '../design'
+import { usePageMeta } from '../hooks/usePageMeta'
 import api, { getErrorMessage } from '../services/api'
 
 export default function ForgotPassword() {
+  usePageMeta({ title: 'Reset your password', noindex: true })
   const [params] = useSearchParams()
   const requested = params.get('portal')
   const portal = requested === 'brand' || requested === 'service' ? requested : 'customer'

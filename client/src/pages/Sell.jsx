@@ -13,6 +13,7 @@ import {
   Wrench,
 } from 'lucide-react'
 import { Reveal } from '../components/ui'
+import { usePageMeta } from '../hooks/usePageMeta'
 import {
   SectionHead,
   accent,
@@ -330,6 +331,12 @@ function DoorCard({ door, index }) {
 }
 
 export default function Sell() {
+  usePageMeta({
+    title: 'Sell on CityCart',
+    description:
+      'Open a store for your products or offer a service in your block. No listing fee, cash paid at the door, and commission only on completed sales.',
+  })
+
   return (
     <>
       {/* Hero */}
