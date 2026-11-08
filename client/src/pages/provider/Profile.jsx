@@ -6,7 +6,7 @@ import { Notice, PageHeader } from '../../components/brand/Bits'
 import { Skeleton } from '../../components/ui'
 import { btnPine, inputClass } from '../../ui'
 
-const labelClass = 'mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-muted'
+const labelClass = 'mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-ink/55'
 const toRupees = (paisa) => (Number.isFinite(paisa) ? String(paisa / 100) : '')
 
 function toPaisa(text) {
@@ -88,7 +88,7 @@ export default function ProviderProfile() {
     return (
       <div className="space-y-4">
         <Skeleton className="h-10 w-56" />
-        <Skeleton className="h-96 w-full rounded-lg" />
+        <Skeleton className="h-96 w-full rounded-card" />
       </div>
     )
   }
@@ -97,7 +97,7 @@ export default function ProviderProfile() {
     return (
       <>
         <PageHeader title="Service profile" />
-        <p className="text-clay">{state.error}</p>
+        <p role="alert" className="rounded-tile border border-clay/20 bg-clay/10 px-3.5 py-2.5 text-sm text-clay">{state.error}</p>
       </>
     )
   }
@@ -108,12 +108,12 @@ export default function ProviderProfile() {
     <>
       <PageHeader
         title="Service profile"
-        intro="How customers see your service. Changes save immediately and do not affect your review status."
+        intro="Edit how customers see your service. Changes apply when you save, and do not affect your review status."
       />
       <Notice tone={message.tone}>{message.text}</Notice>
 
       <div className="grid gap-8 lg:grid-cols-[1fr_18rem]">
-        <form onSubmit={onSubmit} className="space-y-5 rounded-lg border border-line bg-white p-6" noValidate>
+        <form onSubmit={onSubmit} className="space-y-5 rounded-card border border-line-warm bg-paper-warm p-6" noValidate>
           <Field
             label="Service name"
             id="displayName"
@@ -193,33 +193,37 @@ export default function ProviderProfile() {
         </form>
 
         <aside className="space-y-4 text-sm">
-          <section className="rounded-lg border border-line bg-white p-5">
-            <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">Fixed details</h2>
+          <section className="rounded-card border border-line-warm bg-paper-warm p-5">
+            <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-ink/55">Fixed details</h2>
             <dl className="mt-3 space-y-3">
               <div>
-                <dt className="text-muted">Category</dt>
+                <dt className="text-ink/55">Category</dt>
                 <dd className="font-medium text-ink">{provider.category?.name || '—'}</dd>
               </div>
               <div>
-                <dt className="text-muted">Public link</dt>
-                <dd className="font-medium text-ink">/{provider.slug}</dd>
+                <dt className="text-ink/55">Public link</dt>
+                <dd className="font-medium text-ink">
+                  <Link to={`/services/${provider.slug}`} className="text-forest hover:underline">
+                    /services/{provider.slug}
+                  </Link>
+                </dd>
               </div>
               <div>
-                <dt className="text-muted">City</dt>
+                <dt className="text-ink/55">City</dt>
                 <dd className="font-medium text-ink">{provider.city?.name || '—'}</dd>
               </div>
             </dl>
-            <p className="mt-4 text-[12.5px] leading-relaxed text-muted">
+            <p className="mt-4 text-[12.5px] leading-relaxed text-ink/55">
               The category and public link stay fixed. The city is set at signup. Ask CityCart support if either must
               change.
             </p>
           </section>
-          <section className="rounded-lg border border-line bg-white p-5">
-            <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">Service area</h2>
+          <section className="rounded-card border border-line-warm bg-paper-warm p-5">
+            <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-ink/55">Service area</h2>
             <p className="mt-3 font-medium text-ink">
               {[provider.block?.name, provider.city?.name].filter(Boolean).join(', ') || 'Not set'}
             </p>
-            <Link to="/provider/area" className="mt-3 inline-block text-[13px] font-medium text-pine hover:underline">
+            <Link to="/provider/area" className="mt-3 inline-block text-[13px] font-medium text-forest hover:underline">
               Change your area
             </Link>
           </section>

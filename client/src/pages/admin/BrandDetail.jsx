@@ -2,18 +2,19 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import api, { getErrorMessage, getFieldErrors } from '../../services/api'
 import { useCity } from '../../hooks/useCity'
+import useReadOnly from '../../hooks/useReadOnly'
 import { Notice, PageHeader, StatusBadge, selectClass } from '../../components/brand/Bits'
 import { Skeleton } from '../../components/ui'
 import { btnDark, formatDateTime, humanize, inputClass } from '../../ui'
 
 const SETTABLE = ['PENDING', 'ACTIVE', 'SUSPENDED', 'REJECTED']
-const labelClass = 'mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-muted'
+const labelClass = 'mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-ink/55'
 
 function Row({ label, children }) {
   if (!children) return null
   return (
     <div className="flex justify-between gap-6 py-3">
-      <dt className="text-muted">{label}</dt>
+      <dt className="text-ink/55">{label}</dt>
       <dd className="text-right">{children}</dd>
     </div>
   )
@@ -21,6 +22,7 @@ function Row({ label, children }) {
 
 export default function BrandDetail() {
   const { id } = useParams()
+  const readOnly = useReadOnly()
   const { cities } = useCity()
   const [state, setState] = useState({ id: null, data: null, error: '' })
   const [message, setMessage] = useState({ text: '', tone: 'ok' })
@@ -101,13 +103,13 @@ export default function BrandDetail() {
     return (
       <div className="space-y-4">
         <Skeleton className="h-10 w-56" />
-        <Skeleton className="h-64 w-full rounded-lg" />
+        <Skeleton className="h-64 w-full rounded-card" />
       </div>
     )
   if (!state.data) {
     return (
       <>
-        <p className="text-clay">{state.error}</p>
+        <p role="alert" className="rounded-tile border border-clay/20 bg-clay/10 px-3.5 py-2.5 text-sm text-clay">{state.error}</p>
         <Link to="/admin/brands" className="mt-4 inline-block text-sm font-medium text-clay hover:underline">
           Back to brands
         </Link>
@@ -127,19 +129,22 @@ export default function BrandDetail() {
         action={
           <Link
             to="/admin/brands"
-            className="inline-flex items-center gap-1 rounded-md border border-line bg-white px-3.5 py-2 text-[13px] font-medium text-ink transition hover:border-ink"
+            className="inline-flex items-center gap-1 rounded-tile border border-line-warm bg-paper-warm px-3.5 py-2 text-[13px] font-medium text-ink transition hover:border-ink"
           >
             Back to brands
           </Link>
         }
       />
       <Notice tone={message.tone}>{message.text}</Notice>
+      {readOnly && (
+        <p className="mb-5 text-[12.5px] text-ink/55">Your access is read-only, so this brand cannot be changed.</p>
+      )}
 
       <div className="grid gap-10 lg:grid-cols-[1fr_20rem]">
         <div className="space-y-6">
-          <section className="rounded-lg border border-line bg-white p-6">
-            <h2 className="border-b border-line pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-muted">Brand</h2>
-            <dl className="divide-y divide-line text-sm">
+          <section className="rounded-card border border-line-warm bg-paper-warm p-6">
+            <h2 className="border-b border-line-warm pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-ink/55">Brand</h2>
+            <dl className="divide-y divide-line-warm text-sm">
               <Row label="Status">
                 <StatusBadge value={brand.status} />
               </Row>
@@ -150,9 +155,9 @@ export default function BrandDetail() {
           </section>
 
           {store && (
-            <section className="rounded-lg border border-line bg-white p-6">
-              <h2 className="border-b border-line pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-muted">First store</h2>
-              <dl className="divide-y divide-line text-sm">
+            <section className="rounded-card border border-line-warm bg-paper-warm p-6">
+              <h2 className="border-b border-line-warm pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-ink/55">First store</h2>
+              <dl className="divide-y divide-line-warm text-sm">
                 <Row label="Name">{store.name}</Row>
                 <Row label="Address">{[store.address?.addressLine, store.address?.city].filter(Boolean).join(', ')}</Row>
                 <Row label="Phone">{store.contact?.phone}</Row>
@@ -161,19 +166,19 @@ export default function BrandDetail() {
             </section>
           )}
 
-          <section className="rounded-lg border border-line bg-white p-6">
-            <h2 className="border-b border-line pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-muted">Owners</h2>
+          <section className="rounded-card border border-line-warm bg-paper-warm p-6">
+            <h2 className="border-b border-line-warm pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-ink/55">Owners</h2>
             {owners.length === 0 ? (
-              <p className="py-3 text-sm text-muted">No owner accounts.</p>
+              <p className="py-3 text-sm text-ink/55">No owner accounts.</p>
             ) : (
-              <ul className="divide-y divide-line text-sm">
+              <ul className="divide-y divide-line-warm text-sm">
                 {owners.map((o) => (
                   <li key={o._id} className="flex flex-wrap justify-between gap-3 py-3">
                     <span>
                       <span className="font-medium text-ink">{o.name}</span>
-                      <span className="block text-muted">{o.email}</span>
+                      <span className="block text-ink/55">{o.email}</span>
                     </span>
-                    <span className="text-muted">{o.phone}</span>
+                    <span className="text-ink/55">{o.phone}</span>
                   </li>
                 ))}
               </ul>
@@ -181,11 +186,11 @@ export default function BrandDetail() {
           </section>
 
           {terminated && (
-            <section className="rounded-lg border border-danger/25 bg-danger-soft/40 p-6">
-              <h2 className="border-b border-danger/25 pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-danger">
+            <section className="rounded-card border border-clay/25 bg-clay/10 p-6">
+              <h2 className="border-b border-clay/25 pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-clay">
                 Termination
               </h2>
-              <dl className="divide-y divide-danger/15 text-sm">
+              <dl className="divide-y divide-clay/15 text-sm">
                 <Row label="Terminated">{formatDateTime(brand.terminatedAt)}</Row>
                 <Row label="Staff access ends">{formatDateTime(brand.accessEndsAt)}</Row>
                 <Row label="Reason">{brand.terminationReason}</Row>
@@ -196,9 +201,9 @@ export default function BrandDetail() {
 
         <aside className="space-y-6 text-sm">
           {!terminated && (
-            <section className="rounded-lg border border-line bg-white p-6">
-              <h2 className="border-b border-line pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-muted">Status</h2>
-              <p className="mt-3 text-muted">Only active brands appear in the shop.</p>
+            <section className="rounded-card border border-line-warm bg-paper-warm p-6">
+              <h2 className="border-b border-line-warm pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-ink/55">Status</h2>
+              <p className="mt-3 text-ink/55">Only active brands appear in the shop.</p>
               <label htmlFor="status" className="sr-only">
                 New status
               </label>
@@ -209,27 +214,28 @@ export default function BrandDetail() {
                   </option>
                 ))}
               </select>
-              <button type="button" disabled={busy || status === brand.status} onClick={changeStatus} className={`${btnDark} mt-3 w-full`}>
+              <button type="button" disabled={busy || readOnly || status === brand.status} onClick={changeStatus} className={`${btnDark} mt-3 w-full`}>
                 Update status
               </button>
             </section>
           )}
 
           {!terminated && (
-            <section className="rounded-lg border border-danger/30 bg-white p-6">
-              <h2 className="border-b border-danger/25 pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-danger">
+            <section className="rounded-card border border-clay/30 bg-paper-warm p-6">
+              <h2 className="border-b border-clay/25 pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-clay">
                 Terminate brand
               </h2>
               {!danger ? (
                 <>
-                  <p className="mt-3 leading-relaxed text-muted">
+                  <p className="mt-3 leading-relaxed text-ink/55">
                     Closes the brand permanently. Its unshipped orders are rejected and restocked, and its staff lose access after a
                     grace period. This cannot be undone.
                   </p>
                   <button
                     type="button"
+                    disabled={readOnly}
                     onClick={() => setDanger(true)}
-                    className="mt-3 inline-flex h-10 items-center rounded-md border border-danger/40 bg-white px-4 text-[12.5px] font-medium text-danger transition hover:border-danger"
+                    className="mt-3 inline-flex h-10 items-center rounded-tile border border-clay/40 bg-paper-warm px-4 text-[12.5px] font-medium text-clay transition hover:border-clay disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Start termination
                   </button>
@@ -277,15 +283,15 @@ export default function BrandDetail() {
                   <div className="flex flex-wrap items-center gap-3">
                     <button
                       type="submit"
-                      disabled={busy || typed !== brand.name || reason.trim().length < 10}
-                      className="inline-flex h-10 items-center rounded-md bg-danger px-5 text-[12px] font-medium uppercase tracking-[0.08em] text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={busy || readOnly || typed !== brand.name || reason.trim().length < 10}
+                      className="inline-flex h-10 items-center rounded-tile bg-clay px-5 text-[12px] font-medium uppercase tracking-[0.08em] text-cream transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {busy ? 'Terminating…' : 'Terminate brand'}
                     </button>
                     <button
                       type="button"
                       onClick={() => setDanger(false)}
-                      className="inline-flex h-10 items-center rounded-md border border-line bg-white px-4 text-[12.5px] font-medium text-ink transition hover:border-ink"
+                      className="inline-flex h-10 items-center rounded-tile border border-line-warm bg-paper-warm px-4 text-[12.5px] font-medium text-ink transition hover:border-ink"
                     >
                       Cancel
                     </button>

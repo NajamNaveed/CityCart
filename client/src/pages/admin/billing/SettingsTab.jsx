@@ -37,11 +37,11 @@ function toForm(settings) {
 function Field({ id, label, hint, children }) {
   return (
     <div>
-      <label htmlFor={id} className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">
+      <label htmlFor={id} className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-ink/55">
         {label}
       </label>
       {children}
-      {hint && <p className="mt-1.5 text-[11.5px] text-muted">{hint}</p>}
+      {hint && <p className="mt-1.5 text-[11.5px] text-ink/55">{hint}</p>}
     </div>
   )
 }
@@ -125,8 +125,8 @@ export default function SettingsTab({ onChanged }) {
   if (loading) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-40 w-full rounded-lg" />
-        <Skeleton className="h-40 w-full rounded-lg" />
+        <Skeleton className="h-40 w-full rounded-card" />
+        <Skeleton className="h-40 w-full rounded-card" />
       </div>
     )
   }
@@ -137,9 +137,9 @@ export default function SettingsTab({ onChanged }) {
 
       <div className={`${card} p-5`}>
         <h2 className="flex items-center gap-2 font-display text-lg font-semibold tracking-tight">
-          <Percent className="h-4.5 w-4.5 text-pine" aria-hidden="true" /> Commission and due dates
+          <Percent className="h-4.5 w-4.5 text-forest" aria-hidden="true" /> Commission and due dates
         </h2>
-        <p className="mt-1 text-[13px] text-muted">
+        <p className="mt-1 text-[13px] text-ink/55">
           Changes apply to new commission entries. Entries already recorded keep the rate that was stored with them.
         </p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -216,7 +216,7 @@ export default function SettingsTab({ onChanged }) {
           </Field>
         </div>
 
-        <p className="mt-4 flex items-start gap-2 rounded-md bg-paper px-3 py-2.5 text-[12.5px] leading-relaxed text-muted">
+        <p className="mt-4 flex items-start gap-2 rounded-tile bg-sand/50 px-3 py-2.5 text-[12.5px] leading-relaxed text-ink/55">
           <TimerReset className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           The ladder is: due date warning, paused new orders, then hidden listings. A verified payment restores the
           seller immediately. Manual overrides and grace periods are on the Sellers tab.
@@ -225,9 +225,9 @@ export default function SettingsTab({ onChanged }) {
 
       <div className={`${card} p-5`}>
         <h2 className="flex items-center gap-2 font-display text-lg font-semibold tracking-tight">
-          <Landmark className="h-4.5 w-4.5 text-pine" aria-hidden="true" /> Where sellers pay
+          <Landmark className="h-4.5 w-4.5 text-forest" aria-hidden="true" /> Where sellers pay
         </h2>
-        <p className="mt-1 text-[13px] text-muted">
+        <p className="mt-1 text-[13px] text-ink/55">
           These details appear on every seller's billing page. Leave a field empty to hide it.
         </p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">

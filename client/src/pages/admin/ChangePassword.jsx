@@ -44,19 +44,19 @@ export default function ChangePassword() {
   }
 
   return (
-    <div className="w-full max-w-md rounded-xl border border-line bg-white p-8 shadow-lg shadow-ink/5">
-      <p className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.18em] text-muted">
+    <div className="w-full max-w-md rounded-card border border-line-warm bg-paper-warm p-8 shadow-lg shadow-noir/5">
+      <p className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.18em] text-ink/55">
         <KeyRound className="h-4 w-4 text-clay" aria-hidden="true" />
         first sign-in
       </p>
       <h1 className="font-display mt-3 text-[26px] font-semibold tracking-tight text-ink">Choose your password</h1>
-      <p className="mt-1.5 text-sm text-muted">
+      <p className="mt-1.5 text-sm text-ink/55">
         Your temporary password stops working once you set your own. Use at least 8 characters.
       </p>
 
       <form onSubmit={onSubmit} className="mt-7 space-y-5" noValidate>
         {error && (
-          <p role="alert" className="rounded-md bg-clay/5 px-3.5 py-2.5 text-sm text-clay">
+          <p role="alert" className="rounded-tile bg-clay/5 px-3.5 py-2.5 text-sm text-clay">
             {error}
           </p>
         )}

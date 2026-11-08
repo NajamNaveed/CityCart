@@ -33,12 +33,12 @@ function targetFor(notification, user) {
   return null
 }
 
-const inboxPathFor = (role) =>
-  role === 'SUPER_ADMIN' || role === 'ADMIN_PARTNER'
-    ? '/admin/notifications'
-    : role === 'CUSTOMER'
-      ? '/notifications'
-      : '/brand/notifications'
+const inboxPathFor = (role) => {
+  if (role === 'SUPER_ADMIN' || role === 'ADMIN_PARTNER') return '/admin/notifications'
+  if (role === 'CUSTOMER') return '/notifications'
+  if (role === 'SERVICE_PROVIDER') return '/provider/notifications'
+  return '/brand/notifications'
+}
 
 export default function NotificationBell() {
   const { user } = useAuth()
@@ -81,7 +81,7 @@ export default function NotificationBell() {
         type="button"
         aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
         onClick={() => setOpen((v) => !v)}
-        className="relative flex h-9 w-9 items-center justify-center rounded-sm text-ink transition hover:text-clay"
+        className="relative flex h-9 w-9 items-center justify-center rounded-full text-ink/70 transition hover:bg-sand/60 hover:text-clay"
       >
         <BellIcon />
         {unreadCount > 0 && (
@@ -92,9 +92,9 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-11 z-40 w-[calc(100vw-2rem)] max-w-xs rounded-xl border border-line bg-paper shadow-xl shadow-ink/10 overflow-hidden sm:w-80 sm:max-w-none">
-          <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
-            <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Notifications</p>
+        <div className="absolute right-0 top-11 z-40 w-[calc(100vw-2rem)] max-w-xs overflow-hidden rounded-card border border-line-warm bg-paper-warm shadow-xl shadow-noir/10 sm:w-80 sm:max-w-none">
+          <div className="flex items-center justify-between border-b border-line-warm px-4 py-2.5">
+            <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-ink/45">Notifications</p>
             {unreadCount > 0 && (
               <button
                 type="button"
@@ -111,7 +111,7 @@ export default function NotificationBell() {
           ) : (
             <ul className="max-h-96 overflow-y-auto">
               {notifications.map((n) => (
-                <li key={n._id} className={`border-b border-line last:border-b-0 ${n.isRead ? '' : 'bg-cream'}`}>
+                <li key={n._id} className={`border-b border-line-warm last:border-b-0 ${n.isRead ? '' : 'bg-cream/70'}`}>
                   <div className="flex items-start gap-2 px-4 py-3">
                     <button type="button" onClick={() => onItemClick(n)} className="min-w-0 flex-1 text-left">
                       <p className={`truncate text-[13px] ${n.isRead ? 'text-ink' : 'font-semibold text-ink'}`}>
@@ -140,7 +140,7 @@ export default function NotificationBell() {
               setOpen(false)
               navigate(inboxPathFor(user.role))
             }}
-            className="block w-full border-t border-line px-4 py-2.5 text-center text-[12px] font-medium text-clay hover:text-clay-dark"
+            className="block w-full border-t border-line-warm px-4 py-2.5 text-center text-[12px] font-medium text-clay hover:text-clay-dark"
           >
             View all
           </button>

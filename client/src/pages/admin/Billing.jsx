@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { AlertTriangle, Banknote, FileText, Percent, RefreshCw, WalletCards } from 'lucide-react'
 import api, { getErrorMessage } from '../../services/api'
-import { PageHeader } from '../../components/brand/Bits'
+import { PageHeader, tabButton, tabRow } from '../../components/brand/Bits'
 import { Skeleton } from '../../components/ui'
 import { btnGhost, card, formatDate } from '../../ui'
 import { formatPaisa } from '../../utils/billingUi'
@@ -23,7 +24,7 @@ const AGEING_LABELS = {
 
 function Tabs({ active, onChange }) {
   return (
-    <div role="tablist" aria-label="Billing" className="mb-6 flex flex-wrap gap-1 border-b border-line">
+    <div role="tablist" aria-label="Billing" className={tabRow}>
       {TABS.map((tab) => (
         <button
           key={tab}
@@ -31,8 +32,8 @@ function Tabs({ active, onChange }) {
           role="tab"
           aria-selected={active === tab}
           onClick={() => onChange(tab)}
-          className={`border-b-2 px-4 py-3 text-[13px] font-medium transition-colors ${
-            active === tab ? 'border-ink text-ink' : 'border-transparent text-muted hover:text-ink'
+          className={`${tabButton} ${
+            active === tab ? 'border-ink text-ink' : 'border-transparent text-ink/55 hover:text-ink'
           }`}
         >
           {tab}
@@ -45,11 +46,11 @@ function Tabs({ active, onChange }) {
 function Stat({ icon: Icon, label, value, hint }) {
   return (
     <div className={`${card} p-5`}>
-      <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.1em] text-muted">
+      <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.1em] text-ink/55">
         <Icon className="h-3.5 w-3.5" aria-hidden="true" /> {label}
       </p>
       <p className="mt-2 font-display text-2xl font-semibold tracking-tight text-ink">{value}</p>
-      {hint && <p className="mt-1 text-[12px] text-muted">{hint}</p>}
+      {hint && <p className="mt-1 text-[12px] text-ink/55">{hint}</p>}
     </div>
   )
 }
@@ -90,13 +91,13 @@ function Reports({ report }) {
 
       <div className={`${card} p-5`}>
         <h2 className="flex items-center gap-2 font-display text-lg font-semibold tracking-tight">
-          <FileText className="h-4.5 w-4.5 text-pine" aria-hidden="true" /> Unpaid by age
+          <FileText className="h-4.5 w-4.5 text-forest" aria-hidden="true" /> Unpaid by age
         </h2>
-        <p className="mt-1 text-[13px] text-muted">
+        <p className="mt-1 text-[13px] text-ink/55">
           How long the outstanding balance has been waiting. Sellers move to paused orders, then hidden listings, as it
           ages.
         </p>
-        <ul className="mt-4 divide-y divide-line">
+        <ul className="mt-4 divide-y divide-line-warm">
           {Object.entries(AGEING_LABELS)
             .filter(([key]) => key !== 'OTHER')
             .map(([key, label]) => {
@@ -105,7 +106,7 @@ function Reports({ report }) {
                 <li key={key} className="flex items-center justify-between gap-3 py-3 text-[13px]">
                   <span className="text-ink">{label}</span>
                   <span className="flex items-center gap-4">
-                    <span className="text-muted">
+                    <span className="text-ink/55">
                       {bucket ? `${bucket.invoices} invoice${bucket.invoices === 1 ? '' : 's'}` : '—'}
                     </span>
                     <span className="w-28 text-right font-medium text-ink">
@@ -130,7 +131,14 @@ function Reports({ report }) {
 }
 
 export default function AdminBilling() {
-  const [tab, setTab] = useState(TABS[0])
+  const [params, setParams] = useSearchParams()
+  const tab = TABS.find((item) => item.toLowerCase() === String(params.get('tab')).toLowerCase()) || TABS[0]
+  const setTab = (next) => {
+    const paramsNext = new URLSearchParams(params)
+    if (next === TABS[0]) paramsNext.delete('tab')
+    else paramsNext.set('tab', next.toLowerCase())
+    setParams(paramsNext, { replace: true })
+  }
   const [report, setReport] = useState(null)
   const [error, setError] = useState('')
   const [version, setVersion] = useState(0)
@@ -163,7 +171,7 @@ export default function AdminBilling() {
         }
       />
 
-      {error && <p className="mb-5 rounded-md bg-clay/5 px-3 py-2 text-sm text-clay">{error}</p>}
+      {error && <p className="mb-5 rounded-tile bg-clay/5 px-3 py-2 text-sm text-clay">{error}</p>}
 
       <Tabs active={tab} onChange={setTab} />
 
@@ -173,7 +181,7 @@ export default function AdminBilling() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {[0, 1, 2, 3].map((key) => (
-              <Skeleton key={key} className="h-28 w-full rounded-lg" />
+              <Skeleton key={key} className="h-28 w-full rounded-card" />
             ))}
           </div>
         ))}

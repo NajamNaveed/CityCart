@@ -5,7 +5,7 @@ import ImageUploader from './ImageUploader'
 import ProductImage from '../ProductImage'
 import { btnDark, inputClass } from '../../ui'
 
-const labelClass = 'mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-muted'
+const labelClass = 'mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-ink/55'
 
 function sizeText(size) {
   return size?.value ? `${size.value} ${size.unit}` : ''
@@ -15,17 +15,17 @@ function sizeText(size) {
 export function CatalogItemCard({ item, categoryLabel, onChange }) {
   const details = [item.manufacturer, sizeText(item.size), categoryLabel].filter(Boolean).join(' · ')
   return (
-    <div className="flex gap-4 rounded-lg border border-line bg-white p-5">
+    <div className="flex gap-4 rounded-card border border-line-warm bg-paper-warm p-5">
       <ProductImage src={item.images?.[0]} name={item.name} className="h-24 w-24 shrink-0 rounded-md object-cover" width={200} />
       <div className="min-w-0 flex-1">
         <p className="font-medium text-ink">{item.name}</p>
-        {details && <p className="mt-0.5 text-[13px] text-muted">{details}</p>}
+        {details && <p className="mt-0.5 text-[13px] text-ink/55">{details}</p>}
         {item.description && <p className="mt-2 line-clamp-3 text-[13px] text-ink">{item.description}</p>}
-        <p className="mt-2 text-xs text-muted">
+        <p className="mt-2 text-xs text-ink/55">
           The name, photos and description come from the CityCart catalogue. You set the price, stock and branches.
         </p>
         {onChange && (
-          <button type="button" onClick={onChange} className="mt-2 text-[13px] font-medium text-pine underline">
+          <button type="button" onClick={onChange} className="mt-2 text-[13px] font-medium text-forest underline">
             Choose a different product
           </button>
         )}
@@ -57,18 +57,18 @@ function MyRequests({ refresh, onUse }) {
   return (
     <div className="mt-6">
       <p className={labelClass}>Your requests</p>
-      <ul className="divide-y divide-line rounded-md border border-line">
+      <ul className="divide-y divide-line-warm rounded-md border border-line-warm">
         {items.map((item) => (
           <li key={item._id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-[13.5px]">
             <span className="min-w-0">
               <span className="font-medium text-ink">{item.name}</span>
-              <span className="ml-2 text-xs text-muted">
+              <span className="ml-2 text-xs text-ink/55">
                 {item.scope === 'PRIVATE' ? 'Private to your store' : STATUS_TEXT[item.status] || item.status}
               </span>
               {item.status === 'REJECTED' && item.reviewNote && <span className="mt-0.5 block text-xs text-clay">{item.reviewNote}</span>}
             </span>
             {item.status === 'ACTIVE' && (
-              <button type="button" onClick={() => onUse(item)} className="text-[13px] font-medium text-pine underline">
+              <button type="button" onClick={() => onUse(item)} className="text-[13px] font-medium text-forest underline">
                 Use this
               </button>
             )}
@@ -114,7 +114,7 @@ function RequestForm({ categories, onDone, onCancel }) {
   }
 
   return (
-    <div className="mt-5 space-y-4 rounded-lg border border-line bg-paper p-5">
+    <div className="mt-5 space-y-4 rounded-card border border-line-warm bg-sand/50 p-5">
       <p className="font-medium text-ink">Request a new product</p>
       {error && (
         <p role="alert" className="rounded-md bg-clay/5 px-3.5 py-2.5 text-sm text-clay">
@@ -166,14 +166,14 @@ function RequestForm({ categories, onDone, onCancel }) {
         <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} className="mt-0.5 accent-[#1e3a2f]" />
         <span>
           Only my store can use this product
-          <span className="block text-xs text-muted">Usable straight away, never shown to other stores. Leave it off to share it with every store after the CityCart admin approves it.</span>
+          <span className="block text-xs text-ink/55">Usable straight away, never shown to other stores. Leave it off to share it with every store after the CityCart admin approves it.</span>
         </span>
       </label>
       <div className="flex gap-3">
         <button type="button" onClick={submit} disabled={saving || !form.name.trim() || !form.categoryId} className={btnDark}>
           {saving ? 'Sending…' : isPrivate ? 'Create private product' : 'Send request'}
         </button>
-        <button type="button" onClick={onCancel} className="inline-flex h-11 items-center rounded-md border border-line bg-white px-5 text-[13px] font-medium text-ink transition hover:border-ink">
+        <button type="button" onClick={onCancel} className="inline-flex h-11 items-center rounded-md border border-line-warm bg-paper-warm px-5 text-[13px] font-medium text-ink transition hover:border-ink">
           Cancel
         </button>
       </div>
@@ -223,7 +223,7 @@ export default function CatalogPicker({ categories, onSelect }) {
   }
 
   return (
-    <div className="rounded-lg border border-line bg-white p-6">
+    <div className="rounded-card border border-line-warm bg-paper-warm p-6">
       <label htmlFor="catalog-search" className={labelClass}>
         Find the product
       </label>
@@ -236,7 +236,7 @@ export default function CatalogPicker({ categories, onSelect }) {
         autoComplete="off"
       />
       {error && <p className="mt-2 text-sm text-clay">{error}</p>}
-      {sent && <p className="mt-3 rounded-md bg-pine/5 px-3.5 py-2.5 text-sm text-ink">{sent}</p>}
+      {sent && <p className="mt-3 rounded-md bg-forest/5 px-3.5 py-2.5 text-sm text-ink">{sent}</p>}
 
       {results && results.length > 0 && (
         <ul className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -245,12 +245,12 @@ export default function CatalogPicker({ categories, onSelect }) {
               <button
                 type="button"
                 onClick={() => onSelect(item)}
-                className="flex w-full items-center gap-3 rounded-md border border-line px-3 py-2.5 text-left transition hover:border-ink"
+                className="flex w-full items-center gap-3 rounded-md border border-line-warm px-3 py-2.5 text-left transition hover:border-ink"
               >
                 <ProductImage src={item.images?.[0]} name={item.name} className="h-12 w-12 shrink-0 rounded object-cover" width={100} />
                 <span className="min-w-0">
                   <span className="block truncate text-[13.5px] font-medium text-ink">{item.name}</span>
-                  <span className="block truncate text-xs text-muted">
+                  <span className="block truncate text-xs text-ink/55">
                     {[item.manufacturer, sizeText(item.size), item.scope === 'PRIVATE' ? 'Private' : ''].filter(Boolean).join(' · ') || 'Catalogue product'}
                   </span>
                 </span>
@@ -259,10 +259,10 @@ export default function CatalogPicker({ categories, onSelect }) {
           ))}
         </ul>
       )}
-      {results && results.length === 0 && <p className="mt-4 text-sm text-muted">Nothing in the catalogue matches. You can request it below.</p>}
+      {results && results.length === 0 && <p className="mt-4 text-sm text-ink/55">Nothing in the catalogue matches. You can request it below.</p>}
 
       {!requesting && (
-        <button type="button" onClick={() => setRequesting(true)} className="mt-4 text-[13.5px] font-medium text-pine underline">
+        <button type="button" onClick={() => setRequesting(true)} className="mt-4 text-[13.5px] font-medium text-forest underline">
           Can't find it? Request a new product
         </button>
       )}

@@ -1,13 +1,14 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import api, { getErrorMessage, getFieldErrors } from '../../services/api'
 import { Notice, PageHeader } from '../../components/brand/Bits'
+import CoordinatesField from '../../components/CoordinatesField'
 import { Skeleton } from '../../components/ui'
 import { insidePolygon, latLngOfGeoPoint, parseLatLng } from '../../utils/geo'
 import { btnPine, formatDateTime, inputClass } from '../../ui'
 
 const AreaMap = lazy(() => import('../../components/nearby/AreaMap'))
 
-const labelClass = 'mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-muted'
+const labelClass = 'mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-ink/55'
 
 // Mirrors the server's UTC calendar-month rule so the form can explain the
 // limit before a save is refused.
@@ -86,7 +87,7 @@ export default function ProviderArea() {
       return
     }
     if (!pin) {
-      setFieldErrors({ latitude: 'Tap the map to place your pin inside the block.' })
+      setFieldErrors({ latitude: 'Tap the map or type the coordinates to place your pin inside the block.' })
       return
     }
     if (outside) {
@@ -116,7 +117,7 @@ export default function ProviderArea() {
     return (
       <div className="space-y-4">
         <Skeleton className="h-10 w-56" />
-        <Skeleton className="h-[360px] w-full rounded-lg" />
+        <Skeleton className="h-[360px] w-full rounded-card" />
       </div>
     )
   }
@@ -125,7 +126,7 @@ export default function ProviderArea() {
     return (
       <>
         <PageHeader title="Service area" />
-        <p className="text-clay">{state.error}</p>
+        <p role="alert" className="rounded-tile border border-clay/20 bg-clay/10 px-3.5 py-2.5 text-sm text-clay">{state.error}</p>
       </>
     )
   }
@@ -141,28 +142,28 @@ export default function ProviderArea() {
       <Notice tone={message.tone}>{message.text}</Notice>
 
       <form onSubmit={onSubmit} className="space-y-5" noValidate>
-        <div className="rounded-lg border border-line bg-white p-6">
+        <div className="rounded-card border border-line-warm bg-paper-warm p-6">
           <dl className="grid gap-4 text-sm sm:grid-cols-2">
             <div>
-              <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted">City</dt>
+              <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-ink/55">City</dt>
               <dd className="mt-1 font-medium text-ink">{provider.city?.name || '—'}</dd>
             </div>
             <div>
-              <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Current block</dt>
+              <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-ink/55">Current block</dt>
               <dd className="mt-1 font-medium text-ink">{provider.block?.name || '—'}</dd>
             </div>
             <div>
-              <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Last block change</dt>
+              <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-ink/55">Last block change</dt>
               <dd className="mt-1 text-ink">{provider.blockChangedAt ? formatDateTime(provider.blockChangedAt) : 'Never'}</dd>
             </div>
             <div>
-              <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted">City changes</dt>
-              <dd className="mt-1 text-muted">Not available — the city is fixed at signup.</dd>
+              <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-ink/55">City changes</dt>
+              <dd className="mt-1 text-ink/55">Not available — the city is fixed at signup.</dd>
             </div>
           </dl>
         </div>
 
-        <div className="rounded-lg border border-line bg-white p-6">
+        <div className="rounded-card border border-line-warm bg-paper-warm p-6">
           <div className="max-w-md">
             <label htmlFor="blockId" className={labelClass}>
               Area / block
@@ -199,7 +200,7 @@ export default function ProviderArea() {
                 This is a block change. You can change the block again next calendar month.
               </p>
             ) : (
-              <p className="mt-1.5 text-xs text-muted">Moving the pin inside the same block is unlimited.</p>
+              <p className="mt-1.5 text-xs text-ink/55">Moving the pin inside the same block is unlimited.</p>
             )}
           </div>
 
@@ -207,11 +208,11 @@ export default function ProviderArea() {
             <p className={labelClass}>Pin</p>
             {selectedBlock ? (
               <>
-                <p className="mb-2 text-[13px] text-muted">
-                  {selectedBlock.name} is highlighted. Tap inside it to place your pin. Customers only see your block
-                  until you accept a booking.
+                <p className="mb-2 text-[13px] text-ink/55">
+                  {selectedBlock.name} is highlighted. Tap inside it to place your pin, or type the coordinates below.
+                  Customers only see your block until you accept a booking.
                 </p>
-                <Suspense fallback={<Skeleton className="h-[320px] w-full rounded-lg" />}>
+                <Suspense fallback={<Skeleton className="h-[320px] w-full rounded-card" />}>
                   <AreaMap
                     key={selectedBlock._id}
                     zones={zones}
@@ -226,12 +227,20 @@ export default function ProviderArea() {
                   <p className="mt-2 text-xs text-clay" aria-live="polite">
                     This pin is outside {selectedBlock.name}. Tap inside the highlighted outline.
                   </p>
-                ) : fieldErrors.latitude ? (
-                  <p className="mt-2 text-xs text-clay">{fieldErrors.latitude}</p>
                 ) : null}
+                <div className="mt-3">
+                  <CoordinatesField
+                    id="provider-coords"
+                    label="Exact location"
+                    value={coords}
+                    onChange={setCoords}
+                    error={fieldErrors.latitude}
+                    hint="Tap the map, or type the latitude and longitude. The pin must sit inside your block."
+                  />
+                </div>
               </>
             ) : (
-              <p className="rounded-md bg-paper px-3.5 py-3 text-[13px] text-muted">
+              <p className="rounded-tile bg-sand/50 px-3.5 py-3 text-[13px] text-ink/55">
                 Choose an area to place your pin on the map.
               </p>
             )}

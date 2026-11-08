@@ -35,7 +35,7 @@ export const ADMIN_PRESETS = [
 ]
 
 /** True when the account may open `area` (the super admin may open all). */
-function adminCan(user, area) {
+export function adminCan(user, area) {
   if (!user) return false
   if (user.role === 'SUPER_ADMIN') return true
   if (user.role !== 'ADMIN_PARTNER') return false
@@ -46,35 +46,57 @@ export function isReadOnlyAdmin(user) {
   return Boolean(user && user.role === 'ADMIN_PARTNER' && user.readOnly)
 }
 
-// The sidebar entries an account may open: [path, label, end, icon, areas].
+// The sidebar entries an account may open:
+// [path, label, end-exact, icon, areas, super-only, match-any, group].
 // Kept here rather than in AdminLayout so fast refresh sees a
 // components-only module (nav needs the same areas the server enforces).
 export const ADMIN_NAV = [
-  ['/admin', 'Overview', true, 'LayoutDashboard', [ADMIN_PERMISSIONS.BRANDS, ADMIN_PERMISSIONS.ORDERS], false],
-  ['/admin/brands', 'Brands', false, 'Store', [ADMIN_PERMISSIONS.BRANDS], false],
-  ['/admin/providers', 'Providers', false, 'Wrench', [], true],
-  ['/admin/orders', 'Orders', false, 'Package', [ADMIN_PERMISSIONS.ORDERS], false],
-  ['/admin/service-bookings', 'Service bookings', false, 'CalendarClock', [ADMIN_PERMISSIONS.ORDERS], false],
-  ['/admin/returns', 'Returns', false, 'Undo2', [ADMIN_PERMISSIONS.ORDERS], false],
-  ['/admin/reviews', 'Reviews', false, 'Star', [ADMIN_PERMISSIONS.REVIEWS], false],
-  ['/admin/service-reviews', 'Service reviews', false, 'MessageCircle', [ADMIN_PERMISSIONS.REVIEWS], false],
-  ['/admin/cities', 'Cities', false, 'MapPin', [ADMIN_PERMISSIONS.LOCATIONS], false],
-  ['/admin/blocks', 'Blocks', false, 'MapPinned', [ADMIN_PERMISSIONS.LOCATIONS], false],
-  ['/admin/categories', 'Categories', false, 'Tags', [ADMIN_PERMISSIONS.CATALOG], false],
-  ['/admin/service-categories', 'Service categories', false, 'Wrench', [ADMIN_PERMISSIONS.CATALOG], false],
-  ['/admin/catalogue', 'Catalogue', false, 'Package', [ADMIN_PERMISSIONS.CATALOG], false],
-  ['/admin/analytics', 'Analytics', false, 'ChartLine', [ADMIN_PERMISSIONS.ANALYTICS], false],
-  ['/admin/users', 'Users', false, 'UsersRound', [ADMIN_PERMISSIONS.USERS], false],
-  ['/admin/settings', 'Settings', false, 'Settings', [ADMIN_PERMISSIONS.SETTINGS], false],
-  ['/admin/billing', 'Billing', false, 'ReceiptText', [], true],
-  ['/admin/team', 'Admin team', false, 'UserCog', [], true],
-  ['/admin/activity', 'Activity', false, 'History', [], true],
+  ['/admin', 'Overview', true, 'LayoutDashboard', [ADMIN_PERMISSIONS.BRANDS, ADMIN_PERMISSIONS.ORDERS], false, true, 'Overview'],
+  ['/admin/brands', 'Brands', false, 'Store', [ADMIN_PERMISSIONS.BRANDS], false, false, 'Sellers'],
+  ['/admin/providers', 'Providers', false, 'BadgeCheck', [], true, false, 'Sellers'],
+  ['/admin/orders', 'Orders', false, 'Package', [ADMIN_PERMISSIONS.ORDERS], false, false, 'Orders'],
+  ['/admin/service-bookings', 'Service bookings', false, 'CalendarClock', [ADMIN_PERMISSIONS.ORDERS], false, false, 'Orders'],
+  ['/admin/returns', 'Returns', false, 'Undo2', [ADMIN_PERMISSIONS.ORDERS], false, false, 'Orders'],
+  ['/admin/reviews', 'Reviews', false, 'Star', [ADMIN_PERMISSIONS.REVIEWS], false, false, 'Reviews'],
+  ['/admin/service-reviews', 'Service reviews', false, 'MessageCircle', [ADMIN_PERMISSIONS.REVIEWS], false, false, 'Reviews'],
+  ['/admin/categories', 'Product categories', false, 'Tags', [ADMIN_PERMISSIONS.CATALOG], false, false, 'Catalogue'],
+  ['/admin/service-categories', 'Service categories', false, 'LayoutGrid', [ADMIN_PERMISSIONS.CATALOG], false, false, 'Catalogue'],
+  ['/admin/catalogue', 'Catalogue', false, 'LibraryBig', [ADMIN_PERMISSIONS.CATALOG], false, false, 'Catalogue'],
+  ['/admin/cities', 'Cities', false, 'MapPin', [ADMIN_PERMISSIONS.LOCATIONS], false, false, 'Locations'],
+  ['/admin/blocks', 'Blocks and areas', false, 'MapPinned', [ADMIN_PERMISSIONS.LOCATIONS], false, false, 'Locations'],
+  ['/admin/users', 'Users', false, 'UsersRound', [ADMIN_PERMISSIONS.USERS], false, false, 'People'],
+  ['/admin/team', 'Admin team', false, 'UserCog', [], true, false, 'People'],
+  ['/admin/billing', 'Billing', false, 'ReceiptText', [], true, false, 'Money'],
+  ['/admin/analytics', 'Analytics', false, 'ChartLine', [ADMIN_PERMISSIONS.ANALYTICS], false, false, 'Platform'],
+  ['/admin/settings', 'Settings', false, 'Settings', [ADMIN_PERMISSIONS.SETTINGS], false, false, 'Platform'],
+  ['/admin/activity', 'Activity', false, 'History', [], true, false, 'Platform'],
 ]
 
-export function adminNavFor(user) {
+function visibleNav(user) {
   if (!user) return []
-  return ADMIN_NAV.filter(([, , , , areas, superOnly]) => {
-    if (user.role === 'SUPER_ADMIN') return true
-    return !superOnly && areas.every((area) => adminCan(user, area))
+  if (user.role === 'SUPER_ADMIN') return ADMIN_NAV
+  return ADMIN_NAV.filter(([, , , , areas, superOnly, matchAny]) => {
+    if (superOnly) return false
+    if (areas.length === 0) return true
+    return matchAny ? areas.some((area) => adminCan(user, area)) : areas.every((area) => adminCan(user, area))
   })
+}
+
+export function adminNavFor(user) {
+  return visibleNav(user)
+}
+
+// Same entries, grouped for the sidebar: [{ label, items: [...] }].
+export function adminNavGroupsFor(user) {
+  const groups = []
+  visibleNav(user).forEach((entry) => {
+    const group = entry[7]
+    let target = groups.find((item) => item.label === group)
+    if (!target) {
+      target = { label: group, items: [] }
+      groups.push(target)
+    }
+    target.items.push(entry)
+  })
+  return groups
 }

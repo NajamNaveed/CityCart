@@ -5,10 +5,12 @@ import Field from '../../components/Field'
 import ZoneEditor from '../../components/admin/ZoneEditor'
 import { Notice, PageHeader, Pager, selectClass, StatusBadge } from '../../components/brand/Bits'
 import { usePaged } from '../../hooks/usePaged'
+import useReadOnly from '../../hooks/useReadOnly'
 import { EmptyState, Skeleton } from '../../components/ui'
 import { btnDark } from '../../ui'
 
 export default function Blocks() {
+  const readOnly = useReadOnly()
   const [cities, setCities] = useState(null)
   const [cityId, setCityId] = useState('')
   const [blocks, setBlocks] = useState(null)
@@ -122,15 +124,15 @@ export default function Blocks() {
       <Notice tone={message.tone}>{message.text}</Notice>
 
       {loadError ? (
-        <p className="text-clay">{loadError}</p>
+        <p role="alert" className="rounded-tile border border-clay/20 bg-clay/10 px-3.5 py-2.5 text-sm text-clay">{loadError}</p>
       ) : !cities ? (
-        <Skeleton className="h-24 w-full rounded-lg" />
+        <Skeleton className="h-24 w-full rounded-card" />
       ) : cities.length === 0 ? (
-        <EmptyState icon={MapPinned} title="Add a city first." message="Blocks belong to a city. Create one on the Cities page." className="rounded-lg border border-dashed border-line bg-white" />
+        <EmptyState icon={MapPinned} title="Add a city first." message="Blocks belong to a city. Create one on the Cities page." className="rounded-card border border-dashed border-line-warm bg-paper-warm" />
       ) : (
         <>
           <div className="mb-5 max-w-xs">
-            <label htmlFor="block-city" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">
+            <label htmlFor="block-city" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-ink/55">
               City
             </label>
             <select id="block-city" value={cityId} onChange={(e) => setCityId(e.target.value)} className={`${selectClass} w-full`}>
@@ -143,7 +145,7 @@ export default function Blocks() {
           </div>
 
           {draft ? (
-            <form onSubmit={onSave} noValidate className="mb-8 space-y-4 rounded-lg border border-line bg-white p-5">
+            <form onSubmit={onSave} noValidate className="mb-8 space-y-4 rounded-card border border-line-warm bg-paper-warm p-5">
               <p className="font-medium text-ink">{draft.id ? `Edit ${draft.name || 'block'}` : 'Add a block'}</p>
               <div className="max-w-sm">
                 <Field label="Block name" id="b-name" name="name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} error={fieldErrors.name} required />
@@ -151,16 +153,16 @@ export default function Blocks() {
               <ZoneEditor ring={draft.ring} onChange={(ring) => setDraft((d) => ({ ...d, ring }))} others={others} />
               {(fieldErrors.polygon || fieldErrors.latitude) && <p className="text-sm text-clay">{fieldErrors.polygon || fieldErrors.latitude}</p>}
               <div className="flex gap-3">
-                <button type="submit" disabled={busy || !draft.name.trim() || draft.ring.length < 3} className={btnDark}>
+                <button type="submit" disabled={busy || readOnly || !draft.name.trim() || draft.ring.length < 3} className={btnDark}>
                   {busy ? 'Saving…' : 'Save block'}
                 </button>
-                <button type="button" onClick={() => setDraft(null)} className="inline-flex h-11 items-center rounded-md border border-line bg-white px-5 text-[13px] font-medium text-ink transition hover:border-ink">
+                <button type="button" onClick={() => setDraft(null)} className="inline-flex h-11 items-center rounded-tile border border-line-warm bg-paper-warm px-5 text-[13px] font-medium text-ink transition hover:border-ink">
                   Cancel
                 </button>
               </div>
             </form>
           ) : (
-            <button type="button" onClick={() => setDraft({ id: null, name: '', ring: [] })} className={`${btnDark} mb-8`}>
+            <button type="button" disabled={readOnly} onClick={() => setDraft({ id: null, name: '', ring: [] })} className={`${btnDark} mb-8`}>
               Add a block
             </button>
           )}
@@ -168,20 +170,20 @@ export default function Blocks() {
           {!list ? (
             <div className="space-y-2.5">
               {[0, 1, 2].map((i) => (
-                <Skeleton key={i} className="h-16 w-full rounded-lg" />
+                <Skeleton key={i} className="h-16 w-full rounded-card" />
               ))}
             </div>
           ) : list.length === 0 ? (
-            <EmptyState icon={MapPinned} title="No blocks yet." message="Add the first one above. Shoppers and brands pick from these." className="rounded-lg border border-dashed border-line bg-white" />
+            <EmptyState icon={MapPinned} title="No blocks yet." message="Add the first one above. Shoppers and brands pick from these." className="rounded-card border border-dashed border-line-warm bg-paper-warm" />
           ) : (
             <>
-          <ul className="divide-y divide-line rounded-lg border border-line bg-white">
+          <ul className="divide-y divide-line-warm rounded-card border border-line-warm bg-paper-warm">
               {paged.items.map((b) => (
                 <li key={b._id} className="px-5 py-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                       <span>
                         <span className="font-medium text-ink">{b.name}</span>
-                        <span className="ml-3 text-sm text-muted">
+                        <span className="ml-3 text-sm text-ink/55">
                           {b.polygon ? `${b.polygon.length} corners` : 'No outline yet. Edit it to draw one.'}
                         </span>
                       </span>
@@ -189,20 +191,21 @@ export default function Blocks() {
                         <StatusBadge value={b.isActive ? 'ACTIVE' : 'INACTIVE'} />
                         <button
                           type="button"
+                          disabled={readOnly}
                           onClick={() => {
                             setMessage({ text: '', tone: 'ok' })
                             setDraft({ id: b._id, name: b.name, ring: b.polygon || [] })
                           }}
-                          className="rounded-md border border-line px-3 py-1.5 text-ink transition hover:border-ink"
+                          className="rounded-tile border border-line-warm px-3 py-1.5 text-ink transition hover:border-ink disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           Edit
                         </button>
                         {b.isActive ? (
-                          <button type="button" disabled={busy} onClick={() => setActive(b, false)} className="rounded-md border border-danger/40 px-3 py-1.5 text-danger transition hover:border-danger">
+                          <button type="button" disabled={busy || readOnly} onClick={() => setActive(b, false)} className="rounded-tile border border-clay/40 px-3 py-1.5 text-clay transition hover:border-clay disabled:cursor-not-allowed disabled:opacity-40">
                             Deactivate
                           </button>
                         ) : (
-                          <button type="button" disabled={busy} onClick={() => setActive(b, true)} className="rounded-md border border-pine px-3 py-1.5 text-pine transition hover:bg-pine hover:text-white">
+                          <button type="button" disabled={busy || readOnly} onClick={() => setActive(b, true)} className="rounded-tile border border-forest px-3 py-1.5 text-forest transition hover:bg-forest hover:text-cream disabled:cursor-not-allowed disabled:opacity-40">
                             Reactivate
                           </button>
                         )}

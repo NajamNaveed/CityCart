@@ -7,7 +7,7 @@ import { toast } from '../../components/ui'
 import { btnGhost, btnPine, inputClass } from '../../ui'
 import { CLAIM_METHODS, formatPaisa, inputToPaisa, paisaToInput } from '../../utils/billingUi'
 
-const labelClass = 'mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted'
+const labelClass = 'mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-ink/55'
 
 /**
  * The seller's statement that they paid an invoice (docs/15 §8). Only the
@@ -89,7 +89,7 @@ export default function PaymentForm({ invoice, onCancel, onSubmitted }) {
   return (
     <form onSubmit={submit} className="space-y-4">
       <div>
-        <p className="text-sm text-muted">
+        <p className="text-sm text-ink/55">
           Invoice <span className="font-medium text-ink">{invoice.periodKey}</span> · still due{' '}
           <span className="font-medium text-ink">{formatPaisa(invoice.amountDuePaisa)}</span>
         </p>
@@ -138,7 +138,7 @@ export default function PaymentForm({ invoice, onCancel, onSubmitted }) {
         </label>
         <label
           htmlFor="claim-receipt"
-          className="flex h-11 cursor-pointer items-center gap-2 rounded-md border border-dashed border-line bg-white px-3.5 text-[13px] text-muted transition hover:border-ink hover:text-ink"
+          className="flex h-11 cursor-pointer items-center gap-2 rounded-tile border border-dashed border-line-warm bg-paper-warm px-3.5 text-[13px] text-ink/55 transition hover:border-ink hover:text-ink"
         >
           <Upload className="h-4 w-4" aria-hidden="true" />
           {receiptFile ? receiptFile.name : 'Attach a JPG, PNG or WebP up to 5 MB'}
@@ -167,7 +167,7 @@ export default function PaymentForm({ invoice, onCancel, onSubmitted }) {
       </div>
 
       {error && (
-        <p role="alert" className="rounded-md bg-clay/5 px-3 py-2 text-sm text-clay">
+        <p role="alert" className="rounded-tile bg-clay/5 px-3 py-2 text-sm text-clay">
           {error}
         </p>
       )}

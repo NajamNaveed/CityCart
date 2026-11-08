@@ -51,16 +51,16 @@ export default function ProductImportModal({ open, onClose, onImported }) {
 
   return (
     <Modal open={open} onClose={close} title="Import products from CSV" maxWidth="max-w-2xl">
-      <p className="text-[13.5px] text-muted">
+      <p className="text-[13.5px] text-ink/55">
         Upload a spreadsheet saved as CSV. New products are added and existing ones (same SKU, or same name) are updated.
         Products without a status are saved as drafts.
       </p>
-      <ul className="mt-3 list-disc space-y-1 pl-5 text-[12.5px] text-muted">
+      <ul className="mt-3 list-disc space-y-1 pl-5 text-[12.5px] text-ink/55">
         <li>Required columns: name, price. The name (or barcode) must match a product in the CityCart catalogue, and branches must already exist. Products that are not in the catalogue can be requested from Add product.</li>
         <li>Separate several branches with a | sign. Leave branches empty to sell at all branches. Name, photos and description come from the catalogue.</li>
         <li>Up to 500 products per file.</li>
       </ul>
-      <button type="button" onClick={() => downloadFile(TEMPLATE, 'products-template.csv')} className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-pine underline">
+      <button type="button" onClick={() => downloadFile(TEMPLATE, 'products-template.csv')} className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-forest underline">
         <Download className="h-3.5 w-3.5" aria-hidden="true" />
         Download a template
       </button>
@@ -98,27 +98,27 @@ export default function ProductImportModal({ open, onClose, onImported }) {
         {error && <p className="rounded-md bg-clay/5 px-3.5 py-2.5 text-sm text-clay">{error}</p>}
         {result && (
           <div className="space-y-3 text-[13.5px]">
-            <p className="rounded-md bg-paper px-3.5 py-2.5 text-ink">
+            <p className="rounded-md bg-sand/50 px-3.5 py-2.5 text-ink">
               {result.dryRun ? 'Check complete. Nothing was saved yet. ' : 'Import finished. '}
               <strong>{result.created}</strong> {result.dryRun ? 'will be added' : 'added'}, <strong>{result.updated}</strong>{' '}
               {result.dryRun ? 'will be updated' : 'updated'}, <strong>{result.unchanged}</strong> already up to date,{' '}
               <strong>{result.failed}</strong> with problems.
             </p>
             {result.created + result.updated === 0 && result.failed === 0 && result.unchanged > 0 && (
-              <p className="rounded-md bg-warning-soft px-3.5 py-2.5 text-warning">
+              <p className="rounded-md bg-[#f8efd9] px-3.5 py-2.5 text-[#855811]">
                 These products already exist in your shop with exactly these details, so nothing needed to change. To add new products, put each one on a new row with a name or SKU that is not in your shop yet.
               </p>
             )}
             {result.warnings.map((w) => (
-              <p key={w} className="rounded-md bg-warning-soft px-3.5 py-2.5 text-warning">
+              <p key={w} className="rounded-md bg-[#f8efd9] px-3.5 py-2.5 text-[#855811]">
                 {w}
               </p>
             ))}
-            {result.ignoredColumns.length > 0 && <p className="text-xs text-muted">Ignored columns: {result.ignoredColumns.join(', ')}</p>}
+            {result.ignoredColumns.length > 0 && <p className="text-xs text-ink/55">Ignored columns: {result.ignoredColumns.join(', ')}</p>}
             {result.errors.length > 0 && (
-              <div className="max-h-48 overflow-auto rounded-md border border-line">
+              <div className="max-h-48 overflow-auto rounded-md border border-line-warm">
                 <table className="w-full text-left text-[12.5px]">
-                  <thead className="bg-paper/60 text-[11px] uppercase tracking-[0.1em] text-muted">
+                  <thead className="bg-sand/40 text-[11px] uppercase tracking-[0.1em] text-ink/55">
                     <tr>
                       <th className="px-3 py-2">Row</th>
                       <th className="px-3 py-2">Product</th>
@@ -127,7 +127,7 @@ export default function ProductImportModal({ open, onClose, onImported }) {
                   </thead>
                   <tbody>
                     {result.errors.map((e) => (
-                      <tr key={e.row} className="border-t border-line align-top">
+                      <tr key={e.row} className="border-t border-line-warm align-top">
                         <td className="px-3 py-2">{e.row}</td>
                         <td className="px-3 py-2">{e.name || '(no name)'}</td>
                         <td className="px-3 py-2 text-clay">{e.messages.join(' ')}</td>

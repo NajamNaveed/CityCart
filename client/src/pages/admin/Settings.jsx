@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import api, { getErrorMessage, getFieldErrors } from '../../services/api'
 import Field from '../../components/Field'
-import { Notice, PageHeader } from '../../components/brand/Bits'
+import { Notice, PageHeader, tabButton, tabRow } from '../../components/brand/Bits'
 import { Skeleton } from '../../components/ui'
+import useReadOnly from '../../hooks/useReadOnly'
 import { btnDark, inputClass } from '../../ui'
 
 const TABS = ['Commercial', 'Policies', 'System Controls']
@@ -18,11 +19,14 @@ const EMPTY = {
   maintenanceMode: false,
 }
 
+const optionalNumber = (value) =>
+  value === '' || value === null || value === undefined ? null : Number(value)
+
 function Tabs({ active, onChange }) {
   return (
-    <div role="tablist" aria-label="Platform settings" className="mb-6 flex gap-1 border-b border-line">
+    <div role="tablist" aria-label="Platform settings" className={tabRow}>
       {TABS.map((tab) => (
-        <button key={tab} type="button" role="tab" aria-selected={active === tab} onClick={() => onChange(tab)} className={`border-b-2 px-4 py-3 text-[13px] font-medium transition-colors ${active === tab ? 'border-ink text-ink' : 'border-transparent text-muted hover:text-ink'}`}>
+        <button key={tab} type="button" role="tab" aria-selected={active === tab} onClick={() => onChange(tab)} className={`${tabButton} ${active === tab ? 'border-ink text-ink' : 'border-transparent text-ink/55 hover:text-ink'}`}>
           {tab}
         </button>
       ))}
@@ -32,7 +36,7 @@ function Tabs({ active, onChange }) {
 
 function Toggle({ id, label, checked, onChange }) {
   return (
-    <label htmlFor={id} className="flex min-h-12 items-center justify-between gap-5 border-b border-line py-3 last:border-b-0">
+    <label htmlFor={id} className="flex min-h-12 items-center justify-between gap-5 border-b border-line-warm py-3 last:border-b-0">
       <span className="text-sm font-medium text-ink">{label}</span>
       <input id={id} type="checkbox" role="switch" checked={checked} onChange={(event) => onChange(event.target.checked)} className="h-5 w-9 shrink-0 cursor-pointer accent-ink" />
     </label>
@@ -40,6 +44,7 @@ function Toggle({ id, label, checked, onChange }) {
 }
 
 export default function AdminSettings() {
+  const readOnly = useReadOnly()
   const [form, setForm] = useState(EMPTY)
   const [tab, setTab] = useState(TABS[0])
   const [loading, setLoading] = useState(true)
@@ -85,13 +90,13 @@ export default function AdminSettings() {
         platformName: form.platformName,
         supportEmail: form.supportEmail,
         supportPhone: form.supportPhone,
-        commissionRate: form.commissionRate === '' ? null : Number(form.commissionRate),
+        commissionRate: optionalNumber(form.commissionRate),
       }
     } else if (tab === 'Policies') {
       changes = {
-        codMaxOrderAmount: form.codMaxOrderAmount === '' ? null : Number(form.codMaxOrderAmount),
+        codMaxOrderAmount: optionalNumber(form.codMaxOrderAmount),
         brandOnboardingPolicy: form.brandOnboardingPolicy,
-        orderCancellationGraceMinutes: form.orderCancellationGraceMinutes === '' ? null : Number(form.orderCancellationGraceMinutes),
+        orderCancellationGraceMinutes: optionalNumber(form.orderCancellationGraceMinutes),
       }
     } else {
       changes = { announcement: form.announcement, maintenanceMode: form.maintenanceMode }
@@ -99,7 +104,15 @@ export default function AdminSettings() {
 
     try {
       const { data } = await api.patch('/admin/settings', changes)
-      setForm((current) => ({ ...current, ...data.settings, announcement: { ...current.announcement, ...data.settings.announcement } }))
+      const settings = data.settings
+      setForm((current) => ({
+        ...current,
+        ...settings,
+        commissionRate: settings.commissionRate ?? '',
+        codMaxOrderAmount: settings.codMaxOrderAmount ?? '',
+        orderCancellationGraceMinutes: settings.orderCancellationGraceMinutes ?? '',
+        announcement: { ...current.announcement, ...settings.announcement },
+      }))
       setMessage({ text: 'Platform settings saved.', tone: 'ok' })
     } catch (err) {
       setFieldErrors(getFieldErrors(err))
@@ -109,19 +122,22 @@ export default function AdminSettings() {
     }
   }
 
-  if (loading) return <div className="space-y-4"><Skeleton className="h-10 w-56" /><Skeleton className="h-72 w-full rounded-lg" /></div>
+  if (loading) return <div className="space-y-4"><Skeleton className="h-10 w-56" /><Skeleton className="h-72 w-full rounded-card" /></div>
 
   return (
     <>
       <PageHeader title="Platform settings" intro="Marketplace identity, policies, and system controls." />
       <Notice tone={message.tone}>{message.text}</Notice>
+      {readOnly && (
+        <p className="mb-5 text-[12.5px] text-ink/55">Your access is read-only, so settings cannot be changed.</p>
+      )}
       {Object.keys(fieldErrors).length > 0 && (
         <ul className="mb-5 space-y-1 text-xs text-clay" role="alert">
           {Object.entries(fieldErrors).map(([field, error]) => <li key={field}>{field}: {error}</li>)}
         </ul>
       )}
       <Tabs active={tab} onChange={setTab} />
-      <form onSubmit={save} className="space-y-7 rounded-lg border border-line bg-white p-5 sm:p-7">
+      <form onSubmit={save} className="space-y-7 rounded-card border border-line-warm bg-paper-warm p-5 sm:p-7">
         {tab === 'Commercial' && (
           <div className="grid gap-5 sm:grid-cols-2">
             <Field label="Platform name" id="platform-name" value={form.platformName} onChange={(event) => setValue('platformName', event.target.value)} required />
@@ -136,7 +152,7 @@ export default function AdminSettings() {
             <Field label="Maximum COD order (PKR)" id="cod-limit" type="number" min="0" step="0.01" value={form.codMaxOrderAmount} onChange={(event) => setValue('codMaxOrderAmount', event.target.value)} />
             <Field label="Cancellation grace window (minutes)" id="cancel-grace" type="number" min="0" step="1" value={form.orderCancellationGraceMinutes} onChange={(event) => setValue('orderCancellationGraceMinutes', event.target.value)} />
             <div>
-              <label htmlFor="onboarding-policy" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">Brand onboarding policy</label>
+              <label htmlFor="onboarding-policy" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-ink/55">Brand onboarding policy</label>
               <select id="onboarding-policy" value={form.brandOnboardingPolicy} onChange={(event) => setValue('brandOnboardingPolicy', event.target.value)} className={`h-11 ${inputClass}`}>
                 <option value="MANUAL_APPROVAL">Manual Super Admin approval</option>
                 <option value="INSTANT_ACTIVATION">Instant auto-activation</option>
@@ -148,7 +164,7 @@ export default function AdminSettings() {
         {tab === 'System Controls' && (
           <div>
             <div className="mb-5">
-              <label htmlFor="announcement-text" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">Global announcement</label>
+              <label htmlFor="announcement-text" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-ink/55">Global announcement</label>
               <textarea id="announcement-text" rows={4} maxLength={500} value={form.announcement.text} onChange={(event) => setValue('announcement', { ...form.announcement, text: event.target.value })} className={`${inputClass} py-3`} />
             </div>
             <Toggle id="announcement-enabled" label="Show announcement banner" checked={form.announcement.enabled} onChange={(enabled) => setValue('announcement', { ...form.announcement, enabled })} />
@@ -156,7 +172,12 @@ export default function AdminSettings() {
           </div>
         )}
 
-        <button type="submit" disabled={saving} className={btnDark}>{saving ? 'Saving…' : 'Save settings'}</button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="submit" disabled={saving || readOnly} className={btnDark}>
+            {saving ? 'Saving…' : `Save ${tab.toLowerCase()}`}
+          </button>
+          <p className="text-[12px] text-ink/55">Only the open tab is saved.</p>
+        </div>
       </form>
     </>
   )

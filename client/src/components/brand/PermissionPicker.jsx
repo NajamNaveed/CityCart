@@ -21,14 +21,14 @@ export default function PermissionPicker({ value, onChange, canGrant = () => tru
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[12px] text-muted">Start from</span>
+        <span className="text-[12px] text-ink/55">Start from</span>
         {PRESETS.map(([label, list]) => (
           <button
             key={label}
             type="button"
             disabled={disabled}
             onClick={() => applyPreset(list)}
-            className="rounded-md border border-line bg-white px-3 py-1.5 text-[12.5px] font-medium text-ink transition hover:border-pine hover:text-pine disabled:opacity-50"
+            className="rounded-md border border-line-warm bg-paper-warm px-3 py-1.5 text-[12.5px] font-medium text-ink transition hover:border-forest hover:text-forest disabled:opacity-50"
           >
             {label}
           </button>
@@ -37,7 +37,7 @@ export default function PermissionPicker({ value, onChange, canGrant = () => tru
           type="button"
           disabled={disabled}
           onClick={() => onChange([])}
-          className="rounded-md px-2.5 py-1.5 text-[12.5px] font-medium text-muted transition hover:text-danger"
+          className="rounded-md px-2.5 py-1.5 text-[12.5px] font-medium text-ink/55 transition hover:text-clay"
         >
           Clear all
         </button>
@@ -46,7 +46,7 @@ export default function PermissionPicker({ value, onChange, canGrant = () => tru
       <div className="mt-5 grid gap-x-10 gap-y-6 sm:grid-cols-2">
         {PERMISSION_GROUPS.map((group) => (
           <fieldset key={group.title} disabled={disabled}>
-            <legend className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted">{group.title}</legend>
+            <legend className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-ink/55">{group.title}</legend>
             <div className="space-y-1.5">
               {group.items.map(([permission, label]) => {
                 const locked = !canGrant(permission) && !selected.has(permission)
@@ -54,7 +54,7 @@ export default function PermissionPicker({ value, onChange, canGrant = () => tru
                   <label
                     key={permission}
                     className={`flex items-start gap-3 rounded-md px-2.5 py-1.5 text-sm transition ${
-                      locked ? 'text-muted/60' : 'cursor-pointer text-ink hover:bg-paper'
+                      locked ? 'text-ink/35' : 'cursor-pointer text-ink hover:bg-sand/60'
                     }`}
                   >
                     <input

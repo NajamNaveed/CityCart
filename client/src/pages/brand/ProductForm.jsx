@@ -10,7 +10,7 @@ import { Notice, PageHeader } from '../../components/brand/Bits'
 import { Skeleton } from '../../components/ui'
 import { btnPine, inputClass } from '../../ui'
 
-const labelClass = 'mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-muted'
+const labelClass = 'mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-ink/55'
 
 const STATUS_OPTIONS = [
   ['ACTIVE', 'Active: visible in the shop'],
@@ -132,7 +132,7 @@ function FormBody({ id, product, inventory, categories, branches }) {
           action={
             <Link
               to="/brand/products"
-              className="inline-flex items-center gap-1 rounded-md border border-line bg-white px-3.5 py-2 text-[13px] font-medium text-ink transition hover:border-ink"
+              className="inline-flex items-center gap-1 rounded-tile border border-line-warm bg-paper-warm px-3.5 py-2 text-[13px] font-medium text-ink transition hover:border-ink"
             >
               Back to products
             </Link>
@@ -153,7 +153,7 @@ function FormBody({ id, product, inventory, categories, branches }) {
         action={
           <Link
             to="/brand/products"
-            className="inline-flex items-center gap-1 rounded-md border border-line bg-white px-3.5 py-2 text-[13px] font-medium text-ink transition hover:border-ink"
+            className="inline-flex items-center gap-1 rounded-tile border border-line-warm bg-paper-warm px-3.5 py-2 text-[13px] font-medium text-ink transition hover:border-ink"
           >
             Back to products
           </Link>
@@ -162,12 +162,12 @@ function FormBody({ id, product, inventory, categories, branches }) {
       <Notice tone={location.state?.tone}>{location.state?.notice}</Notice>
 
       {!canSave && (
-        <p className="mb-6 rounded-md bg-paper px-3.5 py-2.5 text-sm text-muted">You can view this product but not change it.</p>
+        <p className="mb-6 rounded-tile bg-sand/50 px-3.5 py-2.5 text-sm text-ink/55">You can view this product but not change it.</p>
       )}
 
       <form onSubmit={onSubmit} className="max-w-3xl space-y-5" noValidate>
         {error && (
-          <p role="alert" className="rounded-md bg-clay/5 px-3.5 py-2.5 text-sm text-clay">
+          <p role="alert" className="rounded-tile border border-clay/20 bg-clay/10 px-3.5 py-2.5 text-sm text-clay">
             {error}
           </p>
         )}
@@ -179,7 +179,7 @@ function FormBody({ id, product, inventory, categories, branches }) {
           onChange={id ? undefined : () => setItem(null)}
         />
 
-        <fieldset className="grid gap-5 rounded-lg border border-line bg-white p-6">
+        <fieldset className="grid gap-5 rounded-card border border-line-warm bg-paper-warm p-6">
           <legend className="sr-only">Visibility</legend>
           <div>
             <label htmlFor="status" className={labelClass}>
@@ -195,28 +195,28 @@ function FormBody({ id, product, inventory, categories, branches }) {
           </div>
         </fieldset>
 
-        <fieldset className="grid gap-5 rounded-lg border border-line bg-white p-6 sm:grid-cols-3">
+        <fieldset className="grid gap-5 rounded-card border border-line-warm bg-paper-warm p-6 sm:grid-cols-3">
           <legend className="sr-only">Pricing</legend>
           <Field label="Price (PKR)" id="price" name="price" type="number" min="0" step="0.01" value={form.price} onChange={onChange} error={fieldErrors.price} required />
           <Field label="Compare-at price" id="compareAtPrice" name="compareAtPrice" type="number" min="0" step="0.01" value={form.compareAtPrice} onChange={onChange} error={fieldErrors.compareAtPrice} hint="Optional. Shows a discount." />
           <Field label="SKU" id="sku" name="sku" value={form.sku} onChange={onChange} error={fieldErrors.sku} hint="Optional." />
         </fieldset>
 
-        <fieldset className="grid gap-5 rounded-lg border border-line bg-white p-6 sm:grid-cols-2">
+        <fieldset className="grid gap-5 rounded-card border border-line-warm bg-paper-warm p-6 sm:grid-cols-2">
           <legend className="sr-only">Stock</legend>
           <Field label="Quantity in stock" id="quantity" name="quantity" type="number" min="0" step="1" value={form.quantity} onChange={onChange} />
           <Field label="Low stock warning at" id="lowStockThreshold" name="lowStockThreshold" type="number" min="0" step="1" value={form.lowStockThreshold} onChange={onChange} hint="Flagged as low stock at or below this number." />
         </fieldset>
 
-        <fieldset className="rounded-lg border border-line bg-white p-6">
+        <fieldset className="rounded-card border border-line-warm bg-paper-warm p-6">
           <legend className={labelClass}>Where it is sold</legend>
           {branches.length === 0 ? (
-            <p className="text-sm text-muted">
+            <p className="text-sm text-ink/55">
               This product is sold wherever your brand is found.
               {user.role === 'BRAND_ADMIN' && (
                 <>
                   {' '}
-                  <Link to="/brand/branches" className="font-medium text-pine underline">
+                  <Link to="/brand/branches" className="font-medium text-forest underline">
                     Add branches
                   </Link>{' '}
                   to sell it at some of them only.
@@ -227,11 +227,11 @@ function FormBody({ id, product, inventory, categories, branches }) {
             <>
               <div className="flex flex-wrap gap-x-6 gap-y-2 text-[13.5px] text-ink">
                 <label className="flex items-center gap-2">
-                  <input type="radio" name="branchMode" checked={branchMode === 'all'} onChange={() => setBranchMode('all')} className="accent-[#1e3a2f]" />
+                  <input type="radio" name="branchMode" checked={branchMode === 'all'} onChange={() => setBranchMode('all')} className="accent-forest" />
                   All branches
                 </label>
                 <label className="flex items-center gap-2">
-                  <input type="radio" name="branchMode" checked={branchMode === 'selected'} onChange={() => setBranchMode('selected')} className="accent-[#1e3a2f]" />
+                  <input type="radio" name="branchMode" checked={branchMode === 'selected'} onChange={() => setBranchMode('selected')} className="accent-forest" />
                   Only selected branches
                 </label>
               </div>
@@ -239,26 +239,26 @@ function FormBody({ id, product, inventory, categories, branches }) {
                 <ul className="mt-4 grid gap-2 sm:grid-cols-2">
                   {branches.map((b) => (
                     <li key={b._id}>
-                      <label className="flex cursor-pointer items-start gap-2.5 rounded-md border border-line px-3 py-2.5 text-[13.5px] transition hover:border-ink">
+                      <label className="flex cursor-pointer items-start gap-2.5 rounded-tile border border-line-warm px-3 py-2.5 text-[13.5px] transition hover:border-ink">
                         <input
                           type="checkbox"
                           checked={branchIds.includes(b._id)}
                           onChange={(e) => setBranchIds((ids) => (e.target.checked ? [...ids, b._id] : ids.filter((x) => x !== b._id)))}
-                          className="mt-0.5 accent-[#1e3a2f]"
+                          className="mt-0.5 accent-forest"
                         />
                         <span>
                           <span className="block font-medium text-ink">
                             {b.name}
-                            {!b.isActive && <span className="ml-1.5 text-xs font-normal text-muted">(inactive)</span>}
+                            {!b.isActive && <span className="ml-1.5 text-xs font-normal text-ink/55">(inactive)</span>}
                           </span>
-                          <span className="block text-xs text-muted">{b.blockName}</span>
+                          <span className="block text-xs text-ink/55">{b.blockName}</span>
                         </span>
                       </label>
                     </li>
                   ))}
                 </ul>
               )}
-              <p className="mt-3 text-xs text-muted">Stock is shared by all branches. This only decides where shoppers can find the product.</p>
+              <p className="mt-3 text-xs text-ink/55">Stock is shared by all branches. This only decides where shoppers can find the product.</p>
             </>
           )}
         </fieldset>
@@ -275,26 +275,26 @@ function FormBody({ id, product, inventory, categories, branches }) {
             <button
               type="button"
               onClick={() => setConfirmArchive(true)}
-              className="inline-flex h-11 items-center rounded-md border border-danger/40 bg-white px-5 text-[13px] font-medium text-danger transition hover:border-danger"
+              className="inline-flex h-11 items-center rounded-tile border border-clay/40 bg-paper-warm px-5 text-[13px] font-medium text-clay transition hover:border-clay"
             >
               Archive product
             </button>
           )}
           {id && !archived && canArchive && confirmArchive && (
-            <span className="flex flex-wrap items-center gap-3 rounded-md bg-danger-soft px-3.5 py-2 text-sm">
+            <span className="flex flex-wrap items-center gap-3 rounded-tile bg-clay/10 px-3.5 py-2 text-sm">
               <span className="text-ink">Hide this product from the shop?</span>
               <button
                 type="button"
                 onClick={archive}
                 disabled={saving}
-                className="inline-flex h-8 items-center rounded-md bg-danger px-3 text-[12.5px] font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+                className="inline-flex h-8 items-center rounded-tile bg-clay px-3 text-[12.5px] font-medium text-cream transition hover:opacity-90 disabled:opacity-50"
               >
                 Yes, archive
               </button>
               <button
                 type="button"
                 onClick={() => setConfirmArchive(false)}
-                className="inline-flex h-8 items-center rounded-md border border-line bg-white px-3 text-[12.5px] font-medium text-ink transition hover:border-ink"
+                className="inline-flex h-8 items-center rounded-tile border border-line-warm bg-paper-warm px-3 text-[12.5px] font-medium text-ink transition hover:border-ink"
               >
                 Cancel
               </button>
@@ -334,9 +334,9 @@ export default function ProductForm() {
     return (
       <div className="max-w-3xl space-y-4">
         <Skeleton className="h-10 w-56" />
-        <Skeleton className="h-72 w-full rounded-lg" />
+        <Skeleton className="h-72 w-full rounded-card" />
       </div>
     )
-  if (data.error) return <p className="text-clay">{data.error}</p>
+  if (data.error) return <p role="alert" className="rounded-tile border border-clay/20 bg-clay/10 px-3.5 py-2.5 text-sm text-clay">{data.error}</p>
   return <FormBody key={key} id={id} product={data.product} inventory={data.inventory} categories={data.categories} branches={data.branches} />
 }

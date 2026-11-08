@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { RefreshCw, Search, Store } from 'lucide-react'
 import api, { getErrorMessage } from '../../../services/api'
 import { EmptyState, Modal, Skeleton, toast } from '../../../components/ui'
-import { Pager, StatusBadge, selectClass, tableHead, tableRow, tableShell } from '../../../components/brand/Bits'
+import { Pager, StatusBadge, TableScroll, selectClass, tableHead, tableRow } from '../../../components/brand/Bits'
 import { btnGhost, btnPine, formatDate, formatDateTime, inputClass } from '../../../ui'
 import { BILLING_STATUS_OPTIONS, SELLER_TYPE_OPTIONS, formatPaisa } from '../../../utils/billingUi'
 
@@ -11,7 +11,7 @@ const STATUS_FILTERS = ['', ...BILLING_STATUS_OPTIONS]
 function StatusNote({ seller }) {
   if (seller.graceUntil) {
     return (
-      <p className="mt-1 text-[11.5px] text-muted">
+      <p className="mt-1 text-[11.5px] text-ink/55">
         Grace until {formatDateTime(seller.graceUntil)}
       </p>
     )
@@ -93,9 +93,9 @@ function SellerActions({ seller, onDone }) {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-lg bg-paper/60 p-4">
+      <div className="rounded-card bg-sand/40 p-4">
         <p className="text-sm font-medium text-ink">{seller.name}</p>
-        <p className="mt-1 text-[12.5px] text-muted">
+        <p className="mt-1 text-[12.5px] text-ink/55">
           {seller.sellerType === 'BRAND' ? 'Brand' : 'Service provider'} · balance{' '}
           {formatPaisa(seller.balancePaisa)}
           {seller.oldestDueAt ? ` · oldest due ${formatDate(seller.oldestDueAt)}` : ''}
@@ -104,13 +104,13 @@ function SellerActions({ seller, onDone }) {
           Current status <StatusBadge value={seller.billingStatus || 'ACTIVE'} />
         </p>
         {seller.graceUntil && (
-          <p className="mt-1 text-[12px] text-muted">
+          <p className="mt-1 text-[12px] text-ink/55">
             Grace period until {formatDateTime(seller.graceUntil)}.
           </p>
         )}
       </div>
 
-      <div role="tablist" aria-label="Seller controls" className="flex flex-wrap gap-1 border-b border-line">
+      <div role="tablist" aria-label="Seller controls" className="flex flex-wrap gap-1 border-b border-line-warm">
         {[
           ['status', 'Set status'],
           ['grace', 'Grace period'],
@@ -123,7 +123,7 @@ function SellerActions({ seller, onDone }) {
             aria-selected={mode === value}
             onClick={() => setMode(value)}
             className={`border-b-2 px-3 py-2.5 text-[12.5px] font-medium transition-colors ${
-              mode === value ? 'border-ink text-ink' : 'border-transparent text-muted hover:text-ink'
+              mode === value ? 'border-ink text-ink' : 'border-transparent text-ink/55 hover:text-ink'
             }`}
           >
             {label}
@@ -135,7 +135,7 @@ function SellerActions({ seller, onDone }) {
         <form onSubmit={saveStatus} className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label htmlFor="seller-status" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">
+              <label htmlFor="seller-status" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-ink/55">
                 New status
               </label>
               <select id="seller-status" className={selectClass} value={status} onChange={(event) => setStatus(event.target.value)}>
@@ -147,7 +147,7 @@ function SellerActions({ seller, onDone }) {
               </select>
             </div>
             <div>
-              <label htmlFor="seller-until" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">
+              <label htmlFor="seller-until" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-ink/55">
                 Revert after (optional)
               </label>
               <input
@@ -160,7 +160,7 @@ function SellerActions({ seller, onDone }) {
             </div>
           </div>
           <div>
-            <label htmlFor="seller-reason" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">
+            <label htmlFor="seller-reason" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-ink/55">
               Reason (shown to the seller)
             </label>
             <textarea
@@ -173,7 +173,7 @@ function SellerActions({ seller, onDone }) {
               required
             />
           </div>
-          <p className="text-[12px] text-muted">
+          <p className="text-[12px] text-ink/55">
             A manual status wins over the automatic due-date ladder until it is removed or its revert date passes.
           </p>
           <button type="submit" disabled={busy} className={btnPine}>
@@ -185,7 +185,7 @@ function SellerActions({ seller, onDone }) {
       {mode === 'grace' && (
         <form onSubmit={grantGrace} className="space-y-3">
           {seller.graceUntil ? (
-            <div className="space-y-3 rounded-md border border-line p-3">
+            <div className="space-y-3 rounded-tile border border-line-warm p-3">
               <p className="text-[13px] text-ink">
                 Grace runs until {formatDateTime(seller.graceUntil)}. During grace the automatic ladder is paused.
               </p>
@@ -196,7 +196,7 @@ function SellerActions({ seller, onDone }) {
           ) : (
             <>
               <div>
-                <label htmlFor="grace-until" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">
+                <label htmlFor="grace-until" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-ink/55">
                   Grace ends
                 </label>
                 <input
@@ -209,7 +209,7 @@ function SellerActions({ seller, onDone }) {
                 />
               </div>
               <div>
-                <label htmlFor="grace-reason" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">
+                <label htmlFor="grace-reason" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-ink/55">
                   Reason (shown to the seller)
                 </label>
                 <textarea
@@ -232,11 +232,11 @@ function SellerActions({ seller, onDone }) {
 
       {mode === 'clear' && (
         <form onSubmit={clearOverride} className="space-y-3">
-          <p className="text-[13px] text-muted">
+          <p className="text-[13px] text-ink/55">
             Removing the manual status lets the due-date ladder decide the status again on the next refresh.
           </p>
           <div>
-            <label htmlFor="clear-reason" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">
+            <label htmlFor="clear-reason" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-ink/55">
               Reason (logged with the action)
             </label>
             <textarea
@@ -366,13 +366,15 @@ export default function SellersTab({ onChanged }) {
         </button>
       </form>
 
-      {error && <p className="mb-4 rounded-md bg-clay/5 px-3 py-2 text-sm text-clay">{error}</p>}
+      {error && <p className="mb-4 rounded-tile bg-clay/5 px-3 py-2 text-sm text-clay">{error}</p>}
 
       {loading ? (
-        <Skeleton className="h-64 w-full rounded-lg" />
+        <Skeleton className="h-64 w-full rounded-card" />
+      ) : data.items.length === 0 ? (
+        <EmptyState icon={Store} title="No sellers match" message="Change the filters to see more accounts." />
       ) : (
         <>
-          <div className={tableShell}>
+          <TableScroll label="Billing status by seller">
             <table className="w-full min-w-[860px] text-left text-[13px]">
               <thead className={tableHead}>
                 <tr>
@@ -385,50 +387,42 @@ export default function SellersTab({ onChanged }) {
                 </tr>
               </thead>
               <tbody>
-                {data.items.length === 0 ? (
-                  <tr>
-                    <td colSpan={6}>
-                      <EmptyState icon={Store} title="No sellers match" message="Change the filters to see more accounts." />
+                {data.items.map((seller) => (
+                  <tr key={`${seller.sellerType}:${seller.sellerId}`} className={tableRow}>
+                    <td className="px-4 py-3">
+                      <span className="text-ink">{seller.name}</span>
+                      {seller.phone && <span className="block text-[11.5px] text-ink/55">{seller.phone}</span>}
+                    </td>
+                    <td className="px-4 py-3 text-ink/55">
+                      {seller.sellerType === 'BRAND' ? 'Brand' : 'Service provider'}
+                    </td>
+                    <td className="px-4 py-3 text-right font-medium text-ink">{formatPaisa(seller.balancePaisa)}</td>
+                    <td className="px-4 py-3 text-ink/55">
+                      {seller.oldestDueAt ? formatDate(seller.oldestDueAt) : '—'}
+                      {seller.unpaidInvoiceCount > 0 && (
+                        <span className="block text-[11.5px]">
+                          {seller.unpaidInvoiceCount} unpaid
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusBadge value={seller.billingStatus || 'ACTIVE'} />
+                      <StatusNote seller={seller} />
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => setManaging(seller)}
+                        className="text-[12.5px] font-medium text-forest hover:underline"
+                      >
+                        Manage
+                      </button>
                     </td>
                   </tr>
-                ) : (
-                  data.items.map((seller) => (
-                    <tr key={`${seller.sellerType}:${seller.sellerId}`} className={tableRow}>
-                      <td className="px-4 py-3">
-                        <span className="text-ink">{seller.name}</span>
-                        {seller.phone && <span className="block text-[11.5px] text-muted">{seller.phone}</span>}
-                      </td>
-                      <td className="px-4 py-3 text-muted">
-                        {seller.sellerType === 'BRAND' ? 'Brand' : 'Service provider'}
-                      </td>
-                      <td className="px-4 py-3 text-right font-medium text-ink">{formatPaisa(seller.balancePaisa)}</td>
-                      <td className="px-4 py-3 text-muted">
-                        {seller.oldestDueAt ? formatDate(seller.oldestDueAt) : '—'}
-                        {seller.unpaidInvoiceCount > 0 && (
-                          <span className="block text-[11.5px]">
-                            {seller.unpaidInvoiceCount} unpaid
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <StatusBadge value={seller.billingStatus || 'ACTIVE'} />
-                        <StatusNote seller={seller} />
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <button
-                          type="button"
-                          onClick={() => setManaging(seller)}
-                          className="text-[12.5px] font-medium text-pine hover:underline"
-                        >
-                          Manage
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
+                ))}
               </tbody>
             </table>
-          </div>
+          </TableScroll>
           <Pager pagination={data.pagination} onPage={(next) => load(next)} />
         </>
       )}

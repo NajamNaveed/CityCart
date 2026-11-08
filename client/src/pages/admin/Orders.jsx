@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { PackageSearch, Search } from 'lucide-react'
 import api, { getErrorMessage } from '../../services/api'
-import { PageHeader, Pager, StatusBadge, selectClass, tableHead, tableRow, tableShell } from '../../components/brand/Bits'
+import { PageHeader, Pager, StatusBadge, TableScroll, selectClass, tableHead, tableRow } from '../../components/brand/Bits'
 import { EmptyState, Skeleton } from '../../components/ui'
 import { formatDateTime, formatPrice, humanize } from '../../ui'
 
@@ -65,14 +65,14 @@ export default function Orders() {
           <label htmlFor="q" className="sr-only">
             Search by order number
           </label>
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden="true" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/55" aria-hidden="true" />
           <input
             key={search}
             id="q"
             name="q"
             defaultValue={search}
             placeholder="Order number, e.g. CC-2026"
-            className="h-10 w-full rounded-md border border-line bg-white pl-9 pr-3 text-[13px] text-ink outline-none transition focus:border-ink"
+            className="h-10 w-full rounded-tile border border-line-warm bg-paper-warm pl-9 pr-3 text-[13px] text-ink outline-none transition focus:border-ink"
           />
         </form>
         <label htmlFor="brand" className="sr-only">
@@ -102,49 +102,72 @@ export default function Orders() {
       {loading ? (
         <div className="space-y-2.5">
           {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-16 w-full rounded-lg" />
+            <Skeleton key={i} className="h-16 w-full rounded-card" />
           ))}
         </div>
       ) : state.error ? (
-        <p className="text-clay">{state.error}</p>
+        <p role="alert" className="rounded-tile border border-clay/20 bg-clay/10 px-3.5 py-2.5 text-sm text-clay">{state.error}</p>
       ) : state.orders.length === 0 ? (
-        <EmptyState icon={PackageSearch} title="No orders match." className="rounded-lg border border-dashed border-line bg-white" />
+        <EmptyState icon={PackageSearch} title="No orders match." className="rounded-card border border-dashed border-line-warm bg-paper-warm" />
       ) : (
-        <div className={tableShell}>
-          <table className="w-full min-w-[44rem] text-left text-sm">
-            <thead>
-              <tr className={tableHead}>
-                <th className="px-5 py-3 font-medium">Order</th>
-                <th className="py-3 pr-4 font-medium">Brand</th>
-                <th className="py-3 pr-4 font-medium">Customer</th>
-                <th className="py-3 pr-4 font-medium">Status</th>
-                <th className="py-3 pr-4 font-medium">Payment</th>
-                <th className="py-3 pr-5 text-right font-medium">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {state.orders.map((o) => (
-                <tr key={o._id} className={tableRow}>
-                  <td className="px-5 py-3.5">
-                    <Link to={`/admin/orders/${o._id}`} className="font-medium text-ink transition hover:text-clay">
-                      {o.orderNumber}
-                    </Link>
-                    <span className="block text-xs text-muted">{formatDateTime(o.createdAt)}</span>
-                  </td>
-                  <td className="py-3.5 pr-4 text-ink">{o.brandName || '—'}</td>
-                  <td className="py-3.5 pr-4 text-ink">{o.shippingAddress?.name}</td>
-                  <td className="py-3.5 pr-4">
-                    <StatusBadge value={o.orderStatus} />
-                  </td>
-                  <td className="py-3.5 pr-4">
-                    <StatusBadge value={o.paymentStatus} />
-                  </td>
-                  <td className="py-3.5 pr-5 text-right font-semibold text-ink">{formatPrice(o.total)}</td>
+        <>
+          <TableScroll label="Orders" className="hidden md:block">
+            <table className="w-full min-w-[44rem] text-left text-sm">
+              <thead>
+                <tr className={tableHead}>
+                  <th className="px-5 py-3 font-medium">Order</th>
+                  <th className="py-3 pr-4 font-medium">Brand</th>
+                  <th className="py-3 pr-4 font-medium">Customer</th>
+                  <th className="py-3 pr-4 font-medium">Status</th>
+                  <th className="py-3 pr-4 font-medium">Payment</th>
+                  <th className="py-3 pr-5 text-right font-medium">Total</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {state.orders.map((o) => (
+                  <tr key={o._id} className={tableRow}>
+                    <td className="px-5 py-3.5">
+                      <Link to={`/admin/orders/${o._id}`} className="font-medium text-ink transition hover:text-clay">
+                        {o.orderNumber}
+                      </Link>
+                      <span className="block text-xs text-ink/55">{formatDateTime(o.createdAt)}</span>
+                    </td>
+                    <td className="py-3.5 pr-4 text-ink">{o.brandName || '—'}</td>
+                    <td className="py-3.5 pr-4 text-ink">{o.shippingAddress?.name}</td>
+                    <td className="py-3.5 pr-4">
+                      <StatusBadge value={o.orderStatus} />
+                    </td>
+                    <td className="py-3.5 pr-4">
+                      <StatusBadge value={o.paymentStatus} />
+                    </td>
+                    <td className="py-3.5 pr-5 text-right font-semibold text-ink">{formatPrice(o.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableScroll>
+
+          <ul className="space-y-3 md:hidden">
+            {state.orders.map((o) => (
+              <li key={o._id} className="rounded-card border border-line-warm bg-paper-warm p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <Link to={`/admin/orders/${o._id}`} className="font-medium text-ink transition hover:text-clay">
+                    {o.orderNumber}
+                  </Link>
+                  <span className="font-semibold text-ink">{formatPrice(o.total)}</span>
+                </div>
+                <p className="mt-1 text-[12.5px] text-ink/55">
+                  {o.brandName || 'Unknown brand'} · {o.shippingAddress?.name || 'No customer name'}
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <StatusBadge value={o.orderStatus} />
+                  <StatusBadge value={o.paymentStatus} />
+                  <span className="text-xs text-ink/45">{formatDateTime(o.createdAt)}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
       <Pager pagination={state.pagination} onPage={(p) => update({ page: p > 1 ? String(p) : '' })} />
     </>

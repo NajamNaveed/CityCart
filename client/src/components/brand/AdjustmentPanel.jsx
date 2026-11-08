@@ -169,11 +169,11 @@ export default function AdjustmentPanel({ order, adjustments = [], adjustment, c
       {error && !open && <Notice tone="warn">{error}</Notice>}
 
       {active && (
-        <section className="mb-8 rounded-lg border border-warning/40 bg-warning-soft/50 p-5">
+        <section className="mb-8 rounded-card border border-warning/40 bg-[#f8efd9]/50 p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="font-display text-lg font-semibold text-ink">Waiting for the customer</h2>
-              <p className="mt-1 text-[13px] text-muted">
+              <p className="mt-1 text-[13px] text-ink/55">
                 Sent {formatDateTime(active.createdAt)} · expires {formatDateTime(active.expiresAt)}
               </p>
             </div>
@@ -187,22 +187,22 @@ export default function AdjustmentPanel({ order, adjustments = [], adjustment, c
           </ul>
           <dl className="mt-3 flex flex-wrap gap-x-8 gap-y-1 text-sm">
             <div>
-              <dt className="inline text-muted">If they accept: </dt>
+              <dt className="inline text-ink/55">If they accept: </dt>
               <dd className="inline font-semibold text-ink">{formatPrice(active.totalsAfter.total)}</dd>
             </div>
             <div>
-              <dt className="inline text-muted">If they keep only what you send: </dt>
+              <dt className="inline text-ink/55">If they keep only what you send: </dt>
               <dd className="inline font-semibold text-ink">{formatPrice(active.totalsAfterRemoval.total)}</dd>
             </div>
           </dl>
-          <p className="mt-3 text-[13px] text-muted">
+          <p className="mt-3 text-[13px] text-ink/55">
             Nothing changes unless the customer answers. If they do not answer within 24 hours, the proposal expires and
             the order stays as it is.
           </p>
           {canAdjust && (
             <div className="mt-4">
               {confirmWithdraw ? (
-                <span className="flex flex-wrap items-center gap-3 rounded-md bg-white px-3.5 py-2 text-sm">
+                <span className="flex flex-wrap items-center gap-3 rounded-md bg-paper-warm px-3.5 py-2 text-sm">
                   <span className="text-ink">Withdraw the proposal?</span>
                   <button
                     type="button"
@@ -215,7 +215,7 @@ export default function AdjustmentPanel({ order, adjustments = [], adjustment, c
                   <button
                     type="button"
                     onClick={() => setConfirmWithdraw(false)}
-                    className="inline-flex h-8 items-center rounded-md border border-line bg-white px-3 text-[12.5px] font-medium text-ink transition hover:border-ink"
+                    className="inline-flex h-8 items-center rounded-md border border-line-warm bg-paper-warm px-3 text-[12.5px] font-medium text-ink transition hover:border-ink"
                   >
                     Cancel
                   </button>
@@ -225,7 +225,7 @@ export default function AdjustmentPanel({ order, adjustments = [], adjustment, c
                   type="button"
                   disabled={busy}
                   onClick={() => setConfirmWithdraw(true)}
-                  className="inline-flex h-9 items-center gap-2 rounded-md border border-line bg-white px-4 text-[12.5px] font-medium text-ink transition hover:border-ink disabled:opacity-50"
+                  className="inline-flex h-9 items-center gap-2 rounded-md border border-line-warm bg-paper-warm px-4 text-[12.5px] font-medium text-ink transition hover:border-ink disabled:opacity-50"
                 >
                   <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
                   Withdraw proposal
@@ -237,13 +237,13 @@ export default function AdjustmentPanel({ order, adjustments = [], adjustment, c
       )}
 
       {canPropose && (
-        <section className="mb-8 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-line bg-white p-5">
+        <section className="mb-8 flex flex-wrap items-center justify-between gap-4 rounded-card border border-line-warm bg-paper-warm p-5">
           <div>
             <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-ink">
-              <PencilLine className="h-4 w-4 text-pine" aria-hidden="true" />
+              <PencilLine className="h-4 w-4 text-forest" aria-hidden="true" />
               Cannot supply everything?
             </h2>
-            <p className="mt-1 max-w-xl text-sm text-muted">
+            <p className="mt-1 max-w-xl text-sm text-ink/55">
               Offer a same-brand substitute or remove the items you cannot send. You will see the new total before sending,
               and the customer decides what happens.
             </p>
@@ -256,18 +256,18 @@ export default function AdjustmentPanel({ order, adjustments = [], adjustment, c
 
       {history.length > 0 && (
         <section className="mb-8">
-          <h2 className="border-b border-line pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
+          <h2 className="border-b border-line-warm pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-ink/55">
             Previous change proposals
           </h2>
           <ul className="mt-3 space-y-2">
             {history.slice(0, 5).map((item) => (
-              <li key={item._id} className="rounded-lg border border-line bg-white px-4 py-3 text-sm">
+              <li key={item._id} className="rounded-card border border-line-warm bg-paper-warm px-4 py-3 text-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="flex items-center gap-2">
                     <StatusBadge value={item.status} />
-                    <span className="text-[13px] text-muted">{formatDateTime(item.respondedAt || item.createdAt)}</span>
+                    <span className="text-[13px] text-ink/55">{formatDateTime(item.respondedAt || item.createdAt)}</span>
                   </span>
-                  <span className="text-[13px] text-muted">
+                  <span className="text-[13px] text-ink/55">
                     {formatPrice(item.totalsBefore.total)} → {formatPrice(item.totalsAfter.total)}
                   </span>
                 </div>
@@ -280,7 +280,7 @@ export default function AdjustmentPanel({ order, adjustments = [], adjustment, c
 
       <Modal open={open} onClose={() => !busy && setOpen(false)} title="Propose a change" maxWidth="max-w-2xl">
         <form onSubmit={submit} className="space-y-5">
-          <p className="text-sm text-muted">
+          <p className="text-sm text-ink/55">
             Tick the items you cannot supply in full. The customer can accept what you can send, take only that much, or
             cancel the whole order.
           </p>
@@ -296,7 +296,7 @@ export default function AdjustmentPanel({ order, adjustments = [], adjustment, c
               return (
                 <li
                   key={item._id || `${item.productId}-${index}`}
-                  className={`rounded-lg border p-4 ${line.affected ? 'border-pine/40 bg-paper/40' : 'border-line'}`}
+                  className={`rounded-card border p-4 ${line.affected ? 'border-forest/40 bg-sand/50/40' : 'border-line-warm'}`}
                 >
                   <label className="flex items-start gap-3">
                     <input
@@ -307,14 +307,14 @@ export default function AdjustmentPanel({ order, adjustments = [], adjustment, c
                     />
                     <span className="flex-1">
                       <span className="block text-sm font-medium text-ink">{item.productName}</span>
-                      <span className="block text-[13px] text-muted">
+                      <span className="block text-[13px] text-ink/55">
                         {item.quantity} ordered at {formatPrice(item.unitPrice)} each
                       </span>
                     </span>
                   </label>
 
                   {line.affected && (
-                    <div className="mt-3 space-y-3 border-t border-line pt-3 pl-7">
+                    <div className="mt-3 space-y-3 border-t border-line-warm pt-3 pl-7">
                       <label className="flex flex-wrap items-center gap-2.5 text-sm text-ink">
                         Units you can send
                         <input
@@ -329,7 +329,7 @@ export default function AdjustmentPanel({ order, adjustments = [], adjustment, c
                           }
                           className={`${inputClass} h-9 w-24`}
                         />
-                        <span className="text-muted">of {item.quantity}</span>
+                        <span className="text-ink/55">of {item.quantity}</span>
                       </label>
 
                       {missing > 0 && (
@@ -345,7 +345,7 @@ export default function AdjustmentPanel({ order, adjustments = [], adjustment, c
                               />
                               Remove the {missing} you cannot send
                             </label>
-                            <label className={`flex items-center gap-2 ${choices.length ? '' : 'text-muted'}`}>
+                            <label className={`flex items-center gap-2 ${choices.length ? '' : 'text-ink/55'}`}>
                               <input
                                 type="radio"
                                 name={`mode-${index}`}
@@ -359,7 +359,7 @@ export default function AdjustmentPanel({ order, adjustments = [], adjustment, c
                           </div>
                           {line.mode === 'SUBSTITUTE' &&
                             (productError || (!loading && choices.length === 0) ? (
-                              <p className="text-[13px] text-warning">
+                              <p className="text-[13px] text-[#855811]">
                                 No other active product is in stock, so this item can only be removed.
                               </p>
                             ) : (
@@ -397,7 +397,7 @@ export default function AdjustmentPanel({ order, adjustments = [], adjustment, c
               placeholder="Explain what happened and what you can offer."
               required
             />
-            <span className="mt-1 block text-right text-[12px] text-muted">{note.length}/500</span>
+            <span className="mt-1 block text-right text-[12px] text-ink/55">{note.length}/500</span>
           </label>
 
           {anyRemoved && (
@@ -405,25 +405,25 @@ export default function AdjustmentPanel({ order, adjustments = [], adjustment, c
               <input type="checkbox" className="mt-0.5 h-4 w-4 accent-pine" checked={restock} onChange={(e) => setRestock(e.target.checked)} />
               <span>
                 Put the units I cannot send back into stock
-                <span className="block text-[12.5px] text-muted">Leave this off if they are damaged or missing.</span>
+                <span className="block text-[12.5px] text-ink/55">Leave this off if they are damaged or missing.</span>
               </span>
             </label>
           )}
 
-          <div className="rounded-lg bg-paper p-4 text-sm">
+          <div className="rounded-card bg-sand/50 p-4 text-sm">
             <div className="flex justify-between gap-4">
-              <span className="text-muted">Order total now</span>
+              <span className="text-ink/55">Order total now</span>
               <span className="text-ink">{formatPrice(order.total)}</span>
             </div>
             <div className="mt-1.5 flex justify-between gap-4">
-              <span className="text-muted">If they accept the change</span>
+              <span className="text-ink/55">If they accept the change</span>
               <span className="font-semibold text-ink">{formatPrice(preview.after)}</span>
             </div>
             <div className="mt-1.5 flex justify-between gap-4">
-              <span className="text-muted">If they take only what you can send</span>
+              <span className="text-ink/55">If they take only what you can send</span>
               <span className="font-semibold text-ink">{formatPrice(preview.removal)}</span>
             </div>
-            <p className="mt-3 text-[12.5px] text-muted">
+            <p className="mt-3 text-[12.5px] text-ink/55">
               Delivery and discounts stay the same. The server recalculates the final total when the customer answers.
             </p>
           </div>

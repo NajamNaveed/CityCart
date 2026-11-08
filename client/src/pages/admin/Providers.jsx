@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Search, SearchX } from 'lucide-react'
 import api, { getErrorMessage } from '../../services/api'
-import { PageHeader, Pager, StatusBadge, selectClass, tableHead, tableRow, tableShell } from '../../components/brand/Bits'
+import { PageHeader, Pager, StatusBadge, TableScroll, selectClass, tableHead, tableRow } from '../../components/brand/Bits'
 import { EmptyState, Skeleton } from '../../components/ui'
 import { formatDate, humanize } from '../../ui'
 
@@ -52,14 +52,14 @@ export default function Providers() {
           <label htmlFor="q" className="sr-only">
             Search providers
           </label>
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden="true" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/55" aria-hidden="true" />
           <input
             key={search}
             id="q"
             name="q"
             defaultValue={search}
             placeholder="Search by name"
-            className="h-10 w-full rounded-md border border-line bg-white pl-9 pr-3 text-[13px] text-ink outline-none transition focus:border-ink"
+            className="h-10 w-full rounded-tile border border-line-warm bg-paper-warm pl-9 pr-3 text-[13px] text-ink outline-none transition focus:border-ink"
           />
         </form>
         <label htmlFor="status" className="sr-only">
@@ -78,56 +78,80 @@ export default function Providers() {
       {loading ? (
         <div className="space-y-2.5">
           {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-16 w-full rounded-lg" />
+            <Skeleton key={i} className="h-16 w-full rounded-card" />
           ))}
         </div>
       ) : state.error ? (
-        <p className="text-clay">{state.error}</p>
+        <p role="alert" className="rounded-tile border border-clay/20 bg-clay/10 px-3.5 py-2.5 text-sm text-clay">{state.error}</p>
       ) : state.providers.length === 0 ? (
-        <EmptyState icon={SearchX} title="No providers match." className="rounded-lg border border-dashed border-line bg-white" />
+        <EmptyState icon={SearchX} title="No providers match." className="rounded-card border border-dashed border-line-warm bg-paper-warm" />
       ) : (
-        <div className={tableShell}>
-          <table className="w-full min-w-[44rem] text-left text-sm">
-            <thead>
-              <tr className={tableHead}>
-                <th className="px-5 py-3 font-medium">Provider</th>
-                <th className="py-3 pr-4 font-medium">Owner</th>
-                <th className="py-3 pr-4 font-medium">Area</th>
-                <th className="py-3 pr-4 font-medium">Status</th>
-                <th className="py-3 pr-5 font-medium">Applied</th>
-              </tr>
-            </thead>
-            <tbody>
-              {state.providers.map((p) => (
-                <tr key={p._id} className={tableRow}>
-                  <td className="px-5 py-3.5">
-                    <Link to={`/admin/providers/${p._id}`} className="font-medium text-ink transition hover:text-clay">
-                      {p.displayName}
-                    </Link>
-                    <span className="block text-xs text-muted">{p.category?.name || '—'}</span>
-                  </td>
-                  <td className="py-3.5 pr-4">
-                    {p.owner ? (
-                      <>
-                        <span className="block text-ink">{p.owner.name}</span>
-                        <span className="block text-xs text-muted">{p.owner.email}</span>
-                      </>
-                    ) : (
-                      <span className="text-muted">—</span>
-                    )}
-                  </td>
-                  <td className="py-3.5 pr-4 text-muted">
-                    {[p.block?.name, p.city?.name].filter(Boolean).join(', ') || '—'}
-                  </td>
-                  <td className="py-3.5 pr-4">
-                    <StatusBadge value={p.status} />
-                  </td>
-                  <td className="py-3.5 pr-5 text-muted">{formatDate(p.createdAt)}</td>
+        <>
+          <TableScroll label="Service providers" className="hidden md:block">
+            <table className="w-full min-w-[44rem] text-left text-sm">
+              <thead>
+                <tr className={tableHead}>
+                  <th className="px-5 py-3 font-medium">Provider</th>
+                  <th className="py-3 pr-4 font-medium">Owner</th>
+                  <th className="py-3 pr-4 font-medium">Area</th>
+                  <th className="py-3 pr-4 font-medium">Status</th>
+                  <th className="py-3 pr-5 font-medium">Applied</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {state.providers.map((p) => (
+                  <tr key={p._id} className={tableRow}>
+                    <td className="px-5 py-3.5">
+                      <Link to={`/admin/providers/${p._id}`} className="font-medium text-ink transition hover:text-clay">
+                        {p.displayName}
+                      </Link>
+                      <span className="block text-xs text-ink/55">{p.category?.name || '—'}</span>
+                    </td>
+                    <td className="py-3.5 pr-4">
+                      {p.owner ? (
+                        <>
+                          <span className="block text-ink">{p.owner.name}</span>
+                          <span className="block text-xs text-ink/55">{p.owner.email}</span>
+                        </>
+                      ) : (
+                        <span className="text-ink/55">—</span>
+                      )}
+                    </td>
+                    <td className="py-3.5 pr-4 text-ink/55">
+                      {[p.block?.name, p.city?.name].filter(Boolean).join(', ') || '—'}
+                    </td>
+                    <td className="py-3.5 pr-4">
+                      <StatusBadge value={p.status} />
+                    </td>
+                    <td className="py-3.5 pr-5 text-ink/55">{formatDate(p.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableScroll>
+
+          <ul className="space-y-3 md:hidden">
+            {state.providers.map((p) => (
+              <li key={p._id} className="rounded-card border border-line-warm bg-paper-warm p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <Link to={`/admin/providers/${p._id}`} className="font-medium text-ink transition hover:text-clay">
+                    {p.displayName}
+                  </Link>
+                  <StatusBadge value={p.status} />
+                </div>
+                <p className="mt-1 text-[12.5px] text-ink/55">
+                  {p.category?.name || 'No category'} · {[p.block?.name, p.city?.name].filter(Boolean).join(', ') || 'No area'}
+                </p>
+                {p.owner && (
+                  <p className="mt-1 text-xs text-ink/55">
+                    {p.owner.name} · {p.owner.email}
+                  </p>
+                )}
+                <p className="mt-1 text-xs text-ink/45">Applied {formatDate(p.createdAt)}</p>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
       <Pager pagination={state.pagination} onPage={(p) => update({ page: p > 1 ? String(p) : '' })} />
     </>

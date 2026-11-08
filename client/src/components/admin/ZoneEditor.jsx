@@ -113,9 +113,9 @@ export default function ZoneEditor({ ring, onChange, others = [] }) {
 
   return (
     <div>
-      <div ref={container} className="h-[420px] w-full rounded-lg border border-line" role="application" aria-label="Map for drawing the block's outline" />
+      <div ref={container} className="h-[420px] w-full rounded-card border border-line-warm" role="application" aria-label="Map for drawing the block's outline" />
       <div className="mt-2.5 flex flex-wrap items-center gap-3 text-[12.5px]">
-        <span className="text-muted">
+        <span className="text-ink/55">
           {ring.length === 0
             ? 'Click the map to place the first corner.'
             : `${ring.length} corner${ring.length === 1 ? '' : 's'}${ring.length < 3 ? ' (at least 3 needed)' : ''}. Drag a corner to move it, right-click it to remove it.`}
@@ -124,7 +124,7 @@ export default function ZoneEditor({ ring, onChange, others = [] }) {
           type="button"
           onClick={() => onChange(ring.slice(0, -1))}
           disabled={ring.length === 0}
-          className="rounded-md border border-line px-3 py-1.5 font-medium text-ink transition hover:border-ink disabled:opacity-40"
+          className="rounded-tile border border-line-warm px-3 py-1.5 font-medium text-ink transition hover:border-ink disabled:opacity-40"
         >
           Undo last corner
         </button>
@@ -132,7 +132,7 @@ export default function ZoneEditor({ ring, onChange, others = [] }) {
           type="button"
           onClick={() => onChange([])}
           disabled={ring.length === 0}
-          className="rounded-md border border-line px-3 py-1.5 font-medium text-ink transition hover:border-ink disabled:opacity-40"
+          className="rounded-tile border border-line-warm px-3 py-1.5 font-medium text-ink transition hover:border-ink disabled:opacity-40"
         >
           Clear
         </button>

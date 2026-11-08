@@ -20,7 +20,7 @@ function PermissionTicks({ value, onChange }) {
       {ADMIN_PERMISSION_OPTIONS.map(({ key, label, hint }) => (
         <label
           key={key}
-          className="flex cursor-pointer items-start gap-3 rounded-md border border-line bg-white px-3.5 py-3 transition hover:border-ink/40"
+          className="flex cursor-pointer items-start gap-3 rounded-tile border border-line-warm bg-paper-warm px-3.5 py-3 transition hover:border-ink/40"
         >
           <input
             type="checkbox"
@@ -30,7 +30,7 @@ function PermissionTicks({ value, onChange }) {
           />
           <span>
             <span className="block text-[13px] font-medium text-ink">{label}</span>
-            <span className="block text-xs text-muted">{hint}</span>
+            <span className="block text-xs text-ink/55">{hint}</span>
           </span>
         </label>
       ))}
@@ -46,7 +46,7 @@ function PresetButtons({ onApply }) {
           key={preset.key}
           type="button"
           onClick={() => onApply(preset)}
-          className="rounded-md border border-line bg-white px-3 py-1.5 text-[12.5px] font-medium text-ink transition hover:border-ink"
+          className="rounded-tile border border-line-warm bg-paper-warm px-3 py-1.5 text-[12.5px] font-medium text-ink transition hover:border-ink"
         >
           {preset.label}
         </button>
@@ -54,7 +54,7 @@ function PresetButtons({ onApply }) {
       <button
         type="button"
         onClick={() => onApply({ permissions: [], readOnly: false })}
-        className="rounded-md border border-line bg-white px-3 py-1.5 text-[12.5px] font-medium text-muted transition hover:border-ink hover:text-ink"
+        className="rounded-tile border border-line-warm bg-paper-warm px-3 py-1.5 text-[12.5px] font-medium text-ink/55 transition hover:border-ink hover:text-ink"
       >
         Clear
       </button>
@@ -64,6 +64,7 @@ function PresetButtons({ onApply }) {
 
 export default function AdminTeam() {
   const [partners, setPartners] = useState(null)
+  const [activeCount, setActiveCount] = useState(null)
   const [pagination, setPagination] = useState(null)
   const [page, setPage] = useState(1)
   const [loadError, setLoadError] = useState('')
@@ -85,12 +86,15 @@ export default function AdminTeam() {
 
   useEffect(() => {
     let active = true
-    api
-      .get('/admin/partners', { params: { limit: 20, page } })
-      .then((res) => {
+    Promise.all([
+      api.get('/admin/partners', { params: { limit: 20, page } }),
+      api.get('/admin/partners', { params: { limit: 50, page: 1 } }),
+    ])
+      .then(([res, all]) => {
         if (!active) return
         setPartners(res.data.items)
         setPagination(res.data.pagination)
+        setActiveCount(all.data.items.filter((partner) => partner.isActive).length)
       })
       .catch((err) => active && setLoadError(getErrorMessage(err)))
     return () => {
@@ -187,8 +191,8 @@ export default function AdminTeam() {
     }
   }
 
-  const activeCount = (partners || []).filter((partner) => partner.isActive).length
-  const atLimit = activeCount >= MAX_ACTIVE
+  const activeCountKnown = activeCount ?? (partners || []).filter((partner) => partner.isActive).length
+  const atLimit = activeCountKnown >= MAX_ACTIVE
 
   return (
     <>
@@ -204,15 +208,15 @@ export default function AdminTeam() {
       />
 
       {!loadError && partners && (
-        <p className="mb-5 text-[12.5px] text-muted">
-          {activeCount} of {MAX_ACTIVE} active partners.
+        <p className="mb-5 text-[12.5px] text-ink/55">
+          {activeCountKnown} of {MAX_ACTIVE} active partners.
           {atLimit && ' Deactivate one to open a seat.'}
         </p>
       )}
       <Notice tone={message.tone}>{message.text}</Notice>
 
       {adding && (
-        <form onSubmit={onAdd} noValidate className="mb-8 space-y-7 rounded-lg border border-line bg-white p-6">
+        <form onSubmit={onAdd} noValidate className="mb-8 space-y-7 rounded-card border border-line-warm bg-paper-warm p-6">
           <div className="grid gap-5 sm:grid-cols-2">
             <Field label="Name" id="p-name" name="name" value={form.name} onChange={onChange} error={fieldErrors.name} required />
             <Field label="Email" id="p-email" name="email" type="email" value={form.email} onChange={onChange} error={fieldErrors.email} required />
@@ -233,14 +237,14 @@ export default function AdminTeam() {
           </div>
           <div>
             <h2 className="mb-1 text-[15px] font-semibold text-ink">What can they open?</h2>
-            <p className="mb-4 text-[13px] text-muted">
+            <p className="mb-4 text-[13px] text-ink/55">
               Start from a preset, then adjust. Read-only partners can open their areas but change nothing.
             </p>
             <PresetButtons onApply={applyPreset} />
             <div className="mt-4">
               <PermissionTicks value={permissions} onChange={setPermissions} />
             </div>
-            <label className="mt-4 flex cursor-pointer items-center gap-2.5 rounded-md border border-line bg-paper px-3.5 py-3 text-[13px] text-ink">
+            <label className="mt-4 flex cursor-pointer items-center gap-2.5 rounded-tile border border-line-warm bg-sand/50 px-3.5 py-3 text-[13px] text-ink">
               <input type="checkbox" checked={readOnly} onChange={(e) => setReadOnly(e.target.checked)} className="h-4 w-4 accent-ink" />
               Read only — can view their areas but never change anything
             </label>
@@ -253,11 +257,11 @@ export default function AdminTeam() {
       )}
 
       {loadError ? (
-        <p role="alert" className="text-clay">{loadError}</p>
+        <p role="alert" className="rounded-tile border border-clay/20 bg-clay/10 px-3.5 py-2.5 text-sm text-clay">{loadError}</p>
       ) : !partners ? (
         <div className="space-y-2.5">
           {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-24 w-full rounded-lg" />
+            <Skeleton key={i} className="h-24 w-full rounded-card" />
           ))}
         </div>
       ) : partners.length === 0 ? (
@@ -265,26 +269,26 @@ export default function AdminTeam() {
           icon={UserCog}
           title="No admin partners yet."
           message="Add someone to help with brands, orders or reviews. You can limit them to exactly what they need."
-          className="rounded-lg border border-dashed border-line bg-white"
+          className="rounded-card border border-dashed border-line-warm bg-paper-warm"
         />
       ) : (
         <>
           <ul className="space-y-3">
             {partners.map((partner) => (
-              <li key={partner._id} className="rounded-lg border border-line bg-white p-5">
+              <li key={partner._id} className="rounded-card border border-line-warm bg-paper-warm p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0">
                     <p className="font-medium text-ink">
                       {partner.user?.name}
                       {partner.readOnly && (
-                        <span className="ml-2 rounded border border-warning/30 bg-warning-soft px-1.5 py-0.5 text-[10.5px] font-medium uppercase tracking-[0.06em] text-warning">
+                        <span className="ml-2 rounded border border-[#e5d2a9] bg-[#f8efd9] px-1.5 py-0.5 text-[10.5px] font-medium uppercase tracking-[0.06em] text-[#855811]">
                           Read only
                         </span>
                       )}
                     </p>
-                    <p className="text-[13px] text-muted">{partner.user?.email}</p>
-                    {partner.user?.phone && <p className="text-[12.5px] text-muted">{partner.user.phone}</p>}
-                    <p className="mt-1 text-xs text-muted">
+                    <p className="text-[13px] text-ink/55">{partner.user?.email}</p>
+                    {partner.user?.phone && <p className="text-[12.5px] text-ink/55">{partner.user.phone}</p>}
+                    <p className="mt-1 text-xs text-ink/55">
                       {partner.permissions.length === 0
                         ? 'No areas assigned'
                         : ADMIN_PERMISSION_OPTIONS.filter((option) => partner.permissions.includes(option.key))
@@ -292,7 +296,7 @@ export default function AdminTeam() {
                             .join(' · ')}
                     </p>
                     {partner.user?.mustChangePassword && (
-                      <p className="mt-1 flex items-center gap-1.5 text-xs text-warning">
+                      <p className="mt-1 flex items-center gap-1.5 text-xs text-[#855811]">
                         <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />
                         Has not chosen a password yet
                       </p>
@@ -309,7 +313,8 @@ export default function AdminTeam() {
                             : { id: partner._id, permissions: partner.permissions, readOnly: partner.readOnly },
                         )
                       }
-                      className="rounded-md border border-line px-3 py-1.5 text-ink transition hover:border-ink"
+                      aria-label={`Edit access for ${partner.user?.name}`}
+                      className="rounded-tile border border-line-warm px-3 py-1.5 text-ink transition hover:border-ink"
                     >
                       {editing?.id === partner._id ? 'Close' : 'Edit access'}
                     </button>
@@ -320,18 +325,19 @@ export default function AdminTeam() {
                         setTempPassword('')
                         setFieldErrors({})
                       }}
-                      className="rounded-md border border-line px-3 py-1.5 text-ink transition hover:border-ink"
+                      aria-label={`Reset password for ${partner.user?.name}`}
+                      className="rounded-tile border border-line-warm px-3 py-1.5 text-ink transition hover:border-ink"
                     >
                       Reset password
                     </button>
                     {partner.isActive ? (
                       confirmOff === partner._id ? (
-                        <span className="flex items-center gap-2.5 rounded-md bg-danger-soft px-3 py-1.5 font-normal text-danger">
-                          Deactivate?
+                        <span className="flex items-center gap-2.5 rounded-tile bg-clay/10 px-3 py-1.5 font-normal text-clay">
+                          Remove access?
                           <button type="button" disabled={busy} onClick={() => setActive(partner, false)} className="font-semibold hover:underline">
                             Yes
                           </button>
-                          <button type="button" onClick={() => setConfirmOff(null)} className="text-muted hover:text-ink">
+                          <button type="button" onClick={() => setConfirmOff(null)} className="text-ink/55 hover:text-ink">
                             No
                           </button>
                         </span>
@@ -339,9 +345,10 @@ export default function AdminTeam() {
                         <button
                           type="button"
                           onClick={() => setConfirmOff(partner._id)}
-                          className="rounded-md border border-danger/40 px-3 py-1.5 text-danger transition hover:border-danger"
+                          aria-label={`Remove access for ${partner.user?.name}`}
+                          className="rounded-tile border border-clay/40 px-3 py-1.5 text-clay transition hover:border-clay"
                         >
-                          Deactivate
+                          Remove access
                         </button>
                       )
                     ) : (
@@ -350,17 +357,18 @@ export default function AdminTeam() {
                           type="button"
                           disabled={busy || atLimit}
                           onClick={() => setActive(partner, true)}
-                          className="rounded-md border border-pine px-3 py-1.5 text-pine transition hover:bg-pine hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                          aria-label={`Reactivate ${partner.user?.name}`}
+                          className="rounded-tile border border-forest px-3 py-1.5 text-forest transition hover:bg-forest hover:text-cream disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           Reactivate
                         </button>
                         {confirmPurge === partner._id ? (
-                          <span className="flex items-center gap-2.5 rounded-md bg-danger-soft px-3 py-1.5 font-normal text-danger">
+                          <span className="flex items-center gap-2.5 rounded-tile bg-clay/10 px-3 py-1.5 font-normal text-clay">
                             Delete account and free the email?
                             <button type="button" disabled={busy} onClick={() => purgePartner(partner)} className="font-semibold hover:underline">
                               Yes
                             </button>
-                            <button type="button" onClick={() => setConfirmPurge(null)} className="text-muted hover:text-ink">
+                            <button type="button" onClick={() => setConfirmPurge(null)} className="text-ink/55 hover:text-ink">
                               No
                             </button>
                           </span>
@@ -368,7 +376,8 @@ export default function AdminTeam() {
                           <button
                             type="button"
                             onClick={() => setConfirmPurge(partner._id)}
-                            className="rounded-md border border-danger/40 px-3 py-1.5 text-danger transition hover:border-danger"
+                            aria-label={`Delete account for ${partner.user?.name}`}
+                            className="rounded-tile border border-clay/40 px-3 py-1.5 text-clay transition hover:border-clay"
                           >
                             Delete account
                           </button>
@@ -379,7 +388,7 @@ export default function AdminTeam() {
                 </div>
 
                 {editing?.id === partner._id && (
-                  <form onSubmit={saveAccess} className="mt-5 space-y-5 rounded-md border border-line bg-paper p-5">
+                  <form onSubmit={saveAccess} className="mt-5 space-y-5 rounded-tile border border-line-warm bg-sand/50 p-5">
                     <PresetButtons
                       onApply={(preset) => setEditing({ ...editing, permissions: preset.permissions, readOnly: preset.readOnly })}
                     />
@@ -403,7 +412,7 @@ export default function AdminTeam() {
                       <button
                         type="button"
                         onClick={() => setEditing(null)}
-                        className="inline-flex h-11 items-center rounded-md border border-line bg-white px-5 text-[13px] font-medium text-ink transition hover:border-ink"
+                        className="inline-flex h-11 items-center rounded-tile border border-line-warm bg-paper-warm px-5 text-[13px] font-medium text-ink transition hover:border-ink"
                       >
                         Cancel
                       </button>
@@ -420,7 +429,7 @@ export default function AdminTeam() {
       <Modal open={Boolean(resetting)} onClose={() => setResetting(null)} title="Reset password">
         {resetting && (
           <form onSubmit={onResetPassword} className="space-y-5" noValidate>
-            <p className="text-[13px] text-muted">
+            <p className="text-[13px] text-ink/55">
               Set a temporary password for <strong className="text-ink">{resetting.user?.name}</strong>. They are signed
               out everywhere and must choose a new password at next sign-in.
             </p>

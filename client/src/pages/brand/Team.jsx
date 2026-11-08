@@ -134,7 +134,7 @@ export default function Team() {
       <Notice tone={message.tone}>{message.text}</Notice>
 
       {adding && (
-        <form onSubmit={onAdd} noValidate className="mb-8 space-y-7 rounded-lg border border-line bg-white p-6">
+        <form onSubmit={onAdd} noValidate className="mb-8 space-y-7 rounded-card border border-line-warm bg-paper-warm p-6">
           <div className="grid gap-5 sm:grid-cols-2">
             <Field label="Name" id="m-name" name="name" value={form.name} onChange={onChange} error={fieldErrors.name} required />
             <Field label="Job title" id="m-title" name="jobTitle" value={form.jobTitle} onChange={onChange} error={fieldErrors.jobTitle} hint="Optional, e.g. Order packer." />
@@ -144,7 +144,7 @@ export default function Team() {
           </div>
           <div>
             <h2 className="mb-1 text-[15px] font-semibold text-ink">What kind of account?</h2>
-            <p className="mb-3 text-[13px] text-muted">
+            <p className="mb-3 text-[13px] text-ink/55">
               A team member uses the website and gets only the permissions you tick. A picker uses the Partner app and sees only the orders waiting to be picked.
             </p>
             <div className="flex flex-wrap gap-2">
@@ -157,8 +157,8 @@ export default function Team() {
                   type="button"
                   onClick={() => setForm((f) => ({ ...f, role: value }))}
                   aria-pressed={form.role === value}
-                  className={`rounded-md border px-4 py-2 text-[13px] font-medium transition ${
-                    form.role === value ? 'border-pine bg-pine text-white' : 'border-line bg-white text-ink hover:border-ink'
+                  className={`rounded-tile border px-4 py-2 text-[13px] font-medium transition ${
+                    form.role === value ? 'border-forest bg-forest text-cream' : 'border-line-warm bg-paper-warm text-ink hover:border-ink'
                   }`}
                 >
                   {label}
@@ -169,12 +169,12 @@ export default function Team() {
           {form.role === 'BRAND_EMPLOYEE' ? (
             <div>
               <h2 className="mb-1 text-[15px] font-semibold text-ink">What can they do?</h2>
-              <p className="mb-5 text-[13px] text-muted">They only get what you tick. You can change this later.</p>
+              <p className="mb-5 text-[13px] text-ink/55">They only get what you tick. You can change this later.</p>
               <PermissionPicker value={permissions} onChange={setPermissions} canGrant={can} />
               {fieldErrors.permissions && <p className="mt-3 text-xs text-clay">{fieldErrors.permissions}</p>}
             </div>
           ) : (
-            <p className="rounded-md border border-line bg-paper px-4 py-3 text-[13px] text-muted">
+            <p className="rounded-tile border border-line-warm bg-sand/50 px-4 py-3 text-[13px] text-ink/55">
               A picker signs in on the CityCart Partner app. They see the customer’s first name and the items only — never the phone number, prices or payment.
             </p>
           )}
@@ -185,11 +185,11 @@ export default function Team() {
       )}
 
       {loadError ? (
-        <p className="text-clay">{loadError}</p>
+        <p role="alert" className="rounded-tile border border-clay/20 bg-clay/10 px-3.5 py-2.5 text-sm text-clay">{loadError}</p>
       ) : !members ? (
         <div className="space-y-2.5">
           {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-20 w-full rounded-lg" />
+            <Skeleton key={i} className="h-20 w-full rounded-card" />
           ))}
         </div>
       ) : members.length === 0 ? (
@@ -197,21 +197,21 @@ export default function Team() {
           icon={UserRound}
           title="No team members yet."
           message="Add someone to help with orders, products or deliveries."
-          className="rounded-lg border border-dashed border-line bg-white"
+          className="rounded-card border border-dashed border-line-warm bg-paper-warm"
         />
       ) : (
         <>
           <ul className="space-y-3">
           {members.map((m) => (
-            <li key={m._id} className="rounded-lg border border-line bg-white p-5">
+            <li key={m._id} className="rounded-card border border-line-warm bg-paper-warm p-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <p className="font-medium text-ink">
                     {m.user?.name}
-                    {m.jobTitle && <span className="ml-2 text-sm font-normal text-muted">{m.jobTitle}</span>}
+                    {m.jobTitle && <span className="ml-2 text-sm font-normal text-ink/55">{m.jobTitle}</span>}
                   </p>
-                  <p className="text-[13px] text-muted">{m.user?.email}</p>
-                  <p className="mt-1 text-xs text-muted">
+                  <p className="text-[13px] text-ink/55">{m.user?.email}</p>
+                  <p className="mt-1 text-xs text-ink/55">
                     {m.user?.role === 'PICKER'
                       ? 'Picker · Partner app only'
                       : m.permissions.length === 0
@@ -225,15 +225,16 @@ export default function Team() {
                     <button
                       type="button"
                       onClick={() => setEditing(editing?.id === m._id ? null : { id: m._id, permissions: m.permissions })}
-                      className="rounded-md border border-line px-3 py-1.5 text-ink transition hover:border-ink"
+                      aria-label={`Edit access for ${m.user?.name}`}
+                      className="rounded-tile border border-line-warm px-3 py-1.5 text-ink transition hover:border-ink"
                     >
                       {editing?.id === m._id ? 'Close' : 'Edit access'}
                     </button>
                   )}
                   {m.isActive && can('employees.delete') && (
                     confirmOff === m._id ? (
-                      <span className="flex items-center gap-2.5 rounded-md bg-danger-soft px-3 py-1.5 font-normal text-danger">
-                        Remove?
+                      <span className="flex items-center gap-2.5 rounded-tile bg-clay/10 px-3 py-1.5 font-normal text-clay">
+                        Remove access?
                         <button
                           type="button"
                           disabled={busy}
@@ -242,7 +243,7 @@ export default function Team() {
                         >
                           Yes
                         </button>
-                        <button type="button" onClick={() => setConfirmOff(null)} className="text-muted hover:text-ink">
+                        <button type="button" onClick={() => setConfirmOff(null)} className="text-ink/55 hover:text-ink">
                           No
                         </button>
                       </span>
@@ -250,9 +251,10 @@ export default function Team() {
                       <button
                         type="button"
                         onClick={() => setConfirmOff(m._id)}
-                        className="rounded-md border border-danger/40 px-3 py-1.5 text-danger transition hover:border-danger"
+                        aria-label={`Remove access for ${m.user?.name}`}
+                        className="rounded-tile border border-clay/40 px-3 py-1.5 text-clay transition hover:border-clay"
                       >
-                        Remove
+                        Remove access
                       </button>
                     )
                   )}
@@ -261,14 +263,15 @@ export default function Team() {
                       type="button"
                       disabled={busy}
                       onClick={() => setActive(m, true)}
-                      className="rounded-md border border-pine px-3 py-1.5 text-pine transition hover:bg-pine hover:text-white"
+                      aria-label={`Reactivate ${m.user?.name}`}
+                      className="rounded-tile border border-forest px-3 py-1.5 text-forest transition hover:bg-forest hover:text-cream"
                     >
                       Reactivate
                     </button>
                   )}
                   {!m.isActive && can('employees.delete') && (
                     confirmPurge === m._id ? (
-                      <span className="flex items-center gap-2.5 rounded-md bg-danger-soft px-3 py-1.5 font-normal text-danger">
+                      <span className="flex items-center gap-2.5 rounded-tile bg-clay/10 px-3 py-1.5 font-normal text-clay">
                         Delete account and free the email?
                         <button
                           type="button"
@@ -278,7 +281,7 @@ export default function Team() {
                         >
                           Yes
                         </button>
-                        <button type="button" onClick={() => setConfirmPurge(null)} className="text-muted hover:text-ink">
+                        <button type="button" onClick={() => setConfirmPurge(null)} className="text-ink/55 hover:text-ink">
                           No
                         </button>
                       </span>
@@ -286,7 +289,8 @@ export default function Team() {
                       <button
                         type="button"
                         onClick={() => setConfirmPurge(m._id)}
-                        className="rounded-md border border-danger/40 px-3 py-1.5 text-danger transition hover:border-danger"
+                        aria-label={`Delete account for ${m.user?.name}`}
+                        className="rounded-tile border border-clay/40 px-3 py-1.5 text-clay transition hover:border-clay"
                       >
                         Delete account
                       </button>
@@ -296,7 +300,7 @@ export default function Team() {
               </div>
 
               {editing?.id === m._id && (
-                <form onSubmit={saveAccess} className="mt-5 space-y-6 rounded-md border border-line bg-paper p-5">
+                <form onSubmit={saveAccess} className="mt-5 space-y-6 rounded-tile border border-line-warm bg-sand/50 p-5">
                   <PermissionPicker value={editing.permissions} onChange={(list) => setEditing({ id: m._id, permissions: list })} canGrant={can} />
                   <div className="flex items-center gap-3">
                     <button type="submit" disabled={busy} className={btnPine}>
@@ -305,7 +309,7 @@ export default function Team() {
                     <button
                       type="button"
                       onClick={() => setEditing(null)}
-                      className="inline-flex h-11 items-center rounded-md border border-line bg-white px-5 text-[13px] font-medium text-ink transition hover:border-ink"
+                      className="inline-flex h-11 items-center rounded-tile border border-line-warm bg-paper-warm px-5 text-[13px] font-medium text-ink transition hover:border-ink"
                     >
                       Cancel
                     </button>

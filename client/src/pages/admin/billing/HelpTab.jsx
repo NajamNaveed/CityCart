@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { CircleHelp, MessageSquare } from 'lucide-react'
 import api, { getErrorMessage } from '../../../services/api'
 import { EmptyState, Modal, Skeleton, toast } from '../../../components/ui'
-import { Pager, StatusBadge, selectClass, tableHead, tableRow, tableShell } from '../../../components/brand/Bits'
+import { Pager, StatusBadge, TableScroll, selectClass, tableHead, tableRow } from '../../../components/brand/Bits'
 import { btnGhost, btnPine, formatDateTime, inputClass } from '../../../ui'
 
 const STATUS_OPTIONS = ['OPEN', 'RESOLVED']
@@ -78,18 +78,24 @@ export default function HelpTab() {
             </option>
           ))}
         </select>
-        <p className="text-[12.5px] text-muted">
+        <p className="text-[12.5px] text-ink/55">
           Answers appear on the seller's billing page and in their notifications.
         </p>
       </div>
 
-      {error && <p className="mb-4 rounded-md bg-clay/5 px-3 py-2 text-sm text-clay">{error}</p>}
+      {error && <p className="mb-4 rounded-tile bg-clay/5 px-3 py-2 text-sm text-clay">{error}</p>}
 
       {loading ? (
-        <Skeleton className="h-64 w-full rounded-lg" />
+        <Skeleton className="h-64 w-full rounded-card" />
+      ) : data.items.length === 0 ? (
+        <EmptyState
+          icon={CircleHelp}
+          title={status === 'OPEN' ? 'No open questions' : 'Nothing here'}
+          message="Billing questions from sellers appear here."
+        />
       ) : (
         <>
-          <div className={tableShell}>
+          <TableScroll label="Billing help requests">
             <table className="w-full min-w-[820px] text-left text-[13px]">
               <thead className={tableHead}>
                 <tr>
@@ -101,55 +107,43 @@ export default function HelpTab() {
                 </tr>
               </thead>
               <tbody>
-                {data.items.length === 0 ? (
-                  <tr>
-                    <td colSpan={5}>
-                      <EmptyState
-                        icon={CircleHelp}
-                        title={status === 'OPEN' ? 'No open questions' : 'Nothing here'}
-                        message="Billing questions from sellers appear here."
-                      />
+                {data.items.map((request) => (
+                  <tr key={request._id} className={tableRow}>
+                    <td className="px-4 py-3 align-top text-ink/55">{formatDateTime(request.createdAt)}</td>
+                    <td className="px-4 py-3 align-top">
+                      <span className="text-ink">{request.seller?.name || 'Unknown seller'}</span>
+                      <span className="block text-[11.5px] text-ink/55">
+                        {request.sellerType === 'BRAND' ? 'Brand' : 'Service provider'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 align-top">
+                      <p className="font-medium text-ink">{request.subject}</p>
+                      <p className="mt-0.5 max-w-xl text-[12.5px] leading-relaxed text-ink/55">{request.message}</p>
+                      {request.resolutionNote && (
+                        <p className="mt-1.5 rounded-tile bg-sand/50 px-2.5 py-1.5 text-[12px] text-ink">
+                          <span className="font-medium">Answered: </span>
+                          {request.resolutionNote}
+                        </p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 align-top">
+                      <StatusBadge value={request.status} />
+                      {request.handledAt && (
+                        <span className="mt-1 block text-[11.5px] text-ink/55">{formatDateTime(request.handledAt)}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 align-top text-right">
+                      {request.status === 'OPEN' && (
+                        <button type="button" onClick={() => openAnswer(request)} className={btnGhost}>
+                          <MessageSquare className="h-4 w-4" aria-hidden="true" /> Answer
+                        </button>
+                      )}
                     </td>
                   </tr>
-                ) : (
-                  data.items.map((request) => (
-                    <tr key={request._id} className={tableRow}>
-                      <td className="px-4 py-3 align-top text-muted">{formatDateTime(request.createdAt)}</td>
-                      <td className="px-4 py-3 align-top">
-                        <span className="text-ink">{request.seller?.name || 'Unknown seller'}</span>
-                        <span className="block text-[11.5px] text-muted">
-                          {request.sellerType === 'BRAND' ? 'Brand' : 'Service provider'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 align-top">
-                        <p className="font-medium text-ink">{request.subject}</p>
-                        <p className="mt-0.5 max-w-xl text-[12.5px] leading-relaxed text-muted">{request.message}</p>
-                        {request.resolutionNote && (
-                          <p className="mt-1.5 rounded-md bg-paper px-2.5 py-1.5 text-[12px] text-ink">
-                            <span className="font-medium">Answered: </span>
-                            {request.resolutionNote}
-                          </p>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 align-top">
-                        <StatusBadge value={request.status} />
-                        {request.handledAt && (
-                          <span className="mt-1 block text-[11.5px] text-muted">{formatDateTime(request.handledAt)}</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 align-top text-right">
-                        {request.status === 'OPEN' && (
-                          <button type="button" onClick={() => openAnswer(request)} className={btnGhost}>
-                            <MessageSquare className="h-4 w-4" aria-hidden="true" /> Answer
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
+                ))}
               </tbody>
             </table>
-          </div>
+          </TableScroll>
           <Pager pagination={data.pagination} onPage={load} />
         </>
       )}
@@ -157,12 +151,12 @@ export default function HelpTab() {
       {answering && (
         <Modal open onClose={() => setAnswering(null)} title="Answer the seller" maxWidth="max-w-lg">
           <form onSubmit={submitAnswer} className="space-y-4">
-            <div className="rounded-md bg-paper/70 px-3 py-2.5">
+            <div className="rounded-tile bg-sand/50/70 px-3 py-2.5">
               <p className="text-sm font-medium text-ink">{answering.subject}</p>
-              <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted">{answering.message}</p>
+              <p className="mt-0.5 text-[12.5px] leading-relaxed text-ink/55">{answering.message}</p>
             </div>
             <div>
-              <label htmlFor="help-answer" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">
+              <label htmlFor="help-answer" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-ink/55">
                 Your answer
               </label>
               <textarea

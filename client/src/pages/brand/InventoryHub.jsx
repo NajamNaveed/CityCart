@@ -5,7 +5,7 @@ import api, { getErrorMessage } from '../../services/api'
 import Field from '../../components/Field'
 import ProductImage from '../../components/ProductImage'
 import { EmptyState, Skeleton } from '../../components/ui'
-import { Notice, PageHeader, Pager, StatusBadge, tableHead, tableRow, tableShell } from '../../components/brand/Bits'
+import { Notice, PageHeader, Pager, StatusBadge, TableScroll, tableHead, tableRow } from '../../components/brand/Bits'
 import { btnPine } from '../../ui'
 
 export default function InventoryHub() {
@@ -79,9 +79,20 @@ export default function InventoryHub() {
   }
 
   const loading = state.key !== key
+
+  function stockOf(product, row) {
+    const reserved = product.inventory?.reservedQuantity ?? 0
+    const available = Math.max(0, Number(row.quantity) - reserved)
+    const status = available <= 0 ? 'OUT_OF_STOCK' : available <= Number(row.lowStockThreshold) ? 'LOW_STOCK' : 'IN_STOCK'
+    return { reserved, available, status }
+  }
+
   return (
     <>
       <PageHeader title="Quick inventory" intro="Adjust stock and low-stock thresholds across your catalogue." />
+      <p className="mb-5 text-[13px] leading-relaxed text-ink/55">
+        Available is total stock minus the units open orders have reserved. Set the low-stock alert where you want the product flagged for restocking.
+      </p>
       <Notice tone={message.tone}>{message.text}</Notice>
       <div className="mb-5 flex flex-wrap items-end gap-3">
         <form role="search" className="relative min-w-0 flex-1 basis-56" onSubmit={(event) => {
@@ -89,20 +100,20 @@ export default function InventoryHub() {
           update({ search: new FormData(event.currentTarget).get('search').toString().trim() })
         }}>
           <label htmlFor="inventory-search" className="sr-only">Search inventory products</label>
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden="true" />
-          <input key={search} id="inventory-search" name="search" defaultValue={search} placeholder="Search products by name" className="h-10 w-full rounded-md border border-line bg-white pl-9 pr-3 text-[13px] text-ink outline-none focus:border-ink" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/55" aria-hidden="true" />
+          <input key={search} id="inventory-search" name="search" defaultValue={search} placeholder="Search products by name" className="h-10 w-full rounded-tile border border-line-warm bg-paper-warm pl-9 pr-3 text-[13px] text-ink outline-none transition focus:border-ink focus:ring-2 focus:ring-ink/10" />
         </form>
-        {!loading && state.pagination && <p className="pb-2 text-xs text-muted">{state.pagination.total} products</p>}
+        {!loading && state.pagination && <p className="pb-2 text-xs text-ink/55">{state.pagination.total} products</p>}
       </div>
       {loading ? (
-        <div className="space-y-2.5">{[0, 1, 2, 3].map((row) => <Skeleton key={row} className="h-16 w-full rounded-lg" />)}</div>
+        <div className="space-y-2.5">{[0, 1, 2, 3].map((row) => <Skeleton key={row} className="h-16 w-full rounded-card" />)}</div>
       ) : state.error ? (
-        <p role="alert" className="text-clay">{state.error}</p>
+        <p role="alert" className="rounded-tile border border-clay/20 bg-clay/10 px-3.5 py-2.5 text-sm text-clay">{state.error}</p>
       ) : state.products.length === 0 ? (
-        <EmptyState icon={Warehouse} title={search ? 'No products match.' : 'No products yet.'} message={search ? undefined : 'Add products before managing stock.'} className="rounded-lg border border-dashed border-line bg-white" />
+        <EmptyState icon={Warehouse} title={search ? 'No products match.' : 'No products yet.'} message={search ? undefined : 'Add products before managing stock.'} className="rounded-card border border-dashed border-line-warm bg-paper-warm" />
       ) : (
         <form onSubmit={save}>
-          <div className={tableShell}>
+          <TableScroll label="Quick inventory" className="hidden md:block">
             <table className="w-full min-w-[48rem] text-left text-sm">
               <thead><tr className={tableHead}>
                 <th className="px-5 py-3 font-medium">Product</th>
@@ -112,19 +123,19 @@ export default function InventoryHub() {
               </tr></thead>
               <tbody>{state.products.map((product) => {
                 const row = draft[product._id] || { quantity: '0', lowStockThreshold: '0' }
-                const reserved = product.inventory?.reservedQuantity ?? 0
+                const { reserved, available, status } = stockOf(product, row)
                 return (
                   <tr key={product._id} className={tableRow}>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                        <ProductImage src={product.images?.[0]} name={product.name} className="size-10 shrink-0 rounded-md text-sm" />
-                        <div className="min-w-0"><span className="block truncate font-medium text-ink">{product.name}</span><span className="text-xs text-muted">{product.sku || product.status}</span></div>
+                        <ProductImage src={product.images?.[0]} name={product.name} className="size-10 shrink-0 rounded-tile text-sm" />
+                        <div className="min-w-0"><span className="block truncate font-medium text-ink">{product.name}</span><span className="text-xs text-ink/55">{product.sku || product.status}</span></div>
                       </div>
                       {rowErrors[product._id] && <p role="alert" className="mt-1 text-xs text-clay">{rowErrors[product._id]}</p>}
                     </td>
                     <td className="py-3 pr-4">
-                      <StatusBadge value={Number(row.quantity) - reserved <= 0 ? 'OUT_OF_STOCK' : Number(row.quantity) - reserved <= Number(row.lowStockThreshold) ? 'LOW_STOCK' : 'IN_STOCK'} />
-                      <span className="ml-2 text-xs text-muted">{Math.max(0, Number(row.quantity) - reserved)} available</span>
+                      <StatusBadge value={status} />
+                      <span className="ml-2 text-xs text-ink/55">{available} available{reserved > 0 ? ` · ${reserved} reserved` : ''}</span>
                     </td>
                     <td className="py-3 pr-4"><Field label="" id={`quantity-${product._id}`} type="number" min={reserved} step="1" aria-label={`Total stock for ${product.name}`} value={row.quantity} onChange={(event) => setDraft((current) => ({ ...current, [product._id]: { ...row, quantity: event.target.value } }))} /></td>
                     <td className="py-3 pr-5"><Field label="" id={`threshold-${product._id}`} type="number" min="0" step="1" aria-label={`Low-stock threshold for ${product.name}`} value={row.lowStockThreshold} onChange={(event) => setDraft((current) => ({ ...current, [product._id]: { ...row, lowStockThreshold: event.target.value } }))} /></td>
@@ -132,7 +143,33 @@ export default function InventoryHub() {
                 )
               })}</tbody>
             </table>
-          </div>
+          </TableScroll>
+
+          <ul className="space-y-2.5 md:hidden">
+            {state.products.map((product) => {
+              const row = draft[product._id] || { quantity: '0', lowStockThreshold: '0' }
+              const { reserved, available, status } = stockOf(product, row)
+              return (
+                <li key={product._id} className="rounded-card border border-line-warm bg-paper-warm p-4">
+                  <div className="flex items-center gap-3">
+                    <ProductImage src={product.images?.[0]} name={product.name} className="size-10 shrink-0 rounded-tile text-sm" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium text-ink">{product.name}</p>
+                      <p className="text-xs text-ink/55">{product.sku || product.status}</p>
+                    </div>
+                    <StatusBadge value={status} />
+                  </div>
+                  <p className="mt-2 text-xs text-ink/55">{available} available{reserved > 0 ? ` · ${reserved} reserved` : ''}</p>
+                  {rowErrors[product._id] && <p role="alert" className="mt-1 text-xs text-clay">{rowErrors[product._id]}</p>}
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <Field label="Total stock" id={`mobile-quantity-${product._id}`} type="number" min={reserved} step="1" value={row.quantity} onChange={(event) => setDraft((current) => ({ ...current, [product._id]: { ...row, quantity: event.target.value } }))} />
+                    <Field label="Low-stock alert" id={`mobile-threshold-${product._id}`} type="number" min="0" step="1" value={row.lowStockThreshold} onChange={(event) => setDraft((current) => ({ ...current, [product._id]: { ...row, lowStockThreshold: event.target.value } }))} />
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+
           <div className="mt-4 flex justify-end"><button type="submit" disabled={saving} className={btnPine}>{saving ? 'Saving…' : 'Save stock changes'}</button></div>
         </form>
       )}

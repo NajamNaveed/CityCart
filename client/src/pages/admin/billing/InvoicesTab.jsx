@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { FileText, Play, Receipt } from 'lucide-react'
 import api, { getErrorMessage } from '../../../services/api'
 import { EmptyState, Modal, Skeleton, toast } from '../../../components/ui'
-import { Pager, StatusBadge, selectClass, tableHead, tableRow, tableShell } from '../../../components/brand/Bits'
+import { Pager, StatusBadge, TableScroll, selectClass, tableHead, tableRow } from '../../../components/brand/Bits'
 import { btnGhost, formatDate } from '../../../ui'
 import { formatPaisa, INVOICE_STATUS_OPTIONS, SELLER_TYPE_OPTIONS } from '../../../utils/billingUi'
 
@@ -14,6 +14,7 @@ export default function InvoicesTab({ onChanged }) {
   const [error, setError] = useState('')
   const [detail, setDetail] = useState(null)
   const [generating, setGenerating] = useState(false)
+  const [confirmGenerate, setConfirmGenerate] = useState(false)
 
   const load = useCallback(
     async (nextPage = 1) => {
@@ -63,6 +64,7 @@ export default function InvoicesTab({ onChanged }) {
   }
 
   async function generate() {
+    setConfirmGenerate(false)
     setGenerating(true)
     try {
       const { data: body } = await api.post('/admin/billing/invoices/generate')
@@ -108,23 +110,51 @@ export default function InvoicesTab({ onChanged }) {
         <input
           aria-label="Period (YYYY-MM)"
           placeholder="Period YYYY-MM"
-          className={`h-10 rounded-md border border-line bg-white px-3 text-[13px] outline-none focus:border-ink`}
+          className={`h-10 rounded-tile border border-line-warm bg-paper-warm px-3 text-[13px] outline-none focus:border-ink`}
           value={filters.periodKey}
           onChange={(event) => setFilters((current) => ({ ...current, periodKey: event.target.value }))}
         />
-        <button type="button" onClick={generate} disabled={generating} className={`${btnGhost} ml-auto`}>
+        <button type="button" onClick={() => setConfirmGenerate(true)} disabled={generating} className={`${btnGhost} ml-auto`}>
           <Play className="h-4 w-4" aria-hidden="true" />
           {generating ? 'Generating…' : 'Generate last month now'}
         </button>
       </div>
 
-      {error && <p className="mb-4 rounded-md bg-clay/5 px-3 py-2 text-sm text-clay">{error}</p>}
+      {confirmGenerate && (
+        <div className="mb-4 rounded-tile border border-[#e5d2a9] bg-[#f8efd9] px-4 py-3">
+          <p className="text-[13px] leading-relaxed text-ink">
+            Generate invoices for last month now? Sellers are billed 1% commission on completed sales and bookings.
+            Invoices already issued for the period are left untouched.
+          </p>
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={generate}
+              disabled={generating}
+              className="inline-flex h-9 items-center rounded-tile bg-forest px-3.5 text-[12.5px] font-medium text-cream transition hover:bg-forest-deep disabled:opacity-50"
+            >
+              {generating ? 'Generating…' : 'Yes, generate'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmGenerate(false)}
+              className="inline-flex h-9 items-center rounded-tile border border-line-warm bg-paper-warm px-3.5 text-[12.5px] font-medium text-ink transition hover:border-ink"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {error && <p className="mb-4 rounded-tile bg-clay/5 px-3 py-2 text-sm text-clay">{error}</p>}
 
       {loading ? (
-        <Skeleton className="h-64 w-full rounded-lg" />
+        <Skeleton className="h-64 w-full rounded-card" />
+      ) : data.items.length === 0 ? (
+        <EmptyState icon={FileText} title="No invoices" message="Change the filters or issue the month's bills." />
       ) : (
         <>
-          <div className={tableShell}>
+          <TableScroll label="Seller invoices">
             <table className="w-full min-w-[820px] text-left text-[13px]">
               <thead className={tableHead}>
                 <tr>
@@ -139,40 +169,32 @@ export default function InvoicesTab({ onChanged }) {
                 </tr>
               </thead>
               <tbody>
-                {data.items.length === 0 ? (
-                  <tr>
-                    <td colSpan={8}>
-                      <EmptyState icon={FileText} title="No invoices" message="Change the filters or issue the month's bills." />
+                {data.items.map((invoice) => (
+                  <tr key={invoice._id} className={tableRow}>
+                    <td className="px-4 py-3 font-medium text-ink">{invoice.periodKey}</td>
+                    <td className="px-4 py-3">
+                      <span className="text-ink">{invoice.seller?.name || 'Unknown seller'}</span>
+                      <span className="block text-[11.5px] text-ink/55">
+                        {invoice.sellerType === 'BRAND' ? 'Brand' : 'Service provider'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right text-ink/55">{formatPaisa(invoice.commissionPaisa)}</td>
+                    <td className="px-4 py-3 text-right text-ink/55">{formatPaisa(invoice.paidPaisa)}</td>
+                    <td className="px-4 py-3 text-right font-medium text-ink">{formatPaisa(invoice.amountDuePaisa)}</td>
+                    <td className="px-4 py-3">
+                      <StatusBadge value={invoice.status} />
+                    </td>
+                    <td className="px-4 py-3 text-ink/55">{formatDate(invoice.dueAt)}</td>
+                    <td className="px-4 py-3 text-right">
+                      <button type="button" onClick={() => openDetail(invoice)} className="text-[12.5px] font-medium text-forest hover:underline">
+                        View
+                      </button>
                     </td>
                   </tr>
-                ) : (
-                  data.items.map((invoice) => (
-                    <tr key={invoice._id} className={tableRow}>
-                      <td className="px-4 py-3 font-medium text-ink">{invoice.periodKey}</td>
-                      <td className="px-4 py-3">
-                        <span className="text-ink">{invoice.seller?.name || 'Unknown seller'}</span>
-                        <span className="block text-[11.5px] text-muted">
-                          {invoice.sellerType === 'BRAND' ? 'Brand' : 'Service provider'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right text-muted">{formatPaisa(invoice.commissionPaisa)}</td>
-                      <td className="px-4 py-3 text-right text-muted">{formatPaisa(invoice.paidPaisa)}</td>
-                      <td className="px-4 py-3 text-right font-medium text-ink">{formatPaisa(invoice.amountDuePaisa)}</td>
-                      <td className="px-4 py-3">
-                        <StatusBadge value={invoice.status} />
-                      </td>
-                      <td className="px-4 py-3 text-muted">{formatDate(invoice.dueAt)}</td>
-                      <td className="px-4 py-3 text-right">
-                        <button type="button" onClick={() => openDetail(invoice)} className="text-[12.5px] font-medium text-pine hover:underline">
-                          View
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
+                ))}
               </tbody>
             </table>
-          </div>
+          </TableScroll>
           <Pager pagination={data.pagination} onPage={load} />
         </>
       )}
@@ -183,28 +205,28 @@ export default function InvoicesTab({ onChanged }) {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm text-ink">
                 {detail.invoice.seller?.name}
-                <span className="ml-2 text-[12px] text-muted">
+                <span className="ml-2 text-[12px] text-ink/55">
                   {detail.invoice.sellerType === 'BRAND' ? 'Brand' : 'Service provider'}
                 </span>
               </p>
               <StatusBadge value={detail.invoice.status} />
             </div>
 
-            <div className="grid gap-3 rounded-lg bg-paper/60 p-4 sm:grid-cols-4">
+            <div className="grid gap-3 rounded-card bg-sand/40 p-4 sm:grid-cols-4">
               <div>
-                <p className="text-[11px] uppercase tracking-[0.08em] text-muted">Sales</p>
+                <p className="text-[11px] uppercase tracking-[0.08em] text-ink/55">Sales</p>
                 <p className="font-medium">{formatPaisa(detail.invoice.salesPaisa)}</p>
               </div>
               <div>
-                <p className="text-[11px] uppercase tracking-[0.08em] text-muted">Commission</p>
+                <p className="text-[11px] uppercase tracking-[0.08em] text-ink/55">Commission</p>
                 <p className="font-medium">{formatPaisa(detail.invoice.commissionPaisa)}</p>
               </div>
               <div>
-                <p className="text-[11px] uppercase tracking-[0.08em] text-muted">Credits</p>
+                <p className="text-[11px] uppercase tracking-[0.08em] text-ink/55">Credits</p>
                 <p className="font-medium">−{formatPaisa(detail.invoice.creditsPaisa)}</p>
               </div>
               <div>
-                <p className="text-[11px] uppercase tracking-[0.08em] text-muted">Still due</p>
+                <p className="text-[11px] uppercase tracking-[0.08em] text-ink/55">Still due</p>
                 <p className="font-medium">{formatPaisa(detail.invoice.amountDuePaisa)}</p>
               </div>
             </div>
@@ -212,17 +234,17 @@ export default function InvoicesTab({ onChanged }) {
             <div>
               <h3 className="mb-2 font-display text-base font-semibold">Commission lines</h3>
               {detail.entries.length === 0 ? (
-                <p className="text-sm text-muted">No lines.</p>
+                <p className="text-sm text-ink/55">No lines.</p>
               ) : (
-                <ul className="divide-y divide-line rounded-md border border-line">
+                <ul className="divide-y divide-line-warm rounded-tile border border-line-warm">
                   {detail.entries.map((entry) => (
                     <li key={entry._id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-[13px]">
-                      <span className="text-muted">{formatDate(entry.occurredAt)}</span>
+                      <span className="text-ink/55">{formatDate(entry.occurredAt)}</span>
                       <span className="text-ink">
                         {entry.sourceType === 'ORDER' ? 'Order' : 'Booking'}
                         {entry.kind === 'REVERSAL' ? ' · reversal' : ''}
                       </span>
-                      <span className="text-muted">{formatPaisa(entry.eligibleAmountPaisa)}</span>
+                      <span className="text-ink/55">{formatPaisa(entry.eligibleAmountPaisa)}</span>
                       <span className="font-medium text-ink">{formatPaisa(entry.commissionPaisa)}</span>
                     </li>
                   ))}
@@ -233,18 +255,18 @@ export default function InvoicesTab({ onChanged }) {
             <div>
               <h3 className="mb-2 font-display text-base font-semibold">Claims</h3>
               {detail.claims.length === 0 ? (
-                <p className="text-sm text-muted">No claims yet.</p>
+                <p className="text-sm text-ink/55">No claims yet.</p>
               ) : (
                 <ul className="space-y-2">
                   {detail.claims.map((claim) => (
-                    <li key={claim._id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-line px-3 py-2.5">
+                    <li key={claim._id} className="flex flex-wrap items-center justify-between gap-2 rounded-tile border border-line-warm px-3 py-2.5">
                       <span className="text-[13px] text-ink">
                         {formatPaisa(claim.amountPaisa)} · {claim.method.replaceAll('_', ' ').toLowerCase()} · {claim.reference}
                       </span>
                       <span className="flex items-center gap-2">
                         <StatusBadge value={claim.status} />
                         {claim.receiptAvailable && (
-                          <button type="button" onClick={() => openReceipt(claim)} className="inline-flex items-center gap-1 text-[12px] font-medium text-pine hover:underline">
+                          <button type="button" onClick={() => openReceipt(claim)} className="inline-flex items-center gap-1 text-[12px] font-medium text-forest hover:underline">
                             <Receipt className="h-3.5 w-3.5" /> Receipt
                           </button>
                         )}

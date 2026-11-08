@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Receipt, ShieldCheck } from 'lucide-react'
 import api, { getErrorMessage } from '../../../services/api'
 import { EmptyState, Modal, Skeleton, toast } from '../../../components/ui'
-import { Pager, StatusBadge, selectClass, tableHead, tableRow, tableShell } from '../../../components/brand/Bits'
+import { Pager, StatusBadge, TableScroll, selectClass, tableHead, tableRow } from '../../../components/brand/Bits'
 import { btnGhost, btnPine, formatDateTime, inputClass } from '../../../ui'
 import { CLAIM_STATUS_OPTIONS, formatPaisa } from '../../../utils/billingUi'
 
@@ -90,18 +90,20 @@ export default function ClaimsTab({ onChanged }) {
             </option>
           ))}
         </select>
-        <p className="text-[12.5px] text-muted">
+        <p className="text-[12.5px] text-ink/55">
           Verifying a claim pays the invoice and, if it was the last unpaid bill, restores the seller immediately.
         </p>
       </div>
 
-      {error && <p className="mb-4 rounded-md bg-clay/5 px-3 py-2 text-sm text-clay">{error}</p>}
+      {error && <p className="mb-4 rounded-tile bg-clay/5 px-3 py-2 text-sm text-clay">{error}</p>}
 
       {loading ? (
-        <Skeleton className="h-64 w-full rounded-lg" />
+        <Skeleton className="h-64 w-full rounded-card" />
+      ) : data.items.length === 0 ? (
+        <EmptyState icon={ShieldCheck} title="Nothing to check" message="Claims matching this filter appear here." />
       ) : (
         <>
-          <div className={tableShell}>
+          <TableScroll label="Payment claims">
             <table className="w-full min-w-[900px] text-left text-[13px]">
               <thead className={tableHead}>
                 <tr>
@@ -115,63 +117,55 @@ export default function ClaimsTab({ onChanged }) {
                 </tr>
               </thead>
               <tbody>
-                {data.items.length === 0 ? (
-                  <tr>
-                    <td colSpan={7}>
-                      <EmptyState icon={ShieldCheck} title="Nothing to check" message="Claims matching this filter appear here." />
+                {data.items.map((claim) => (
+                  <tr key={claim._id} className={tableRow}>
+                    <td className="px-4 py-3 text-ink/55">{formatDateTime(claim.createdAt)}</td>
+                    <td className="px-4 py-3">
+                      <span className="text-ink">{claim.seller?.name || 'Unknown seller'}</span>
+                      <span className="block text-[11.5px] text-ink/55">
+                        {claim.sellerType === 'BRAND' ? 'Brand' : 'Service provider'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-ink/55">
+                      {claim.invoice ? `${claim.invoice.periodKey} · ${formatPaisa(claim.invoice.amountDuePaisa)} due` : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-right font-medium text-ink">{formatPaisa(claim.amountPaisa)}</td>
+                    <td className="px-4 py-3 text-ink/55">
+                      {claim.method.replaceAll('_', ' ').toLowerCase()}
+                      <span className="block text-[11.5px]">{claim.reference}</span>
+                      {claim.comment && <span className="block text-[11.5px] italic">{claim.comment}</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusBadge value={claim.status} />
+                      {claim.rejectionReason && <p className="mt-1 text-[11.5px] text-clay">{claim.rejectionReason}</p>}
+                      {claim.creditPaisa > 0 && (
+                        <p className="mt-1 text-[11.5px] text-ink/55">{formatPaisa(claim.creditPaisa)} becomes credit</p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        {claim.receiptAvailable && (
+                          <button type="button" onClick={() => openReceipt(claim)} className="inline-flex items-center gap-1 text-[12px] font-medium text-forest hover:underline">
+                            <Receipt className="h-3.5 w-3.5" /> Receipt
+                          </button>
+                        )}
+                        {claim.status === 'SUBMITTED' && (
+                          <>
+                            <button type="button" onClick={() => openDecision(claim, 'VERIFIED')} className={btnPine}>
+                              Verify
+                            </button>
+                            <button type="button" onClick={() => openDecision(claim, 'REJECTED')} className={btnGhost}>
+                              Reject
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
-                ) : (
-                  data.items.map((claim) => (
-                    <tr key={claim._id} className={tableRow}>
-                      <td className="px-4 py-3 text-muted">{formatDateTime(claim.createdAt)}</td>
-                      <td className="px-4 py-3">
-                        <span className="text-ink">{claim.seller?.name || 'Unknown seller'}</span>
-                        <span className="block text-[11.5px] text-muted">
-                          {claim.sellerType === 'BRAND' ? 'Brand' : 'Service provider'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-muted">
-                        {claim.invoice ? `${claim.invoice.periodKey} · ${formatPaisa(claim.invoice.amountDuePaisa)} due` : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-right font-medium text-ink">{formatPaisa(claim.amountPaisa)}</td>
-                      <td className="px-4 py-3 text-muted">
-                        {claim.method.replaceAll('_', ' ').toLowerCase()}
-                        <span className="block text-[11.5px]">{claim.reference}</span>
-                        {claim.comment && <span className="block text-[11.5px] italic">{claim.comment}</span>}
-                      </td>
-                      <td className="px-4 py-3">
-                        <StatusBadge value={claim.status} />
-                        {claim.rejectionReason && <p className="mt-1 text-[11.5px] text-clay">{claim.rejectionReason}</p>}
-                        {claim.creditPaisa > 0 && (
-                          <p className="mt-1 text-[11.5px] text-muted">{formatPaisa(claim.creditPaisa)} becomes credit</p>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap justify-end gap-2">
-                          {claim.receiptAvailable && (
-                            <button type="button" onClick={() => openReceipt(claim)} className="inline-flex items-center gap-1 text-[12px] font-medium text-pine hover:underline">
-                              <Receipt className="h-3.5 w-3.5" /> Receipt
-                            </button>
-                          )}
-                          {claim.status === 'SUBMITTED' && (
-                            <>
-                              <button type="button" onClick={() => openDecision(claim, 'VERIFIED')} className={btnPine}>
-                                Verify
-                              </button>
-                              <button type="button" onClick={() => openDecision(claim, 'REJECTED')} className={btnGhost}>
-                                Reject
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
+                ))}
               </tbody>
             </table>
-          </div>
+          </TableScroll>
           <Pager pagination={data.pagination} onPage={load} />
         </>
       )}
@@ -189,17 +183,17 @@ export default function ClaimsTab({ onChanged }) {
               {deciding.invoice?.periodKey || '—'} ({deciding.method.replaceAll('_', ' ').toLowerCase()} · {deciding.reference}).
             </p>
             {decision === 'VERIFIED' ? (
-              <p className="rounded-md bg-success-soft px-3 py-2 text-[13px] text-success">
+              <p className="rounded-tile bg-sage/60 px-3 py-2 text-[13px] text-forest">
                 The invoice is paid by {formatPaisa(Math.min(deciding.amountPaisa, deciding.invoice?.amountDuePaisa || 0))}.
                 Any extra becomes credit on a later invoice.
               </p>
             ) : (
-              <p className="rounded-md bg-danger-soft px-3 py-2 text-[13px] text-danger">
+              <p className="rounded-tile bg-clay/10 px-3 py-2 text-[13px] text-clay">
                 The seller keeps the balance and the reason below is shown on their billing page.
               </p>
             )}
             <div>
-              <label htmlFor="decision-note" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">
+              <label htmlFor="decision-note" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-ink/55">
                 {decision === 'VERIFIED' ? 'Note (optional)' : 'Reason (shown to the seller)'}
               </label>
               <textarea

@@ -42,26 +42,26 @@ export default function BrandAnalytics() {
             { label: 'Low stock', value: wholeNumber(summary.lowStockProducts) },
             { label: 'Out of stock', value: wholeNumber(summary.outOfStockProducts) },
           ]} />
-          <TrendChart title="Daily delivered revenue" items={analytics.salesTrend} series={[{ key: 'revenue', label: 'Revenue', color: 'bg-pine', format: money }]} />
+          <TrendChart title="Daily delivered revenue" items={analytics.salesTrend} series={[{ key: 'revenue', label: 'Revenue', color: 'bg-forest', format: money }]} />
           <div className="grid gap-8 lg:grid-cols-2">
             <StatusList title="Order status" items={analytics.orderStatuses} />
             <StatusList title="Delivery status" items={analytics.deliveryStatuses} />
           </div>
-          <section className="border-t border-line pt-5">
+          <section className="border-t border-line-warm pt-5">
             <h2 className="mb-4 text-sm font-semibold text-ink">Best-selling products</h2>
-            {analytics.topProducts.length === 0 ? <p className="py-4 text-sm text-muted">No delivered product sales in this date range.</p> : (
+            {analytics.topProducts.length === 0 ? <p className="py-4 text-sm text-ink/55">No delivered product sales in this date range.</p> : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
-                  <thead className="text-[10px] uppercase tracking-[0.1em] text-muted"><tr><th className="pb-2 font-medium">Product</th><th className="pb-2 text-right font-medium">Units</th><th className="pb-2 text-right font-medium">Revenue</th></tr></thead>
-                  <tbody className="divide-y divide-line">{analytics.topProducts.map((product) => <tr key={product.productId}><td className="py-3 font-medium text-ink">{product.productName}</td><td className="py-3 text-right tabular-nums text-muted">{wholeNumber(product.unitsSold)}</td><td className="py-3 text-right tabular-nums text-ink">{money(product.revenue)}</td></tr>)}</tbody>
+                  <thead className="text-[10px] uppercase tracking-[0.1em] text-ink/55"><tr><th className="pb-2 font-medium">Product</th><th className="pb-2 text-right font-medium">Units</th><th className="pb-2 text-right font-medium">Revenue</th></tr></thead>
+                  <tbody className="divide-y divide-line-warm">{analytics.topProducts.map((product) => <tr key={product.productId}><td className="py-3 font-medium text-ink">{product.productName}</td><td className="py-3 text-right tabular-nums text-ink/55">{wholeNumber(product.unitsSold)}</td><td className="py-3 text-right tabular-nums text-ink">{money(product.revenue)}</td></tr>)}</tbody>
                 </table>
               </div>
             )}
           </section>
-          <section className="border-t border-line pt-5">
+          <section className="border-t border-line-warm pt-5">
             <h2 className="mb-4 text-sm font-semibold text-ink">Inventory alerts</h2>
-            {analytics.inventoryAlerts.length === 0 ? <p className="py-4 text-sm text-muted">No low-stock products.</p> : (
-              <ul className="divide-y divide-line">{analytics.inventoryAlerts.map((item) => <li key={item.productId} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"><span className="font-medium text-ink">{item.productName || 'Product'}</span><span className="text-xs uppercase text-warning">{item.status.replaceAll('_', ' ')}</span><span className="text-xs tabular-nums text-muted">{wholeNumber(item.availableQuantity)} available / {wholeNumber(item.quantity)} total</span></li>)}</ul>
+            {analytics.inventoryAlerts.length === 0 ? <p className="py-4 text-sm text-ink/55">No low-stock products.</p> : (
+              <ul className="divide-y divide-line-warm">{analytics.inventoryAlerts.map((item) => <li key={item.productId} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"><span className="font-medium text-ink">{item.productName || 'Product'}</span><span className="text-xs uppercase text-[#855811]">{item.status.replaceAll('_', ' ')}</span><span className="text-xs tabular-nums text-ink/55">{wholeNumber(item.availableQuantity)} available / {wholeNumber(item.quantity)} total</span></li>)}</ul>
             )}
           </section>
         </div>

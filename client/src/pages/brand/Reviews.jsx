@@ -58,18 +58,18 @@ export default function Reviews() {
       />
 
       {summary && summary.count > 0 && (
-        <div className="mb-8 flex flex-wrap items-center gap-x-10 gap-y-4 rounded-lg border border-line bg-white p-6">
+        <div className="mb-8 flex flex-wrap items-center gap-x-10 gap-y-4 rounded-card border border-line-warm bg-paper-warm p-6">
           <div>
             <p className="font-display text-4xl font-semibold text-ink">{summary.average.toFixed(1)}</p>
             <Stars value={summary.average} className="mt-1" />
           </div>
-          <p className="text-sm text-muted">
+          <p className="text-sm text-ink/55">
             Across {summary.count} {summary.count === 1 ? 'review' : 'reviews'} on all your products
           </p>
           <dl className="flex gap-5 text-sm">
             {[5, 4, 3, 2, 1].map((n) => (
               <div key={n} className="text-center">
-                <dt className="text-muted">{n} ★</dt>
+                <dt className="text-ink/55">{n} ★</dt>
                 <dd className="font-medium text-ink">{summary.distribution[n]}</dd>
               </div>
             ))}
@@ -80,34 +80,34 @@ export default function Reviews() {
       {loading ? (
         <div className="space-y-2.5">
           {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-24 w-full rounded-lg" />
+            <Skeleton key={i} className="h-24 w-full rounded-card" />
           ))}
         </div>
       ) : state.error ? (
-        <p className="text-clay">{state.error}</p>
+        <p role="alert" className="rounded-tile border border-clay/20 bg-clay/10 px-3.5 py-2.5 text-sm text-clay">{state.error}</p>
       ) : state.reviews.length === 0 ? (
         <EmptyState
           icon={Star}
           title={rating ? 'No reviews with that rating.' : 'No reviews yet.'}
           message={!rating ? 'Customers can review a product once their order is delivered.' : undefined}
-          className="rounded-lg border border-dashed border-line bg-white"
+          className="rounded-card border border-dashed border-line-warm bg-paper-warm"
         />
       ) : (
         <ul className="space-y-3">
           {state.reviews.map((r) => (
-            <li key={r._id} className="rounded-lg border border-line bg-white p-5">
+            <li key={r._id} className="rounded-card border border-line-warm bg-paper-warm p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <Stars value={r.rating} />
-                <span className="text-xs text-muted">
+                <span className="text-xs text-ink/55">
                   {r.reviewerName} · {formatDate(r.createdAt)}
                 </span>
               </div>
               {r.title && <p className="mt-2 font-medium text-ink">{r.title}</p>}
-              {r.comment && <p className="mt-1 text-[14px] leading-relaxed text-muted">{r.comment}</p>}
+              {r.comment && <p className="mt-1 text-[14px] leading-relaxed text-ink/55">{r.comment}</p>}
               <p className="mt-3 text-xs">
                 <Link
                   to={`/brand/products/${r.productId}`}
-                  className="inline-flex items-center gap-1 rounded-md bg-paper px-2.5 py-1 font-medium text-ink transition hover:text-pine"
+                  className="inline-flex items-center gap-1 rounded-tile bg-sand/50 px-2.5 py-1 font-medium text-ink transition hover:text-clay"
                 >
                   {r.productName}
                 </Link>

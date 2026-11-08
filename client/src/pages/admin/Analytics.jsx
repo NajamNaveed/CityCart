@@ -44,24 +44,24 @@ export default function AdminAnalytics() {
             title="Marketplace growth by day"
             items={analytics.growthTrend}
             series={[
-              { key: 'orders', label: 'Orders', color: 'bg-ink' },
+              { key: 'orders', label: 'Orders', color: 'bg-noir' },
               { key: 'newBrands', label: 'New brands', color: 'bg-clay' },
-              { key: 'newCustomers', label: 'New customers', color: 'bg-pine' },
+              { key: 'newCustomers', label: 'New customers', color: 'bg-forest' },
             ]}
           />
           <div className="grid gap-8 lg:grid-cols-2">
             <StatusList title="Order status" items={analytics.orderStatuses} />
-            <section className="border-t border-line pt-5">
+            <section className="border-t border-line-warm pt-5">
               <h2 className="mb-4 text-sm font-semibold text-ink">Orders by city</h2>
-              {analytics.ordersByCity.length === 0 ? <p className="py-4 text-sm text-muted">No orders in this date range.</p> : (
-                <ul className="divide-y divide-line">{analytics.ordersByCity.map((city) => <li key={city.cityId || city.city} className="flex items-center justify-between gap-3 py-3 text-sm"><span className="font-medium text-ink">{city.city}</span><span className="text-xs text-muted">{wholeNumber(city.orders)} orders</span><span className="tabular-nums text-ink">{money(city.gmv)}</span></li>)}</ul>
+              {analytics.ordersByCity.length === 0 ? <p className="py-4 text-sm text-ink/55">No orders in this date range.</p> : (
+                <ul className="divide-y divide-line-warm">{analytics.ordersByCity.map((city) => <li key={city.cityId || city.city} className="flex items-center justify-between gap-3 py-3 text-sm"><span className="font-medium text-ink">{city.city}</span><span className="text-xs text-ink/55">{wholeNumber(city.orders)} orders</span><span className="tabular-nums text-ink">{money(city.gmv)}</span></li>)}</ul>
               )}
             </section>
           </div>
-          <section className="border-t border-line pt-5">
+          <section className="border-t border-line-warm pt-5">
             <h2 className="mb-4 text-sm font-semibold text-ink">Top-performing brands</h2>
-            {analytics.topBrands.length === 0 ? <p className="py-4 text-sm text-muted">No brand sales in this date range.</p> : (
-              <ol className="divide-y divide-line">{analytics.topBrands.map((brand, index) => <li key={brand.brandId || brand.brandName} className="flex items-center justify-between gap-3 py-3 text-sm"><span className="w-8 text-xs tabular-nums text-muted">{String(index + 1).padStart(2, '0')}</span><span className="flex-1 font-medium text-ink">{brand.brandName || 'Brand'}</span><span className="text-xs text-muted">{wholeNumber(brand.orders)} orders</span><span className="tabular-nums text-ink">{money(brand.gmv)}</span></li>)}</ol>
+            {analytics.topBrands.length === 0 ? <p className="py-4 text-sm text-ink/55">No brand sales in this date range.</p> : (
+              <ol className="divide-y divide-line-warm">{analytics.topBrands.map((brand, index) => <li key={brand.brandId || brand.brandName} className="flex items-center justify-between gap-3 py-3 text-sm"><span className="w-8 text-xs tabular-nums text-ink/55">{String(index + 1).padStart(2, '0')}</span><span className="flex-1 font-medium text-ink">{brand.brandName || 'Brand'}</span><span className="text-xs text-ink/55">{wholeNumber(brand.orders)} orders</span><span className="tabular-nums text-ink">{money(brand.gmv)}</span></li>)}</ol>
             )}
           </section>
         </div>

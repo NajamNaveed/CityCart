@@ -9,7 +9,7 @@ import { EmptyState, Skeleton } from '../../components/ui'
 import { uploadProviderImage } from '../../services/uploads'
 import { btnOutline, btnPine, formatPrice, inputClass } from '../../ui'
 
-const labelClass = 'mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-muted'
+const labelClass = 'mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-ink/55'
 const EMPTY = { title: '', description: '', startingAtPrice: '', durationMinutes: '', images: [], isActive: true }
 
 const toRupees = (paisa) => (Number.isFinite(paisa) ? String(paisa / 100) : '')
@@ -170,7 +170,7 @@ function OfferingForm({ editing, onSaved, onCancel }) {
           type="checkbox"
           checked={form.isActive}
           onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))}
-          className="h-4 w-4 rounded border-line accent-pine"
+          className="h-4 w-4 rounded border-line-warm accent-forest"
         />
         Show this service on my public page
       </label>
@@ -195,6 +195,8 @@ export default function ProviderOfferings() {
   const [editing, setEditing] = useState(null)
   const [adding, setAdding] = useState(false)
   const [notice, setNotice] = useState('')
+  const [busyId, setBusyId] = useState(null)
+  const [confirmRemove, setConfirmRemove] = useState(null)
 
   useEffect(() => {
     let active = true
@@ -215,15 +217,32 @@ export default function ProviderOfferings() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  async function toggleActive(offering) {
+    setBusyId(offering._id)
+    setState((s) => ({ ...s, error: '' }))
+    try {
+      await api.patch(`/services/provider/offerings/${offering._id}`, { isActive: !offering.isActive })
+      setNotice(offering.isActive ? `“${offering.title}” is hidden from your page.` : `“${offering.title}” is shown again.`)
+      setReload((n) => n + 1)
+    } catch (err) {
+      setState((s) => ({ ...s, error: getErrorMessage(err) }))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   async function remove(offering) {
-    if (!window.confirm(`Remove “${offering.title}” from your page?`)) return
+    setBusyId(offering._id)
+    setState((s) => ({ ...s, error: '' }))
     try {
       await api.delete(`/services/provider/offerings/${offering._id}`)
       setNotice('Service removed from your page.')
+      setConfirmRemove(null)
       setReload((n) => n + 1)
     } catch (err) {
-      setNotice('')
       setState((s) => ({ ...s, error: getErrorMessage(err) }))
+    } finally {
+      setBusyId(null)
     }
   }
 
@@ -247,7 +266,7 @@ export default function ProviderOfferings() {
       <Notice>{!state.error && notice}</Notice>
 
       {formOpen ? (
-        <section className="mb-8 rounded-lg border border-line bg-white p-6">
+        <section className="mb-8 rounded-card border border-line-warm bg-paper-warm p-6">
           <h2 className="mb-5 text-[15px] font-semibold text-ink">
             {editing ? `Edit ${editing.title}` : 'New service'}
           </h2>
@@ -266,18 +285,18 @@ export default function ProviderOfferings() {
       {!state.loaded ? (
         <div className="space-y-3">
           {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-24 w-full rounded-lg" />
+            <Skeleton key={i} className="h-24 w-full rounded-card" />
           ))}
         </div>
       ) : state.error ? (
-        <p className="text-clay">{state.error}</p>
+        <p role="alert" className="rounded-tile border border-clay/20 bg-clay/10 px-3.5 py-2.5 text-sm text-clay">{state.error}</p>
       ) : state.items.length === 0 ? (
         !formOpen && (
           <EmptyState
             icon={Wrench}
             title="No services yet."
             message="Add what you offer — each service appears on your public page with its own starting price."
-            className="rounded-lg border border-dashed border-line bg-white"
+            className="rounded-card border border-dashed border-line-warm bg-paper-warm"
             action={
               <button type="button" onClick={() => setAdding(true)} className={btnPine}>
                 Add your first service
@@ -287,23 +306,23 @@ export default function ProviderOfferings() {
         )
       ) : (
         <>
-          <p className="mb-4 text-[13px] text-muted">
+          <p className="mb-4 text-[13px] text-ink/55">
             {state.items.length} {state.items.length === 1 ? 'service' : 'services'} · {activeCount} shown publicly
           </p>
-          <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-white">
+          <ul className="divide-y divide-line-warm overflow-hidden rounded-card border border-line-warm bg-paper-warm">
             {state.items.map((offering) => (
               <li key={offering._id} className="flex flex-wrap items-center gap-4 px-5 py-4">
                 <ProductImage
                   src={offering.images?.[0]}
                   name={offering.title}
-                  className="size-14 shrink-0 rounded-md text-sm"
+                  className="size-14 shrink-0 rounded-tile text-sm"
                 />
                 <div className="min-w-0 flex-1 basis-56">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="truncate font-medium text-ink">{offering.title}</p>
                     <StatusBadge value={offering.isActive ? 'ACTIVE' : 'INACTIVE'} />
                   </div>
-                  <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12.5px] text-muted">
+                  <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12.5px] text-ink/55">
                     <span>From {formatPrice(offering.startingAtPrice / 100)}</span>
                     <span className="inline-flex items-center gap-1">
                       <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
@@ -311,31 +330,57 @@ export default function ProviderOfferings() {
                     </span>
                   </p>
                   {offering.description && (
-                    <p className="mt-1 line-clamp-2 text-[12.5px] text-muted">{offering.description}</p>
+                    <p className="mt-1 line-clamp-2 text-[12.5px] text-ink/55">{offering.description}</p>
                   )}
                 </div>
-                <div className="flex shrink-0 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAdding(false)
-                      setEditing(offering)
-                      window.scrollTo({ top: 0, behavior: 'smooth' })
-                    }}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-md border border-line px-3 text-[12.5px] font-medium text-ink transition hover:border-ink"
-                  >
-                    <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => remove(offering)}
-                    aria-label={`Remove ${offering.title}`}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-danger/40 text-danger transition hover:border-danger"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                  </button>
-                </div>
+                {confirmRemove === offering._id ? (
+                  <div className="flex shrink-0 flex-wrap items-center gap-2 rounded-tile bg-clay/10 px-3 py-2 text-[12.5px] text-clay">
+                    <span>Remove this service?</span>
+                    <button
+                      type="button"
+                      disabled={busyId === offering._id}
+                      onClick={() => remove(offering)}
+                      className="font-semibold hover:underline"
+                    >
+                      Yes
+                    </button>
+                    <button type="button" onClick={() => setConfirmRemove(null)} className="text-ink/55 hover:text-ink">
+                      No
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex shrink-0 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAdding(false)
+                        setEditing(offering)
+                        window.scrollTo({ top: 0, behavior: 'smooth' })
+                      }}
+                      aria-label={`Edit ${offering.title}`}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-tile border border-line-warm px-3 text-[12.5px] font-medium text-ink transition hover:border-ink"
+                    >
+                      <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busyId === offering._id}
+                      onClick={() => toggleActive(offering)}
+                      className="inline-flex h-9 items-center rounded-tile border border-line-warm px-3 text-[12.5px] font-medium text-ink transition hover:border-ink disabled:opacity-50"
+                    >
+                      {offering.isActive ? 'Hide' : 'Show'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmRemove(offering._id)}
+                      aria-label={`Remove ${offering.title}`}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-tile border border-clay/40 text-clay transition hover:border-clay"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

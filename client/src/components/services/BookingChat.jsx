@@ -21,8 +21,8 @@ function Bubble({ message }) {
       <div
         className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed sm:max-w-[75%] ${
           message.mine
-            ? 'rounded-br-md bg-noir text-cream'
-            : 'rounded-bl-md border border-line-warm bg-paper-warm text-ink'
+            ? 'rounded-br-sm bg-noir text-cream'
+            : 'rounded-bl-sm border border-line-warm bg-paper-warm text-ink'
         }`}
       >
         {message.body && <p className="whitespace-pre-wrap break-words">{message.body}</p>}
@@ -178,7 +178,7 @@ export default function BookingChat({ bookingId, enabled, closedText }) {
             maxLength={MAX_BODY}
             rows={2}
             placeholder="Write a message…"
-            className="min-h-[44px] flex-1 resize-none rounded-tile border border-line-warm bg-paper-warm px-3.5 py-2.5 text-[13.5px] text-ink outline-none transition placeholder:text-muted/60 focus:border-ink/40 focus:ring-2 focus:ring-ink/10"
+            className="min-h-[44px] flex-1 resize-none rounded-tile border border-line-warm bg-paper-warm px-3.5 py-2.5 text-[13.5px] text-ink outline-none transition placeholder:text-ink/40 focus:border-ink/40 focus:ring-2 focus:ring-ink/10"
           />
           <button type="submit" disabled={!draft.trim() || sending} className={btn('noir', 'md')}>
             <Send className="h-3.5 w-3.5" aria-hidden="true" />

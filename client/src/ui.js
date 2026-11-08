@@ -2,32 +2,32 @@
 // Pages consume these directly; components/ wraps them where behaviour repeats.
 
 const base =
-  'inline-flex h-11 items-center justify-center gap-2 rounded-md px-6 text-[13px] font-medium uppercase tracking-[0.08em] transition-all duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100'
+  'inline-flex h-11 items-center justify-center gap-2 rounded-tile px-6 text-[12px] font-semibold uppercase tracking-[0.1em] transition-colors duration-200 disabled:pointer-events-none disabled:opacity-50'
 
-export const btnPrimary = `${base} bg-clay text-white shadow-sm shadow-clay/25 hover:bg-clay-dark`
-export const btnDark = `${base} bg-ink text-white hover:bg-ink-soft`
-export const btnOutline = `${base} border border-ink bg-transparent text-ink hover:bg-ink hover:text-white`
+export const btnPrimary = `${base} bg-clay text-white hover:bg-clay-dark`
+export const btnDark = `${base} bg-noir text-cream hover:bg-noir-soft`
+export const btnOutline = `${base} border border-ink/15 bg-transparent text-ink hover:border-ink/40 hover:bg-ink/5`
 export const btnGhost =
-  'inline-flex h-11 items-center justify-center gap-2 rounded-md px-4 text-[13px] font-medium text-ink transition hover:bg-ink/5'
+  'inline-flex h-11 items-center justify-center gap-2 rounded-tile px-4 text-[13px] font-medium text-ink/70 transition hover:bg-ink/5 hover:text-ink'
 
-// Seller side uses the pine green; the shop keeps clay.
+// Seller side uses the deep forest; the shop keeps clay.
 export const btnPine =
-  'inline-flex h-11 items-center justify-center gap-2 rounded-md bg-pine px-6 text-[13px] font-medium uppercase tracking-[0.08em] text-white transition-all duration-200 hover:bg-pine-dark active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50'
+  'inline-flex h-11 items-center justify-center gap-2 rounded-tile bg-forest px-6 text-[12px] font-semibold uppercase tracking-[0.1em] text-cream transition-colors duration-200 hover:bg-forest-deep disabled:pointer-events-none disabled:opacity-50'
 export const btnCream =
-  'inline-flex h-11 items-center justify-center gap-2 rounded-md bg-cream px-6 text-[13px] font-medium uppercase tracking-[0.08em] text-pine transition-colors hover:bg-white'
+  'inline-flex h-11 items-center justify-center gap-2 rounded-tile bg-cream px-6 text-[12px] font-semibold uppercase tracking-[0.1em] text-noir transition-colors hover:bg-white'
 export const btnCreamOutline =
-  'inline-flex h-11 items-center justify-center gap-2 rounded-md border border-white/25 px-6 text-[13px] font-medium uppercase tracking-[0.08em] text-white transition-colors hover:border-white/60'
+  'inline-flex h-11 items-center justify-center gap-2 rounded-tile border border-white/25 px-6 text-[12px] font-semibold uppercase tracking-[0.1em] text-white transition-colors hover:border-white/60'
 
-export const sectionLabel = 'text-[11px] font-medium uppercase tracking-[0.18em] text-muted'
+export const sectionLabel = 'text-[10.5px] font-semibold uppercase tracking-[0.18em] text-ink/45'
 
 export const inputClass =
-  'w-full rounded-md border border-line bg-white px-3.5 text-sm text-ink placeholder-muted/50 outline-none transition-[border-color,box-shadow] focus:border-ink focus:ring-2 focus:ring-ink/10'
+  'w-full rounded-tile border border-line-warm bg-paper-warm px-3.5 text-sm text-ink placeholder:text-muted/60 outline-none transition-[border-color,box-shadow] focus:border-ink/40 focus:ring-2 focus:ring-ink/10'
 
-// Cards: white sheets lifted off the paper background.
-export const card = 'rounded-lg border border-line bg-surface'
-export const cardHover = 'transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-ink/5'
+// Cards: warm paper sheets lifted off the canvas.
+export const card = 'rounded-card border border-line-warm bg-paper-warm'
+export const cardHover = 'transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_35px_rgba(21,20,15,0.07)]'
 
-export const skeleton = 'animate-pulse rounded-md bg-line/60'
+export const skeleton = 'animate-pulse rounded-tile bg-line-warm/60'
 
 const money = new Intl.NumberFormat('en-PK', {
   style: 'currency',

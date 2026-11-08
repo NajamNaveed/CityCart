@@ -12,7 +12,17 @@ import {
 } from 'lucide-react'
 import api, { getErrorMessage, getFieldErrors } from '../../services/api'
 import Field from '../../components/Field'
-import { Notice, PageHeader, Pager, StatusBadge, tableHead, tableRow, tableShell } from '../../components/brand/Bits'
+import {
+  Notice,
+  PageHeader,
+  Pager,
+  StatusBadge,
+  TableScroll,
+  tabButton,
+  tabRow,
+  tableHead,
+  tableRow,
+} from '../../components/brand/Bits'
 import { EmptyState, Modal, Skeleton, toast } from '../../components/ui'
 import { btnGhost, btnPine, card, formatDate, formatDateTime, inputClass } from '../../ui'
 import {
@@ -34,7 +44,7 @@ function copyText(text) {
 
 function Tabs({ active, onChange }) {
   return (
-    <div role="tablist" aria-label="Billing" className="mb-6 flex flex-wrap gap-1 border-b border-line">
+    <div role="tablist" aria-label="Billing" className={tabRow}>
       {TABS.map((tab) => (
         <button
           key={tab}
@@ -42,8 +52,8 @@ function Tabs({ active, onChange }) {
           role="tab"
           aria-selected={active === tab}
           onClick={() => onChange(tab)}
-          className={`border-b-2 px-4 py-3 text-[13px] font-medium transition-colors ${
-            active === tab ? 'border-pine text-ink' : 'border-transparent text-muted hover:text-ink'
+          className={`${tabButton} ${
+            active === tab ? 'border-forest text-ink' : 'border-transparent text-ink/55 hover:text-ink'
           }`}
         >
           {tab}
@@ -63,7 +73,7 @@ function BankDetails({ bank }) {
 
   if (rows.length === 0) {
     return (
-      <p className="text-sm text-muted">
+      <p className="text-sm text-ink/55">
         The platform bank details are not published yet. Use the Help tab and the team will send them.
       </p>
     )
@@ -73,21 +83,21 @@ function BankDetails({ bank }) {
     <div className="space-y-2.5">
       {rows.map(([label, value]) => (
         <div key={label} className="flex items-start justify-between gap-3">
-          <span className="text-[11.5px] font-medium uppercase tracking-[0.08em] text-muted">{label}</span>
+          <span className="text-[11.5px] font-medium uppercase tracking-[0.08em] text-ink/55">{label}</span>
           <span className="flex items-center gap-1.5 text-right text-sm font-medium text-ink">
             {value}
             <button
               type="button"
               aria-label={`Copy ${label}`}
               onClick={() => copyText(value)}
-              className="rounded p-1 text-muted transition hover:bg-paper hover:text-ink"
+              className="rounded p-1 text-ink/55 transition hover:bg-sand/60 hover:text-ink"
             >
               <Copy className="h-3.5 w-3.5" />
             </button>
           </span>
         </div>
       ))}
-      {bank.instructions && <p className="border-t border-line pt-3 text-[12.5px] leading-relaxed text-muted">{bank.instructions}</p>}
+      {bank.instructions && <p className="border-t border-line-warm pt-3 text-[12.5px] leading-relaxed text-ink/55">{bank.instructions}</p>}
     </div>
   )
 }
@@ -102,10 +112,10 @@ function StatusPanel({ billing, onPay }) {
       <div
         className={`px-5 py-4 ${
           copy.tone === 'danger'
-            ? 'bg-danger-soft'
+            ? 'bg-clay/10'
             : copy.tone === 'warn'
-              ? 'bg-warning-soft'
-              : 'bg-success-soft'
+              ? 'bg-[#f8efd9]'
+              : 'bg-sage/60'
         }`}
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -118,41 +128,41 @@ function StatusPanel({ billing, onPay }) {
 
       <div className="grid gap-5 px-5 py-5 sm:grid-cols-3">
         <div>
-          <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted">Amount due</p>
+          <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-ink/55">Amount due</p>
           <p className="mt-1 font-display text-2xl font-semibold text-ink">{formatPaisa(billing.balancePaisa)}</p>
           {oldest && (
-            <p className="mt-1 text-[12px] text-muted">
+            <p className="mt-1 text-[12px] text-ink/55">
               {billing.unpaidInvoiceCount} unpaid invoice{billing.unpaidInvoiceCount === 1 ? '' : 's'} · oldest due{' '}
               {formatDate(oldest.dueAt)}
             </p>
           )}
         </div>
         <div>
-          <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted">Commission rate</p>
+          <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-ink/55">Commission rate</p>
           <p className="mt-1 text-lg font-semibold text-ink">{(billing.settings.rateBps / 100).toFixed(2)}%</p>
-          <p className="mt-1 text-[12px] text-muted">1% of completed sales, charged monthly.</p>
+          <p className="mt-1 text-[12px] text-ink/55">1% of completed sales, charged monthly.</p>
         </div>
         <div className="sm:text-right">
-          <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted">Next step</p>
+          <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-ink/55">Next step</p>
           {due ? (
             <button type="button" onClick={() => onPay(oldest)} className={`${btnPine} mt-2`}>
               <Wallet className="h-4 w-4" aria-hidden="true" />
               Pay now
             </button>
           ) : (
-            <p className="mt-2 text-sm font-medium text-success">Nothing to pay right now.</p>
+            <p className="mt-2 text-sm font-medium text-forest">Nothing to pay right now.</p>
           )}
         </div>
       </div>
 
       {billing.seller.graceUntil && (
-        <p className="border-t border-line bg-paper/50 px-5 py-3 text-[12.5px] text-muted">
+        <p className="border-t border-line-warm bg-sand/40 px-5 py-3 text-[12.5px] text-ink/55">
           A grace period is active until {formatDateTime(billing.seller.graceUntil)}
           {billing.seller.graceReason ? ` — ${billing.seller.graceReason}` : ''}.
         </p>
       )}
       {billing.seller.override && (
-        <p className="border-t border-line bg-paper/50 px-5 py-3 text-[12.5px] text-muted">
+        <p className="border-t border-line-warm bg-sand/40 px-5 py-3 text-[12.5px] text-ink/55">
           The platform team set this status manually
           {billing.seller.override.until ? ` until ${formatDateTime(billing.seller.override.until)}` : ''}
           {billing.seller.override.reason ? ` — ${billing.seller.override.reason}` : ''}.
@@ -167,26 +177,26 @@ function InvoiceDetail({ detail, onClose, onPay, onOpenReceipt }) {
   return (
     <Modal open onClose={onClose} title={`Invoice ${invoice.periodKey}`} maxWidth="max-w-2xl">
       <div className="space-y-6">
-        <div className="grid gap-3 rounded-lg bg-paper/60 p-4 sm:grid-cols-4">
+        <div className="grid gap-3 rounded-card bg-sand/40 p-4 sm:grid-cols-4">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.08em] text-muted">Commission</p>
+            <p className="text-[11px] uppercase tracking-[0.08em] text-ink/55">Commission</p>
             <p className="font-medium text-ink">{formatPaisa(invoice.commissionPaisa)}</p>
           </div>
           <div>
-            <p className="text-[11px] uppercase tracking-[0.08em] text-muted">Credits</p>
+            <p className="text-[11px] uppercase tracking-[0.08em] text-ink/55">Credits</p>
             <p className="font-medium text-ink">−{formatPaisa(invoice.creditsPaisa)}</p>
           </div>
           <div>
-            <p className="text-[11px] uppercase tracking-[0.08em] text-muted">Paid</p>
+            <p className="text-[11px] uppercase tracking-[0.08em] text-ink/55">Paid</p>
             <p className="font-medium text-ink">{formatPaisa(invoice.paidPaisa)}</p>
           </div>
           <div>
-            <p className="text-[11px] uppercase tracking-[0.08em] text-muted">Still due</p>
+            <p className="text-[11px] uppercase tracking-[0.08em] text-ink/55">Still due</p>
             <p className="font-medium text-ink">{formatPaisa(invoice.amountDuePaisa)}</p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-ink/55">
           <span>
             Issued {formatDate(invoice.issuedAt)} · due {formatDate(invoice.dueAt)}{' '}
             <StatusBadge value={invoice.status} />
@@ -202,9 +212,9 @@ function InvoiceDetail({ detail, onClose, onPay, onOpenReceipt }) {
         <div>
           <h3 className="mb-2 font-display text-base font-semibold">Sales behind this bill</h3>
           {detail.entries.length === 0 ? (
-            <p className="text-sm text-muted">No commission lines were recorded for this invoice.</p>
+            <p className="text-sm text-ink/55">No commission lines were recorded for this invoice.</p>
           ) : (
-            <div className={tableShell}>
+            <TableScroll label="Sales behind this invoice">
               <table className="w-full text-left text-[13px]">
                 <thead className={tableHead}>
                   <tr>
@@ -217,29 +227,29 @@ function InvoiceDetail({ detail, onClose, onPay, onOpenReceipt }) {
                 <tbody>
                   {detail.entries.map((entry) => (
                     <tr key={entry._id} className={tableRow}>
-                      <td className="px-3 py-2.5 text-muted">{formatDate(entry.occurredAt)}</td>
+                      <td className="px-3 py-2.5 text-ink/55">{formatDate(entry.occurredAt)}</td>
                       <td className="px-3 py-2.5 text-ink">
                         {entry.sourceType === 'ORDER' ? 'Order' : 'Service booking'}
                         {entry.kind === 'REVERSAL' ? ' · refund reversal' : ''}
                       </td>
-                      <td className="px-3 py-2.5 text-right text-muted">{formatPaisa(entry.eligibleAmountPaisa)}</td>
+                      <td className="px-3 py-2.5 text-right text-ink/55">{formatPaisa(entry.eligibleAmountPaisa)}</td>
                       <td className="px-3 py-2.5 text-right font-medium text-ink">{formatPaisa(entry.commissionPaisa)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+            </TableScroll>
           )}
         </div>
 
         <div>
           <h3 className="mb-2 font-display text-base font-semibold">Payments claimed</h3>
           {detail.claims.length === 0 ? (
-            <p className="text-sm text-muted">No payment has been submitted for this invoice yet.</p>
+            <p className="text-sm text-ink/55">No payment has been submitted for this invoice yet.</p>
           ) : (
             <ul className="space-y-2">
               {detail.claims.map((claim) => (
-                <li key={claim._id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-line px-3 py-2.5">
+                <li key={claim._id} className="flex flex-wrap items-center justify-between gap-2 rounded-tile border border-line-warm px-3 py-2.5">
                   <span className="text-sm text-ink">
                     {formatPaisa(claim.amountPaisa)} · {claim.method.replaceAll('_', ' ').toLowerCase()} · {claim.reference}
                   </span>
@@ -249,7 +259,7 @@ function InvoiceDetail({ detail, onClose, onPay, onOpenReceipt }) {
                       <button
                         type="button"
                         onClick={() => onOpenReceipt(claim)}
-                        className="inline-flex items-center gap-1 text-[12px] font-medium text-pine hover:underline"
+                        className="inline-flex items-center gap-1 text-[12px] font-medium text-forest hover:underline"
                       >
                         <Receipt className="h-3.5 w-3.5" /> Receipt
                       </button>
@@ -295,7 +305,7 @@ function HelpTab({ requests, onReload }) {
       <form onSubmit={submit} className={`${card} space-y-4 p-5`}>
         <div>
           <h2 className="font-display text-lg font-semibold tracking-tight">Ask about a bill</h2>
-          <p className="mt-1 text-[13px] text-muted">
+          <p className="mt-1 text-[13px] text-ink/55">
             A wrong amount, a payment you already made, or anything else about commission. Only the platform team
             sees this.
           </p>
@@ -309,7 +319,7 @@ function HelpTab({ requests, onReload }) {
           error={fieldErrors.subject}
         />
         <div>
-          <label htmlFor="help-message" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">
+          <label htmlFor="help-message" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-ink/55">
             What do you need help with?
           </label>
           <textarea
@@ -322,7 +332,7 @@ function HelpTab({ requests, onReload }) {
           />
           {fieldErrors.message && <p className="mt-1.5 text-xs text-clay">{fieldErrors.message}</p>}
         </div>
-        {error && <p className="rounded-md bg-clay/5 px-3 py-2 text-sm text-clay">{error}</p>}
+        {error && <p className="rounded-tile bg-clay/5 px-3 py-2 text-sm text-clay">{error}</p>}
         <button type="submit" disabled={saving} className={btnPine}>
           {saving ? 'Sending…' : 'Send to the platform team'}
         </button>
@@ -333,21 +343,21 @@ function HelpTab({ requests, onReload }) {
         {requests.length === 0 ? (
           <EmptyState icon={CircleHelp} title="No requests yet" message="Answers from the platform team appear here." />
         ) : (
-          <ul className="mt-3 divide-y divide-line">
+          <ul className="mt-3 divide-y divide-line-warm">
             {requests.map((request) => (
               <li key={request._id} className="py-3.5">
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-sm font-medium text-ink">{request.subject}</p>
                   <StatusBadge value={request.status} />
                 </div>
-                <p className="mt-1 text-[12.5px] leading-relaxed text-muted">{request.message}</p>
+                <p className="mt-1 text-[12.5px] leading-relaxed text-ink/55">{request.message}</p>
                 {request.resolutionNote && (
-                  <p className="mt-2 rounded-md bg-paper px-2.5 py-2 text-[12.5px] text-ink">
+                  <p className="mt-2 rounded-tile bg-sand/50 px-2.5 py-2 text-[12.5px] text-ink">
                     <span className="font-medium">Platform team: </span>
                     {request.resolutionNote}
                   </p>
                 )}
-                <p className="mt-1.5 text-[11.5px] text-muted">{formatDateTime(request.createdAt)}</p>
+                <p className="mt-1.5 text-[11.5px] text-ink/55">{formatDateTime(request.createdAt)}</p>
               </li>
             ))}
           </ul>
@@ -451,8 +461,8 @@ export default function BillingPage() {
     return (
       <div className="space-y-4">
         <Skeleton className="h-10 w-56" />
-        <Skeleton className="h-44 w-full rounded-lg" />
-        <Skeleton className="h-64 w-full rounded-lg" />
+        <Skeleton className="h-44 w-full rounded-card" />
+        <Skeleton className="h-64 w-full rounded-card" />
       </div>
     )
   }
@@ -492,29 +502,29 @@ export default function BillingPage() {
             <div className="space-y-6">
               <div className={`${card} p-5`}>
                 <h2 className="flex items-center gap-2 font-display text-lg font-semibold tracking-tight">
-                  <FileText className="h-4.5 w-4.5 text-pine" aria-hidden="true" /> Unpaid invoices
+                  <FileText className="h-4.5 w-4.5 text-forest" aria-hidden="true" /> Unpaid invoices
                 </h2>
                 {billing.invoices.length === 0 ? (
                   <EmptyState icon={FileText} title="No unpaid invoices" message="Your account is up to date." />
                 ) : (
-                  <ul className="mt-3 divide-y divide-line">
+                  <ul className="mt-3 divide-y divide-line-warm">
                     {billing.invoices.map((invoice) => (
                       <li key={invoice._id} className="flex flex-wrap items-center justify-between gap-2 py-3">
                         <div>
                           <button
                             type="button"
                             onClick={() => openInvoice(invoice)}
-                            className="text-sm font-medium text-pine hover:underline"
+                            className="text-sm font-medium text-forest hover:underline"
                           >
                             {invoice.periodKey}
                           </button>
-                          <p className="text-[12px] text-muted">
+                          <p className="text-[12px] text-ink/55">
                             Due {formatDate(invoice.dueAt)} · {formatPaisa(invoice.amountDuePaisa)} outstanding
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
                           <StatusBadge value={invoice.status} />
-                          <button type="button" onClick={() => setPayFor(invoice)} className="text-[12.5px] font-medium text-pine hover:underline">
+                          <button type="button" onClick={() => setPayFor(invoice)} className="text-[12.5px] font-medium text-forest hover:underline">
                             Pay
                           </button>
                         </div>
@@ -526,17 +536,17 @@ export default function BillingPage() {
 
               <div className={`${card} p-5`}>
                 <h2 className="flex items-center gap-2 font-display text-lg font-semibold tracking-tight">
-                  <Receipt className="h-4.5 w-4.5 text-pine" aria-hidden="true" /> Recent payments
+                  <Receipt className="h-4.5 w-4.5 text-forest" aria-hidden="true" /> Recent payments
                 </h2>
                 {billing.recentClaims.length === 0 ? (
                   <EmptyState icon={Receipt} title="No payments submitted" message="Payments you submit appear here for verification." />
                 ) : (
-                  <ul className="mt-3 divide-y divide-line">
+                  <ul className="mt-3 divide-y divide-line-warm">
                     {billing.recentClaims.map((claim) => (
                       <li key={claim._id} className="flex flex-wrap items-center justify-between gap-2 py-3">
                         <div>
                           <p className="text-sm font-medium text-ink">{formatPaisa(claim.amountPaisa)}</p>
-                          <p className="text-[12px] text-muted">
+                          <p className="text-[12px] text-ink/55">
                             {claim.method.replaceAll('_', ' ').toLowerCase()} · {claim.reference} · {formatDate(claim.createdAt)}
                           </p>
                           {claim.rejectionReason && <p className="text-[12px] text-clay">{claim.rejectionReason}</p>}
@@ -544,7 +554,7 @@ export default function BillingPage() {
                         <span className="flex items-center gap-2">
                           <StatusBadge value={claim.status} />
                           {claim.receiptAvailable && (
-                            <button type="button" onClick={() => openReceipt(claim)} className="text-[12px] font-medium text-pine hover:underline">
+                            <button type="button" onClick={() => openReceipt(claim)} className="text-[12px] font-medium text-forest hover:underline">
                               Receipt
                             </button>
                           )}
@@ -559,9 +569,9 @@ export default function BillingPage() {
             <div className="space-y-6">
               <div className={`${card} p-5`}>
                 <h2 className="flex items-center gap-2 font-display text-lg font-semibold tracking-tight">
-                  <Landmark className="h-4.5 w-4.5 text-pine" aria-hidden="true" /> Where to pay
+                  <Landmark className="h-4.5 w-4.5 text-forest" aria-hidden="true" /> Where to pay
                 </h2>
-                <p className="mb-3 mt-1 text-[12.5px] text-muted">
+                <p className="mb-3 mt-1 text-[12.5px] text-ink/55">
                   Pay the platform directly, then submit the reference here. Never pay a rider or delivery person.
                 </p>
                 <BankDetails bank={billing.bank} />
@@ -569,9 +579,9 @@ export default function BillingPage() {
 
               <div className={`${card} p-5`}>
                 <h2 className="flex items-center gap-2 font-display text-lg font-semibold tracking-tight">
-                  <Building2 className="h-4.5 w-4.5 text-pine" aria-hidden="true" /> How billing works
+                  <Building2 className="h-4.5 w-4.5 text-forest" aria-hidden="true" /> How billing works
                 </h2>
-                <ol className="mt-3 space-y-2.5 text-[13px] leading-relaxed text-muted">
+                <ol className="mt-3 space-y-2.5 text-[13px] leading-relaxed text-ink/55">
                   <li>
                     <span className="font-medium text-ink">1% commission</span> on completed sales. Delivery fees and
                     tax are never included.
@@ -601,8 +611,12 @@ export default function BillingPage() {
           </div>
         )}
 
-        {tab === 'Invoices' && (
-          <div className={tableShell}>
+        {tab === 'Invoices' && invoiceList.items.length === 0 && (
+          <EmptyState icon={FileText} title="No invoices yet" message="Your first invoice is issued after your first month with sales." />
+        )}
+
+        {tab === 'Invoices' && invoiceList.items.length > 0 && (
+          <TableScroll label="Your invoices">
             <table className="w-full min-w-[720px] text-left text-[13px]">
               <thead className={tableHead}>
                 <tr>
@@ -617,33 +631,25 @@ export default function BillingPage() {
                 </tr>
               </thead>
               <tbody>
-                {invoiceList.items.length === 0 ? (
-                  <tr>
-                    <td colSpan={8}>
-                      <EmptyState icon={FileText} title="No invoices yet" message="Your first invoice is issued after your first month with sales." />
+                {invoiceList.items.map((invoice) => (
+                  <tr key={invoice._id} className={tableRow}>
+                    <td className="px-4 py-3 font-medium text-ink">{invoice.periodKey}</td>
+                    <td className="px-4 py-3 text-right text-ink/55">{formatPaisa(invoice.commissionPaisa)}</td>
+                    <td className="px-4 py-3 text-right text-ink/55">−{formatPaisa(invoice.creditsPaisa)}</td>
+                    <td className="px-4 py-3 text-right text-ink/55">{formatPaisa(invoice.paidPaisa)}</td>
+                    <td className="px-4 py-3 text-right font-medium text-ink">{formatPaisa(invoice.amountDuePaisa)}</td>
+                    <td className="px-4 py-3"><StatusBadge value={invoice.status} /></td>
+                    <td className="px-4 py-3 text-ink/55">{formatDate(invoice.dueAt)}</td>
+                    <td className="px-4 py-3 text-right">
+                      <button type="button" onClick={() => openInvoice(invoice)} className="inline-flex items-center gap-1 text-[12.5px] font-medium text-forest hover:underline">
+                        View <ExternalLink className="h-3.5 w-3.5" />
+                      </button>
                     </td>
                   </tr>
-                ) : (
-                  invoiceList.items.map((invoice) => (
-                    <tr key={invoice._id} className={tableRow}>
-                      <td className="px-4 py-3 font-medium text-ink">{invoice.periodKey}</td>
-                      <td className="px-4 py-3 text-right text-muted">{formatPaisa(invoice.commissionPaisa)}</td>
-                      <td className="px-4 py-3 text-right text-muted">−{formatPaisa(invoice.creditsPaisa)}</td>
-                      <td className="px-4 py-3 text-right text-muted">{formatPaisa(invoice.paidPaisa)}</td>
-                      <td className="px-4 py-3 text-right font-medium text-ink">{formatPaisa(invoice.amountDuePaisa)}</td>
-                      <td className="px-4 py-3"><StatusBadge value={invoice.status} /></td>
-                      <td className="px-4 py-3 text-muted">{formatDate(invoice.dueAt)}</td>
-                      <td className="px-4 py-3 text-right">
-                        <button type="button" onClick={() => openInvoice(invoice)} className="inline-flex items-center gap-1 text-[12.5px] font-medium text-pine hover:underline">
-                          View <ExternalLink className="h-3.5 w-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
+                ))}
               </tbody>
             </table>
-          </div>
+          </TableScroll>
         )}
 
         {tab === 'Invoices' && (
@@ -656,9 +662,13 @@ export default function BillingPage() {
           />
         )}
 
-        {tab === 'Payments' && (
+        {tab === 'Payments' && claimList.items.length === 0 && (
+          <EmptyState icon={Receipt} title="No payments yet" message="Submit a payment from an unpaid invoice." />
+        )}
+
+        {tab === 'Payments' && claimList.items.length > 0 && (
           <>
-            <div className={tableShell}>
+            <TableScroll label="Payment submissions">
               <table className="w-full min-w-[640px] text-left text-[13px]">
                 <thead className={tableHead}>
                   <tr>
@@ -671,41 +681,33 @@ export default function BillingPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {claimList.items.length === 0 ? (
-                    <tr>
-                      <td colSpan={6}>
-                        <EmptyState icon={Receipt} title="No payments yet" message="Submit a payment from an unpaid invoice." />
+                  {claimList.items.map((claim) => (
+                    <tr key={claim._id} className={tableRow}>
+                      <td className="px-4 py-3 text-ink/55">{formatDateTime(claim.createdAt)}</td>
+                      <td className="px-4 py-3 text-right font-medium text-ink">{formatPaisa(claim.amountPaisa)}</td>
+                      <td className="px-4 py-3 capitalize text-ink/55">{claim.method.replaceAll('_', ' ').toLowerCase()}</td>
+                      <td className="px-4 py-3 text-ink/55">{claim.reference}</td>
+                      <td className="px-4 py-3">
+                        <StatusBadge value={claim.status} />
+                        {claim.rejectionReason && <p className="mt-1 text-[11.5px] text-clay">{claim.rejectionReason}</p>}
+                        {claim.creditPaisa > 0 && (
+                          <p className="mt-1 text-[11.5px] text-ink/55">
+                            {formatPaisa(claim.creditPaisa)} carried to a later invoice
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {claim.receiptAvailable && (
+                          <button type="button" onClick={() => openReceipt(claim)} className="text-[12.5px] font-medium text-forest hover:underline">
+                            Receipt
+                          </button>
+                        )}
                       </td>
                     </tr>
-                  ) : (
-                    claimList.items.map((claim) => (
-                      <tr key={claim._id} className={tableRow}>
-                        <td className="px-4 py-3 text-muted">{formatDateTime(claim.createdAt)}</td>
-                        <td className="px-4 py-3 text-right font-medium text-ink">{formatPaisa(claim.amountPaisa)}</td>
-                        <td className="px-4 py-3 capitalize text-muted">{claim.method.replaceAll('_', ' ').toLowerCase()}</td>
-                        <td className="px-4 py-3 text-muted">{claim.reference}</td>
-                        <td className="px-4 py-3">
-                          <StatusBadge value={claim.status} />
-                          {claim.rejectionReason && <p className="mt-1 text-[11.5px] text-clay">{claim.rejectionReason}</p>}
-                          {claim.creditPaisa > 0 && (
-                            <p className="mt-1 text-[11.5px] text-muted">
-                              {formatPaisa(claim.creditPaisa)} carried to a later invoice
-                            </p>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          {claim.receiptAvailable && (
-                            <button type="button" onClick={() => openReceipt(claim)} className="text-[12.5px] font-medium text-pine hover:underline">
-                              Receipt
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
+                  ))}
                 </tbody>
               </table>
-            </div>
+            </TableScroll>
             <Pager
               pagination={claimList.pagination}
               onPage={(page) => {
@@ -734,7 +736,7 @@ export default function BillingPage() {
         </Modal>
       )}
 
-      {detailLoading && <p className="mt-3 text-sm text-muted">Loading invoice…</p>}
+      {detailLoading && <p className="mt-3 text-sm text-ink/55">Loading invoice…</p>}
     </>
   )
 }

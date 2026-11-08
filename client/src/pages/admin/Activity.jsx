@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { History } from 'lucide-react'
 import api, { getErrorMessage } from '../../services/api'
 import { EmptyState, Skeleton } from '../../components/ui'
-import { PageHeader, Pager, selectClass, tableHead, tableRow, tableShell } from '../../components/brand/Bits'
+import { PageHeader, Pager, TableScroll, selectClass, tableHead, tableRow } from '../../components/brand/Bits'
 import { formatDateTime } from '../../ui'
 
 const ACTION_LABELS = {
@@ -53,7 +53,7 @@ export default function AdminActivity() {
         title="Activity"
         intro="Every platform change made by you or an admin partner, newest first."
         action={
-          <label className="flex items-center gap-2 text-[12.5px] text-muted">
+          <label className="flex items-center gap-2 text-[12.5px] text-ink/55">
             Action
             <select
               value={action}
@@ -78,21 +78,21 @@ export default function AdminActivity() {
       {loading ? (
         <div className="space-y-2.5">
           {[0, 1, 2, 3].map((row) => (
-            <Skeleton key={row} className="h-14 w-full rounded-lg" />
+            <Skeleton key={row} className="h-14 w-full rounded-card" />
           ))}
         </div>
       ) : state.error ? (
-        <p role="alert" className="text-clay">{state.error}</p>
+        <p role="alert" className="rounded-tile border border-clay/20 bg-clay/10 px-3.5 py-2.5 text-sm text-clay">{state.error}</p>
       ) : state.items.length === 0 ? (
         <EmptyState
           icon={History}
           title={action ? 'No activity of this kind.' : 'No platform changes yet.'}
           message="Actions taken by the super admin and partners will appear here."
-          className="rounded-lg border border-dashed border-line bg-white"
+          className="rounded-card border border-dashed border-line-warm bg-paper-warm"
         />
       ) : (
         <>
-          <div className={tableShell}>
+          <TableScroll label="Activity log">
             <table className="w-full min-w-[48rem] text-left text-sm">
               <thead>
                 <tr className={tableHead}>
@@ -105,16 +105,16 @@ export default function AdminActivity() {
               <tbody>
                 {state.items.map((item) => (
                   <tr key={item._id} className={tableRow}>
-                    <td className="whitespace-nowrap px-5 py-3.5 text-[12.5px] text-muted">{formatDateTime(item.createdAt)}</td>
+                    <td className="whitespace-nowrap px-5 py-3.5 text-[12.5px] text-ink/55">{formatDateTime(item.createdAt)}</td>
                     <td className="py-3.5 pr-4">
                       <span className="block font-medium text-ink">{item.actor?.name || 'Unknown'}</span>
-                      <span className="text-[12px] text-muted">{item.actor?.email}</span>
+                      <span className="text-[12px] text-ink/55">{item.actor?.email}</span>
                     </td>
                     <td className="py-3.5 pr-4">
                       <span className="block text-ink">{actionLabel(item.action)}</span>
-                      <span className="text-[12px] text-muted">{item.action}</span>
+                      <span className="text-[12px] text-ink/55">{item.action}</span>
                     </td>
-                    <td className="py-3.5 pr-5 text-[12.5px] text-muted">
+                    <td className="py-3.5 pr-5 text-[12.5px] text-ink/55">
                       {item.target?.label && <span className="block text-ink">{item.target.label}</span>}
                       {item.details}
                     </td>
@@ -122,7 +122,7 @@ export default function AdminActivity() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableScroll>
           <Pager pagination={state.pagination} onPage={setPage} />
         </>
       )}

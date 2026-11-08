@@ -2,19 +2,20 @@ import { useCallback, useEffect, useState } from 'react'
 import api, { getErrorMessage, getFieldErrors } from '../../services/api'
 import Field from '../../components/Field'
 import ProductImage from '../../components/ProductImage'
-import { Notice, PageHeader, Pager, StatusBadge, tableHead, tableRow, tableShell, selectClass } from '../../components/brand/Bits'
+import { Notice, PageHeader, Pager, StatusBadge, TableScroll, tableHead, tableRow, selectClass } from '../../components/brand/Bits'
 import { Skeleton } from '../../components/ui'
+import useReadOnly from '../../hooks/useReadOnly'
 import { categoryLabelFor } from '../../utils/categoryLabel'
 import { btnDark, inputClass } from '../../ui'
 
-const labelClass = 'mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-muted'
+const labelClass = 'mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-ink/55'
 const TABS = [
   ['ACTIVE', 'Active'],
   ['PENDING', 'Waiting for approval'],
   ['REJECTED', 'Rejected'],
   ['ARCHIVED', 'Archived'],
 ]
-const smallBtn = 'rounded-md border border-line px-3 py-1.5 text-[12.5px] font-medium text-ink transition hover:border-ink disabled:opacity-50'
+const smallBtn = 'rounded-tile border border-line-warm px-3 py-1.5 text-[12.5px] font-medium text-ink transition hover:border-ink disabled:opacity-50'
 
 function emptyForm(item) {
   return {
@@ -66,10 +67,10 @@ function ItemForm({ item, categories, onSaved, onCancel }) {
   }
 
   return (
-    <form onSubmit={submit} className="mb-6 space-y-4 rounded-lg border border-line bg-white p-5">
+    <form onSubmit={submit} className="mb-6 space-y-4 rounded-card border border-line-warm bg-paper-warm p-5">
       <p className="font-medium text-ink">{editing ? `Edit ${item.name}` : 'Add a catalogue product'}</p>
       {error && (
-        <p role="alert" className="rounded-md bg-clay/5 px-3.5 py-2.5 text-sm text-clay">
+        <p role="alert" className="rounded-tile bg-clay/5 px-3.5 py-2.5 text-sm text-clay">
           {error}
         </p>
       )}
@@ -121,7 +122,7 @@ function ItemForm({ item, categories, onSaved, onCancel }) {
         <button type="submit" disabled={saving || !form.name.trim() || !form.categoryId} className={btnDark}>
           {saving ? 'Saving…' : editing ? 'Save changes' : 'Add product'}
         </button>
-        <button type="button" onClick={onCancel} className="inline-flex h-11 items-center rounded-md border border-line bg-white px-5 text-[13px] font-medium text-ink transition hover:border-ink">
+        <button type="button" onClick={onCancel} className="inline-flex h-11 items-center rounded-tile border border-line-warm bg-paper-warm px-5 text-[13px] font-medium text-ink transition hover:border-ink">
           Cancel
         </button>
       </div>
@@ -148,13 +149,13 @@ function MergePanel({ from, onMerge, onCancel }) {
     }
   }, [q, from._id])
   return (
-    <div className="mb-6 rounded-lg border border-line bg-white p-5">
+    <div className="mb-6 rounded-card border border-line-warm bg-paper-warm p-5">
       <p className="font-medium text-ink">Merge “{from.name}” into another product</p>
-      <p className="mt-1 text-[13px] text-muted">Every store listing moves to the product you choose, and this one is archived.</p>
+      <p className="mt-1 text-[13px] text-ink/55">Every store listing moves to the product you choose, and this one is archived.</p>
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the product it duplicates" className={`mt-3 h-11 ${inputClass}`} aria-label="Search the product to merge into" />
       <ul className="mt-3 space-y-2">
         {(q.trim() ? results : []).map((item) => (
-          <li key={item._id} className="flex items-center justify-between gap-3 rounded-md border border-line px-3 py-2 text-[13.5px]">
+          <li key={item._id} className="flex items-center justify-between gap-3 rounded-tile border border-line-warm px-3 py-2 text-[13.5px]">
             <span className="min-w-0 truncate">{item.name}</span>
             <button type="button" onClick={() => onMerge(item)} className={smallBtn}>
               Merge into this
@@ -162,7 +163,7 @@ function MergePanel({ from, onMerge, onCancel }) {
           </li>
         ))}
       </ul>
-      <button type="button" onClick={onCancel} className="mt-3 text-[13px] font-medium text-muted underline">
+      <button type="button" onClick={onCancel} className="mt-3 text-[13px] font-medium text-ink/55 underline">
         Cancel
       </button>
     </div>
@@ -170,6 +171,7 @@ function MergePanel({ from, onMerge, onCancel }) {
 }
 
 export default function Catalogue() {
+  const readOnly = useReadOnly()
   const [categories, setCategories] = useState([])
   const [status, setStatus] = useState('ACTIVE')
   const [q, setQ] = useState('')
@@ -180,6 +182,11 @@ export default function Catalogue() {
   const [panel, setPanel] = useState(null) // { type: 'add' | 'edit' | 'merge', item? }
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState({ text: '', tone: 'ok' })
+  const [selected, setSelected] = useState(() => new Set())
+  const [rejectTarget, setRejectTarget] = useState(null) // { ids: string[], name?: string }
+  const [rejectNote, setRejectNote] = useState('')
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [archiveId, setArchiveId] = useState(null)
 
   useEffect(() => {
     api
@@ -222,9 +229,67 @@ export default function Catalogue() {
     }
   }, [])
 
-  function reject(item) {
-    const note = window.prompt(`Why is "${item.name}" not approved? The store will see this.`)
-    if (note && note.trim()) run(() => api.post(`/admin/catalog/${item._id}/reject`, { note: note.trim() }), 'Request rejected.')
+  const pending = (data?.items || []).filter((item) => item.status === 'PENDING')
+  const selectable = status === 'PENDING' && !readOnly
+  const selectedPending = pending.filter((item) => selected.has(item._id))
+  const allPendingSelected = pending.length > 0 && selectedPending.length === pending.length
+
+  const resetSelection = () => setSelected(new Set())
+
+  function toggle(id) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleAll() {
+    setSelected(allPendingSelected ? new Set() : new Set(pending.map((item) => item._id)))
+  }
+
+  function openReject(ids, name) {
+    setRejectNote('')
+    setRejectTarget({ ids, ...(name && { name }) })
+  }
+
+  async function submitReject(event) {
+    event.preventDefault()
+    const note = rejectNote.trim()
+    if (!note || !rejectTarget) return
+    const { ids, name } = rejectTarget
+    setBulkBusy(true)
+    setMessage({ text: '', tone: 'ok' })
+    const results = await Promise.allSettled(ids.map((id) => api.post(`/admin/catalog/${id}/reject`, { note })))
+    const failed = results.filter((result) => result.status === 'rejected').length
+    setBulkBusy(false)
+    setRejectTarget(null)
+    setRejectNote('')
+    if (ids.length > 1) resetSelection()
+    setReload((n) => n + 1)
+    setMessage(
+      failed
+        ? { text: `${ids.length - failed} of ${ids.length} rejected. ${failed} could not be rejected — try again.`, tone: 'warn' }
+        : { text: name ? 'Request rejected.' : `${ids.length} ${ids.length === 1 ? 'request' : 'requests'} rejected.`, tone: 'ok' },
+    )
+  }
+
+  async function bulkApprove() {
+    const ids = selectedPending.map((item) => item._id)
+    if (!ids.length) return
+    setBulkBusy(true)
+    setMessage({ text: '', tone: 'ok' })
+    const results = await Promise.allSettled(ids.map((id) => api.post(`/admin/catalog/${id}/approve`)))
+    const failed = results.filter((result) => result.status === 'rejected').length
+    setBulkBusy(false)
+    resetSelection()
+    setReload((n) => n + 1)
+    setMessage(
+      failed
+        ? { text: `${ids.length - failed} of ${ids.length} approved. ${failed} could not be approved — try again.`, tone: 'warn' }
+        : { text: `${ids.length} ${ids.length === 1 ? 'product' : 'products'} approved. Stores can list them now.`, tone: 'ok' },
+    )
   }
 
   const saved = (text) => {
@@ -233,18 +298,107 @@ export default function Catalogue() {
     setReload((n) => n + 1)
   }
 
+  const itemActions = (item) => {
+    if (readOnly) return <span className="text-[12.5px] text-ink/55">View only</span>
+    return (
+    <>
+      {item.status === 'PENDING' && (
+        <>
+          <button type="button" disabled={busy || bulkBusy} onClick={() => run(() => api.post(`/admin/catalog/${item._id}/approve`), 'Approved. Every store can list it now.')} className={smallBtn}>
+            Approve
+          </button>
+          <button type="button" disabled={busy || bulkBusy} onClick={() => openReject([item._id], item.name)} className={`${smallBtn} text-clay`}>
+            Reject
+          </button>
+        </>
+      )}
+      {item.status !== 'ARCHIVED' && (
+        <button type="button" onClick={() => setPanel({ type: 'edit', item })} className={smallBtn}>
+          Edit
+        </button>
+      )}
+      {item.status === 'ACTIVE' && item.scope === 'GLOBAL' && (
+        <button type="button" onClick={() => setPanel({ type: 'merge', item })} className={smallBtn}>
+          Merge
+        </button>
+      )}
+      {item.status !== 'ARCHIVED' &&
+        (archiveId === item._id ? (
+          <>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={async () => {
+                await run(() => api.delete(`/admin/catalog/${item._id}`), 'Archived.')
+                setArchiveId(null)
+              }}
+              className="rounded-tile bg-clay px-3 py-1.5 text-[12.5px] font-medium text-cream transition hover:bg-clay-dark disabled:opacity-50"
+            >
+              Yes, archive
+            </button>
+            <button type="button" onClick={() => setArchiveId(null)} className={smallBtn}>
+              Keep
+            </button>
+          </>
+        ) : (
+          <button type="button" disabled={busy} onClick={() => setArchiveId(item._id)} className={`${smallBtn} text-clay`}>
+            Archive
+          </button>
+        ))}
+    </>
+    )
+  }
+
   return (
     <>
       <PageHeader
         title="Catalogue"
         intro="One record for each real product, shared by every store that sells it. Stores add their own price and stock on top."
         action={
-          <button type="button" onClick={() => setPanel({ type: 'add' })} className={btnDark}>
+          <button type="button" disabled={readOnly} onClick={() => setPanel({ type: 'add' })} className={`${btnDark} disabled:cursor-not-allowed disabled:opacity-40`}>
             Add product
           </button>
         }
       />
       <Notice tone={message.tone}>{message.text}</Notice>
+      {readOnly && (
+        <p className="mb-5 text-[12.5px] text-ink/55">Your access is read-only, so the catalogue cannot be changed.</p>
+      )}
+
+      {rejectTarget && (
+        <form onSubmit={submitReject} className="mb-6 space-y-3 rounded-card border border-clay/25 bg-clay/10 p-5">
+          <p className="font-medium text-ink">
+            {rejectTarget.name ? `Reject “${rejectTarget.name}”` : `Reject ${rejectTarget.ids.length} selected products`}
+          </p>
+          <div>
+            <label htmlFor="reject-note" className={labelClass}>
+              Why? The store will see this.
+            </label>
+            <textarea
+              id="reject-note"
+              rows={2}
+              maxLength={500}
+              value={rejectNote}
+              onChange={(e) => setRejectNote(e.target.value)}
+              className={`${inputClass} py-2.5`}
+              required
+              autoFocus
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="submit"
+              disabled={bulkBusy || !rejectNote.trim()}
+              className="inline-flex h-10 items-center rounded-tile bg-clay px-4 text-[13px] font-medium text-cream transition hover:bg-clay-dark disabled:opacity-50"
+            >
+              {bulkBusy ? 'Rejecting…' : 'Reject'}
+            </button>
+            <button type="button" onClick={() => setRejectTarget(null)} className={smallBtn}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
 
       {panel?.type === 'add' && <ItemForm categories={categories} onSaved={saved} onCancel={() => setPanel(null)} />}
       {panel?.type === 'edit' && <ItemForm key={panel.item._id} item={panel.item} categories={categories} onSaved={saved} onCancel={() => setPanel(null)} />}
@@ -264,8 +418,9 @@ export default function Catalogue() {
             onClick={() => {
               setStatus(value)
               setPage(1)
+              resetSelection()
             }}
-            className={`rounded-full border px-4 py-1.5 text-[13px] font-medium transition ${status === value ? 'border-ink bg-ink text-white' : 'border-line bg-white text-ink hover:border-ink'}`}
+            className={`rounded-full border px-4 py-1.5 text-[13px] font-medium transition ${status === value ? 'border-ink bg-noir text-cream' : 'border-line-warm bg-paper-warm text-ink hover:border-ink'}`}
           >
             {label}
           </button>
@@ -275,6 +430,7 @@ export default function Catalogue() {
           onChange={(e) => {
             setQ(e.target.value)
             setPage(1)
+            resetSelection()
           }}
           placeholder="Search name, maker or barcode"
           aria-label="Search the catalogue"
@@ -282,80 +438,147 @@ export default function Catalogue() {
         />
       </div>
 
+      {selectable && pending.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-tile border border-line-warm bg-sand/40 px-4 py-3">
+          <label className="flex items-center gap-2 text-[13px] font-medium text-ink">
+            <input
+              type="checkbox"
+              checked={allPendingSelected}
+              onChange={toggleAll}
+              className="h-4 w-4 rounded border-line-warm accent-forest"
+            />
+            Select all on this page
+          </label>
+          {selectedPending.length > 0 && (
+            <>
+              <span className="text-[12.5px] text-ink/55">{selectedPending.length} selected</span>
+              <span className="ml-auto flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={bulkBusy}
+                  onClick={bulkApprove}
+                  className="inline-flex h-9 items-center rounded-tile bg-forest px-3.5 text-[12.5px] font-medium text-cream transition hover:bg-forest-deep disabled:opacity-50"
+                >
+                  {bulkBusy ? 'Working…' : `Approve ${selectedPending.length}`}
+                </button>
+                <button
+                  type="button"
+                  disabled={bulkBusy}
+                  onClick={() => openReject(selectedPending.map((item) => item._id))}
+                  className="inline-flex h-9 items-center rounded-tile border border-clay/40 px-3.5 text-[12.5px] font-medium text-clay transition hover:border-clay disabled:opacity-50"
+                >
+                  Reject selected
+                </button>
+              </span>
+            </>
+          )}
+        </div>
+      )}
+
       {loadError ? (
-        <p className="text-clay">{loadError}</p>
+        <p role="alert" className="rounded-tile border border-clay/20 bg-clay/10 px-3.5 py-2.5 text-sm text-clay">{loadError}</p>
       ) : !data ? (
         <Skeleton className="h-40" />
       ) : data.items.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-line bg-white p-8 text-center text-sm text-muted">Nothing here.</p>
+        <p className="rounded-card border border-dashed border-line-warm bg-paper-warm p-8 text-center text-sm text-ink/55">Nothing here.</p>
       ) : (
-        <div className={tableShell}>
-          <table className="w-full text-left text-[13.5px]">
-            <thead className={tableHead}>
-              <tr>
-                <th className="px-5 py-3">Product</th>
-                <th className="px-5 py-3">Category</th>
-                <th className="px-5 py-3">Kind</th>
-                <th className="px-5 py-3">Status</th>
-                <th className="px-5 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.items.map((item) => (
-                <tr key={item._id} className={tableRow}>
-                  <td className="px-5 py-3">
-                    <span className="flex items-center gap-3">
-                      <ProductImage src={item.images?.[0]} name={item.name} className="h-10 w-10 shrink-0 rounded object-cover" width={80} />
-                      <span className="min-w-0">
-                        <span className="block font-medium text-ink">{item.name}</span>
-                        <span className="block text-xs text-muted">
-                          {[item.manufacturer, item.size?.value ? `${item.size.value} ${item.size.unit}` : '', item.barcode].filter(Boolean).join(' · ')}
-                        </span>
-                        {item.status === 'REJECTED' && item.reviewNote && <span className="block text-xs text-clay">{item.reviewNote}</span>}
-                      </span>
-                    </span>
-                  </td>
-                  <td className="px-5 py-3 text-muted">{categoryLabelFor(categories, item.categoryId)}</td>
-                  <td className="px-5 py-3 text-muted">{item.scope === 'PRIVATE' ? 'Private to one store' : item.brandId ? 'Requested by a store' : 'Platform'}</td>
-                  <td className="px-5 py-3">
-                    <StatusBadge value={item.status} />
-                  </td>
-                  <td className="px-5 py-3">
-                    <span className="flex flex-wrap justify-end gap-2">
-                      {item.status === 'PENDING' && (
-                        <>
-                          <button type="button" disabled={busy} onClick={() => run(() => api.post(`/admin/catalog/${item._id}/approve`), 'Approved. Every store can list it now.')} className={smallBtn}>
-                            Approve
-                          </button>
-                          <button type="button" disabled={busy} onClick={() => reject(item)} className={`${smallBtn} text-danger`}>
-                            Reject
-                          </button>
-                        </>
-                      )}
-                      {item.status !== 'ARCHIVED' && (
-                        <button type="button" onClick={() => setPanel({ type: 'edit', item })} className={smallBtn}>
-                          Edit
-                        </button>
-                      )}
-                      {item.status === 'ACTIVE' && item.scope === 'GLOBAL' && (
-                        <button type="button" onClick={() => setPanel({ type: 'merge', item })} className={smallBtn}>
-                          Merge
-                        </button>
-                      )}
-                      {item.status !== 'ARCHIVED' && (
-                        <button type="button" disabled={busy} onClick={() => run(() => api.delete(`/admin/catalog/${item._id}`), 'Archived.')} className={`${smallBtn} text-danger`}>
-                          Archive
-                        </button>
-                      )}
-                    </span>
-                  </td>
+        <>
+          <TableScroll label="Catalogue products" className="hidden md:block">
+            <table className="w-full min-w-[760px] text-left text-[13.5px]">
+              <thead className={tableHead}>
+                <tr>
+                  {selectable && (
+                    <th className="w-10 px-4 py-3">
+                      <span className="sr-only">Select</span>
+                    </th>
+                  )}
+                  <th className="px-5 py-3">Product</th>
+                  <th className="px-5 py-3">Category</th>
+                  <th className="px-5 py-3">Kind</th>
+                  <th className="px-5 py-3">Status</th>
+                  <th className="px-5 py-3 text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {data.items.map((item) => (
+                  <tr key={item._id} className={tableRow}>
+                    {selectable && (
+                      <td className="px-4 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(item._id)}
+                          onChange={() => toggle(item._id)}
+                          aria-label={`Select ${item.name}`}
+                          className="h-4 w-4 rounded border-line-warm accent-forest"
+                        />
+                      </td>
+                    )}
+                    <td className="px-5 py-3">
+                      <span className="flex items-center gap-3">
+                        <ProductImage src={item.images?.[0]} name={item.name} className="h-10 w-10 shrink-0 rounded object-cover" width={80} />
+                        <span className="min-w-0">
+                          <span className="block font-medium text-ink">{item.name}</span>
+                          <span className="block text-xs text-ink/55">
+                            {[item.manufacturer, item.size?.value ? `${item.size.value} ${item.size.unit}` : '', item.barcode].filter(Boolean).join(' · ')}
+                          </span>
+                          {item.status === 'REJECTED' && item.reviewNote && <span className="block text-xs text-clay">{item.reviewNote}</span>}
+                        </span>
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-ink/55">{categoryLabelFor(categories, item.categoryId)}</td>
+                    <td className="px-5 py-3 text-ink/55">{item.scope === 'PRIVATE' ? 'Private to one store' : item.brandId ? 'Requested by a store' : 'Platform'}</td>
+                    <td className="px-5 py-3">
+                      <StatusBadge value={item.status} />
+                    </td>
+                    <td className="px-5 py-3">
+                      <span className="flex flex-wrap justify-end gap-2">{itemActions(item)}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableScroll>
+
+          <ul className="space-y-3 md:hidden">
+            {data.items.map((item) => (
+              <li key={item._id} className="rounded-card border border-line-warm bg-paper-warm p-4">
+                <div className="flex gap-3">
+                  {selectable && (
+                    <input
+                      type="checkbox"
+                      checked={selected.has(item._id)}
+                      onChange={() => toggle(item._id)}
+                      aria-label={`Select ${item.name}`}
+                      className="mt-1 h-4 w-4 shrink-0 rounded border-line-warm accent-forest"
+                    />
+                  )}
+                  <ProductImage src={item.images?.[0]} name={item.name} className="h-12 w-12 shrink-0 rounded object-cover" width={80} />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-ink">{item.name}</p>
+                    <p className="mt-0.5 text-xs text-ink/55">
+                      {[item.manufacturer, item.size?.value ? `${item.size.value} ${item.size.unit}` : ''].filter(Boolean).join(' · ') || 'No maker listed'}
+                    </p>
+                    {item.status === 'REJECTED' && item.reviewNote && <p className="mt-1 text-xs text-clay">{item.reviewNote}</p>}
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12.5px] text-ink/55">
+                  <StatusBadge value={item.status} />
+                  <span>{categoryLabelFor(categories, item.categoryId)}</span>
+                  <span>{item.scope === 'PRIVATE' ? 'Private' : item.brandId ? 'Store request' : 'Platform'}</span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2 border-t border-line-warm pt-3">{itemActions(item)}</div>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
-      <Pager pagination={data?.pagination} onPage={setPage} />
+      <Pager
+        pagination={data?.pagination}
+        onPage={(value) => {
+          setPage(value)
+          resetSelection()
+        }}
+      />
     </>
   )
 }

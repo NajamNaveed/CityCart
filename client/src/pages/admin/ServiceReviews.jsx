@@ -5,9 +5,11 @@ import api, { getErrorMessage } from '../../services/api'
 import Stars from '../../components/Stars'
 import { Notice, PageHeader, Pager, StatusBadge, selectClass } from '../../components/brand/Bits'
 import { EmptyState, Skeleton } from '../../components/ui'
+import useReadOnly from '../../hooks/useReadOnly'
 import { formatDate } from '../../ui'
 
 export default function ServiceReviews() {
+  const readOnly = useReadOnly()
   const [params, setParams] = useSearchParams()
   const approved = ['true', 'false'].includes(params.get('approved')) ? params.get('approved') : ''
   const rating = ['1', '2', '3', '4', '5'].includes(params.get('rating')) ? params.get('rating') : ''
@@ -92,17 +94,17 @@ export default function ServiceReviews() {
       {loading ? (
         <div className="space-y-2.5">
           {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-24 w-full rounded-lg" />
+            <Skeleton key={i} className="h-24 w-full rounded-card" />
           ))}
         </div>
       ) : state.error ? (
-        <p className="text-clay">{state.error}</p>
+        <p role="alert" className="rounded-tile border border-clay/20 bg-clay/10 px-3.5 py-2.5 text-sm text-clay">{state.error}</p>
       ) : state.reviews.length === 0 ? (
-        <EmptyState icon={Star} title="No service reviews match." className="rounded-lg border border-dashed border-line bg-white" />
+        <EmptyState icon={Star} title="No service reviews match." className="rounded-card border border-dashed border-line-warm bg-paper-warm" />
       ) : (
         <ul className="space-y-3">
           {state.reviews.map((r) => (
-            <li key={r._id} className="rounded-lg border border-line bg-white p-5">
+            <li key={r._id} className="rounded-card border border-line-warm bg-paper-warm p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <span className="flex items-center gap-3">
                   <Stars value={r.rating} />
@@ -110,18 +112,18 @@ export default function ServiceReviews() {
                 </span>
                 <button
                   type="button"
-                  disabled={busyId === r._id}
+                  disabled={readOnly || busyId === r._id}
                   onClick={() => toggle(r)}
-                  className={`inline-flex h-9 items-center rounded-md border px-3.5 text-[12.5px] font-medium transition ${
-                    r.isApproved ? 'border-danger/40 text-danger hover:border-danger' : 'border-pine text-pine hover:bg-pine hover:text-white'
+                  className={`inline-flex h-9 items-center rounded-tile border px-3.5 text-[12.5px] font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                    r.isApproved ? 'border-clay/40 text-clay hover:border-clay' : 'border-forest text-forest hover:bg-forest hover:text-cream'
                   }`}
                 >
                   {r.isApproved ? 'Hide review' : 'Show review'}
                 </button>
               </div>
-              {r.comment && <p className="mt-2 text-[14px] leading-relaxed text-muted">{r.comment}</p>}
+              {r.comment && <p className="mt-2 text-[14px] leading-relaxed text-ink/55">{r.comment}</p>}
               {r.providerReply?.body && (
-                <div className="mt-3 rounded-md bg-paper px-3.5 py-2.5 text-[13px] leading-relaxed text-muted">
+                <div className="mt-3 rounded-tile bg-sand/50 px-3.5 py-2.5 text-[13px] leading-relaxed text-ink/55">
                   <span className="inline-flex items-center gap-1.5 font-medium text-ink">
                     <MessageCircle className="h-3.5 w-3.5" aria-hidden="true" />
                     {r.providerName} replied:
@@ -129,7 +131,7 @@ export default function ServiceReviews() {
                   {r.providerReply.body}
                 </div>
               )}
-              <p className="mt-3 text-xs text-muted">
+              <p className="mt-3 text-xs text-ink/55">
                 {r.reviewerName} on {r.serviceTitle || 'a service'} ({r.providerName})
                 {r.bookingNumber ? ` · ${r.bookingNumber}` : ''} · {formatDate(r.createdAt)}
               </p>

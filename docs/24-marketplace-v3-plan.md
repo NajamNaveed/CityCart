@@ -1,6 +1,6 @@
 # 24 — Marketplace v3: Services, Seller Billing, Redesign, Flutter and Security
 
-Status: **approved 2026-11-06; Phases 0, 1, 2a, 2b, 2c and 3 implemented. Phase 4 is in progress: design system, discovery, purchase funnel, services funnel, the account/communication screens and the seller site are rebuilt.** This document is the
+Status: **approved 2026-11-06; Phases 0, 1, 2a, 2b, 2c and 3 implemented. Phase 4 is in progress: design system, discovery, purchase funnel, services funnel, the account/communication screens, the seller site and all three dashboards are rebuilt.** This document is the
 authoritative plan for the v3 programme. Where it conflicts with an earlier
 document, this document wins until the earlier document is updated.
 
@@ -751,6 +751,14 @@ Phase 4 progress (customer web):
   services), both application forms and both portal logins — is rebuilt on those
   primitives, with one shared seller shell and one application frame. All fields,
   validation rules, payloads and portal routes are unchanged.
+* The dashboards — brand, provider and super admin — share one shell and table
+  kit: consistent navigation and labels, stat and attention queues, labelled
+  scroll regions, mobile card fallbacks for list tables, inline confirmations
+  instead of browser dialogs, catalogue bulk approve/reject, and read-only
+  partners see no mutating controls. Tab rows scroll on narrow screens and empty
+  states render outside the wide tables, so neither is clipped or centred off
+  screen on phones. All permissions, endpoints and business rules are unchanged;
+  the server still enforces read-only access.
 * Customer navigation is **Home · Stores · Services**. The separate Brands tab
   is retired; a brand is reached through its storefront, and the public brand
   and storefront APIs are unchanged.

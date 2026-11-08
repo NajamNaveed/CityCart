@@ -18,11 +18,11 @@ const ACTIONS = {
 }
 
 const primaryBtn =
-  'inline-flex h-10 items-center rounded-md bg-pine px-5 text-[12px] font-medium uppercase tracking-[0.08em] text-white transition hover:bg-pine-dark disabled:opacity-50'
+  'inline-flex h-10 items-center rounded-tile bg-forest px-5 text-[12px] font-medium uppercase tracking-[0.08em] text-cream transition hover:bg-forest-deep disabled:opacity-50'
 
 function SectionTitle({ children }) {
   return (
-    <h2 className="border-b border-line pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
+    <h2 className="border-b border-line-warm pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-ink/55">
       {children}
     </h2>
   )
@@ -80,16 +80,16 @@ export default function OrderDetail() {
     return (
       <div className="space-y-4">
         <Skeleton className="h-10 w-56" />
-        <Skeleton className="h-24 w-full rounded-lg" />
-        <Skeleton className="h-48 w-full rounded-lg" />
+        <Skeleton className="h-24 w-full rounded-card" />
+        <Skeleton className="h-48 w-full rounded-card" />
       </div>
     )
 
   if (!state.order) {
     return (
       <>
-        <p className="text-clay">{state.error}</p>
-        <Link to="/brand/orders" className="mt-4 inline-block text-sm font-medium text-pine hover:underline">
+        <p role="alert" className="rounded-tile border border-clay/20 bg-clay/10 px-3.5 py-2.5 text-sm text-clay">{state.error}</p>
+        <Link to="/brand/orders" className="mt-4 inline-block text-sm font-medium text-forest hover:underline">
           Back to orders
         </Link>
       </>
@@ -104,7 +104,7 @@ export default function OrderDetail() {
 
   return (
     <>
-      <Link to="/brand/orders" className="inline-flex items-center gap-1 text-[13px] text-muted transition hover:text-ink">
+      <Link to="/brand/orders" className="inline-flex items-center gap-1 text-[13px] text-ink/55 transition hover:text-ink">
         <ChevronLeft className="h-4 w-4" aria-hidden="true" />
         All orders
       </Link>
@@ -114,16 +114,16 @@ export default function OrderDetail() {
         action={
           <span className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
             <span className="flex items-center gap-2">
-              <span className="text-muted">Order</span>
+              <span className="text-ink/55">Order</span>
               <StatusBadge value={order.orderStatus} />
             </span>
             <span className="flex items-center gap-2">
-              <span className="text-muted">Payment</span>
+              <span className="text-ink/55">Payment</span>
               <StatusBadge value={payment?.status || order.paymentStatus} />
             </span>
             {delivery && (
               <span className="flex items-center gap-2">
-                <span className="text-muted">Delivery</span>
+                <span className="text-ink/55">Delivery</span>
                 <StatusBadge value={delivery.status} />
               </span>
             )}
@@ -133,8 +133,8 @@ export default function OrderDetail() {
       <Notice tone={message.tone}>{message.text}</Notice>
 
       {actions.length > 0 && (
-        <div className="mb-8 flex flex-wrap items-center gap-3 rounded-lg border border-line bg-white p-5">
-          <span className="mr-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Next step</span>
+        <div className="mb-8 flex flex-wrap items-center gap-3 rounded-card border border-line-warm bg-paper-warm p-5">
+          <span className="mr-1 text-[11px] font-medium uppercase tracking-[0.14em] text-ink/55">Next step</span>
           {actions.map(([status, label, primary]) =>
             primary ? (
               <button
@@ -148,21 +148,21 @@ export default function OrderDetail() {
                 {label}
               </button>
             ) : confirmReject ? (
-              <span key={status} className="flex flex-wrap items-center gap-3 rounded-md bg-danger-soft px-3.5 py-2 text-sm">
-                <TriangleAlert className="h-4 w-4 text-danger" aria-hidden="true" />
+              <span key={status} className="flex flex-wrap items-center gap-3 rounded-tile bg-clay/10 px-3.5 py-2 text-sm">
+                <TriangleAlert className="h-4 w-4 text-clay" aria-hidden="true" />
                 <span className="text-ink">Reject and return the stock?</span>
                 <button
                   type="button"
                   disabled={busy}
                   onClick={() => move(status)}
-                  className="inline-flex h-8 items-center rounded-md bg-danger px-3 text-[12.5px] font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+                  className="inline-flex h-8 items-center rounded-tile bg-clay px-3 text-[12.5px] font-medium text-cream transition hover:opacity-90 disabled:opacity-50"
                 >
                   Yes, reject
                 </button>
                 <button
                   type="button"
                   onClick={() => setConfirmReject(false)}
-                  className="inline-flex h-8 items-center rounded-md border border-line bg-white px-3 text-[12.5px] font-medium text-ink transition hover:border-ink"
+                  className="inline-flex h-8 items-center rounded-tile border border-line-warm bg-paper-warm px-3 text-[12.5px] font-medium text-ink transition hover:border-ink"
                 >
                   Cancel
                 </button>
@@ -173,14 +173,14 @@ export default function OrderDetail() {
                 type="button"
                 disabled={busy}
                 onClick={() => setConfirmReject(true)}
-                className="inline-flex h-10 items-center rounded-md border border-danger/40 bg-white px-4 text-[12.5px] font-medium text-danger transition hover:border-danger"
+                className="inline-flex h-10 items-center rounded-tile border border-clay/40 bg-paper-warm px-4 text-[12.5px] font-medium text-clay transition hover:border-clay"
               >
                 {label}
               </button>
             ),
           )}
           {waitingForCustomer && order.orderStatus === 'PROCESSING' && (
-            <p className="w-full text-[13px] text-warning">
+            <p className="w-full text-[13px] text-[#855811]">
               The customer must answer the change proposal before this order can be marked ready for shipment.
             </p>
           )}
@@ -188,7 +188,7 @@ export default function OrderDetail() {
       )}
 
       {rejected && (
-        <p className="mb-8 flex items-center gap-2.5 rounded-md bg-danger-soft px-3.5 py-2.5 text-sm text-danger">
+        <p className="mb-8 flex items-center gap-2.5 rounded-tile border border-clay/20 bg-clay/10 px-3.5 py-2.5 text-sm text-clay">
           <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
           This order was rejected. Stock has been returned to your inventory.
         </p>
@@ -207,12 +207,12 @@ export default function OrderDetail() {
       <div className="grid gap-10 lg:grid-cols-[1fr_17rem]">
         <section>
           <SectionTitle>Items</SectionTitle>
-          <ul className="divide-y divide-line rounded-lg border border-line bg-white">
+          <ul className="divide-y divide-line-warm rounded-card border border-line-warm bg-paper-warm">
             {order.items.map((item) => (
               <li key={`${item.productId}-${item.sku || ''}`} className="flex justify-between gap-4 px-5 py-4 text-sm">
                 <span>
                   <span className="font-medium text-ink">{item.productName}</span>
-                  <span className="block text-muted">
+                  <span className="block text-ink/55">
                     {item.quantity} × {formatPrice(item.unitPrice)}
                   </span>
                 </span>
@@ -222,16 +222,16 @@ export default function OrderDetail() {
           </ul>
           <dl className="mt-4 space-y-2 text-sm">
             <div className="flex justify-between">
-              <dt className="text-muted">Subtotal</dt>
+              <dt className="text-ink/55">Subtotal</dt>
               <dd className="text-ink">{formatPrice(order.subtotal)}</dd>
             </div>
             {order.deliveryFee > 0 && (
               <div className="flex justify-between">
-                <dt className="text-muted">Delivery</dt>
+                <dt className="text-ink/55">Delivery</dt>
                 <dd className="text-ink">{formatPrice(order.deliveryFee)}</dd>
               </div>
             )}
-            <div className="flex justify-between border-t border-line pt-3 text-base font-semibold">
+            <div className="flex justify-between border-t border-line-warm pt-3 text-base font-semibold">
               <dt className="text-ink">Total (cash on delivery)</dt>
               <dd className="text-ink">{formatPrice(order.total)}</dd>
             </div>
@@ -248,10 +248,10 @@ export default function OrderDetail() {
               <br />
               {[a.city, a.state, a.postalCode].filter(Boolean).join(', ')}
               <br />
-              <a href={`tel:${a.phone}`} className="text-pine transition hover:text-ink">
+              <a href={`tel:${a.phone}`} className="text-forest transition hover:text-ink">
                 {a.phone}
               </a>
-              {a.additionalInstructions && <span className="mt-2 block text-muted">Note: {a.additionalInstructions}</span>}
+              {a.additionalInstructions && <span className="mt-2 block text-ink/55">Note: {a.additionalInstructions}</span>}
             </address>
           </section>
 
@@ -262,7 +262,7 @@ export default function OrderDetail() {
                 {[...order.statusHistory].reverse().map((h) => (
                   <li key={h._id || `${h.status}-${h.at}`} className="flex justify-between gap-3">
                     <span className="text-ink/90">{humanize(h.status)}</span>
-                    <span className="text-muted">{formatDateTime(h.at)}</span>
+                    <span className="text-ink/55">{formatDateTime(h.at)}</span>
                   </li>
                 ))}
               </ol>

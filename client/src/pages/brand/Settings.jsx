@@ -3,7 +3,7 @@ import { Upload } from 'lucide-react'
 import api, { getErrorMessage, getFieldErrors } from '../../services/api'
 import { ACCEPTED_TYPES, checkImageFile, uploadProductImage } from '../../services/uploads'
 import Field from '../../components/Field'
-import { Notice, PageHeader } from '../../components/brand/Bits'
+import { Notice, PageHeader, tabButton, tabRow } from '../../components/brand/Bits'
 import { Skeleton } from '../../components/ui'
 import { btnPine, inputClass } from '../../ui'
 
@@ -49,11 +49,11 @@ function ImageSetting({ label, name, value, onChange }) {
 
   return (
     <div>
-      <label htmlFor={`${name}-url`} className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">
+      <label htmlFor={`${name}-url`} className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-ink/55">
         {label}
       </label>
       <div className="flex flex-wrap items-center gap-3">
-        {value && <img src={value} alt={`${label} preview`} className="h-14 w-14 rounded-md border border-line object-cover" />}
+        {value && <img src={value} alt={`${label} preview`} className="h-14 w-14 rounded-tile border border-line-warm object-cover" />}
         <input
           id={`${name}-url`}
           type="url"
@@ -73,7 +73,7 @@ function ImageSetting({ label, name, value, onChange }) {
             event.target.value = ''
           }}
         />
-        <button type="button" disabled={uploading} onClick={() => inputRef.current?.click()} className="inline-flex h-10 items-center gap-2 rounded-md border border-line bg-white px-3 text-[12px] font-medium text-ink hover:border-ink disabled:opacity-50">
+        <button type="button" disabled={uploading} onClick={() => inputRef.current?.click()} className="inline-flex h-10 items-center gap-2 rounded-tile border border-line-warm bg-paper-warm px-3 text-[12px] font-medium text-ink hover:border-ink disabled:opacity-50">
           <Upload className="h-4 w-4" aria-hidden="true" />
           {uploading ? 'Uploading…' : 'Upload'}
         </button>
@@ -85,7 +85,7 @@ function ImageSetting({ label, name, value, onChange }) {
 
 function Tabs({ active, onChange }) {
   return (
-    <div role="tablist" aria-label="Brand settings" className="mb-6 flex gap-1 border-b border-line">
+    <div role="tablist" aria-label="Brand settings" className={tabRow}>
       {TABS.map((tab) => (
         <button
           key={tab}
@@ -93,7 +93,7 @@ function Tabs({ active, onChange }) {
           role="tab"
           aria-selected={active === tab}
           onClick={() => onChange(tab)}
-          className={`border-b-2 px-4 py-3 text-[13px] font-medium transition-colors ${active === tab ? 'border-pine text-pine' : 'border-transparent text-muted hover:text-ink'}`}
+          className={`${tabButton} ${active === tab ? 'border-forest text-forest' : 'border-transparent text-ink/55 hover:text-ink'}`}
         >
           {tab}
         </button>
@@ -127,10 +127,10 @@ function PasswordSettings() {
   }
 
   return (
-    <form onSubmit={submit} className="max-w-xl space-y-6 rounded-lg border border-line bg-white p-5 sm:p-7">
+    <form onSubmit={submit} className="max-w-xl space-y-6 rounded-card border border-line-warm bg-paper-warm p-5 sm:p-7">
       <div>
         <h2 className="text-base font-semibold text-ink">Change password</h2>
-        <p className="mt-1 text-sm text-muted">Enter your current password, then choose a new one.</p>
+        <p className="mt-1 text-sm text-ink/55">Enter your current password, then choose a new one.</p>
       </div>
       <Notice tone={message.tone}>{message.text}</Notice>
       {Object.keys(fieldErrors).length > 0 && (
@@ -251,7 +251,7 @@ export default function BrandSettings() {
     }
   }
 
-  if (loading) return <div className="space-y-4"><Skeleton className="h-10 w-56" /><Skeleton className="h-72 w-full rounded-lg" /></div>
+  if (loading) return <div className="space-y-4"><Skeleton className="h-10 w-56" /><Skeleton className="h-72 w-full rounded-card" /></div>
 
   return (
     <>
@@ -266,7 +266,7 @@ export default function BrandSettings() {
         <>
           <Tabs active={tab} onChange={setTab} />
           {tab === 'Password' ? <PasswordSettings /> : (
-          <form onSubmit={save} className="space-y-7 rounded-lg border border-line bg-white p-5 sm:p-7">
+          <form onSubmit={save} className="space-y-7 rounded-card border border-line-warm bg-paper-warm p-5 sm:p-7">
             {tab === 'Profile' && (
               <>
                 <div className="grid gap-5 sm:grid-cols-2">
@@ -274,7 +274,7 @@ export default function BrandSettings() {
                   <Field label="Storefront address" id="brand-slug" value={form.slug} onChange={(event) => setForm({ ...form, slug: event.target.value.toLowerCase().replace(/\s+/g, '-') })} required />
                 </div>
                 <div>
-                  <label htmlFor="brand-description" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">Description / story</label>
+                  <label htmlFor="brand-description" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-ink/55">Description / story</label>
                   <textarea id="brand-description" rows={4} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} className={`${inputClass} py-3`} />
                 </div>
                 <ImageSetting label="Logo" name="brand-logo" value={form.logo} onChange={(logo) => setForm((current) => ({ ...current, logo }))} />
@@ -294,14 +294,14 @@ export default function BrandSettings() {
                   <Field label="Closing time" id="contact-closes" type="time" value={form.contact.operatingHours.closesAt} onChange={(event) => updateHours('closesAt', event.target.value)} />
                 </div>
                 <fieldset>
-                  <legend className="mb-2 text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">Closed days</legend>
+                  <legend className="mb-2 text-[11.5px] font-medium uppercase tracking-[0.1em] text-ink/55">Closed days</legend>
                   <div className="flex flex-wrap gap-x-5 gap-y-2">
                     {DAYS.map((day) => (
                       <label key={day} className="flex items-center gap-2 text-[13px] text-ink">
                         <input type="checkbox" checked={form.contact.operatingHours.closedDays.includes(day)} onChange={(event) => {
                           const days = form.contact.operatingHours.closedDays
                           updateHours('closedDays', event.target.checked ? [...days, day] : days.filter((item) => item !== day))
-                        }} className="h-4 w-4 accent-pine" />
+                        }} className="h-4 w-4 accent-forest" />
                         {day}
                       </label>
                     ))}
@@ -318,7 +318,7 @@ export default function BrandSettings() {
                   <Field label="Minimum order value (PKR)" id="minimum-order" type="number" min="0" step="0.01" value={form.settings.minimumOrderValue ?? ''} onChange={(event) => updateFulfillment('minimumOrderValue', event.target.value)} />
                 </div>
                 <div>
-                  <label htmlFor="delivery-note" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">Customer delivery instructions</label>
+                  <label htmlFor="delivery-note" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-ink/55">Customer delivery instructions</label>
                   <textarea id="delivery-note" rows={4} maxLength={500} value={form.settings.deliveryNote} onChange={(event) => updateFulfillment('deliveryNote', event.target.value)} className={`${inputClass} py-3`} />
                 </div>
               </>

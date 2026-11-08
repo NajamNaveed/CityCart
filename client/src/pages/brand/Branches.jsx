@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { MapPin } from 'lucide-react'
 import api, { getErrorMessage, getFieldErrors } from '../../services/api'
 import Field from '../../components/Field'
@@ -26,6 +26,7 @@ export default function Branches() {
   const [fieldErrors, setFieldErrors] = useState({})
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState({ text: '', tone: 'ok' })
+  const headingRef = useRef(null)
 
   // The brand's city decides which blocks it may open a branch in.
   useEffect(() => {
@@ -70,6 +71,7 @@ export default function Branches() {
       coords: `${branch.latitude}, ${branch.longitude}`,
     })
     window.scrollTo({ top: 0, behavior: 'smooth' })
+    requestAnimationFrame(() => headingRef.current?.focus({ preventScroll: true }))
   }
 
   function reset() {
@@ -138,12 +140,14 @@ export default function Branches() {
       />
       <Notice tone={message.tone}>{message.text}</Notice>
 
-      <form onSubmit={onSubmit} noValidate className="mb-8 rounded-lg border border-line bg-white p-5">
-        <h2 className="mb-4 font-display text-lg font-semibold tracking-tight text-ink">{editingId ? 'Edit branch' : 'Add a branch'}</h2>
+      <form onSubmit={onSubmit} noValidate className="mb-8 rounded-card border border-line-warm bg-paper-warm p-5">
+        <h2 ref={headingRef} tabIndex={-1} className="mb-4 font-display text-lg font-semibold tracking-tight text-ink outline-none">
+          {editingId ? 'Edit branch' : 'Add a branch'}
+        </h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Branch name" id="br-name" name="name" value={form.name} onChange={set('name')} error={fieldErrors.name} placeholder="e.g. Main Bazaar shop" required />
           <div>
-            <label htmlFor="br-block" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">
+            <label htmlFor="br-block" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-ink/55">
               Block
             </label>
             <select id="br-block" value={form.blockId} onChange={onBlockChange} className={`${selectClass} h-11 w-full`} required>
@@ -155,20 +159,20 @@ export default function Branches() {
               ))}
             </select>
             {fieldErrors.blockId && <p className="mt-1.5 text-xs text-clay">{fieldErrors.blockId}</p>}
-            {blocks.length === 0 && !loadError && <p className="mt-1.5 text-xs text-muted">No blocks are set up for your city yet. Contact CityCart support.</p>}
+            {blocks.length === 0 && !loadError && <p className="mt-1.5 text-xs text-ink/55">No blocks are set up for your city yet. Contact CityCart support.</p>}
           </div>
           <Field label="Address" id="br-address" name="address" value={form.address} onChange={set('address')} error={fieldErrors.address} placeholder="Street, landmark" />
           <Field label="Phone" id="br-phone" name="phone" value={form.phone} onChange={set('phone')} error={fieldErrors.phone} type="tel" />
         </div>
 
         <div className="mt-5">
-          <p className="mb-1.5 text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted">Shop location on the map</p>
+          <p className="mb-1.5 text-[11.5px] font-medium uppercase tracking-[0.1em] text-ink/55">Shop location on the map</p>
           {form.blockId ? (
             <>
-              <p className="mb-2 text-[12.5px] text-muted">
+              <p className="mb-2 text-[12.5px] text-ink/55">
                 {selectedBlock?.name} is highlighted. Tap inside it to place the shop’s pin — the pin decides the distances shoppers see.
               </p>
-              <Suspense fallback={<Skeleton className="h-[320px] w-full rounded-lg" />}>
+              <Suspense fallback={<Skeleton className="h-[320px] w-full rounded-card" />}>
                 <AreaMap
                   key={form.blockId}
                   zones={zones}
@@ -186,7 +190,7 @@ export default function Branches() {
               ) : null}
             </>
           ) : (
-            <p className="rounded-md bg-paper px-3.5 py-3 text-[13px] text-muted">Choose a block to pin the shop on the map.</p>
+            <p className="rounded-tile bg-sand/50 px-3.5 py-3 text-[13px] text-ink/55">Choose a block to pin the shop on the map.</p>
           )}
         </div>
 
@@ -210,7 +214,7 @@ export default function Branches() {
             {editingId ? 'Save changes' : 'Add branch'}
           </button>
           {editingId && (
-            <button type="button" onClick={reset} className="inline-flex h-11 items-center rounded-md border border-line bg-white px-5 text-[13px] font-medium text-ink transition hover:border-ink">
+            <button type="button" onClick={reset} className="inline-flex h-11 items-center rounded-tile border border-line-warm bg-paper-warm px-5 text-[13px] font-medium text-ink transition hover:border-ink">
               Cancel
             </button>
           )}
@@ -218,36 +222,36 @@ export default function Branches() {
       </form>
 
       {loadError ? (
-        <p className="text-clay">{loadError}</p>
+        <p role="alert" className="rounded-tile border border-clay/20 bg-clay/10 px-3.5 py-2.5 text-sm text-clay">{loadError}</p>
       ) : !branches ? (
         <div className="space-y-2.5">
           {[0, 1].map((i) => (
-            <Skeleton key={i} className="h-20 w-full rounded-lg" />
+            <Skeleton key={i} className="h-20 w-full rounded-card" />
           ))}
         </div>
       ) : branches.length === 0 ? (
-        <EmptyState icon={MapPin} title="No branches yet." message="Add your first shop above so nearby shoppers can find your brand." className="rounded-lg border border-dashed border-line bg-white" />
+        <EmptyState icon={MapPin} title="No branches yet." message="Add your first shop above so nearby shoppers can find your brand." className="rounded-card border border-dashed border-line-warm bg-paper-warm" />
       ) : (
         <>
-          <ul className="divide-y divide-line rounded-lg border border-line bg-white">
+          <ul className="divide-y divide-line-warm rounded-card border border-line-warm bg-paper-warm">
           {paged.items.map((b) => (
             <li key={b._id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
               <span className="min-w-0">
                 <span className="block font-medium text-ink">{b.name}</span>
-                <span className="block text-sm text-muted">{[b.blockName, b.address].filter(Boolean).join(' · ')}</span>
-                {b.phone && <span className="block text-sm text-muted">{b.phone}</span>}
+                <span className="block text-sm text-ink/55">{[b.blockName, b.address].filter(Boolean).join(' · ')}</span>
+                {b.phone && <span className="block text-sm text-ink/55">{b.phone}</span>}
               </span>
               <span className="flex items-center gap-2.5 text-[12.5px] font-medium">
                 <StatusBadge value={b.isActive ? 'ACTIVE' : 'INACTIVE'} />
-                <button type="button" onClick={() => startEdit(b)} className="rounded-md border border-line px-3 py-1.5 text-ink transition hover:border-ink">
+                <button type="button" onClick={() => startEdit(b)} aria-label={`Edit ${b.name}`} className="rounded-tile border border-line-warm px-3 py-1.5 text-ink transition hover:border-ink">
                   Edit
                 </button>
                 {b.isActive ? (
-                  <button type="button" disabled={busy} onClick={() => setActive(b, false)} className="rounded-md border border-danger/40 px-3 py-1.5 text-danger transition hover:border-danger">
+                  <button type="button" disabled={busy} onClick={() => setActive(b, false)} aria-label={`Deactivate ${b.name}`} className="rounded-tile border border-clay/40 px-3 py-1.5 text-clay transition hover:border-clay">
                     Deactivate
                   </button>
                 ) : (
-                  <button type="button" disabled={busy} onClick={() => setActive(b, true)} className="rounded-md border border-pine px-3 py-1.5 text-pine transition hover:bg-pine hover:text-white">
+                  <button type="button" disabled={busy} onClick={() => setActive(b, true)} aria-label={`Reactivate ${b.name}`} className="rounded-tile border border-forest px-3 py-1.5 text-forest transition hover:bg-forest hover:text-cream">
                     Reactivate
                   </button>
                 )}

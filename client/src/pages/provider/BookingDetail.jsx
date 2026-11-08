@@ -27,11 +27,11 @@ import {
 } from '../../utils/serviceBookings'
 import { formatKarachiDateTime, isoToKarachiInput, karachiInputToIso } from '../../utils/serviceSlots'
 
-const labelClass = 'mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-muted'
+const labelClass = 'mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-ink/55'
 const actionBtn =
-  'inline-flex h-10 items-center justify-center gap-2 rounded-md bg-pine px-4 text-[13px] font-medium text-white transition hover:bg-pine-dark disabled:cursor-not-allowed disabled:opacity-50'
+  'inline-flex h-10 items-center justify-center gap-2 rounded-tile bg-forest px-4 text-[13px] font-medium text-cream transition hover:bg-forest-deep disabled:cursor-not-allowed disabled:opacity-50'
 const quietBtn =
-  'inline-flex h-10 items-center justify-center gap-2 rounded-md border border-line bg-white px-4 text-[13px] font-medium text-ink transition hover:border-ink disabled:opacity-50'
+  'inline-flex h-10 items-center justify-center gap-2 rounded-tile border border-line-warm bg-paper-warm px-4 text-[13px] font-medium text-ink transition hover:border-ink disabled:opacity-50'
 
 function FieldGroup({ label, hint, htmlFor, children }) {
   return (
@@ -40,7 +40,7 @@ function FieldGroup({ label, hint, htmlFor, children }) {
         {label}
       </label>
       {children}
-      {hint && <p className="mt-1 text-[11.5px] text-muted">{hint}</p>}
+      {hint && <p className="mt-1 text-[11.5px] text-ink/55">{hint}</p>}
     </div>
   )
 }
@@ -264,7 +264,6 @@ function CancelForm({ booking, onDone }) {
   async function submit(event) {
     event.preventDefault()
     if (reason.trim().length < 3) return setError('Tell the customer why.')
-    if (!window.confirm('Cancel this booking? The customer is notified immediately.')) return
     setSaving(true)
     setError('')
     try {
@@ -279,7 +278,7 @@ function CancelForm({ booking, onDone }) {
 
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} className={`${quietBtn} text-danger`}>
+      <button type="button" onClick={() => setOpen(true)} className={`${quietBtn} text-clay`}>
         <XCircle className="h-4 w-4" aria-hidden="true" />
         Cancel booking
       </button>
@@ -287,7 +286,7 @@ function CancelForm({ booking, onDone }) {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-3 rounded-md border border-danger/25 bg-danger-soft/40 p-4">
+    <form onSubmit={submit} className="space-y-3 rounded-tile border border-clay/25 bg-clay/10 p-4">
       <FieldGroup label="Why are you cancelling?" htmlFor="cancel-reason">
         <input
           id="cancel-reason"
@@ -303,7 +302,7 @@ function CancelForm({ booking, onDone }) {
         <button
           type="submit"
           disabled={saving}
-          className="inline-flex h-10 items-center rounded-md bg-danger px-4 text-[13px] font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+          className="inline-flex h-10 items-center rounded-tile bg-clay px-4 text-[13px] font-medium text-cream transition hover:opacity-90 disabled:opacity-50"
         >
           {saving ? 'Cancelling…' : 'Yes, cancel it'}
         </button>
@@ -349,14 +348,14 @@ function StatusPanel({ booking, onDone }) {
       <div className="space-y-6">
         <div>
           <h3 className="text-[15px] font-semibold text-ink">Accept the requested time</h3>
-          <p className="mt-1 text-[13px] text-muted">The price you set here is what both sides are bound to.</p>
+          <p className="mt-1 text-[13px] text-ink/55">The price you set here is what both sides are bound to.</p>
           <div className="mt-4">
             <AcceptForm booking={booking} onDone={onDone} />
           </div>
         </div>
-        <div className="border-t border-line pt-5">
+        <div className="border-t border-line-warm pt-5">
           <h3 className="text-[15px] font-semibold text-ink">Or propose another time and price</h3>
-          <p className="mt-1 text-[13px] text-muted">The customer accepts or declines. They can reply in the chat afterwards.</p>
+          <p className="mt-1 text-[13px] text-ink/55">The customer accepts or declines. They can reply in the chat afterwards.</p>
           <div className="mt-4">
             <ProposeForm booking={booking} onDone={onDone} />
           </div>
@@ -368,7 +367,7 @@ function StatusPanel({ booking, onDone }) {
   if (booking.status === 'PROPOSED') {
     return (
       <div className="space-y-2">
-        <p className="text-[13px] text-muted">
+        <p className="text-[13px] text-ink/55">
           Waiting for the customer to accept or decline. You can send a revised proposal if something changed.
         </p>
         <ProposeForm booking={booking} onDone={onDone} />
@@ -379,7 +378,7 @@ function StatusPanel({ booking, onDone }) {
   if (booking.status === 'ACCEPTED') {
     return (
       <div className="space-y-3">
-        <p className="text-[13px] text-muted">
+        <p className="text-[13px] text-ink/55">
           Agreed at {formatPrice((booking.agreedPricePaisa ?? 0) / 100)} for{' '}
           {formatKarachiDateTime(booking.scheduledStart)}. Start the job when you arrive.
         </p>
@@ -391,7 +390,7 @@ function StatusPanel({ booking, onDone }) {
   if (booking.status === 'IN_PROGRESS') {
     return (
       <div className="space-y-2">
-        <p className="text-[13px] text-muted">Started {formatKarachiDateTime(booking.startedAt)}. State the final amount at the end.</p>
+        <p className="text-[13px] text-ink/55">Started {formatKarachiDateTime(booking.startedAt)}. State the final amount at the end.</p>
         <CompleteForm booking={booking} onDone={onDone} />
       </div>
     )
@@ -399,7 +398,7 @@ function StatusPanel({ booking, onDone }) {
 
   if (booking.status === 'COMPLETED') {
     return (
-      <p className="text-[13px] leading-relaxed text-muted">
+      <p className="text-[13px] leading-relaxed text-ink/55">
         Final amount {formatPrice((booking.finalAmountPaisa ?? 0) / 100)} sent. The customer confirms, or CityCart
         confirms automatically on {formatKarachiDateTime(booking.autoConfirmAt)}.
       </p>
@@ -408,7 +407,7 @@ function StatusPanel({ booking, onDone }) {
 
   if (booking.status === 'CONFIRMED') {
     return (
-      <p className="flex items-start gap-2 text-[13px] leading-relaxed text-success">
+      <p className="flex items-start gap-2 text-[13px] leading-relaxed text-forest">
         <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
         Confirmed{booking.confirmedBy === 'AUTO' ? ' automatically' : ''} on {formatKarachiDateTime(booking.confirmedAt)}.
       </p>
@@ -417,7 +416,7 @@ function StatusPanel({ booking, onDone }) {
 
   if (booking.status === 'DISPUTED') {
     return (
-      <div className="rounded-md border border-warning/30 bg-warning-soft px-4 py-3 text-[13px] leading-relaxed text-warning">
+      <div className="rounded-tile border border-[#e5d2a9] bg-[#f8efd9] px-4 py-3 text-[13px] leading-relaxed text-[#855811]">
         <p className="font-medium text-ink">The customer disputed this booking</p>
         {booking.dispute?.reason && <p className="mt-1">{booking.dispute.reason}</p>}
         <p className="mt-1">CityCart is reviewing it. You can reply in the chat.</p>
@@ -427,14 +426,14 @@ function StatusPanel({ booking, onDone }) {
 
   if (booking.cancellation) {
     return (
-      <p className="text-[13px] leading-relaxed text-muted">
+      <p className="text-[13px] leading-relaxed text-ink/55">
         Cancelled by {booking.cancellation.by.toLowerCase()} on {formatKarachiDateTime(booking.cancellation.at)}:{' '}
         {booking.cancellation.reason}
       </p>
     )
   }
 
-  return <p className="text-[13px] text-muted">This booking is closed.</p>
+  return <p className="text-[13px] text-ink/55">This booking is closed.</p>
 }
 
 export default function ProviderBookingDetail() {
@@ -463,8 +462,8 @@ export default function ProviderBookingDetail() {
     return (
       <div className="space-y-4">
         <Skeleton className="h-9 w-56" />
-        <Skeleton className="h-32 w-full rounded-lg" />
-        <Skeleton className="h-64 w-full rounded-lg" />
+        <Skeleton className="h-32 w-full rounded-card" />
+        <Skeleton className="h-64 w-full rounded-card" />
       </div>
     )
   }
@@ -472,7 +471,7 @@ export default function ProviderBookingDetail() {
   if (!state.booking) {
     return (
       <div>
-        <p className="text-clay">{state.error}</p>
+        <p role="alert" className="rounded-tile border border-clay/20 bg-clay/10 px-3.5 py-2.5 text-sm text-clay">{state.error}</p>
         <Link to="/provider/bookings" className="mt-4 inline-block text-[13px] font-medium underline underline-offset-4">
           Back to bookings
         </Link>
@@ -487,7 +486,7 @@ export default function ProviderBookingDetail() {
     <>
       <Link
         to="/provider/bookings"
-        className="inline-flex items-center gap-1 text-[13px] text-muted transition hover:text-ink"
+        className="inline-flex items-center gap-1 text-[13px] text-ink/55 transition hover:text-ink"
       >
         <ChevronLeft className="h-4 w-4" aria-hidden="true" />
         Bookings
@@ -495,7 +494,7 @@ export default function ProviderBookingDetail() {
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-semibold tracking-tight text-ink sm:text-[28px]">{booking.bookingNumber}</h1>
-          <p className="mt-1 text-[13px] text-muted">
+          <p className="mt-1 text-[13px] text-ink/55">
             {booking.offering.title} · {durationLabel(booking.offering.durationMinutes)} · requested{' '}
             {formatKarachiDateTime(booking.createdAt)}
           </p>
@@ -506,46 +505,46 @@ export default function ProviderBookingDetail() {
 
       <div className="grid gap-6 lg:grid-cols-[1fr_19rem]">
         <div className="space-y-5">
-          <section className="rounded-lg border border-line bg-white p-5">
+          <section className="rounded-card border border-line-warm bg-paper-warm p-5">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Appointment</p>
+                <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-ink/55">Appointment</p>
                 <p className="mt-1.5 text-[15px] font-semibold text-ink">
                   {formatKarachiDateTime(bookingWhen(booking))}
                 </p>
-                <p className="mt-0.5 text-[12.5px] text-muted">
+                <p className="mt-0.5 text-[12.5px] text-ink/55">
                   Requested {formatKarachiDateTime(booking.requestedStart)}
                 </p>
               </div>
               <div className="text-right">
-                <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Price</p>
+                <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-ink/55">Price</p>
                 <p className="mt-1.5 text-[15px] font-semibold text-ink">{formatPrice(priceOf(booking) / 100)}</p>
-                <p className="mt-0.5 text-[12.5px] text-muted">
+                <p className="mt-0.5 text-[12.5px] text-ink/55">
                   From {formatPrice(booking.offering.startingAtPrice / 100)}
                 </p>
               </div>
             </div>
             {booking.note && (
-              <p className="mt-4 rounded-md bg-paper px-3.5 py-2.5 text-[13px] leading-relaxed text-muted">
+              <p className="mt-4 rounded-tile bg-sand/50 px-3.5 py-2.5 text-[13px] leading-relaxed text-ink/55">
                 Customer note: {booking.note}
               </p>
             )}
             {booking.completionNote && (
-              <p className="mt-3 rounded-md bg-paper px-3.5 py-2.5 text-[13px] leading-relaxed text-muted">
+              <p className="mt-3 rounded-tile bg-sand/50 px-3.5 py-2.5 text-[13px] leading-relaxed text-ink/55">
                 Your completion note: {booking.completionNote}
               </p>
             )}
           </section>
 
-          <section className="rounded-lg border border-line bg-white p-5">
-            <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">Next step</h2>
+          <section className="rounded-card border border-line-warm bg-paper-warm p-5">
+            <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-ink/55">Next step</h2>
             <div className="mt-3">
               <StatusPanel booking={booking} onDone={onDone} />
             </div>
           </section>
 
-          <section className="rounded-lg border border-line bg-white p-5">
-            <h2 className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
+          <section className="rounded-card border border-line-warm bg-paper-warm p-5">
+            <h2 className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.16em] text-ink/55">
               <MessageCircle className="h-3.5 w-3.5" aria-hidden="true" />
               Messages
             </h2>
@@ -559,16 +558,16 @@ export default function ProviderBookingDetail() {
           </section>
 
           {booking.proposals.length > 0 && (
-            <section className="rounded-lg border border-line bg-white p-5">
-              <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">Proposals</h2>
+            <section className="rounded-card border border-line-warm bg-paper-warm p-5">
+              <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-ink/55">Proposals</h2>
               <ul className="mt-3 space-y-3">
                 {[...booking.proposals].reverse().map((proposal) => (
-                  <li key={proposal._id} className="rounded-md border border-line px-4 py-3">
+                  <li key={proposal._id} className="rounded-tile border border-line-warm px-4 py-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="font-medium text-ink">{formatPrice(proposal.pricePaisa / 100)}</span>
                       <StatusBadge value={proposal.status} />
                     </div>
-                    <p className="mt-1 text-[12.5px] text-muted">
+                    <p className="mt-1 text-[12.5px] text-ink/55">
                       {formatKarachiDateTime(proposal.scheduledStart)} · open until{' '}
                       {formatKarachiDateTime(proposal.expiresAt)}
                     </p>
@@ -579,8 +578,8 @@ export default function ProviderBookingDetail() {
             </section>
           )}
 
-          <section className="rounded-lg border border-line bg-white p-5">
-            <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">History</h2>
+          <section className="rounded-card border border-line-warm bg-paper-warm p-5">
+            <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-ink/55">History</h2>
             <div className="mt-3">
               <BookingTimeline events={booking.events} />
             </div>
@@ -590,19 +589,19 @@ export default function ProviderBookingDetail() {
         </div>
 
         <aside className="space-y-4">
-          <section className="rounded-lg border border-line bg-white p-5 text-[13px]">
-            <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">Customer</h2>
+          <section className="rounded-card border border-line-warm bg-paper-warm p-5 text-[13px]">
+            <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-ink/55">Customer</h2>
             <p className="mt-3 flex items-center gap-2 font-medium text-ink">
               {address.fullName}
             </p>
-            <p className="mt-1 flex items-center gap-2 text-muted">
+            <p className="mt-1 flex items-center gap-2 text-ink/55">
               <Phone className="h-3.5 w-3.5" aria-hidden="true" />
               <a href={`tel:${address.phone}`} className="hover:text-ink">
                 {address.phone}
               </a>
             </p>
             <p className="mt-3 flex items-start gap-2 leading-relaxed text-ink/85">
-              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" aria-hidden="true" />
+              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink/55" aria-hidden="true" />
               <span>
                 {address.addressLine}
                 <br />
@@ -614,7 +613,7 @@ export default function ProviderBookingDetail() {
                 href={`https://www.google.com/maps?q=${address.pin.lat},${address.pin.lng}`}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-3 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-pine hover:underline"
+                className="mt-3 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-forest hover:underline"
               >
                 <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
                 Open the pin in Maps
@@ -622,7 +621,7 @@ export default function ProviderBookingDetail() {
             )}
           </section>
 
-          <p className="rounded-md bg-paper px-4 py-3 text-[12.5px] leading-relaxed text-muted">
+          <p className="rounded-tile bg-sand/50 px-4 py-3 text-[12.5px] leading-relaxed text-ink/55">
             No online payment is taken. The customer pays you at the door, by cash or whatever method you both agree.
           </p>
         </aside>

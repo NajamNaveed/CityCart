@@ -38,7 +38,7 @@ export default function Menu({ trigger, children, align = 'right', width = 'w-56
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -4, scale: 0.98 }}
             transition={{ duration: 0.16, ease: 'easeOut' }}
-            className={`absolute ${alignment} top-12 z-50 ${width} overflow-hidden rounded-lg border border-line bg-white shadow-xl shadow-ink/10`}
+            className={`absolute ${alignment} top-12 z-50 ${width} overflow-hidden rounded-card border border-line-warm bg-paper-warm shadow-xl shadow-noir/10`}
           >
             {children({ close: () => setOpen(false) })}
           </motion.div>

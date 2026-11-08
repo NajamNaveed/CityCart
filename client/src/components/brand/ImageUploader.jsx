@@ -90,18 +90,18 @@ export default function ImageUploader({
               <div className="relative overflow-hidden bg-sand">
                 <ProductImage src={src} name={name} className="aspect-square w-full" />
                 {index === 0 && (
-                  <span className="absolute left-2 top-2 bg-ink px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.1em] text-cream">Main</span>
+                  <span className="absolute left-2 top-2 bg-noir px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.1em] text-cream">Main</span>
                 )}
               </div>
               <div className="mt-2 flex justify-between text-[12px] font-medium">
                 {index === 0 ? (
-                  <span className="text-muted">Main photo</span>
+                  <span className="text-ink/55">Main photo</span>
                 ) : (
-                  <button type="button" disabled={busy} onClick={() => makeMain(index)} className="text-pine hover:underline disabled:text-muted">
+                  <button type="button" disabled={busy} onClick={() => makeMain(index)} className="text-forest hover:underline disabled:text-ink/55">
                     Make main
                   </button>
                 )}
-                <button type="button" disabled={busy} onClick={() => remove(index)} className="text-clay hover:underline disabled:text-muted">
+                <button type="button" disabled={busy} onClick={() => remove(index)} className="text-clay hover:underline disabled:text-ink/55">
                   Remove
                 </button>
               </div>
@@ -121,8 +121,8 @@ export default function ImageUploader({
           setDragging(false)
           addFiles(e.dataTransfer.files)
         }}
-        className={`rounded-lg border border-dashed px-5 py-8 text-center transition ${
-          dragging ? 'border-pine bg-pine/5' : 'border-line bg-paper'
+        className={`rounded-card border border-dashed px-5 py-8 text-center transition ${
+          dragging ? 'border-forest bg-forest/5' : 'border-line-warm bg-sand/50'
         }`}
       >
         <p className="text-sm text-ink">Drag photos here, or</p>
@@ -130,11 +130,11 @@ export default function ImageUploader({
           type="button"
           disabled={room <= 0}
           onClick={() => fileInput.current?.click()}
-          className="mt-2 text-[13px] font-medium text-pine underline underline-offset-4 hover:no-underline disabled:text-muted disabled:no-underline"
+          className="mt-2 text-[13px] font-medium text-forest underline underline-offset-4 hover:no-underline disabled:text-ink/55 disabled:no-underline"
         >
           choose from your computer
         </button>
-        <p className="mt-2 text-xs text-muted">
+        <p className="mt-2 text-xs text-ink/55">
           JPG, PNG or WebP, up to 5 MB each. {images.length} of {max} photos.
         </p>
         <input
@@ -159,12 +159,12 @@ export default function ImageUploader({
               {u.error ? (
                 <span className="flex shrink-0 items-center gap-3 text-clay">
                   {u.error}
-                  <button type="button" onClick={() => setUploads((list) => list.filter((x) => x.id !== u.id))} className="text-muted hover:underline">
+                  <button type="button" onClick={() => setUploads((list) => list.filter((x) => x.id !== u.id))} className="text-ink/55 hover:underline">
                     Dismiss
                   </button>
                 </span>
               ) : (
-                <span className="shrink-0 text-muted">{Math.round(u.progress * 100)}%</span>
+                <span className="shrink-0 text-ink/55">{Math.round(u.progress * 100)}%</span>
               )}
             </li>
           ))}
@@ -172,7 +172,7 @@ export default function ImageUploader({
       )}
 
       {message && (
-        <p role="status" className="mt-4 border-l-2 border-line bg-sand px-3 py-2 text-sm">
+        <p role="status" className="mt-4 border-l-2 border-line-warm bg-sand px-3 py-2 text-sm">
           {message}
         </p>
       )}
@@ -182,7 +182,7 @@ export default function ImageUploader({
           Add an image by link
         </label>
         <input id="image-link" value={link} onChange={(e) => setLink(e.target.value)} placeholder="Or paste a link to an image" className={`h-10 min-w-0 flex-1 basis-60 ${inputClass}`} />
-        <button type="submit" className="text-[13px] font-medium text-pine hover:underline">
+        <button type="submit" className="text-[13px] font-medium text-forest hover:underline">
           Add link
         </button>
       </form>

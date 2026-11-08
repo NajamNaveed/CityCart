@@ -45,7 +45,7 @@ function ReplyForm({ review, onReplied }) {
       <button
         type="submit"
         disabled={saving || !body.trim()}
-        className="inline-flex h-9 items-center rounded-md bg-pine px-3.5 text-[12.5px] font-medium text-white transition hover:bg-pine-dark disabled:opacity-40"
+        className="inline-flex h-9 items-center rounded-tile bg-forest px-3.5 text-[12.5px] font-medium text-cream transition hover:bg-forest-deep disabled:opacity-40"
       >
         {saving ? 'Posting…' : 'Post reply'}
       </button>
@@ -99,11 +99,6 @@ export default function ProviderReviews() {
       <PageHeader
         title="Reviews"
         intro="Reviews from customers whose booking was confirmed. Reply once to each one; replies are public."
-        action={
-          <label htmlFor="rating" className="sr-only">
-            Rating
-          </label>
-        }
       />
       <Notice>{notice}</Notice>
 
@@ -119,18 +114,18 @@ export default function ProviderReviews() {
       </div>
 
       {summary && summary.count > 0 && (
-        <div className="mb-8 flex flex-wrap items-center gap-x-10 gap-y-4 rounded-lg border border-line bg-white p-6">
+        <div className="mb-8 flex flex-wrap items-center gap-x-10 gap-y-4 rounded-card border border-line-warm bg-paper-warm p-6">
           <div>
             <p className="font-display text-4xl font-semibold text-ink">{summary.average.toFixed(1)}</p>
             <Stars value={summary.average} className="mt-1" />
           </div>
-          <p className="text-sm text-muted">
+          <p className="text-sm text-ink/55">
             Across {summary.count} {summary.count === 1 ? 'review' : 'reviews'}
           </p>
-          <dl className="flex gap-5 text-sm">
+          <dl className="flex flex-wrap gap-5 text-sm">
             {[5, 4, 3, 2, 1].map((value) => (
               <div key={value} className="text-center">
-                <dt className="text-muted">{value} ★</dt>
+                <dt className="text-ink/55">{value} ★</dt>
                 <dd className="font-medium text-ink">{summary.distribution[value]}</dd>
               </div>
             ))}
@@ -141,32 +136,32 @@ export default function ProviderReviews() {
       {loading ? (
         <div className="space-y-2.5">
           {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-24 w-full rounded-lg" />
+            <Skeleton key={i} className="h-24 w-full rounded-card" />
           ))}
         </div>
       ) : state.error ? (
-        <p className="text-clay">{state.error}</p>
+        <p role="alert" className="rounded-tile border border-clay/20 bg-clay/10 px-3.5 py-2.5 text-sm text-clay">{state.error}</p>
       ) : state.reviews.length === 0 ? (
         <EmptyState
           icon={Star}
           title={rating ? 'No reviews with that rating.' : 'No reviews yet.'}
           message={!rating ? 'A customer can review a booking once it is confirmed.' : undefined}
-          className="rounded-lg border border-dashed border-line bg-white"
+          className="rounded-card border border-dashed border-line-warm bg-paper-warm"
         />
       ) : (
         <ul className="space-y-3">
           {state.reviews.map((review) => (
-            <li key={review._id} className="rounded-lg border border-line bg-white p-5">
+            <li key={review._id} className="rounded-card border border-line-warm bg-paper-warm p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <Stars value={review.rating} />
-                <span className="text-xs text-muted">
+                <span className="text-xs text-ink/55">
                   {review.reviewerName} · {formatDate(review.createdAt)}
                 </span>
               </div>
-              {review.serviceTitle && <p className="mt-1 text-[12px] font-medium text-muted">{review.serviceTitle}</p>}
-              {review.comment && <p className="mt-2 text-[14px] leading-relaxed text-muted">{review.comment}</p>}
+              {review.serviceTitle && <p className="mt-1 text-[12px] font-medium text-ink/55">{review.serviceTitle}</p>}
+              {review.comment && <p className="mt-2 text-[14px] leading-relaxed text-ink/55">{review.comment}</p>}
               {review.providerReply?.body ? (
-                <div className="mt-3 rounded-md bg-paper px-3.5 py-2.5 text-[13px] leading-relaxed text-muted">
+                <div className="mt-3 rounded-tile bg-sand/50 px-3.5 py-2.5 text-[13px] leading-relaxed text-ink/55">
                   <span className="font-medium text-ink">Your reply: </span>
                   {review.providerReply.body}
                 </div>

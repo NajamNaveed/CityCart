@@ -12,8 +12,8 @@ import {
   timeInputToMinutes,
 } from '../../utils/serviceSlots'
 
-const labelClass = 'mb-1.5 block text-[11px] font-medium uppercase tracking-[0.1em] text-muted'
-const smallInput = 'h-9 rounded-md border border-line bg-white px-2.5 text-[13px] text-ink outline-none transition focus:border-ink'
+const labelClass = 'mb-1.5 block text-[11px] font-medium uppercase tracking-[0.1em] text-ink/55'
+const smallInput = 'h-9 rounded-tile border border-line-warm bg-paper-warm px-2.5 text-[13px] text-ink outline-none transition focus:border-ink'
 
 let nextKeySeed = 0
 const newKey = () => `window-${nextKeySeed++}`
@@ -32,6 +32,7 @@ export default function ProviderAvailability() {
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [confirmStandard, setConfirmStandard] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -80,6 +81,7 @@ export default function ProviderAvailability() {
     setWindows(STANDARD_WEEK.map((window) => ({ ...window, key: newKey() })))
     setError('')
     setNotice('')
+    setConfirmStandard(false)
   }
 
   function addBlackout() {
@@ -157,7 +159,7 @@ export default function ProviderAvailability() {
     return (
       <div className="space-y-4">
         <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-96 w-full rounded-lg" />
+        <Skeleton className="h-96 w-full rounded-card" />
       </div>
     )
   }
@@ -166,7 +168,7 @@ export default function ProviderAvailability() {
     return (
       <>
         <PageHeader title="Working hours" />
-        <p className="text-clay">{state.error}</p>
+        <p role="alert" className="rounded-tile border border-clay/20 bg-clay/10 px-3.5 py-2.5 text-sm text-clay">{state.error}</p>
       </>
     )
   }
@@ -200,35 +202,47 @@ export default function ProviderAvailability() {
       />
       <Notice>{notice}</Notice>
       {error && (
-        <p role="alert" className="mb-6 rounded-md bg-clay/5 px-3.5 py-2.5 text-sm text-clay">
+        <p role="alert" className="mb-6 rounded-tile border border-clay/20 bg-clay/10 px-3.5 py-2.5 text-sm text-clay">
           {error}
         </p>
       )}
 
       {windows.length === 0 && (
-        <div className="mb-6 rounded-lg border border-warning/30 bg-warning-soft p-5">
-          <p className="text-[13.5px] leading-relaxed text-warning">
+        <div className="mb-6 rounded-card border border-[#e5d2a9] bg-[#f8efd9] p-5">
+          <p className="text-[13.5px] leading-relaxed text-[#855811]">
             No hours published: customers can still request any future time, and you confirm each one manually.
           </p>
         </div>
       )}
 
-      <section className="rounded-lg border border-line bg-white">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">
+      <section className="rounded-card border border-line-warm bg-paper-warm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line-warm px-5 py-4">
           <h2 className="flex items-center gap-2 text-[15px] font-semibold text-ink">
-            <Clock3 className="h-4 w-4 text-muted" aria-hidden="true" />
+            <Clock3 className="h-4 w-4 text-ink/55" aria-hidden="true" />
             Weekly hours
           </h2>
-          <button
-            type="button"
-            onClick={useStandardWeek}
-            className="inline-flex h-9 items-center rounded-md border border-line px-3 text-[12.5px] font-medium text-ink transition hover:border-ink"
-          >
-            Use Mon–Sat, 9–5
-          </button>
+          {confirmStandard ? (
+            <span className="flex flex-wrap items-center gap-2.5 rounded-tile bg-clay/10 px-3 py-1.5 text-[12.5px] text-clay">
+              Replace all your hours with Mon–Sat, 9–5?
+              <button type="button" onClick={useStandardWeek} className="font-semibold hover:underline">
+                Yes
+              </button>
+              <button type="button" onClick={() => setConfirmStandard(false)} className="text-ink/55 hover:text-ink">
+                No
+              </button>
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmStandard(true)}
+              className="inline-flex h-9 items-center rounded-tile border border-line-warm px-3 text-[12.5px] font-medium text-ink transition hover:border-ink"
+            >
+              Use Mon–Sat, 9–5
+            </button>
+          )}
         </div>
 
-        <div className="divide-y divide-line">
+        <div className="divide-y divide-line-warm">
           {WEEKDAYS.map((name, weekday) => {
             const list = windows.filter((window) => window.weekday === weekday)
             return (
@@ -238,14 +252,14 @@ export default function ProviderAvailability() {
                   <button
                     type="button"
                     onClick={() => addWindow(weekday)}
-                    className="inline-flex items-center gap-1 text-[12.5px] font-medium text-pine transition hover:underline"
+                    className="inline-flex items-center gap-1 text-[12.5px] font-medium text-forest transition hover:underline"
                   >
                     <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                     Add hours
                   </button>
                 </div>
                 {list.length === 0 ? (
-                  <p className="mt-1 text-[12.5px] text-muted">Not working</p>
+                  <p className="mt-1 text-[12.5px] text-ink/55">Not working</p>
                 ) : (
                   <ul className="mt-2.5 space-y-2">
                     {list.map((window) => (
@@ -278,7 +292,7 @@ export default function ProviderAvailability() {
                         </div>
                         <div>
                           <label htmlFor={`${window.key}-slot`} className={labelClass}>
-                            Slot
+                            Slot length
                           </label>
                           <input
                             id={`${window.key}-slot`}
@@ -293,12 +307,12 @@ export default function ProviderAvailability() {
                             required
                           />
                         </div>
-                        <span className="pb-2 text-[11.5px] text-muted">min per booking</span>
+                        <span className="pb-2 text-[11.5px] text-ink/55">minutes per appointment</span>
                         <button
                           type="button"
                           onClick={() => removeWindow(window.key)}
                           aria-label={`Remove ${name} hours`}
-                          className="mb-0.5 inline-flex h-9 w-9 items-center justify-center rounded-md border border-danger/40 text-danger transition hover:border-danger"
+                          className="mb-0.5 inline-flex h-9 w-9 items-center justify-center rounded-tile border border-clay/40 text-clay transition hover:border-clay"
                         >
                           <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                         </button>
@@ -312,12 +326,12 @@ export default function ProviderAvailability() {
         </div>
       </section>
 
-      <section className="mt-6 rounded-lg border border-line bg-white p-5">
+      <section className="mt-6 rounded-card border border-line-warm bg-paper-warm p-5">
         <h2 className="flex items-center gap-2 text-[15px] font-semibold text-ink">
-          <CalendarOff className="h-4 w-4 text-muted" aria-hidden="true" />
+          <CalendarOff className="h-4 w-4 text-ink/55" aria-hidden="true" />
           Days off
         </h2>
-        <p className="mt-1 text-[13px] text-muted">Whole days you are unavailable, even if your weekly hours say otherwise.</p>
+        <p className="mt-1 text-[13px] text-ink/55">Whole days you are unavailable, even if your weekly hours say otherwise.</p>
         <div className="mt-3 flex flex-wrap items-end gap-2">
           <div>
             <label htmlFor="blackout-date" className={labelClass}>
@@ -334,7 +348,7 @@ export default function ProviderAvailability() {
           <button
             type="button"
             onClick={addBlackout}
-            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-line px-3 text-[12.5px] font-medium text-ink transition hover:border-ink"
+            className="inline-flex h-9 items-center gap-1.5 rounded-tile border border-line-warm px-3 text-[12.5px] font-medium text-ink transition hover:border-ink"
           >
             <Plus className="h-3.5 w-3.5" aria-hidden="true" />
             Add day off
@@ -345,14 +359,14 @@ export default function ProviderAvailability() {
             {blackoutDates.map((date) => (
               <li
                 key={date}
-                className="inline-flex items-center gap-1.5 rounded-md bg-paper px-2.5 py-1.5 text-[12.5px] text-ink"
+                className="inline-flex items-center gap-1.5 rounded-tile bg-sand/50 px-2.5 py-1.5 text-[12.5px] text-ink"
               >
                 {date}
                 <button
                   type="button"
                   onClick={() => setBlackoutDates((list) => list.filter((item) => item !== date))}
                   aria-label={`Remove ${date}`}
-                  className="text-muted transition hover:text-danger"
+                  className="text-ink/55 transition hover:text-clay"
                 >
                   <Trash2 className="h-3 w-3" aria-hidden="true" />
                 </button>
@@ -360,14 +374,21 @@ export default function ProviderAvailability() {
             ))}
           </ul>
         ) : (
-          <p className="mt-3 text-[12.5px] text-muted">No days off listed.</p>
+          <p className="mt-3 text-[12.5px] text-ink/55">No days off listed.</p>
         )}
       </section>
 
-      <p className="mt-6 rounded-md bg-paper px-4 py-3 text-[12.5px] leading-relaxed text-muted">
-        {preview.length} bookable hour{preview.length === 1 ? '' : 's'} in the next seven days with these settings.
+      <p className="mt-6 rounded-tile bg-sand/50 px-4 py-3 text-[12.5px] leading-relaxed text-ink/55">
+        Customers can book {preview.length} time{preview.length === 1 ? '' : 's'} in the next seven days with these settings.
         {state.updatedAt ? ` Last saved ${new Date(state.updatedAt).toLocaleString()}.` : ''}
       </p>
+
+      <div className="mt-5">
+        <button type="submit" disabled={saving} className={btnPine}>
+          <Save className="h-4 w-4" aria-hidden="true" />
+          {saving ? 'Saving…' : 'Save hours'}
+        </button>
+      </div>
     </form>
   )
 }

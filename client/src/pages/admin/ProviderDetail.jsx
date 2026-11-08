@@ -22,14 +22,14 @@ const NEXT = {
   TERMINATED: [],
 }
 
-const labelClass = 'mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-muted'
+const labelClass = 'mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-ink/55'
 const money = (paisa) => formatPrice((paisa ?? 0) / 100)
 
 function Row({ label, children }) {
   if (!children) return null
   return (
     <div className="flex justify-between gap-6 py-3">
-      <dt className="text-muted">{label}</dt>
+      <dt className="text-ink/55">{label}</dt>
       <dd className="max-w-[65%] text-right">{children}</dd>
     </div>
   )
@@ -93,7 +93,7 @@ export default function ProviderDetail() {
     return (
       <div className="space-y-4">
         <Skeleton className="h-10 w-56" />
-        <Skeleton className="h-64 w-full rounded-lg" />
+        <Skeleton className="h-64 w-full rounded-card" />
       </div>
     )
   }
@@ -101,7 +101,7 @@ export default function ProviderDetail() {
   if (!state.data) {
     return (
       <>
-        <p className="text-clay">{state.error}</p>
+        <p role="alert" className="rounded-tile border border-clay/20 bg-clay/10 px-3.5 py-2.5 text-sm text-clay">{state.error}</p>
         <Link to="/admin/providers" className="mt-4 inline-block text-sm font-medium text-clay hover:underline">
           Back to providers
         </Link>
@@ -119,7 +119,7 @@ export default function ProviderDetail() {
         action={
           <Link
             to="/admin/providers"
-            className="inline-flex items-center gap-1 rounded-md border border-line bg-white px-3.5 py-2 text-[13px] font-medium text-ink transition hover:border-ink"
+            className="inline-flex items-center gap-1 rounded-tile border border-line-warm bg-paper-warm px-3.5 py-2 text-[13px] font-medium text-ink transition hover:border-ink"
           >
             Back to providers
           </Link>
@@ -129,9 +129,9 @@ export default function ProviderDetail() {
 
       <div className="grid gap-10 lg:grid-cols-[1fr_20rem]">
         <div className="space-y-6">
-          <section className="rounded-lg border border-line bg-white p-6">
-            <h2 className="border-b border-line pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-muted">Provider</h2>
-            <dl className="divide-y divide-line text-sm">
+          <section className="rounded-card border border-line-warm bg-paper-warm p-6">
+            <h2 className="border-b border-line-warm pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-ink/55">Provider</h2>
+            <dl className="divide-y divide-line-warm text-sm">
               <Row label="Status">
                 <StatusBadge value={provider.status} />
               </Row>
@@ -150,10 +150,10 @@ export default function ProviderDetail() {
             </dl>
           </section>
 
-          <section className="rounded-lg border border-line bg-white p-6">
-            <h2 className="border-b border-line pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-muted">Owner</h2>
+          <section className="rounded-card border border-line-warm bg-paper-warm p-6">
+            <h2 className="border-b border-line-warm pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-ink/55">Owner</h2>
             {owner ? (
-              <dl className="divide-y divide-line text-sm">
+              <dl className="divide-y divide-line-warm text-sm">
                 <Row label="Name">{owner.name}</Row>
                 <Row label="Email">{owner.email}</Row>
                 <Row label="Email verified">{owner.emailVerified ? 'Yes' : 'No'}</Row>
@@ -161,13 +161,13 @@ export default function ProviderDetail() {
                 <Row label="Account active">{owner.isActive ? 'Yes' : 'No'}</Row>
               </dl>
             ) : (
-              <p className="py-3 text-sm text-muted">No owner account.</p>
+              <p className="py-3 text-sm text-ink/55">No owner account.</p>
             )}
           </section>
 
-          <section className="rounded-lg border border-line bg-white p-6">
-            <h2 className="border-b border-line pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-muted">Activity</h2>
-            <dl className="divide-y divide-line text-sm">
+          <section className="rounded-card border border-line-warm bg-paper-warm p-6">
+            <h2 className="border-b border-line-warm pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-ink/55">Activity</h2>
+            <dl className="divide-y divide-line-warm text-sm">
               <Row label="Completed jobs">{provider.completedBookings}</Row>
               <Row label="Rating">
                 {provider.ratingCount > 0 ? `${provider.ratingAvg.toFixed(1)} from ${provider.ratingCount} reviews` : 'No reviews yet'}
@@ -180,13 +180,13 @@ export default function ProviderDetail() {
 
         <aside className="space-y-6 text-sm">
           {actions.length === 0 ? (
-            <section className="rounded-lg border border-line bg-white p-6">
-              <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">Status</h2>
-              <p className="mt-3 leading-relaxed text-muted">A terminated provider cannot be changed.</p>
+            <section className="rounded-card border border-line-warm bg-paper-warm p-6">
+              <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-ink/55">Status</h2>
+              <p className="mt-3 leading-relaxed text-ink/55">A terminated provider cannot be changed.</p>
             </section>
           ) : (
-            <section className="rounded-lg border border-line bg-white p-6">
-              <h2 className="border-b border-line pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
+            <section className="rounded-card border border-line-warm bg-paper-warm p-6">
+              <h2 className="border-b border-line-warm pb-2.5 text-[11px] font-medium uppercase tracking-[0.16em] text-ink/55">
                 Status actions
               </h2>
               <div className="mt-4 space-y-2">
@@ -200,20 +200,20 @@ export default function ProviderDetail() {
                       setFieldErrors({})
                       setMessage({ text: '', tone: 'ok' })
                     }}
-                    className={`w-full rounded-md border px-3.5 py-3 text-left transition ${
-                      chosen === a.status ? 'border-ink bg-paper' : 'border-line bg-white hover:border-ink'
+                    className={`w-full rounded-tile border px-3.5 py-3 text-left transition ${
+                      chosen === a.status ? 'border-ink bg-sand/50' : 'border-line-warm bg-paper-warm hover:border-ink'
                     }`}
                   >
                     <span className={`block font-medium ${a.status === 'SUSPENDED' || a.status === 'TERMINATED' ? 'text-clay' : 'text-ink'}`}>
                       {a.label}
                     </span>
-                    <span className="mt-0.5 block text-[12.5px] leading-relaxed text-muted">{a.text}</span>
+                    <span className="mt-0.5 block text-[12.5px] leading-relaxed text-ink/55">{a.text}</span>
                   </button>
                 ))}
               </div>
 
               {action && (
-                <form onSubmit={submitStatus} className="mt-4 border-t border-line pt-4">
+                <form onSubmit={submitStatus} className="mt-4 border-t border-line-warm pt-4">
                   {needsReason && (
                     <div>
                       <label htmlFor="reason" className={labelClass}>

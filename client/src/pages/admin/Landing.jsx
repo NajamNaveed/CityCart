@@ -20,7 +20,7 @@ export default function AdminLanding() {
         icon={ShieldOff}
         title="No admin areas assigned yet."
         message="Ask the super admin to give your account access to at least one area."
-        className="rounded-lg border border-dashed border-line bg-white"
+        className="rounded-card border border-dashed border-line-warm bg-paper-warm"
       />
     )
   }

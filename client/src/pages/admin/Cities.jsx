@@ -5,12 +5,14 @@ import Field from '../../components/Field'
 import PakistanCityPicker from '../../components/PakistanCityPicker'
 import { Notice, PageHeader, Pager, StatusBadge } from '../../components/brand/Bits'
 import { usePaged } from '../../hooks/usePaged'
+import useReadOnly from '../../hooks/useReadOnly'
 import { EmptyState, Skeleton } from '../../components/ui'
 import { btnDark, inputClass } from '../../ui'
 
 const EMPTY = { name: '', state: '', country: '' }
 
 export default function Cities() {
+  const readOnly = useReadOnly()
   const [cities, setCities] = useState(null)
   const paged = usePaged(cities, 10)
   const [loadError, setLoadError] = useState('')
@@ -81,7 +83,7 @@ export default function Cities() {
       <PageHeader title="Cities" intro="Where CityCart operates. Brands and shoppers choose from active cities." />
       <Notice tone={message.tone}>{message.text}</Notice>
 
-      <form onSubmit={onAdd} noValidate className="mb-8 grid gap-4 rounded-lg border border-line bg-white p-5 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end">
+      <form onSubmit={onAdd} noValidate className="mb-8 grid gap-4 rounded-card border border-line-warm bg-paper-warm p-5 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end">
         <PakistanCityPicker
           id="c-name"
           value={form.name}
@@ -92,24 +94,27 @@ export default function Cities() {
         />
         <Field label="Province or state" id="c-state" name="state" value={form.state} onChange={onChange} error={fieldErrors.state} />
         <Field label="Country" id="c-country" name="country" value={form.country} onChange={onChange} error={fieldErrors.country} />
-        <button type="submit" disabled={busy || !form.name.trim()} className={`${btnDark} h-11`}>
+        <button type="submit" disabled={busy || readOnly || !form.name.trim()} className={`${btnDark} h-11`}>
           Add
         </button>
       </form>
+      {readOnly && (
+        <p className="mb-6 -mt-4 text-[12.5px] text-ink/55">Your access is read-only, so cities cannot be changed.</p>
+      )}
 
       {loadError ? (
-        <p className="text-clay">{loadError}</p>
+        <p role="alert" className="rounded-tile border border-clay/20 bg-clay/10 px-3.5 py-2.5 text-sm text-clay">{loadError}</p>
       ) : !cities ? (
         <div className="space-y-2.5">
           {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-16 w-full rounded-lg" />
+            <Skeleton key={i} className="h-16 w-full rounded-card" />
           ))}
         </div>
       ) : cities.length === 0 ? (
-        <EmptyState icon={MapPin} title="No cities yet." message="Add one above — brands and shoppers choose from active cities." className="rounded-lg border border-dashed border-line bg-white" />
+        <EmptyState icon={MapPin} title="No cities yet." message="Add one above — brands and shoppers choose from active cities." className="rounded-card border border-dashed border-line-warm bg-paper-warm" />
       ) : (
         <>
-          <ul className="divide-y divide-line rounded-lg border border-line bg-white">
+          <ul className="divide-y divide-line-warm rounded-card border border-line-warm bg-paper-warm">
           {paged.items.map((c) => (
             <li key={c._id} className="px-5 py-4">
               {editing?.id === c._id ? (
@@ -131,15 +136,15 @@ export default function Cities() {
                   ))}
                   <button
                     type="submit"
-                    disabled={busy || !editing.name.trim()}
-                    className="inline-flex h-9 items-center rounded-md bg-ink px-4 text-[12.5px] font-medium text-white transition hover:bg-ink-soft disabled:opacity-50"
+                    disabled={busy || readOnly || !editing.name.trim()}
+                    className="inline-flex h-9 items-center rounded-tile bg-noir px-4 text-[12.5px] font-medium text-cream transition hover:bg-noir-soft disabled:opacity-50"
                   >
                     Save
                   </button>
                   <button
                     type="button"
                     onClick={() => setEditing(null)}
-                    className="inline-flex h-9 items-center rounded-md border border-line bg-white px-4 text-[12.5px] font-medium text-ink transition hover:border-ink"
+                    className="inline-flex h-9 items-center rounded-tile border border-line-warm bg-paper-warm px-4 text-[12.5px] font-medium text-ink transition hover:border-ink"
                   >
                     Cancel
                   </button>
@@ -148,32 +153,33 @@ export default function Cities() {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <span>
                     <span className="font-medium text-ink">{c.name}</span>
-                    <span className="ml-3 text-sm text-muted">{[c.state, c.country].filter(Boolean).join(', ')}</span>
+                    <span className="ml-3 text-sm text-ink/55">{[c.state, c.country].filter(Boolean).join(', ')}</span>
                   </span>
                   <span className="flex items-center gap-2.5 text-[12.5px] font-medium">
                     <StatusBadge value={c.isActive ? 'ACTIVE' : 'INACTIVE'} />
                     <button
                       type="button"
+                      disabled={readOnly}
                       onClick={() => setEditing({ id: c._id, name: c.name, state: c.state || '', country: c.country || '' })}
-                      className="rounded-md border border-line px-3 py-1.5 text-ink transition hover:border-ink"
+                      className="rounded-tile border border-line-warm px-3 py-1.5 text-ink transition hover:border-ink disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       Edit
                     </button>
                     {c.isActive ? (
                       <button
                         type="button"
-                        disabled={busy}
+                        disabled={busy || readOnly}
                         onClick={() => setActive(c, false)}
-                        className="rounded-md border border-danger/40 px-3 py-1.5 text-danger transition hover:border-danger"
+                        className="rounded-tile border border-clay/40 px-3 py-1.5 text-clay transition hover:border-clay disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         Deactivate
                       </button>
                     ) : (
                       <button
                         type="button"
-                        disabled={busy}
+                        disabled={busy || readOnly}
                         onClick={() => setActive(c, true)}
-                        className="rounded-md border border-pine px-3 py-1.5 text-pine transition hover:bg-pine hover:text-white"
+                        className="rounded-tile border border-forest px-3 py-1.5 text-forest transition hover:bg-forest hover:text-cream disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         Reactivate
                       </button>

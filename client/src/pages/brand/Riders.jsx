@@ -10,7 +10,7 @@ import { btnPine } from '../../ui'
 const EMPTY = { name: '', email: '', phone: '', password: '' }
 
 const ghostBtn =
-  'rounded-md border border-line px-3 py-1.5 text-ink transition hover:border-ink disabled:opacity-50'
+  'rounded-tile border border-line-warm px-3 py-1.5 text-ink transition hover:border-ink disabled:opacity-50'
 
 export default function Riders() {
   const can = useCan()
@@ -122,7 +122,7 @@ export default function Riders() {
       <Notice tone={message.tone}>{message.text}</Notice>
 
       {adding && (
-        <form onSubmit={onAdd} noValidate className="mb-8 space-y-7 rounded-lg border border-line bg-white p-6">
+        <form onSubmit={onAdd} noValidate className="mb-8 space-y-7 rounded-card border border-line-warm bg-paper-warm p-6">
           <div className="grid gap-5 sm:grid-cols-2">
             <Field label="Name" id="r-name" name="name" value={form.name} onChange={onChange} error={fieldErrors.name} required />
             <Field label="Phone" id="r-phone" name="phone" type="tel" value={form.phone} onChange={onChange} error={fieldErrors.phone} hint="Customers may need to reach them." required />
@@ -136,11 +136,11 @@ export default function Riders() {
       )}
 
       {loadError ? (
-        <p className="text-clay">{loadError}</p>
+        <p role="alert" className="rounded-tile border border-clay/20 bg-clay/10 px-3.5 py-2.5 text-sm text-clay">{loadError}</p>
       ) : !riders ? (
         <div className="space-y-2.5">
           {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-20 w-full rounded-lg" />
+            <Skeleton key={i} className="h-20 w-full rounded-card" />
           ))}
         </div>
       ) : riders.length === 0 ? (
@@ -148,18 +148,18 @@ export default function Riders() {
           icon={Bike}
           title="No riders yet."
           message="Add a rider, then give them deliveries from the Deliveries page."
-          className="rounded-lg border border-dashed border-line bg-white"
+          className="rounded-card border border-dashed border-line-warm bg-paper-warm"
         />
       ) : (
         <>
           <ul className="space-y-3">
             {riders.map((r) => (
-              <li key={r._id} className="rounded-lg border border-line bg-white p-5">
+              <li key={r._id} className="rounded-card border border-line-warm bg-paper-warm p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <p className="font-medium text-ink">{r.name}</p>
-                    <p className="text-[13px] text-muted">{r.email}</p>
-                    <p className="text-[13px] text-muted">{r.phone}</p>
+                    <p className="text-[13px] text-ink/55">{r.email}</p>
+                    <p className="text-[13px] text-ink/55">{r.phone}</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2.5 text-[12.5px] font-medium">
                     <StatusBadge value={r.isActive ? 'ACTIVE' : 'INACTIVE'} />
@@ -167,6 +167,7 @@ export default function Riders() {
                       <button
                         type="button"
                         onClick={() => setResetting(resetting?.id === r._id ? null : { id: r._id, password: '' })}
+                        aria-label={`Reset password for ${r.name}`}
                         className={ghostBtn}
                       >
                         {resetting?.id === r._id ? 'Close' : 'Reset password'}
@@ -174,12 +175,12 @@ export default function Riders() {
                     )}
                     {r.isActive && can('riders.update') &&
                       (confirmOff === r._id ? (
-                        <span className="flex items-center gap-2.5 rounded-md bg-danger-soft px-3 py-1.5 font-normal text-danger">
-                          Remove?
+                        <span className="flex items-center gap-2.5 rounded-tile bg-clay/10 px-3 py-1.5 font-normal text-clay">
+                          Remove rider?
                           <button type="button" disabled={busy} onClick={() => removeRider(r)} className="font-semibold hover:underline">
                             Yes
                           </button>
-                          <button type="button" onClick={() => setConfirmOff(null)} className="text-muted hover:text-ink">
+                          <button type="button" onClick={() => setConfirmOff(null)} className="text-ink/55 hover:text-ink">
                             No
                           </button>
                         </span>
@@ -187,9 +188,10 @@ export default function Riders() {
                         <button
                           type="button"
                           onClick={() => setConfirmOff(r._id)}
-                          className="rounded-md border border-danger/40 px-3 py-1.5 text-danger transition hover:border-danger"
+                          aria-label={`Remove ${r.name}`}
+                          className="rounded-tile border border-clay/40 px-3 py-1.5 text-clay transition hover:border-clay"
                         >
-                          Remove
+                          Remove rider
                         </button>
                       ))}
                     {!r.isActive && can('riders.update') && (
@@ -197,19 +199,20 @@ export default function Riders() {
                         type="button"
                         disabled={busy}
                         onClick={() => setActive(r, true)}
-                        className="rounded-md border border-pine px-3 py-1.5 text-pine transition hover:bg-pine hover:text-white"
+                        aria-label={`Reactivate ${r.name}`}
+                        className="rounded-tile border border-forest px-3 py-1.5 text-forest transition hover:bg-forest hover:text-cream"
                       >
                         Reactivate
                       </button>
                     )}
                     {!r.isActive && can('riders.update') &&
                       (confirmPurge === r._id ? (
-                        <span className="flex items-center gap-2.5 rounded-md bg-danger-soft px-3 py-1.5 font-normal text-danger">
+                        <span className="flex items-center gap-2.5 rounded-tile bg-clay/10 px-3 py-1.5 font-normal text-clay">
                           Delete account and free the email?
                           <button type="button" disabled={busy} onClick={() => purgeRider(r)} className="font-semibold hover:underline">
                             Yes
                           </button>
-                          <button type="button" onClick={() => setConfirmPurge(null)} className="text-muted hover:text-ink">
+                          <button type="button" onClick={() => setConfirmPurge(null)} className="text-ink/55 hover:text-ink">
                             No
                           </button>
                         </span>
@@ -217,7 +220,8 @@ export default function Riders() {
                         <button
                           type="button"
                           onClick={() => setConfirmPurge(r._id)}
-                          className="rounded-md border border-danger/40 px-3 py-1.5 text-danger transition hover:border-danger"
+                          aria-label={`Delete account for ${r.name}`}
+                          className="rounded-tile border border-clay/40 px-3 py-1.5 text-clay transition hover:border-clay"
                         >
                           Delete account
                         </button>
@@ -226,7 +230,7 @@ export default function Riders() {
                 </div>
 
                 {resetting?.id === r._id && (
-                  <form onSubmit={onReset} noValidate className="mt-5 flex flex-wrap items-end gap-3 rounded-md border border-line bg-paper p-5">
+                  <form onSubmit={onReset} noValidate className="mt-5 flex flex-wrap items-end gap-3 rounded-tile border border-line-warm bg-sand/50 p-5">
                     <div className="min-w-0 flex-1 basis-64">
                       <Field
                         label="New password"
