@@ -270,7 +270,11 @@ export default function StoreFooter({ flush = false }) {
               </ul>
             </nav>
           </div>
+        </div>
 
+        <FooterWordmark />
+
+        <div className={wrap}>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-white/10 py-5 text-[11px] text-white/45">
             {TRUST.map(({ icon: Icon, text }, index) => (
               <div key={text} className="flex items-center gap-4">
@@ -288,7 +292,7 @@ export default function StoreFooter({ flush = false }) {
 
           <nav
             aria-label="Help and legal"
-            className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-white/10 py-5 text-[11.5px] text-white/50"
+            className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/10 py-5 text-[11.5px] text-white/50"
           >
             <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">Help & legal</span>
             {[
@@ -305,11 +309,7 @@ export default function StoreFooter({ flush = false }) {
               </Link>
             ))}
           </nav>
-        </div>
 
-        <FooterWordmark />
-
-        <div className={wrap}>
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 py-7 text-[11px] text-white/40">
             <p>© {new Date().getFullYear()} CityCart. All rights reserved.</p>
             <p className="hidden sm:block">Cash on delivery on every order</p>

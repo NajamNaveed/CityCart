@@ -876,14 +876,14 @@ describe('retention of verified proof photos', () => {
       },
     ],
   });
-  const verified = (daysAgo) =>
+  const verified = (daysAgo, reference = Date.now()) =>
     storedPayment({
       collection: {
         method: 'CARD_MACHINE',
         reference: 'APPR-1',
         proof: { publicId: proofOf(brandId, oid()), fingerprint: 'etag-1' },
         verification: 'VERIFIED',
-        verifiedAt: new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000),
+        verifiedAt: new Date(reference - daysAgo * 24 * 60 * 60 * 1000),
       },
     });
 
@@ -895,7 +895,7 @@ describe('retention of verified proof photos', () => {
 
   it('deletes photos decided more than 90 days ago and forgets the id', async () => {
     const now = new Date('2026-10-28T00:00:00Z');
-    const payment = verified(100);
+    const payment = verified(100, now);
     const destroy = jest.fn().mockResolvedValue(true);
     Payment.find.mockReturnValue(findLimit([payment]));
     Payment.updateOne.mockResolvedValue({});

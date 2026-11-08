@@ -121,7 +121,9 @@ export default function ChatPanel({ mode = 'customer', source, canReply = true }
 
   const rawSelected = params.get('c')
   const selected = isObjectId(rawSelected) ? { id: rawSelected, kind: pickKind(params.get('k')) } : null
-  const selectedKey = selected ? `${selected.kind}:${selected.id}` : null
+  const selectedId = selected?.id
+  const selectedKind = selected?.kind
+  const selectedKey = selected ? `${selectedKind}:${selectedId}` : null
 
   const rawProduct = params.get('product')
   const productId = isCustomer && includeStore && isObjectId(rawProduct) ? rawProduct : null
@@ -287,22 +289,22 @@ export default function ChatPanel({ mode = 'customer', source, canReply = true }
   // "Loading" is derived (the thread in state is not the selected one yet), so
   // the previous conversation's messages never flash under a new header.
   useEffect(() => {
-    if (!selected) return undefined
+    if (!selectedId) return undefined
     let active = true
-    const key = `${selected.kind}:${selected.id}`
+    const key = `${selectedKind}:${selectedId}`
     api
-      .get(`${baseFor(selected.kind)}/${selected.id}/messages`, { params: { limit: PAGE } })
+      .get(`${baseFor(selectedKind)}/${selectedId}/messages`, { params: { limit: PAGE } })
       .then((res) => {
         if (!active) return
         scrollPlan.current = { mode: 'bottom', height: 0 }
         setThread({ key, messages: res.data.messages, hasMore: res.data.hasMore, loading: false, error: '' })
-        markRead(selected.id, selected.kind)
+        markRead(selectedId, selectedKind)
       })
       .catch((err) => active && setThread({ key, messages: [], hasMore: false, loading: false, error: getErrorMessage(err) }))
     return () => {
       active = false
     }
-  }, [selected?.id, selected?.kind, markRead])
+  }, [selectedId, selectedKind, markRead])
 
   async function loadEarlier() {
     const oldest = thread.messages[0]
