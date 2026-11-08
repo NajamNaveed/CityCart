@@ -64,10 +64,12 @@ export default function NearbyMap({
   pin,
   pickable = false,
   onPick,
+  focus = null,
 }) {
   const container = useRef(null)
   const mapRef = useRef(null)
   const layerRef = useRef(null)
+  const focusKeyRef = useRef('')
   // Leaflet handlers are bound once; these refs keep them current.
   const pickableRef = useRef(pickable)
   const onPickRef = useRef(onPick)
@@ -145,6 +147,16 @@ export default function NearbyMap({
     else if (points.length === 1) map.setView(points[0], 15)
     else map.fitBounds(L.latLngBounds(points), { padding: [40, 40], maxZoom: 16 })
   }, [items, zones, origin, radiusKm, originLabel, onOpenBrand, pin])
+
+  // An explicit city choice frames that whole city; later result updates may
+  // zoom in, but the city itself stays on screen first.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !focus?.bounds || focusKeyRef.current === focus.key) return
+    focusKeyRef.current = focus.key
+    const { south, west, north, east } = focus.bounds
+    map.fitBounds([[south, west], [north, east]], { padding: [28, 28], maxZoom: 13 })
+  }, [focus])
 
   return (
     <div

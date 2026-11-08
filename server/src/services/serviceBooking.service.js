@@ -26,6 +26,7 @@ const {
   notifyCustomerOfServiceProposal,
   notifyProviderOfProposalAnswer,
   notifyCustomerOfServiceAccepted,
+  notifyCustomerOfServiceDeclined,
   notifyCustomerOfServiceStarted,
   notifyCustomerOfServiceCompleted,
   notifyProviderOfServiceConfirmed,
@@ -131,6 +132,7 @@ function serialiseBooking(
     scheduledStart: doc.scheduledStart,
     scheduledEnd: doc.scheduledEnd,
     note: doc.note,
+    customerOfferPaisa: doc.customerOfferPaisa ?? null,
     proposals: (doc.proposals || []).map((p) => ({
       _id: p._id,
       pricePaisa: p.pricePaisa,
@@ -267,7 +269,16 @@ async function createBooking(customerId, data) {
           location: { type: 'Point', coordinates: [data.location.lng, data.location.lat] },
         },
         ...(data.note && { note: data.note }),
-        events: [{ type: 'REQUESTED', by: customerId, byRole: 'CUSTOMER', at: new Date() }],
+        ...(data.customerOfferPaisa && { customerOfferPaisa: data.customerOfferPaisa }),
+        events: [
+          {
+            type: 'REQUESTED',
+            by: customerId,
+            byRole: 'CUSTOMER',
+            at: new Date(),
+            ...(data.customerOfferPaisa && { meta: { customerOfferPaisa: data.customerOfferPaisa } }),
+          },
+        ],
       });
     } catch (err) {
       if (err.code !== 11000 || attempt === 1) throw err;
@@ -326,6 +337,95 @@ async function providerAccept(providerId, bookingId, { pricePaisa }) {
     provider,
     unread: conversation ? conversation.providerUnread : 0,
   });
+}
+
+/**
+ * The provider accepts the amount the customer proposed. The amount comes from
+ * the booking document, never from this request, so the client cannot rewrite
+ * the bargaining position at the moment of acceptance. Accepting the customer's
+ * own offer is the one case where the agreed price may sit below the published
+ * starting price: the provider has explicitly consented to that amount.
+ */
+async function providerAcceptOffer(providerId, bookingId) {
+  const booking = await providerBookingForUpdate(providerId, bookingId);
+  if (booking.status !== 'REQUESTED') throw statusError(booking);
+  if (!booking.customerOfferPaisa) {
+    throw new ServiceBookingError(400, 'This customer did not propose a price.', 'NO_CUSTOMER_OFFER');
+  }
+
+  const { startDate, endDate } = await assertSlot(
+    providerId,
+    booking.requestedStart,
+    booking.offering.durationMinutes,
+    { excludeBookingId: booking._id }
+  );
+
+  const updated = await ServiceBooking.findOneAndUpdate(
+    { _id: booking._id, providerId, status: 'REQUESTED', customerOfferPaisa: booking.customerOfferPaisa },
+    {
+      $set: {
+        status: 'ACCEPTED',
+        agreedPricePaisa: booking.customerOfferPaisa,
+        scheduledStart: startDate,
+        scheduledEnd: endDate,
+        acceptedAt: new Date(),
+      },
+      $push: {
+        events: {
+          type: 'OFFER_ACCEPTED',
+          by: providerId,
+          byRole: 'PROVIDER',
+          at: new Date(),
+          meta: { pricePaisa: booking.customerOfferPaisa },
+        },
+      },
+    },
+    { new: true, runValidators: true }
+  );
+  if (!updated) throw statusError(await ServiceBooking.findById(booking._id));
+
+  const conversation = await openBookingChat(updated);
+  if (conversation && !updated.conversationId) updated.conversationId = conversation._id;
+  const provider = await ServiceProvider.findById(providerId);
+  await notifyCustomerOfServiceAccepted({ booking: updated });
+  await refreshRanking(providerId, { provider });
+  return serialiseBooking(updated, {
+    viewer: 'PROVIDER',
+    provider,
+    unread: conversation ? conversation.providerUnread : 0,
+  });
+}
+
+/** The provider turns down a request (and any price the customer proposed). */
+async function providerDeclineRequest(providerId, bookingId, { reason } = {}) {
+  const booking = await providerBookingForUpdate(providerId, bookingId);
+  if (booking.status !== 'REQUESTED') throw statusError(booking);
+
+  const updated = await ServiceBooking.findOneAndUpdate(
+    { _id: booking._id, providerId, status: 'REQUESTED' },
+    {
+      $set: {
+        status: 'DECLINED',
+        cancellation: { by: 'PROVIDER', reason: reason || 'The provider could not take this job.', late: false, at: new Date() },
+      },
+      $push: {
+        events: {
+          type: 'OFFER_DECLINED',
+          by: providerId,
+          byRole: 'PROVIDER',
+          at: new Date(),
+          ...(reason && { note: reason }),
+        },
+      },
+    },
+    { new: true, runValidators: true }
+  );
+  if (!updated) throw statusError(await ServiceBooking.findById(booking._id));
+
+  const provider = await ServiceProvider.findById(providerId);
+  await notifyCustomerOfServiceDeclined({ booking: updated, provider, reason });
+  await refreshRanking(providerId, { provider });
+  return serialiseBooking(updated, { viewer: 'PROVIDER', provider });
 }
 
 /** Provider sends or revises a proposal. A counter-proposal supersedes the old one. */
@@ -860,6 +960,8 @@ module.exports = {
   ACTIVE,
   createBooking,
   providerAccept,
+  providerAcceptOffer,
+  providerDeclineRequest,
   providerPropose,
   customerAcceptProposal,
   customerDeclineProposal,

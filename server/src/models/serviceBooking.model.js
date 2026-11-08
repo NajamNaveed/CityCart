@@ -108,6 +108,11 @@ const serviceBookingSchema = new mongoose.Schema(
     address: { type: bookingAddressSchema, required: true },
     note: { type: String, trim: true, maxlength: 1000 },
 
+    // What the customer said they would pay for the whole job when they asked.
+    // It is only a bargaining position until the provider accepts it, at which
+    // point it becomes the server-recorded agreed price.
+    customerOfferPaisa: { type: Number, min: 1 },
+
     proposals: { type: [proposalSchema], default: [] },
     agreedPricePaisa: { type: Number, min: 0 },
     finalAmountPaisa: { type: Number, min: 0 },

@@ -3,8 +3,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Layers, LayoutGrid, LocateFixed, Map as MapIcon, MapPin, Search, Store as StoreIcon } from 'lucide-react'
 import api, { getErrorMessage } from '../services/api'
 import { useCity } from '../hooks/useCity'
+import { useMapFocus } from '../hooks/useMapFocus'
 import { useNearby } from '../hooks/useNearby'
 import { isRadius } from '../utils/range'
+import { nextLayerState } from '../utils/layerState'
+import MapLayers from '../components/nearby/MapLayers'
 import RangeSelector from '../components/nearby/RangeSelector'
 import StoreCard from '../components/home/StoreCard'
 import { EmptyState, ErrorState, PageHeader, Skeleton, btn, fieldClass, shell } from '../design'
@@ -81,13 +84,14 @@ export default function Nearby() {
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
   const [view, setView] = useState('list') // 'list' | 'map'
-  const [showBlocks, setShowBlocks] = useState(true)
-  const [showShops, setShowShops] = useState(true)
+  const [blockLayer, setBlockLayer] = useState('all') // 'all' | 'mine' | 'off'
+  const [storeLayer, setStoreLayer] = useState('all') // 'all' | 'mine' | 'off'
   const [picking, setPicking] = useState(false)
   const openBrand = useCallback((brand) => navigate(`/store/${brand._id}`), [navigate])
   const q = params.get('q') || ''
-  const { city, cityId } = useCity()
-  const { selectedBlocks, blockIds, areaName, coords, pinned, origin, range, setRange, blocksReady, detect, setPin, status } = useNearby()
+  const { city, cityId, cities } = useCity()
+  const { selectedBlocks, blockIds, blocks, areaName, coords, pinned, origin, range, setRange, blocksReady, detect, setPin, status } = useNearby()
+  const { focus, chooseCity } = useMapFocus(blocks)
 
   const [draft, setDraft] = useState(q)
   // A search sent from the navbar arrives as a new query string; show it in the box.
@@ -173,6 +177,8 @@ export default function Nearby() {
   const items = data?.items || []
   const blockSet = new Set(blockIds.map(String))
   const inBlock = (store) => (store.branches || []).some((branch) => blockSet.has(String(branch.blockId)))
+  const zones = blockLayer === 'all' ? blocks : blockLayer === 'mine' ? selectedBlocks : []
+  const mapStores = storeLayer === 'all' ? items : storeLayer === 'mine' ? items.filter(inBlock) : []
 
   return (
     <div className="bg-canvas">
@@ -261,8 +267,8 @@ export default function Nearby() {
             <div className="relative overflow-hidden rounded-panel border border-line-warm">
               <Suspense fallback={<Skeleton className="h-[460px] w-full rounded-none" />}>
                 <NearbyMap
-                  items={showShops ? items : []}
-                  zones={showBlocks ? selectedBlocks : []}
+                  items={mapStores}
+                  zones={zones}
                   origin={origin}
                   radiusKm={isRadius(range) && origin ? Number(range) : null}
                   originLabel={coords ? (pinned ? 'Your chosen spot' : 'You are here') : selectedBlocks.length === 1 ? `Centre of ${areaName}` : 'Search centre'}
@@ -270,29 +276,32 @@ export default function Nearby() {
                   pickable={picking || !hasLocation}
                   onPick={handleMapPick}
                   onOpenBrand={openBrand}
+                  focus={focus}
                 />
               </Suspense>
-              <div className="absolute right-3 top-3 z-[1000] flex flex-col items-end gap-2">
-                <div className="flex overflow-hidden rounded-tile border border-line-warm bg-paper-warm/95 text-[11.5px] font-medium shadow-sm backdrop-blur">
-                  <button
-                    type="button"
-                    aria-pressed={showBlocks}
-                    onClick={() => setShowBlocks((v) => !v)}
-                    className={`inline-flex h-9 items-center gap-1.5 px-3 transition ${showBlocks ? 'bg-noir text-cream' : 'text-ink/60 hover:text-ink'}`}
-                  >
-                    <Layers className="h-3.5 w-3.5" aria-hidden="true" />
-                    Blocks
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={showShops}
-                    onClick={() => setShowShops((v) => !v)}
-                    className={`inline-flex h-9 items-center gap-1.5 border-l border-line-warm px-3 transition ${showShops ? 'bg-noir text-cream' : 'text-ink/60 hover:text-ink'}`}
-                  >
-                    <StoreIcon className="h-3.5 w-3.5" aria-hidden="true" />
-                    Stores
-                  </button>
-                </div>
+              <MapLayers
+                cities={cities}
+                cityId={cityId}
+                onCityChange={chooseCity}
+                layers={[
+                  {
+                    key: 'blocks',
+                    label: 'Blocks',
+                    mineLabel: 'my block',
+                    icon: Layers,
+                    state: blockLayer,
+                    onCycle: () => setBlockLayer(nextLayerState),
+                  },
+                  {
+                    key: 'stores',
+                    label: 'Stores',
+                    mineLabel: 'my stores',
+                    icon: StoreIcon,
+                    state: storeLayer,
+                    onCycle: () => setStoreLayer(nextLayerState),
+                  },
+                ]}
+              >
                 <button
                   type="button"
                   aria-pressed={picking}
@@ -302,7 +311,7 @@ export default function Nearby() {
                   <MapPin className="h-3.5 w-3.5 text-clay" aria-hidden="true" />
                   {picking ? 'Cancel' : 'Choose location'}
                 </button>
-              </div>
+              </MapLayers>
               {(picking || !hasLocation) && (
                 <p className="pointer-events-none absolute bottom-3 left-1/2 z-[1000] w-max max-w-[90%] -translate-x-1/2 rounded-full bg-noir/90 px-3.5 py-1.5 text-center text-[12px] text-cream shadow">
                   {picking ? 'Tap the map to set your location.' : 'Tap the map to choose where you shop.'}

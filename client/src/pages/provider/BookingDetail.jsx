@@ -45,6 +45,97 @@ function FieldGroup({ label, hint, htmlFor, children }) {
   )
 }
 
+function CustomerOffer({ booking, onDone }) {
+  const [mode, setMode] = useState('')
+  const [reason, setReason] = useState('')
+  const [saving, setSaving] = useState('')
+  const [error, setError] = useState('')
+
+  async function accept() {
+    if (!window.confirm(`Accept the customer's offer of ${formatPrice(booking.customerOfferPaisa / 100)}?`)) return
+    setSaving('accept')
+    setError('')
+    try {
+      const res = await api.post(`/services/provider/bookings/${booking._id}/offer/accept`)
+      onDone(res.data.booking, 'You accepted the customer’s offer. The chat is open.')
+    } catch (err) {
+      setError(getErrorMessage(err))
+    } finally {
+      setSaving('')
+    }
+  }
+
+  async function decline(event) {
+    event.preventDefault()
+    setSaving('decline')
+    setError('')
+    try {
+      const res = await api.post(`/services/provider/bookings/${booking._id}/decline`, {
+        ...(reason.trim() && { reason: reason.trim() }),
+      })
+      onDone(res.data.booking, 'Request declined. The customer has been told.')
+    } catch (err) {
+      setError(getErrorMessage(err))
+    } finally {
+      setSaving('')
+    }
+  }
+
+  return (
+    <div className="rounded-tile border border-clay/25 bg-cream/70 p-4">
+      <p className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-clay">The customer proposed a price</p>
+      <p className="mt-1 font-display text-[26px] font-semibold leading-tight text-ink">
+        {formatPrice(booking.customerOfferPaisa / 100)}
+      </p>
+      <p className="mt-1 text-[12.5px] leading-relaxed text-ink/65">
+        For the whole job at {formatKarachiDateTime(booking.requestedStart)}. Accept their amount or decline the request.
+      </p>
+      {error && (
+        <p role="alert" className="mt-2 text-[13px] text-clay">
+          {error}
+        </p>
+      )}
+      {mode === 'decline' ? (
+        <form onSubmit={decline} className="mt-3 space-y-3">
+          <FieldGroup label="Why are you declining? (optional)" htmlFor="decline-reason">
+            <input
+              id="decline-reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              maxLength={500}
+              placeholder="Too low, not available, outside your area…"
+              className={`h-11 ${inputClass}`}
+            />
+          </FieldGroup>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="submit"
+              disabled={Boolean(saving)}
+              className="inline-flex h-10 items-center rounded-tile bg-clay px-4 text-[13px] font-medium text-cream transition hover:opacity-90 disabled:opacity-50"
+            >
+              {saving === 'decline' ? 'Declining…' : 'Yes, decline'}
+            </button>
+            <button type="button" onClick={() => setMode('')} className={quietBtn}>
+              Go back
+            </button>
+          </div>
+        </form>
+      ) : (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button type="button" onClick={accept} disabled={Boolean(saving)} className={actionBtn}>
+            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+            {saving === 'accept' ? 'Accepting…' : 'Accept their offer'}
+          </button>
+          <button type="button" onClick={() => setMode('decline')} className={`${quietBtn} text-clay`}>
+            <XCircle className="h-4 w-4" aria-hidden="true" />
+            Decline request
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function AcceptForm({ booking, onDone }) {
   const [price, setPrice] = useState(toRupees(booking.offering.startingAtPrice))
   const [saving, setSaving] = useState(false)
@@ -346,8 +437,11 @@ function StatusPanel({ booking, onDone }) {
   if (booking.status === 'REQUESTED') {
     return (
       <div className="space-y-6">
+        {booking.customerOfferPaisa != null && <CustomerOffer booking={booking} onDone={onDone} />}
         <div>
-          <h3 className="text-[15px] font-semibold text-ink">Accept the requested time</h3>
+          <h3 className="text-[15px] font-semibold text-ink">
+            {booking.customerOfferPaisa != null ? 'Or set your own price' : 'Accept the requested time'}
+          </h3>
           <p className="mt-1 text-[13px] text-ink/55">The price you set here is what both sides are bound to.</p>
           <div className="mt-4">
             <AcceptForm booking={booking} onDone={onDone} />

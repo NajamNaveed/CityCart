@@ -372,7 +372,10 @@ each item carries its block centre, distance, starting price and up to three
 offerings. `GET /services/providers/:slug` publishes the same summary plus all
 active offerings, and answers `404` for any non-approved provider. Neither
 endpoint ever returns the provider's pin, phone or address line. The web
-screens are `/services` (list + Leaflet map) and `/services/:slug`.
+screens are `/services` (list + Leaflet map) and `/services/:slug`. The map
+shares the shop directory's controls: block and provider layers cycle
+**everything → only the shopper's block → hidden**, and a city picker frames
+that city's blocks and providers without moving the shopper's saved spot.
 Phase 2c adds the published availability and approved review list to the public
 provider page, and the booking form refuses a customer pin outside the
 provider's block with `OUTSIDE_SERVICE_BLOCK` (docs/04 §12e, docs/05 §22g).
@@ -396,6 +399,12 @@ Rules:
 * A request carries offering, requested slot, customer address pin, block and a
   note. The server resolves the block and checks it against the provider's
   block.
+* A request may also carry an optional `customerOfferPaisa`: the amount the
+  customer is willing to pay for the whole job. It is the customer's own
+  bargaining position and is stored on the booking. The provider can accept that
+  exact amount, decline the request, or send a normal counter-proposal. The
+  accepted amount is copied from the booking document, never from the accept
+  request, so it cannot be rewritten client-side.
 * A proposal carries price, scope, scheduled time and an expiry. Only one
   proposal is active; a counter-proposal supersedes it and invalidates the old
   one. The customer accepts or declines.
@@ -414,7 +423,12 @@ Rules:
 Phase 2c implements the lifecycle in `ServiceBooking` (docs/04 §12e) with the
 statuses `REQUESTED`, `PROPOSED`, `ACCEPTED`, `IN_PROGRESS`, `COMPLETED`,
 `CONFIRMED`, `DECLINED`, `CANCELLED` and `DISPUTED`. Money is integer paisa; the
-agreed price cannot be below the offering's starting price. Proposals expire
+provider's own price cannot be below the offering's starting price. The one
+exception is `POST /services/provider/bookings/:id/offer/accept`, which binds the
+customer's recorded offer even when it sits below the listing price — the
+provider has explicitly consented to that amount. `POST
+/services/provider/bookings/:id/decline` closes a request (with an optional
+reason) and records `OFFER_DECLINED`. Proposals expire
 after 1–72 hours (default 24) and a new one supersedes the active one. The
 customer confirms within three days or the job auto-confirms; a dispute opens a
 super-admin review (`PATCH /admin/service-bookings/:id/dispute`). Cancellations
@@ -424,7 +438,35 @@ final amount but does **not** create commission; the 1% ledger is Phase 3.
 
 ### 4.5 Chat
 
-Booking chat is a new, booking-scoped conversation:
+Chat has two service channels plus the existing brand/store channel.
+
+**Direct provider chat** is a pre-booking conversation between one customer
+and one provider, started from the provider's public page:
+
+```text
+ProviderConversation
+├── customerId + providerId   unique together
+├── lastMessageAt / preview / senderRole
+├── customerUnread / providerUnread
+└── timestamps
+
+ProviderMessage
+├── conversationId
+├── senderId
+├── senderRole    CUSTOMER | PROVIDER
+├── body          text
+└── createdAt
+```
+
+Endpoints live under `/services/direct-chats`: `POST /start { providerId }`
+(customer only), `GET /` (list), `GET /unread`, `GET /:id/messages`,
+`POST /:id/messages { body }` and `POST /:id/read`. Membership is the pair in
+the record; anyone else receives 404, never "forbidden". A provider tenant is
+resolved from the session, never from the request. The same `chat:message`
+socket event carries `kind: 'PROVIDER'`, and clients ignore kinds they do not
+show.
+
+**Booking chat** is a booking-scoped conversation:
 
 ```text
 ServiceConversation
@@ -454,6 +496,17 @@ the booking is `ACCEPTED`, `IN_PROGRESS`, `COMPLETED`, `CONFIRMED`, `DISPUTED`
 or `CANCELLED`; a request or proposal has no chat yet. Messages are sent over
 the authenticated booking routes and pushed to that booking's room only. The
 admin view (`GET /admin/service-bookings/:id/messages`) is read-only.
+
+The web inbox merges these channels by scope:
+
+```text
+Customer /chat        All chats | Stores | Service providers
+Provider /provider/messages   direct threads + booking threads
+Brand /brand/messages         store threads
+```
+
+Pushes carry a kind (`SERVICE_BOOKING` for a booking thread, `PROVIDER` for a
+direct thread, absent for store chat) so each inbox only reacts to its own.
 
 ### 4.6 Reviews
 

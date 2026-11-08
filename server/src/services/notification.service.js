@@ -580,11 +580,14 @@ function bookingData(booking) {
 
 async function notifyProviderOfServiceRequest({ providerUserId, booking }) {
   if (!providerUserId || !booking) return;
+  const offer = booking.customerOfferPaisa
+    ? ` They offered PKR ${(booking.customerOfferPaisa / 100).toFixed(2)} for the whole job.`
+    : '';
   await notify({
     userIds: [providerUserId],
     type: 'SERVICE_BOOKING_REQUESTED',
     title: 'New booking request',
-    message: `${booking.address.fullName} asked for "${booking.offering.title}" on ${booking.requestedStart.toUTCString()}.`,
+    message: `${booking.address.fullName} asked for "${booking.offering.title}" on ${booking.requestedStart.toUTCString()}.${offer}`,
     data: bookingData(booking),
   });
 }
@@ -620,6 +623,18 @@ async function notifyCustomerOfServiceAccepted({ booking }) {
     type: 'SERVICE_BOOKING_ACCEPTED',
     title: 'Booking accepted',
     message: `${booking.offering.title} is booked for ${booking.scheduledStart.toUTCString()}. Chat with the provider inside the booking.`,
+    data: bookingData(booking),
+  });
+}
+
+async function notifyCustomerOfServiceDeclined({ booking, provider, reason }) {
+  if (!booking) return;
+  const who = provider && provider.displayName ? provider.displayName : 'The provider';
+  await notify({
+    userIds: [booking.customerId],
+    type: 'SERVICE_BOOKING_DECLINED',
+    title: 'Request declined',
+    message: `${who} could not take "${booking.offering.title}"${reason ? `: ${reason}` : '.'} You can ask another provider.`,
     data: bookingData(booking),
   });
 }
@@ -952,6 +967,7 @@ module.exports = {
   notifyCustomerOfServiceProposal: bestEffort(notifyCustomerOfServiceProposal),
   notifyProviderOfProposalAnswer: bestEffort(notifyProviderOfProposalAnswer),
   notifyCustomerOfServiceAccepted: bestEffort(notifyCustomerOfServiceAccepted),
+  notifyCustomerOfServiceDeclined: bestEffort(notifyCustomerOfServiceDeclined),
   notifyCustomerOfServiceStarted: bestEffort(notifyCustomerOfServiceStarted),
   notifyCustomerOfServiceCompleted: bestEffort(notifyCustomerOfServiceCompleted),
   notifyProviderOfServiceConfirmed: bestEffort(notifyProviderOfServiceConfirmed),

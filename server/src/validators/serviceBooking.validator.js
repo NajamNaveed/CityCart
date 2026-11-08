@@ -21,6 +21,13 @@ const pricePaisa = z
   .min(0, 'Price cannot be negative.')
   .max(MAX_PAISA, 'Price is too large.');
 
+// A customer offer is a bargaining position, so it must be a real amount.
+const offerPaisa = z
+  .number()
+  .int('The offer must be a whole number of paisa.')
+  .min(1, 'Enter the amount you want to pay.')
+  .max(MAX_PAISA, 'The offer is too large.');
+
 const page = numberFromQuery
   .refine((n) => Number.isInteger(n) && n >= 1 && n <= 1000, { message: 'page must be between 1 and 1000.' })
   .optional();
@@ -47,8 +54,10 @@ const location = z
   })
   .strict();
 
-// The provider, price and customer are never accepted from the client: only
-// the offering, the requested time and where the job happens.
+// The provider, customer and binding price are never accepted from the client:
+// only the offering, the requested time and where the job happens. The optional
+// customerOfferPaisa is the customer's own bargaining position, recorded so the
+// provider can accept that exact amount.
 const createBookingSchema = z
   .object({
     providerId: objectId,
@@ -57,10 +66,15 @@ const createBookingSchema = z
     address,
     location,
     note: z.string().trim().max(1000).optional(),
+    customerOfferPaisa: offerPaisa.optional(),
   })
   .strict();
 
 const providerAcceptSchema = z.object({ pricePaisa }).strict();
+
+const providerDeclineSchema = z
+  .object({ reason: z.string().trim().max(500).optional() })
+  .strict();
 
 const providerProposeSchema = z
   .object({
@@ -117,6 +131,7 @@ const bookingIdParamSchema = z.object({ id: objectId });
 module.exports = {
   createBookingSchema,
   providerAcceptSchema,
+  providerDeclineSchema,
   providerProposeSchema,
   providerCompleteSchema,
   cancelBookingSchema,

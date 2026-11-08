@@ -67,6 +67,8 @@ const ProviderBookings = lazy(() => import('./pages/provider/Bookings'))
 const ProviderBookingDetail = lazy(() => import('./pages/provider/BookingDetail'))
 const ProviderAvailability = lazy(() => import('./pages/provider/Availability'))
 const ProviderReviews = lazy(() => import('./pages/provider/Reviews'))
+const ProviderMessages = lazy(() => import('./pages/provider/Messages'))
+const ProviderSettings = lazy(() => import('./pages/provider/Settings'))
 const SellerBilling = lazy(() => import('./pages/billing/Billing'))
 const AdminLayout = lazy(() => import('./components/admin/AdminLayout'))
 const AdminLanding = lazy(() => import('./pages/admin/Landing'))
@@ -184,9 +186,11 @@ function App() {
                     <Route path="bookings" element={<ProviderBookings />} />
                     <Route path="bookings/:id" element={<ProviderBookingDetail />} />
                     <Route path="availability" element={<ProviderAvailability />} />
+                    <Route path="messages" element={<ProviderMessages />} />
                     <Route path="reviews" element={<ProviderReviews />} />
                     <Route path="profile" element={<ProviderProfile />} />
                     <Route path="area" element={<ProviderArea />} />
+                    <Route path="settings" element={<ProviderSettings />} />
                     <Route path="billing" element={<SellerBilling />} />
                     <Route path="notifications" element={<Notifications />} />
                   </Route>

@@ -2,8 +2,10 @@ import { Link } from 'react-router-dom'
 import {
   CalendarClock,
   CalendarDays,
+  KeyRound,
   LayoutDashboard,
   MapPin,
+  MessagesSquare,
   Settings,
   Sparkles,
   Star,
@@ -20,6 +22,7 @@ const groups = [
     items: [
       { to: '/provider', label: 'Overview', end: true, icon: LayoutDashboard },
       { to: '/provider/bookings', label: 'Bookings', icon: CalendarClock },
+      { to: '/provider/messages', label: 'Messages', icon: MessagesSquare },
       { to: '/provider/offerings', label: 'Services and prices', icon: Wrench },
       { to: '/provider/availability', label: 'Working hours', icon: CalendarDays },
     ],
@@ -37,6 +40,10 @@ const groups = [
       { to: '/provider/profile', label: 'Profile and details', icon: Settings },
       { to: '/provider/area', label: 'Service area', icon: MapPin },
     ],
+  },
+  {
+    label: 'Account',
+    items: [{ to: '/provider/settings', label: 'Settings', icon: KeyRound }],
   },
 ]
 

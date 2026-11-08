@@ -2489,7 +2489,9 @@ the client:
 The server resolves the active provider, its active offering and its block. A
 pin outside the provider's block answers `400 OUTSIDE_SERVICE_BLOCK`; a
 published slot that does not contain the job answers `409 SLOT_UNAVAILABLE`.
-The request starts `REQUESTED` with a booking number and a server-side event.
+The request starts `REQUESTED` with a booking number and a server-side event. The
+optional `customerOfferPaisa` records what the customer is willing to pay for
+the whole job; it is their bargaining position, not a binding price.
 
 Proposals are provider-only (`POST /services/provider/bookings/:id/propose`
 with `{ pricePaisa, scope, scheduledStart, expiresInHours? }`), expire after
@@ -2498,16 +2500,21 @@ accepts or declines; accepting sets `ACCEPTED`, the agreed price and the
 scheduled window, and opens the chat. Provider actions and rules:
 
 ```text
-POST /services/provider/bookings/:id/accept   { pricePaisa }              REQUESTED -> ACCEPTED
-POST /services/provider/bookings/:id/propose  { pricePaisa, scope, ... }  REQUESTED | PROPOSED
+POST /services/provider/bookings/:id/accept        { pricePaisa }         REQUESTED -> ACCEPTED
+POST /services/provider/bookings/:id/offer/accept                         REQUESTED -> ACCEPTED
+POST /services/provider/bookings/:id/decline       { reason? }            REQUESTED -> DECLINED
+POST /services/provider/bookings/:id/propose       { pricePaisa, scope, ... }  REQUESTED | PROPOSED
 POST /services/provider/bookings/:id/start                                ACCEPTED -> IN_PROGRESS
-POST /services/provider/bookings/:id/complete { finalAmountPaisa, completionNote? }
+POST /services/provider/bookings/:id/complete      { finalAmountPaisa, completionNote? }
                                                                           IN_PROGRESS -> COMPLETED
-POST /services/provider/bookings/:id/cancel   { reason }                  any open -> CANCELLED
+POST /services/provider/bookings/:id/cancel        { reason }             any open -> CANCELLED
 ```
 
-The agreed and final amounts are whole paisa and may not be below the offering's
-starting price. Completion sets `autoConfirmAt` three days ahead; the customer
+The provider's own price and the final amount are whole paisa and may not be
+below the offering's starting price. The single exception is
+`/offer/accept`: it binds the `customerOfferPaisa` already stored on the booking,
+so the provider can consent to a lower bargained amount without the client
+sending a price. Completion sets `autoConfirmAt` three days ahead; the customer
 confirms (`CONFIRMED`) or disputes (`DISPUTED`). Cancellations require a reason;
 a customer cancellation after acceptance is recorded as late. The booking
 serializer omits the provider's phone until the request is accepted.
@@ -2528,6 +2535,28 @@ request. Chat opens once the booking is `ACCEPTED`. Messages are text (max 1000)
 plus up to three attachment URLs, stored immutably and rendered as text. The
 list adds the counterpart name, booking number, service title, status and the
 viewer's unread count.
+
+## Direct provider chat
+
+A pre-booking conversation between a customer and one provider, separate from
+a booking's own thread:
+
+```text
+POST /services/direct-chats/start         { providerId } -> { conversationId, provider }
+GET  /services/direct-chats?page=&limit=  -> { conversations, pagination }
+GET  /services/direct-chats/unread       -> { unread }
+GET  /services/direct-chats/:id/messages?before=&limit= -> { messages, hasMore }
+POST /services/direct-chats/:id/messages  { body } -> 201 { message }
+POST /services/direct-chats/:id/read      -> { success: true }
+```
+
+`:id` here is the conversation id. Starting is customer-only; list, messages,
+send and read accept the customer or that provider (the provider tenant comes
+from the session, never the request). A customer/provider pair has at most one
+conversation, created on first use. A non-member gets 404, not 403. Bodies are
+trimmed and cleaned on the server (max 1000). Messages are pushed over the
+existing `chat:message` event with `kind: 'PROVIDER'`; booking-chat pushes use
+`kind: 'SERVICE_BOOKING'` and store chat pushes carry no kind.
 
 ## Provider reviews and ranking (Phase 2c)
 

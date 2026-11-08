@@ -1,6 +1,7 @@
 const {
   createBookingSchema,
   providerAcceptSchema,
+  providerDeclineSchema,
   providerProposeSchema,
   providerCompleteSchema,
   cancelBookingSchema,
@@ -14,6 +15,8 @@ const {
   ServiceBookingError,
   createBooking,
   providerAccept,
+  providerAcceptOffer,
+  providerDeclineRequest,
   providerPropose,
   customerAcceptProposal,
   customerDeclineProposal,
@@ -214,6 +217,30 @@ async function providerAcceptBooking(req, res, next) {
   }
 }
 
+async function providerAcceptOfferBooking(req, res, next) {
+  const id = parseId(req, res);
+  if (!id) return undefined;
+  try {
+    const booking = await providerAcceptOffer(req.tenantProviderId, id);
+    return res.status(200).json({ success: true, message: 'Customer offer accepted.', booking });
+  } catch (err) {
+    return handleError(err, res, next);
+  }
+}
+
+async function providerDeclineBooking(req, res, next) {
+  const id = parseId(req, res);
+  if (!id) return undefined;
+  const parsed = providerDeclineSchema.safeParse(req.body || {});
+  if (!parsed.success) return invalid(res, parsed.error);
+  try {
+    const booking = await providerDeclineRequest(req.tenantProviderId, id, parsed.data);
+    return res.status(200).json({ success: true, message: 'Request declined.', booking });
+  } catch (err) {
+    return handleError(err, res, next);
+  }
+}
+
 async function providerProposeBooking(req, res, next) {
   const id = parseId(req, res);
   if (!id) return undefined;
@@ -306,6 +333,8 @@ module.exports = {
   providerList,
   providerGet,
   providerAcceptBooking,
+  providerAcceptOfferBooking,
+  providerDeclineBooking,
   providerProposeBooking,
   providerStartBooking,
   providerCompleteBooking,

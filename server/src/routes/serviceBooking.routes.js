@@ -3,6 +3,7 @@ const express = require('express');
 const bookings = require('../controllers/serviceBooking.controller');
 const reviews = require('../controllers/serviceReview.controller');
 const chat = require('../controllers/serviceChat.controller');
+const directChat = require('../controllers/serviceDirectChat.controller');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
 const { ROLES } = require('../config/roles');
@@ -31,5 +32,15 @@ router.get('/chats/unread', authenticate, requireRole(ROLES.CUSTOMER, ROLES.SERV
 router.get('/chats/:id/messages', authenticate, requireRole(ROLES.CUSTOMER, ROLES.SERVICE_PROVIDER), chat.messages);
 router.post('/chats/:id/messages', authenticate, requireRole(ROLES.CUSTOMER, ROLES.SERVICE_PROVIDER), chat.send);
 router.post('/chats/:id/read', authenticate, requireRole(ROLES.CUSTOMER, ROLES.SERVICE_PROVIDER), chat.read);
+
+// Direct customer ↔ provider chat, independent of a booking. A customer opens
+// the thread from the public provider page; both sides read and reply here.
+// The literal routes are registered before the :id routes.
+router.post('/direct-chats/start', authenticate, requireRole(ROLES.CUSTOMER), directChat.start);
+router.get('/direct-chats/unread', authenticate, requireRole(ROLES.CUSTOMER, ROLES.SERVICE_PROVIDER), directChat.unread);
+router.get('/direct-chats', authenticate, requireRole(ROLES.CUSTOMER, ROLES.SERVICE_PROVIDER), directChat.list);
+router.get('/direct-chats/:id/messages', authenticate, requireRole(ROLES.CUSTOMER, ROLES.SERVICE_PROVIDER), directChat.messages);
+router.post('/direct-chats/:id/messages', authenticate, requireRole(ROLES.CUSTOMER, ROLES.SERVICE_PROVIDER), directChat.send);
+router.post('/direct-chats/:id/read', authenticate, requireRole(ROLES.CUSTOMER, ROLES.SERVICE_PROVIDER), directChat.read);
 
 module.exports = router;

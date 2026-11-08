@@ -1,11 +1,12 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ChevronRight, Clock3, MapPin, Star, Wrench } from 'lucide-react'
+import { ChevronRight, Clock3, MapPin, MessageCircle, Star, Wrench } from 'lucide-react'
 import api, { getErrorMessage } from '../services/api'
 import ProductImage from '../components/ProductImage'
 import Stars from '../components/Stars'
 import BookingRequest from '../components/services/BookingRequest'
 import { EmptyState, Skeleton, btn, card, panel, shell } from '../design'
+import { useAuth } from '../hooks/useAuth'
 import { formatKarachiDate, minuteLabel } from '../utils/serviceSlots'
 import { durationLabel } from '../utils/serviceBookings'
 import { formatPrice } from '../ui'
@@ -17,6 +18,7 @@ const sectionTitle = 'font-display mt-2 text-[24px] font-semibold tracking-tight
 
 export default function ServiceProvider() {
   const { slug } = useParams()
+  const { user } = useAuth()
   // `slug` is stored with the result so navigating to another provider shows
   // the skeleton instead of the previous provider while the new one loads.
   const [state, setState] = useState({ slug: null, loaded: false, provider: null, error: '' })
@@ -283,6 +285,23 @@ export default function ServiceProvider() {
           </div>
 
           <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start">
+            {(!user || user.role === 'CUSTOMER') && (
+              <section className={`${panel} p-5`}>
+                <p className={sectionLabel}>Not ready to book?</p>
+                <h2 className="font-display mt-2 text-[20px] font-semibold tracking-tight text-ink">Ask a question</h2>
+                <p className="mt-2 text-[12.5px] leading-relaxed text-ink/55">
+                  Chat with {provider.displayName} about the job first. Prices and times are still agreed in a booking.
+                </p>
+                <Link
+                  to={`/chat?provider=${provider._id}&tab=providers`}
+                  className={`${btn('outline', 'md')} mt-4 w-full`}
+                >
+                  <MessageCircle className="h-4 w-4" aria-hidden="true" />
+                  Message {provider.displayName}
+                </Link>
+              </section>
+            )}
+
             <section className={`${panel} p-5`}>
               <p className={sectionLabel}>Book this provider</p>
               <h2 className="font-display mt-2 text-[20px] font-semibold tracking-tight text-ink">Request a booking</h2>

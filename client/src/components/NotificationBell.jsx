@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useNotifications from '../hooks/useNotifications'
 import { useAuth } from '../hooks/useAuth'
+import { notificationTarget } from '../utils/notificationTarget'
 
 function BellIcon() {
   return (
@@ -20,17 +21,6 @@ function timeAgo(value) {
   if (seconds < 86400) return `${Math.floor(seconds / 3600)} h ago`
   if (seconds < 86400 * 7) return `${Math.floor(seconds / 86400)} d ago`
   return new Date(value).toLocaleDateString()
-}
-
-// Where a notification click should land, per role.
-function targetFor(notification, user) {
-  const data = notification.data || {}
-  if (data.orderId) {
-    if (user.role === 'CUSTOMER') return `/orders/${data.orderId}`
-    if (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN_PARTNER') return `/admin/orders/${data.orderId}`
-    return `/brand/orders/${data.orderId}`
-  }
-  return null
 }
 
 const inboxPathFor = (role) => {
@@ -69,7 +59,7 @@ export default function NotificationBell() {
     if (!notification.isRead) {
       markRead(notification._id).catch(() => {})
     }
-    const to = targetFor(notification, user)
+    const to = notificationTarget(notification, user)
     if (to) navigate(to)
   }
 

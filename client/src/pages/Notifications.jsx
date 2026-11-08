@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   ArrowUpRight,
   Bell,
+  CalendarClock,
   CheckCheck,
   ChevronLeft,
   ChevronRight,
@@ -13,10 +14,12 @@ import {
   Star,
   Trash2,
   Truck,
+  Wallet,
 } from 'lucide-react'
 import api from '../services/api'
 import useNotifications from '../hooks/useNotifications'
 import { useAuth } from '../hooks/useAuth'
+import { notificationTarget } from '../utils/notificationTarget'
 import {
   Badge,
   Button,
@@ -36,19 +39,14 @@ const PAGE_SIZE = 20
 const homePathFor = (role) =>
   role === 'SUPER_ADMIN' || role === 'ADMIN_PARTNER' ? '/admin' : role === 'CUSTOMER' ? '/' : '/brand'
 
-// Where a notification click should land, per role.
-function targetFor(notification, user) {
-  const data = notification?.data || {}
-  if (data.orderId) {
-    if (user?.role === 'CUSTOMER') return `/orders/${data.orderId}`
-    if (user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_PARTNER') return `/admin/orders/${data.orderId}`
-    return `/brand/orders/${data.orderId}`
-  }
-  return null
-}
-
 function getNotificationVisuals(type = '') {
-  if (type.includes('DELIVER') || type === 'ORDER_SHIPPED' || type === 'ORDER_OUT_FOR_DELIVERY') {
+  if (type.startsWith('BILLING_')) {
+    return { Icon: Wallet, tone: 'bg-cream text-clay', badge: 'Billing' }
+  }
+  if (type.startsWith('SERVICE_')) {
+    return { Icon: CalendarClock, tone: 'bg-sand text-forest', badge: 'Service' }
+  }
+  if (type.includes('DELIVER') || type.includes('SHIPPED') || type.includes('TRANSIT')) {
     return { Icon: Truck, tone: 'bg-sage text-forest', badge: 'Delivery' }
   }
   if (type.includes('ORDER') || type.includes('PAYMENT') || type.includes('REFUND') || type.includes('ADJUSTMENT')) {
@@ -105,7 +103,7 @@ export default function Notifications() {
         // badge sync is best-effort
       }
     }
-    const to = targetFor(notification, user)
+    const to = notificationTarget(notification, user)
     if (to) navigate(to)
   }
 
@@ -256,7 +254,7 @@ export default function Notifications() {
           <div className="space-y-2.5">
             {displayedItems.map((n) => {
               const { Icon, tone, badge } = getNotificationVisuals(n.type)
-              const to = targetFor(n, user)
+              const to = notificationTarget(n, user)
 
               return (
                 <div
@@ -306,7 +304,7 @@ export default function Notifications() {
                           onClick={() => onItemClick(n)}
                           className="inline-flex items-center gap-1 font-semibold text-clay transition hover:underline"
                         >
-                          View order details
+                          View details
                           <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
                         </button>
                       )}

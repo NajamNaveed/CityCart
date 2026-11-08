@@ -382,13 +382,6 @@ export default function ProviderAvailability() {
         Customers can book {preview.length} time{preview.length === 1 ? '' : 's'} in the next seven days with these settings.
         {state.updatedAt ? ` Last saved ${new Date(state.updatedAt).toLocaleString()}.` : ''}
       </p>
-
-      <div className="mt-5">
-        <button type="submit" disabled={saving} className={btnPine}>
-          <Save className="h-4 w-4" aria-hidden="true" />
-          {saving ? 'Saving…' : 'Save hours'}
-        </button>
-      </div>
     </form>
   )
 }

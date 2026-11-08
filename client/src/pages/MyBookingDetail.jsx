@@ -308,8 +308,26 @@ function StatusMessage({ booking }) {
   if (booking.status === 'REQUESTED') {
     return (
       <p className="text-[12.5px] leading-relaxed text-ink/60">
-        Your request for {formatKarachiDateTime(booking.requestedStart)} has been sent. The provider will accept it or
-        send you a price. You can chat once it is accepted.
+        Your request for {formatKarachiDateTime(booking.requestedStart)} has been sent.
+        {booking.customerOfferPaisa != null ? (
+          <>
+            {' '}
+            You offered {formatPrice(booking.customerOfferPaisa / 100)} for the whole job — the provider can accept it,
+            decline it, or send a counter-offer.
+          </>
+        ) : (
+          ' The provider will accept it or send you a price.'
+        )}{' '}
+        You can chat once it is accepted.
+      </p>
+    )
+  }
+  if (booking.status === 'DECLINED') {
+    return (
+      <p className="text-[12.5px] leading-relaxed text-ink/60">
+        The provider declined this request
+        {booking.cancellation?.reason ? `: ${booking.cancellation.reason}` : '.'} You can ask another provider for the
+        same job.
       </p>
     )
   }
@@ -491,6 +509,14 @@ export default function MyBookingDetail() {
                       <dt className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/40">Price</dt>
                       <dd className="mt-1 font-medium text-ink">{formatPrice(priceOf(booking) / 100)}</dd>
                     </div>
+                    {booking.customerOfferPaisa != null && (
+                      <div>
+                        <dt className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/40">Your offer</dt>
+                        <dd className="mt-1 font-medium text-ink">
+                          {formatPrice(booking.customerOfferPaisa / 100)}
+                        </dd>
+                      </div>
+                    )}
                   </dl>
                 </div>
               </div>

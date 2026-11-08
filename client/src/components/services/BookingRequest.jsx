@@ -6,8 +6,8 @@ import { useAuth } from '../../hooks/useAuth'
 import { Field, Skeleton, btn, fieldLabel } from '../../design'
 import { formatPrice } from '../../ui'
 import { getDevicePosition, parseLatLng } from '../../utils/geo'
-import { availableSlots, karachiInputToIso } from '../../utils/serviceSlots'
-import { durationLabel } from '../../utils/serviceBookings'
+import { availableSlots, karachiInputToIso, minuteLabel } from '../../utils/serviceSlots'
+import { durationLabel, toPaisa } from '../../utils/serviceBookings'
 
 function SignedOut() {
   return (
@@ -40,8 +40,10 @@ export default function BookingRequest({ provider }) {
   const [locating, setLocating] = useState(false)
   const [pinNote, setPinNote] = useState('')
   const [slot, setSlot] = useState('')
+  const [dateKey, setDateKey] = useState('')
   const [customStart, setCustomStart] = useState('')
   const [note, setNote] = useState('')
+  const [offer, setOffer] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
   const [message, setMessage] = useState('')
   const [saving, setSaving] = useState(false)
@@ -80,9 +82,29 @@ export default function BookingRequest({ provider }) {
     [provider.availability, offering],
   )
 
-  useEffect(() => {
-    setSlot(slots[0]?.value || '')
+  // {dateKey} -> {dayLabel} preserves the availability order (soonest first).
+  const dates = useMemo(() => {
+    const seen = new Map()
+    for (const item of slots) {
+      if (!seen.has(item.dateKey)) seen.set(item.dateKey, item.label.split(' · ')[0])
+    }
+    return [...seen].map(([value, label]) => ({ value, label }))
   }, [slots])
+
+  const daySlots = useMemo(() => slots.filter((item) => item.dateKey === dateKey), [slots, dateKey])
+
+  useEffect(() => {
+    const nextDate = dates[0]?.value || ''
+    setDateKey(nextDate)
+    setSlot(slots.find((item) => item.dateKey === nextDate)?.value || '')
+  }, [dates, slots])
+
+  useEffect(() => {
+    if (!dateKey) return
+    if (!slots.some((item) => item.value === slot && item.dateKey === dateKey)) {
+      setSlot(slots.find((item) => item.dateKey === dateKey)?.value || '')
+    }
+  }, [dateKey, slot, slots])
 
   if (user?.role !== 'CUSTOMER') {
     return (
@@ -142,6 +164,12 @@ export default function BookingRequest({ provider }) {
     const startIso = provider.availability?.isPublished ? slot : karachiInputToIso(customStart)
     if (!startIso) errors.scheduledStart = 'Choose a date and time.'
 
+    let offerPaisa = null
+    if (offer.trim()) {
+      offerPaisa = toPaisa(offer)
+      if (offerPaisa === null || offerPaisa < 1) errors.customerOfferPaisa = 'Enter the amount you want to pay.'
+    }
+
     let address
     let location
     if (mode === 'saved' && selectedAddress) {
@@ -177,6 +205,7 @@ export default function BookingRequest({ provider }) {
         address,
         location,
         ...(note.trim() && { note: note.trim() }),
+        ...(offerPaisa !== null && { customerOfferPaisa: offerPaisa }),
       })
       setDone(res.data.booking)
     } catch (err) {
@@ -195,37 +224,75 @@ export default function BookingRequest({ provider }) {
         id="service-offering"
         value={offering?._id || ''}
         onChange={(e) => chooseOffering(e.target.value)}
-        hint={
-          offering
-            ? `${durationLabel(offering.durationMinutes)} usually · price agreed with the provider`
-            : undefined
-        }
+        hint={offering ? `Full service · about ${durationLabel(offering.durationMinutes)} on site` : undefined}
       >
         {offerings.map((item) => (
           <option key={item._id} value={item._id}>
-            {item.title} — from {formatPrice(item.startingAtPrice / 100)}
+            {item.title} — {formatPrice(item.startingAtPrice / 100)}
           </option>
         ))}
       </Field>
 
+      {offering && (
+        <div className="rounded-tile border border-line-warm bg-canvas/70 px-3.5 py-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-[12px] font-medium text-ink/60">Full service, one visit</span>
+            <span className="font-display text-[18px] font-semibold text-ink">
+              {formatPrice(offering.startingAtPrice / 100)}
+            </span>
+          </div>
+          <p className="mt-1 text-[11.5px] leading-relaxed text-ink/50">
+            Not an hourly rate. The provider quotes the whole job, and you agree the final price before work starts.
+          </p>
+        </div>
+      )}
+
+      <Field
+        label="Your price for the job (Rs) — optional"
+        id="booking-offer"
+        type="number"
+        min="0"
+        step="1"
+        inputMode="numeric"
+        value={offer}
+        onChange={(e) => setOffer(e.target.value)}
+        error={fieldErrors.customerOfferPaisa}
+        hint="Want to bargain? Propose the whole-job amount. The provider can accept it, decline, or send a counter-offer. Leave blank to let them quote."
+      />
+
       {provider.availability?.isPublished ? (
         slots.length > 0 ? (
-          <Field
-            as="select"
-            label="Date and time"
-            id="service-slot"
-            value={slot}
-            onChange={(e) => setSlot(e.target.value)}
-            hint="Pakistan time."
-            error={fieldErrors.scheduledStart}
-            required
-          >
-            {slots.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field
+              as="select"
+              label="Date"
+              id="service-date"
+              value={dateKey}
+              onChange={(e) => setDateKey(e.target.value)}
+            >
+              {dates.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </Field>
+            <Field
+              as="select"
+              label="Time"
+              id="service-time"
+              value={slot}
+              onChange={(e) => setSlot(e.target.value)}
+              hint="Pakistan time."
+              error={fieldErrors.scheduledStart}
+              required
+            >
+              {daySlots.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {minuteLabel(item.startMinute)}
+                </option>
+              ))}
+            </Field>
+          </div>
         ) : (
           <div>
             <p className={fieldLabel}>Date and time</p>

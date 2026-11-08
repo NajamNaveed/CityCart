@@ -52,10 +52,11 @@ function popupFor(provider, onOpenProvider) {
  * Approved providers pinned at their block centre — the only location that is
  * public before a booking is accepted. Tapping a pin opens the provider page.
  */
-export default function ServicesMap({ items, zones = [], origin, radiusKm, originLabel = 'Search centre', onOpenProvider }) {
+export default function ServicesMap({ items, zones = [], origin, radiusKm, originLabel = 'Search centre', onOpenProvider, focus = null }) {
   const container = useRef(null)
   const mapRef = useRef(null)
   const layerRef = useRef(null)
+  const focusKeyRef = useRef('')
 
   useEffect(() => {
     const map = L.map(container.current, { scrollWheelZoom: false }).setView(FALLBACK_CENTER, 12)
@@ -110,6 +111,15 @@ export default function ServicesMap({ items, zones = [], origin, radiusKm, origi
     else if (points.length === 1) map.setView(points[0], 14)
     else map.fitBounds(L.latLngBounds(points), { padding: [40, 40], maxZoom: 15 })
   }, [items, zones, origin, radiusKm, originLabel, onOpenProvider])
+
+  // City picks frame the whole city before the new results narrow it down.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !focus?.bounds || focusKeyRef.current === focus.key) return
+    focusKeyRef.current = focus.key
+    const { south, west, north, east } = focus.bounds
+    map.fitBounds([[south, west], [north, east]], { padding: [28, 28], maxZoom: 13 })
+  }, [focus])
 
   return (
     <div

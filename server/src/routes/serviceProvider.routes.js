@@ -44,6 +44,8 @@ router.put('/provider/availability', authenticate, requireServiceTenant, availab
 router.get('/provider/bookings', authenticate, requireServiceTenant, bookings.providerList);
 router.get('/provider/bookings/:id', authenticate, requireServiceTenant, bookings.providerGet);
 router.post('/provider/bookings/:id/accept', authenticate, requireServiceTenant, bookings.providerAcceptBooking);
+router.post('/provider/bookings/:id/offer/accept', authenticate, requireServiceTenant, bookings.providerAcceptOfferBooking);
+router.post('/provider/bookings/:id/decline', authenticate, requireServiceTenant, bookings.providerDeclineBooking);
 router.post('/provider/bookings/:id/propose', authenticate, requireServiceTenant, bookings.providerProposeBooking);
 router.post('/provider/bookings/:id/start', authenticate, requireServiceTenant, bookings.providerStartBooking);
 router.post('/provider/bookings/:id/complete', authenticate, requireServiceTenant, bookings.providerCompleteBooking);

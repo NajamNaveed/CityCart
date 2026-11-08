@@ -14,6 +14,10 @@ export const BOOKING_STATUSES = [
 
 export const CANCELABLE_STATUSES = ['REQUESTED', 'PROPOSED', 'ACCEPTED', 'IN_PROGRESS']
 
+// Mirrors server/src/config/serviceBookingStatuses.js — the booking chat stays
+// writable in these states.
+export const CHAT_OPEN_STATUSES = ['ACCEPTED', 'IN_PROGRESS', 'COMPLETED', 'CONFIRMED', 'DISPUTED', 'CANCELLED']
+
 const EVENT_LABELS = {
   REQUESTED: 'Request sent',
   ACCEPTED: 'Booking accepted',
@@ -21,6 +25,8 @@ const EVENT_LABELS = {
   PROPOSAL_ACCEPTED: 'Proposal accepted',
   PROPOSAL_DECLINED: 'Proposal declined',
   PROPOSAL_EXPIRED: 'Proposal expired',
+  OFFER_ACCEPTED: 'Your offer accepted',
+  OFFER_DECLINED: 'Request declined',
   STARTED: 'Job started',
   COMPLETED: 'Job completed',
   CONFIRMED: 'Completion confirmed',
@@ -35,6 +41,7 @@ export function priceOf(booking) {
   if (booking.finalAmountPaisa != null) return booking.finalAmountPaisa
   if (booking.agreedPricePaisa != null) return booking.agreedPricePaisa
   if (booking.activeProposal) return booking.activeProposal.pricePaisa
+  if (booking.customerOfferPaisa != null) return booking.customerOfferPaisa
   return booking.offering?.startingAtPrice ?? 0
 }
 

@@ -34,9 +34,25 @@ const listServiceChatsQuerySchema = z.object({
 
 const bookingChatParamSchema = z.object({ id: objectId });
 
+// Direct customer ↔ provider chat (docs/24 §4.5): a thread is opened with a
+// provider id and carries text messages only.
+const startProviderChatSchema = z.object({ providerId: objectId }).strict();
+
+const directMessageSchema = z
+  .object({
+    body: z
+      .string({ error: 'A message is required.' })
+      .trim()
+      .min(1, 'A message is required.')
+      .max(1000, 'A message can be at most 1000 characters.'),
+  })
+  .strict();
+
 module.exports = {
   sendMessageSchema,
   listMessagesQuerySchema,
   listServiceChatsQuerySchema,
   bookingChatParamSchema,
+  startProviderChatSchema,
+  directMessageSchema,
 };

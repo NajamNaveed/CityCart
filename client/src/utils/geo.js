@@ -53,6 +53,35 @@ export function latLngOfBlock(block) {
   return { lat: block.latitude, lng: block.longitude }
 }
 
+// The rectangle enclosing every block of a city, so the map can frame the
+// whole city rather than a single pin. Blocks without a drawn outline fall
+// back to their centre point.
+export function boundsOfBlocks(blocks = []) {
+  const lats = []
+  const lngs = []
+  for (const block of blocks) {
+    const ring = Array.isArray(block.polygon) ? block.polygon : []
+    if (ring.length > 0) {
+      for (const [lat, lng] of ring) {
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+          lats.push(lat)
+          lngs.push(lng)
+        }
+      }
+    } else if (Number.isFinite(block.latitude) && Number.isFinite(block.longitude)) {
+      lats.push(block.latitude)
+      lngs.push(block.longitude)
+    }
+  }
+  if (lats.length === 0) return null
+  return {
+    south: Math.min(...lats),
+    north: Math.max(...lats),
+    west: Math.min(...lngs),
+    east: Math.max(...lngs),
+  }
+}
+
 // A GeoJSON point from the API ([longitude, latitude]) -> { lat, lng }.
 export function latLngOfGeoPoint(point) {
   const coordinates = point?.coordinates

@@ -4,11 +4,11 @@ import { useAuth } from '../hooks/useAuth'
 import useNotifications from '../hooks/useNotifications'
 import { ChatContext } from './contexts'
 
-// Customers and the brand team members who may read chats. The server decides
-// for real on every request; this only avoids pointless calls.
+// Customers, service providers and brand team members who may read chats. The
+// server decides for real on every request; this only avoids pointless calls.
 function usesChat(user) {
   if (!user) return false
-  if (user.role === 'CUSTOMER' || user.role === 'BRAND_ADMIN') return true
+  if (user.role === 'CUSTOMER' || user.role === 'SERVICE_PROVIDER' || user.role === 'BRAND_ADMIN') return true
   return user.role === 'BRAND_EMPLOYEE' && ['messages.view', 'messages.manage'].some((p) => user.permissions?.includes(p))
 }
 
@@ -24,23 +24,35 @@ export function ChatProvider({ children }) {
   const timer = useRef(null)
   const enabled = usesChat(user)
   const userId = user?.id
+  const isProvider = user?.role === 'SERVICE_PROVIDER'
+
+  // A provider has two service inboxes: booking threads and direct threads.
+  const loadUnread = useCallback(async () => {
+    if (isProvider) {
+      const [bookings, direct] = await Promise.all([
+        api.get('/services/chats/unread').catch(() => null),
+        api.get('/services/direct-chats/unread').catch(() => null),
+      ])
+      return (Number(bookings?.data?.unread) || 0) + (Number(direct?.data?.unread) || 0)
+    }
+    const res = await api.get('/chats/unread-count')
+    return Number(res.data?.unread) || 0
+  }, [isProvider])
 
   const refreshUnread = useCallback(async () => {
     if (!enabled) return
     try {
-      const res = await api.get('/chats/unread-count')
-      setState({ userId, unread: Number(res.data?.unread) || 0 })
+      setState({ userId, unread: await loadUnread() })
     } catch {
       /* keep the last known count */
     }
-  }, [enabled, userId])
+  }, [enabled, userId, loadUnread])
 
   useEffect(() => {
     if (!enabled) return undefined
     let active = true
-    api
-      .get('/chats/unread-count')
-      .then((res) => active && setState({ userId, unread: Number(res.data?.unread) || 0 }))
+    loadUnread()
+      .then((unread) => active && setState({ userId, unread }))
       .catch(() => {})
 
     // A burst of messages triggers one re-read, not one per message.
@@ -58,7 +70,7 @@ export function ChatProvider({ children }) {
       unsubscribe()
       document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [enabled, userId, subscribeChat, refreshUnread])
+  }, [enabled, userId, subscribeChat, refreshUnread, loadUnread])
 
   const value = useMemo(
     () => ({

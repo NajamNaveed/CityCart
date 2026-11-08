@@ -34,7 +34,6 @@ export default function ProviderApply() {
     ownerPhone: '',
     ownerPassword: '',
     displayName: '',
-    legalName: '',
     categoryId: '',
     cityId: '',
     blockId: '',
@@ -159,7 +158,6 @@ export default function ProviderApply() {
           latitude: pin.lat,
           longitude: pin.lng,
           startingAtPrice,
-          ...(form.legalName.trim() && { legalName: form.legalName.trim() }),
           ...(form.addressLine.trim() && { addressLine: form.addressLine.trim() }),
           ...(form.bio.trim() && { bio: form.bio.trim() }),
         },
@@ -236,15 +234,6 @@ export default function ProviderApply() {
             error={fieldErrors['provider.displayName']}
             placeholder="e.g. Ali Home Cleaning"
             required
-          />
-          <Field
-            label="Legal or full name (optional)"
-            id="legalName"
-            name="legalName"
-            value={form.legalName}
-            onChange={onChange}
-            error={fieldErrors['provider.legalName']}
-            placeholder="Shown to CityCart admins only"
           />
           <Field
             as="select"

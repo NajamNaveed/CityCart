@@ -129,6 +129,7 @@ async function openBookingChat(booking, body = 'Booking accepted. You can chat h
 async function pushMessage(conversation, message, booking) {
   try {
     const summary = {
+      kind: 'SERVICE_BOOKING',
       conversationId: String(conversation._id),
       bookingId: String(booking._id),
       lastMessageAt: message.createdAt,

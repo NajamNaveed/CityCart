@@ -342,11 +342,12 @@ function buildDataset({ now = new Date(), hashes }) {
 
   const requestedService = addServiceBooking({
     customer: customers[0], status: 'REQUESTED', at: ago(2 * HOUR), start: new Date(now.getTime() + 2 * DAY + 3 * HOUR),
-    over: { note: 'Please bring your own supplies.' },
+    over: { note: 'Please bring your own supplies.', customerOfferPaisa: 450000 },
   });
   const proposedService = addServiceBooking({
     customer: customers[1], status: 'PROPOSED', at: ago(6 * HOUR), start: new Date(now.getTime() + 3 * DAY + 4 * HOUR),
     over: {
+      customerOfferPaisa: 450000,
       proposals: [{
         pricePaisa: 480000, scope: 'Two bedrooms, kitchen and both bathrooms; supplies included.',
         scheduledStart: new Date(now.getTime() + 3 * DAY + 4 * HOUR),

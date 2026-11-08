@@ -3,6 +3,7 @@ jest.mock('../src/services/notification.service', () => ({
   notifyCustomerOfServiceProposal: jest.fn(),
   notifyProviderOfProposalAnswer: jest.fn(),
   notifyCustomerOfServiceAccepted: jest.fn(),
+  notifyCustomerOfServiceDeclined: jest.fn(),
   notifyCustomerOfServiceStarted: jest.fn(),
   notifyCustomerOfServiceCompleted: jest.fn(),
   notifyProviderOfServiceConfirmed: jest.fn(),
@@ -14,12 +15,23 @@ jest.mock('../src/services/notification.service', () => ({
 }));
 jest.mock('../src/services/serviceRanking.service', () => ({ refreshRanking: jest.fn().mockResolvedValue(null) }));
 jest.mock('../src/services/serviceChat.service', () => ({ openBookingChat: jest.fn() }));
+jest.mock('../src/services/serviceAvailability.service', () => ({
+  rawAvailability: jest.fn(),
+  assertSlotWithinAvailability: jest.fn(),
+}));
 
 const mongoose = require('mongoose');
 
 const ServiceBooking = require('../src/models/serviceBooking.model');
 const ServiceProvider = require('../src/models/serviceProvider.model');
-const { serialiseBooking, expireProposals, autoConfirmCompleted } = require('../src/services/serviceBooking.service');
+const {
+  serialiseBooking,
+  expireProposals,
+  autoConfirmCompleted,
+  providerAcceptOffer,
+  providerDeclineRequest,
+} = require('../src/services/serviceBooking.service');
+const { notifyCustomerOfServiceAccepted, notifyCustomerOfServiceDeclined } = require('../src/services/notification.service');
 
 const oid = () => new mongoose.Types.ObjectId();
 
@@ -152,5 +164,65 @@ describe('autoConfirmCompleted', () => {
 
     expect(result).toBe(0);
     expect(inc).not.toHaveBeenCalled();
+  });
+});
+
+describe('customer offer decisions', () => {
+  const { rawAvailability, assertSlotWithinAvailability } = require('../src/services/serviceAvailability.service');
+
+  beforeEach(() => {
+    rawAvailability.mockResolvedValue({});
+    assertSlotWithinAvailability.mockReturnValue({
+      start: new Date('2026-11-20T05:00:00Z'),
+      end: new Date('2026-11-20T06:00:00Z'),
+    });
+  });
+
+  afterEach(() => jest.restoreAllMocks());
+
+  it('accepts the amount already stored on the booking, not anything sent by the client', async () => {
+    const booking = bookingDoc({ customerOfferPaisa: 45000 });
+    jest.spyOn(ServiceBooking, 'findOne').mockResolvedValue(booking);
+    jest.spyOn(ServiceBooking, 'exists').mockResolvedValue(null);
+    jest.spyOn(ServiceProvider, 'findById').mockResolvedValue(provider());
+    const accepted = bookingDoc({ status: 'ACCEPTED', customerOfferPaisa: 45000, agreedPricePaisa: 45000 });
+    const update = jest.spyOn(ServiceBooking, 'findOneAndUpdate').mockResolvedValue(accepted);
+
+    await providerAcceptOffer(booking.providerId, booking._id);
+
+    const [filter, patch] = update.mock.calls[0];
+    // The conditional filter pins the offer that was on the document, so a
+    // concurrent edit cannot swap the price being accepted.
+    expect(filter).toMatchObject({ status: 'REQUESTED', customerOfferPaisa: 45000 });
+    expect(patch.$set.agreedPricePaisa).toBe(45000);
+    expect(patch.$set.scheduledStart).toEqual(new Date('2026-11-20T05:00:00Z'));
+    expect(notifyCustomerOfServiceAccepted).toHaveBeenCalledWith({ booking: accepted });
+  });
+
+  it('refuses to accept when the customer proposed no price', async () => {
+    const booking = bookingDoc();
+    jest.spyOn(ServiceBooking, 'findOne').mockResolvedValue(booking);
+
+    await expect(providerAcceptOffer(booking.providerId, booking._id)).rejects.toMatchObject({
+      code: 'NO_CUSTOMER_OFFER',
+    });
+  });
+
+  it('declines a request with the provider cancellation and reason recorded', async () => {
+    const booking = bookingDoc({ customerOfferPaisa: 45000 });
+    jest.spyOn(ServiceBooking, 'findOne').mockResolvedValue(booking);
+    jest.spyOn(ServiceProvider, 'findById').mockResolvedValue(provider());
+    const declined = bookingDoc({
+      status: 'DECLINED',
+      cancellation: { by: 'PROVIDER', reason: 'Fully booked', late: false },
+    });
+    const update = jest.spyOn(ServiceBooking, 'findOneAndUpdate').mockResolvedValue(declined);
+
+    await providerDeclineRequest(booking.providerId, booking._id, { reason: 'Fully booked' });
+
+    const [, patch] = update.mock.calls[0];
+    expect(patch.$set.cancellation).toMatchObject({ by: 'PROVIDER', reason: 'Fully booked' });
+    expect(patch.$push.events.type).toBe('OFFER_DECLINED');
+    expect(notifyCustomerOfServiceDeclined).toHaveBeenCalled();
   });
 });

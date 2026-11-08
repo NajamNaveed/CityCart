@@ -19,7 +19,7 @@ function toPaisa(text) {
 
 export default function ProviderProfile() {
   const [state, setState] = useState({ loaded: false, provider: null, error: '' })
-  const [form, setForm] = useState({ displayName: '', legalName: '', phone: '', bio: '', addressLine: '', startingAtPrice: '' })
+  const [form, setForm] = useState({ displayName: '', phone: '', bio: '', addressLine: '', startingAtPrice: '' })
   const [fieldErrors, setFieldErrors] = useState({})
   const [message, setMessage] = useState({ text: '', tone: 'ok' })
   const [saving, setSaving] = useState(false)
@@ -34,7 +34,6 @@ export default function ProviderProfile() {
         setState({ loaded: true, provider, error: '' })
         setForm({
           displayName: provider.displayName || '',
-          legalName: provider.legalName || '',
           phone: provider.phone || '',
           bio: provider.bio || '',
           addressLine: provider.addressLine || '',
@@ -67,7 +66,6 @@ export default function ProviderProfile() {
     try {
       const res = await api.patch('/services/provider/me', {
         displayName: form.displayName.trim(),
-        legalName: form.legalName.trim() || null,
         phone: form.phone.trim() || null,
         bio: form.bio.trim() || null,
         addressLine: form.addressLine.trim(),
@@ -122,15 +120,6 @@ export default function ProviderProfile() {
             onChange={onChange}
             error={fieldErrors.displayName}
             required
-          />
-          <Field
-            label="Legal or full name"
-            id="legalName"
-            name="legalName"
-            value={form.legalName}
-            onChange={onChange}
-            error={fieldErrors.legalName}
-            hint="Shown to CityCart admins only."
           />
           <Field
             label="Contact phone"

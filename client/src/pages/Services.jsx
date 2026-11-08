@@ -1,10 +1,13 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, LayoutList, LocateFixed, Map as MapIcon, MapPin, Search, Star, Wrench } from 'lucide-react'
+import { ArrowRight, Layers, LayoutList, LocateFixed, Map as MapIcon, MapPin, Search, Star, Wrench } from 'lucide-react'
 import api, { getErrorMessage } from '../services/api'
 import { useCity } from '../hooks/useCity'
+import { useMapFocus } from '../hooks/useMapFocus'
 import { useNearby } from '../hooks/useNearby'
 import { isRadius } from '../utils/range'
+import { nextLayerState } from '../utils/layerState'
+import MapLayers from '../components/nearby/MapLayers'
 import RangeSelector from '../components/nearby/RangeSelector'
 import ProductImage from '../components/ProductImage'
 import { EmptyState, ErrorState, PageHeader, Skeleton, btn, card, cardLift, fieldClass, shell } from '../design'
@@ -161,9 +164,12 @@ function ViewToggle({ view, onChange }) {
 
 export default function Services() {
   const navigate = useNavigate()
-  const { city, cityId } = useCity()
-  const { selectedBlocks, blockIds, areaName, coords, origin, range, setRange, blocksReady, detect, status } = useNearby()
+  const { city, cityId, cities } = useCity()
+  const { selectedBlocks, blockIds, blocks, areaName, coords, origin, range, setRange, blocksReady, detect, status } = useNearby()
+  const { focus, chooseCity } = useMapFocus(blocks)
   const [view, setView] = useState('list')
+  const [blockLayer, setBlockLayer] = useState('all') // 'all' | 'mine' | 'off'
+  const [providerLayer, setProviderLayer] = useState('all') // 'all' | 'mine' | 'off'
   const [draft, setDraft] = useState('')
   const [q, setQ] = useState('')
   const [categoryId, setCategoryId] = useState('')
@@ -236,6 +242,10 @@ export default function Services() {
   const error = result.key === key ? result.error : ''
   const items = data?.items || []
   const bigger = nextRange(range)
+  const blockSet = new Set(blockIds.map(String))
+  const inMyBlock = (provider) => blockSet.has(String(provider.block?._id))
+  const zones = blockLayer === 'all' ? blocks : blockLayer === 'mine' ? selectedBlocks : []
+  const mapProviders = providerLayer === 'all' ? items : providerLayer === 'mine' ? items.filter(inMyBlock) : []
 
   function onSearch(e) {
     e.preventDefault()
@@ -348,14 +358,38 @@ export default function Services() {
             <div className="relative overflow-hidden rounded-panel border border-line-warm">
               <Suspense fallback={<Skeleton className="h-[460px] w-full rounded-none" />}>
                 <ServicesMap
-                  items={items}
-                  zones={selectedBlocks}
+                  items={mapProviders}
+                  zones={zones}
                   origin={origin}
                   radiusKm={isRadius(range) && origin ? Number(range) : null}
                   originLabel={coords ? 'Your spot' : selectedBlocks.length === 1 ? `Centre of ${areaName}` : 'Search centre'}
                   onOpenProvider={(provider) => navigate(`/services/${provider.slug}`)}
+                  focus={focus}
                 />
               </Suspense>
+              <MapLayers
+                cities={cities}
+                cityId={cityId}
+                onCityChange={chooseCity}
+                layers={[
+                  {
+                    key: 'blocks',
+                    label: 'Blocks',
+                    mineLabel: 'my block',
+                    icon: Layers,
+                    state: blockLayer,
+                    onCycle: () => setBlockLayer(nextLayerState),
+                  },
+                  {
+                    key: 'providers',
+                    label: 'Providers',
+                    mineLabel: 'my block',
+                    icon: Wrench,
+                    state: providerLayer,
+                    onCycle: () => setProviderLayer(nextLayerState),
+                  },
+                ]}
+              />
               {data?.pagination?.pages > 1 && (
                 <p className="px-3 pb-2 pt-1 text-[11.5px] text-muted">The map shows the providers on this page of results.</p>
               )}
