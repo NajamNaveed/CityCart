@@ -1,4 +1,4 @@
-import { ChevronDown, MapPin } from 'lucide-react'
+import { MapPin } from 'lucide-react'
 
 const STATE_LABEL = { all: 'All', mine: 'Mine', off: 'Off' }
 const NEXT_LABEL = { all: 'only mine', mine: 'off', off: 'everything' }
@@ -9,14 +9,14 @@ export default function MapLayers({ cities = [], cityId, onCityChange, layers = 
   return (
     <div className="absolute right-3 top-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-col items-end gap-2">
       {cities.length > 0 && (
-        <label className="relative inline-flex h-9 items-center rounded-tile border border-line-warm bg-paper-warm/95 pl-8 pr-8 shadow-sm backdrop-blur">
+        <label className="relative inline-flex h-9 items-center rounded-tile border border-line-warm bg-paper-warm/95 pl-8 shadow-sm backdrop-blur transition hover:border-ink/40 focus-within:border-ink/40">
           <span className="sr-only">City shown on the map</span>
           <MapPin className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-clay" aria-hidden="true" />
           <select
             value={cityId}
             onChange={(event) => onCityChange(event.target.value)}
             title="Selecting a city moves the map, not your saved location"
-            className="h-full max-w-[9.5rem] cursor-pointer appearance-none overflow-hidden text-ellipsis whitespace-nowrap bg-transparent text-[11.5px] font-medium text-ink outline-none"
+            className="h-full min-w-0 max-w-[10.5rem] overflow-hidden text-ellipsis whitespace-nowrap bg-transparent pr-1.5 text-[11.5px] font-medium text-ink outline-none"
           >
             {!cityId && <option value="">Choose a city</option>}
             {cities.map((city) => (
@@ -25,10 +25,6 @@ export default function MapLayers({ cities = [], cityId, onCityChange, layers = 
               </option>
             ))}
           </select>
-          <ChevronDown
-            className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink/45"
-            aria-hidden="true"
-          />
         </label>
       )}
 
