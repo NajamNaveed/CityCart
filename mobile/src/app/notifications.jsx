@@ -14,10 +14,12 @@ import { useNotifications } from '../hooks/useNotifications'
 import { usePagedList } from '../hooks/usePagedList'
 import { fetchNotifications } from '../services/notifications'
 import { timeAgo } from '../utils/format'
+import { notificationTarget } from '../utils/notificationTarget'
 import { colors, radius, spacing } from '../theme'
 
-// The same grouping as the web inbox: delivery, order, review, stock, else update.
+// The same grouping as the web inbox: service, delivery, order, review, stock, else update.
 function visualsFor(type = '') {
+  if (type.startsWith('SERVICE_')) return { icon: 'calendar', color: colors.pine, bg: colors.sand, label: 'Service' }
   if (type.includes('DELIVER') || type === 'ORDER_SHIPPED' || type === 'ORDER_OUT_FOR_DELIVERY') return { icon: 'truck', color: colors.success, bg: colors.successSoft, label: 'Delivery' }
   if (type.includes('ORDER') || type.includes('PAYMENT') || type.includes('REFUND') || type.includes('ADJUSTMENT')) return { icon: 'package', color: colors.warning, bg: colors.warningSoft, label: 'Order' }
   if (type.includes('REVIEW')) return { icon: 'star', color: colors.clay, bg: colors.cream, label: 'Review' }
@@ -65,10 +67,10 @@ function NotificationRow({ notification, busy, onPress, onDelete }) {
   )
 }
 
-function NotificationsInbox({ userId }) {
+function NotificationsInbox({ user }) {
   const router = useRouter()
   const { markRead, markAllRead, remove } = useNotifications()
-  const list = usePagedList(`notifications:${userId}`, (page) => fetchNotifications(page))
+  const list = usePagedList(`notifications:${user?.id}`, (page) => fetchNotifications(page))
   const [filter, setFilter] = useState('all')
   const [busyId, setBusyId] = useState(null)
   // The paged list owns its rows; read/done state set from here overlays it
@@ -93,7 +95,7 @@ function NotificationsInbox({ userId }) {
   const unreadLoaded = items.filter((n) => !n.isRead).length
 
   async function open(notification) {
-    const orderId = notification.data?.orderId
+    const target = notificationTarget(notification, user)
     try {
       if (!notification.isRead) {
         setBusyId(notification._id)
@@ -105,7 +107,7 @@ function NotificationsInbox({ userId }) {
     } finally {
       setBusyId(null)
     }
-    if (orderId) router.push(`/orders/${orderId}`)
+    if (target) router.push(target)
   }
 
   return (
@@ -206,7 +208,7 @@ export default function Notifications() {
         </AppText>
       </View>
       <RequireCustomer next="/notifications" icon="bell" title="Sign in to see your notifications" message="Order updates are kept in your account.">
-        <NotificationsInbox userId={user?.id} />
+        <NotificationsInbox user={user} />
       </RequireCustomer>
     </SafeAreaView>
   )

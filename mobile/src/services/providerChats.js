@@ -7,6 +7,12 @@ import api from './api'
  */
 
 export const PROVIDER_MESSAGES_PAGE_SIZE = 30
+export const PROVIDER_CHATS_PAGE_SIZE = 20
+
+export async function fetchProviderConversations(page = 1) {
+  const res = await api.get('/services/direct-chats', { params: { page, limit: PROVIDER_CHATS_PAGE_SIZE } })
+  return { items: res.data.conversations || [], pagination: res.data.pagination }
+}
 
 export async function startProviderChat(providerId) {
   const res = await api.post('/services/direct-chats/start', { providerId })

@@ -12,6 +12,7 @@ import { useChat } from '../../hooks/useChat'
 import { getErrorMessage } from '../../services/api'
 import { cleanMessageBody, fetchMessages, markConversationRead, sendMessage } from '../../services/chats'
 import { fetchProviderMessages, markProviderChatRead, sendProviderMessage } from '../../services/providerChats'
+import { fetchBookingMessages, markBookingChatRead, sendBookingMessage } from '../../services/bookings'
 import { clockTime, dayLabel, MAX_MESSAGE_LENGTH } from '../../utils/chat'
 import { colors, radius, spacing } from '../../theme'
 
@@ -140,11 +141,13 @@ export default function ChatThread() {
   const canSendParam = Array.isArray(params.canSend) ? params.canSend[0] : params.canSend
   const kindParam = Array.isArray(params.kind) ? params.kind[0] : params.kind
   // A direct chat with a service provider uses its own endpoints and its own
-  // live event kind; everything else is the product chat with a seller.
+  // live event kind; a booking thread is keyed by the booking, not by the
+  // conversation it may create. Everything else is the product chat.
   const providerThread = kindParam === 'provider'
-  const loadMessages = providerThread ? fetchProviderMessages : fetchMessages
-  const sendThreadMessage = providerThread ? sendProviderMessage : sendMessage
-  const markRead = providerThread ? markProviderChatRead : markConversationRead
+  const bookingThread = kindParam === 'booking'
+  const loadMessages = bookingThread ? fetchBookingMessages : providerThread ? fetchProviderMessages : fetchMessages
+  const sendThreadMessage = bookingThread ? sendBookingMessage : providerThread ? sendProviderMessage : sendMessage
+  const markRead = bookingThread ? markBookingChatRead : providerThread ? markProviderChatRead : markConversationRead
   const { subscribe, refreshUnread } = useChat()
 
   const [thread, setThread] = useState({ id, status: 'loading', messages: [], hasMore: false, error: '' })
@@ -174,10 +177,10 @@ export default function ChatThread() {
   }, [load])
 
   const appendMessage = useCallback(
-    (message) => {
+    (message, { byConversation = true } = {}) => {
       if (!message || seen.current.has(message._id)) return
       seen.current.add(message._id)
-      setThread((current) => (current.id === message.conversationId ? { ...current, messages: [...current.messages, message] } : current))
+      setThread((current) => (!byConversation || current.id === message.conversationId ? { ...current, messages: [...current.messages, message] } : current))
     },
     [],
   )
@@ -189,9 +192,12 @@ export default function ChatThread() {
         load()
         return
       }
-      if (payload?.conversationId !== id) return
-      if (providerThread ? payload.kind !== 'PROVIDER' : Boolean(payload.kind)) return
-      appendMessage(payload.message)
+      // Booking events are addressed by bookingId; a booking's conversation is
+      // created server-side, so its id is not the route's id.
+      const addressed = bookingThread ? payload?.bookingId === id : payload?.conversationId === id
+      if (!addressed) return
+      if (bookingThread ? payload.kind !== 'SERVICE_BOOKING' : providerThread ? payload.kind !== 'PROVIDER' : Boolean(payload.kind)) return
+      appendMessage(payload.message, { byConversation: !bookingThread })
       if (payload.message && !payload.message.mine) {
         markRead(id).catch(() => {})
         refreshUnread()
@@ -199,7 +205,7 @@ export default function ChatThread() {
     })
     return unsubscribe
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subscribe, id, load, providerThread, markRead])
+  }, [subscribe, id, load, providerThread, bookingThread, markRead])
 
   async function loadEarlier() {
     const oldest = thread.messages[0]
@@ -224,7 +230,7 @@ export default function ChatThread() {
     setSendError('')
     try {
       const message = await sendThreadMessage(id, body)
-      appendMessage(message)
+      appendMessage(message, { byConversation: !bookingThread })
       setDraft('')
     } catch (err) {
       setSendError(getErrorMessage(err, "Couldn't send your message. Please try again."))
@@ -241,7 +247,7 @@ export default function ChatThread() {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: colors.surface }}>
         <BackButton />
         <AppText variant="heading" accessibilityRole="header" style={{ flex: 1 }} numberOfLines={1}>
-          {name || (providerThread ? 'Service provider' : 'Chat')}
+          {name || (bookingThread ? 'Booking chat' : providerThread ? 'Service provider' : 'Chat')}
         </AppText>
       </View>
 
@@ -275,9 +281,11 @@ export default function ChatThread() {
                   icon="message-circle"
                   title="Say hello"
                   message={
-                    providerThread
-                      ? `Ask ${name || 'the provider'} about the job. Prices and times are still agreed in a booking.`
-                      : 'Your message goes straight to the seller.'
+                    bookingThread
+                      ? 'Ask about the scope, access or price. The provider sees your message right here.'
+                      : providerThread
+                        ? `Ask ${name || 'the provider'} about the job. Prices and times are still agreed in a booking.`
+                        : 'Your message goes straight to the seller.'
                   }
                 />
               </View>
@@ -299,7 +307,7 @@ export default function ChatThread() {
           ) : null}
           <Composer
             disabled={!canSend}
-            notice={canSend ? null : providerThread ? 'This provider is not taking messages right now.' : 'This seller is not taking messages right now.'}
+            notice={canSend ? null : bookingThread ? 'Chat opens once the provider accepts this booking.' : providerThread ? 'This provider is not taking messages right now.' : 'This seller is not taking messages right now.'}
             draft={draft}
             setDraft={setDraft}
             onSend={send}

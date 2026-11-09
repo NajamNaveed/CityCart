@@ -48,6 +48,10 @@ const CONVERSATIONS = [
   { _id: ID(2), with: { name: 'Mehr Menswear', image: '' }, canSend: true, lastMessageAt: YESTERDAY, lastMessagePreview: 'You: Thanks!', lastSenderRole: 'CUSTOMER', unread: 0 },
 ]
 
+const PROVIDER_CONVERSATIONS = [
+  { _id: ID(4), providerId: ID(7), with: { name: 'Ali Plumbing', image: '' }, lastMessageAt: TODAY, lastMessagePreview: 'Friday at 10 works.', lastSenderRole: 'PROVIDER', unread: 1 },
+]
+
 const MESSAGES = [
   { _id: ID(3), conversationId: ID(1), senderRole: 'CUSTOMER', mine: true, body: 'Is this in stock?', createdAt: YESTERDAY, product: null },
   { _id: ID(4), conversationId: ID(1), senderRole: 'BRAND', mine: false, body: 'Yes, ships tomorrow.', createdAt: TODAY, product: null },
@@ -57,6 +61,15 @@ const PRODUCT = { _id: ID(9), name: 'Mehrunisa Printed Lawn', price: 3600, image
 const BRAND = { _id: ID(8), name: 'Loom & Co.', logo: '' }
 
 const httpError = (status, message) => Object.assign(new Error(message), { response: { status, data: { message } } })
+
+// The inbox merges two collections, so each URL answers with its own list.
+const mockInbox = ({ store = [], provider = [] } = {}) => {
+  api.get.mockImplementation((url) => {
+    if (url === '/services/direct-chats') return Promise.resolve({ data: { conversations: provider, pagination: { page: 1, pages: 1 } } })
+    if (url === '/chats') return Promise.resolve({ data: { conversations: store, pagination: { page: 1, pages: 1 } } })
+    return Promise.resolve({ data: {} })
+  })
+}
 
 // The product page reads the product, its brand and the reviews summary.
 const mockProductApi = () => {
@@ -77,7 +90,7 @@ beforeEach(() => {
 
 describe('conversation list', () => {
   it('shows each conversation with its unread count', async () => {
-    api.get.mockResolvedValue({ data: { conversations: CONVERSATIONS, pagination: { page: 1, pages: 1 } } })
+    mockInbox({ store: CONVERSATIONS })
     const screen = await show(<ChatScreen />, { auth: signedIn() })
     const text = screenText(screen)
     expect(text).toContain('Loom & Co.')
@@ -88,7 +101,7 @@ describe('conversation list', () => {
   })
 
   it('re-reads the list when a message arrives over the socket', async () => {
-    api.get.mockResolvedValue({ data: { conversations: CONVERSATIONS, pagination: { page: 1, pages: 1 } } })
+    mockInbox({ store: CONVERSATIONS })
     let listener
     const screen = await show(<ChatScreen />, {
       auth: signedIn(),
@@ -100,8 +113,51 @@ describe('conversation list', () => {
     expect(calls.length).toBeGreaterThanOrEqual(2)
   })
 
+  it('merges store and provider chats under one filter bar', async () => {
+    mockInbox({ store: CONVERSATIONS, provider: PROVIDER_CONVERSATIONS })
+    const screen = await show(<ChatScreen />, { auth: signedIn() })
+    const text = screenText(screen)
+    expect(text).toContain('Loom & Co.')
+    expect(text).toContain('Ali Plumbing')
+    // Kind labels only make sense in the merged view.
+    expect(text).toContain('Store')
+    expect(text).toContain('Service')
+    expect(api.get).toHaveBeenCalledWith('/services/direct-chats', { params: { page: 1, limit: 20 } })
+  })
+
+  it('filters to service providers and opens a provider thread', async () => {
+    mockInbox({ store: CONVERSATIONS, provider: PROVIDER_CONVERSATIONS })
+    const screen = await show(<ChatScreen />, { auth: signedIn() })
+    api.get.mockClear()
+    await press(screen, 'Service providers')
+
+    const text = screenText(screen)
+    expect(text).toContain('Ali Plumbing')
+    expect(text).not.toContain('Loom & Co.')
+    expect(api.get).not.toHaveBeenCalledWith('/chats', expect.anything())
+    // When the filter is providers-only the provider list drives paging.
+    expect(api.get).toHaveBeenCalledWith('/services/direct-chats', { params: { page: 1, limit: 20 } })
+
+    await press(screen, 'Ali Plumbing')
+    expect(mockRouter.push).toHaveBeenCalledWith({
+      pathname: `/chat/${ID(4)}`,
+      params: { name: 'Ali Plumbing', canSend: '1', kind: 'provider' },
+    })
+  })
+
+  it('filters to stores without asking the provider endpoint', async () => {
+    mockInbox({ store: CONVERSATIONS, provider: PROVIDER_CONVERSATIONS })
+    const screen = await show(<ChatScreen />, { auth: signedIn() })
+    api.get.mockClear()
+    await press(screen, 'Stores')
+    expect(screenText(screen)).toContain('Loom & Co.')
+    expect(screenText(screen)).not.toContain('Ali Plumbing')
+    expect(api.get).toHaveBeenCalledWith('/chats', { params: { page: 1, limit: 20 } })
+    expect(api.get).not.toHaveBeenCalledWith('/services/direct-chats', expect.anything())
+  })
+
   it('says so when there are no conversations yet', async () => {
-    api.get.mockResolvedValue({ data: { conversations: [], pagination: { page: 1, pages: 1 } } })
+    mockInbox()
     const screen = await show(<ChatScreen />, { auth: signedIn() })
     expect(screenText(screen)).toContain('No conversations yet')
   })
@@ -311,5 +367,77 @@ describe('thread with a service provider', () => {
     api.post.mockResolvedValue({ data: { success: true } })
     const screen = await show(<ChatThread />, { auth: signedIn() })
     expect(screenText(screen)).toContain('Ask Ali Plumbing about the job.')
+  })
+})
+
+describe('booking thread', () => {
+  const BOOKING_ID = ID(11)
+  const SERVICE_CONVERSATION = ID(12)
+  const BOOKING_MESSAGES = [
+    { _id: ID(13), conversationId: SERVICE_CONVERSATION, senderRole: 'SYSTEM', mine: false, body: 'Booking accepted. You can chat here about the job.', createdAt: YESTERDAY },
+    { _id: ID(14), conversationId: SERVICE_CONVERSATION, senderRole: 'CUSTOMER', mine: true, body: 'Gate code is 4321.', createdAt: TODAY },
+  ]
+
+  beforeEach(() => {
+    mockParams = { id: BOOKING_ID, name: 'Ali Plumbing', kind: 'booking' }
+  })
+
+  const openBookingThread = async (extra = {}) => {
+    api.get.mockResolvedValue({ data: { messages: BOOKING_MESSAGES, hasMore: false } })
+    api.post.mockResolvedValue({ data: { success: true } })
+    return show(<ChatThread />, { auth: signedIn(), ...extra })
+  }
+
+  it('reads the thread by booking id and marks it read', async () => {
+    const screen = await openBookingThread()
+    expect(screenText(screen)).toContain('Gate code is 4321.')
+    expect(api.get).toHaveBeenCalledWith(`/services/chats/${BOOKING_ID}/messages`, { params: { limit: 30 } })
+    expect(api.post).toHaveBeenCalledWith(`/services/chats/${BOOKING_ID}/read`)
+  })
+
+  it('sends through the booking endpoint and shows the answer', async () => {
+    const screen = await openBookingThread()
+    api.post.mockResolvedValue({ data: { message: { _id: ID(15), conversationId: SERVICE_CONVERSATION, senderRole: 'CUSTOMER', mine: true, body: 'See you at 4.', createdAt: TODAY } } })
+    await type(screen, 'Message', 'See you at 4.')
+    await pressByLabel(screen, 'Send message')
+
+    expect(api.post).toHaveBeenCalledWith(`/services/chats/${BOOKING_ID}/messages`, { body: 'See you at 4.' })
+    expect(screenText(screen)).toContain('See you at 4.')
+  })
+
+  it('appends a live booking message addressed by booking id', async () => {
+    let listener
+    const screen = await openBookingThread({ chat: chatValue({ subscribe: (fn) => { listener = fn; return () => {} } }) })
+    await act(async () =>
+      listener('message', {
+        kind: 'SERVICE_BOOKING',
+        bookingId: BOOKING_ID,
+        conversationId: SERVICE_CONVERSATION,
+        message: { _id: ID(16), conversationId: SERVICE_CONVERSATION, senderRole: 'PROVIDER', mine: false, body: 'On my way.', createdAt: TODAY },
+      }),
+    )
+    expect(screenText(screen)).toContain('On my way.')
+    expect(api.post).toHaveBeenCalledWith(`/services/chats/${BOOKING_ID}/read`)
+  })
+
+  it('ignores a booking event for another booking', async () => {
+    let listener
+    const screen = await openBookingThread({ chat: chatValue({ subscribe: (fn) => { listener = fn; return () => {} } }) })
+    await act(async () =>
+      listener('message', {
+        kind: 'SERVICE_BOOKING',
+        bookingId: ID(2),
+        conversationId: SERVICE_CONVERSATION,
+        message: { _id: ID(17), conversationId: SERVICE_CONVERSATION, senderRole: 'PROVIDER', mine: false, body: 'Other booking', createdAt: TODAY },
+      }),
+    )
+    expect(screenText(screen)).not.toContain('Other booking')
+  })
+
+  it('explains when the thread is still closed', async () => {
+    mockParams = { ...mockParams, canSend: '0' }
+    const screen = await openBookingThread()
+    expect(screenText(screen)).toContain('Chat opens once the provider accepts this booking.')
+    expect(screen.root.findAll((n) => n.props.accessibilityLabel === 'Message').length).toBe(0)
   })
 })

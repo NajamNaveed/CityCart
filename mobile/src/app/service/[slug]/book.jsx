@@ -295,6 +295,7 @@ function BookingForm({ provider, slug }) {
           </AppText>
         </Card>
         <Button title={`Back to ${provider.displayName}`} onPress={() => router.replace(`/service/${slug}`)} />
+        <Button title="View my bookings" variant="outline" onPress={() => router.replace('/bookings')} />
         <Button title="Browse more services" variant="outline" onPress={() => router.navigate('/services')} />
       </ScrollView>
     )

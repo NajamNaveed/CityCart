@@ -51,6 +51,7 @@ export default function Account() {
         </Card>
         <View style={{ gap: spacing.md, marginTop: spacing.lg }}>
           <AccountRow icon="package" label="My orders" onPress={() => router.push('/orders')} />
+          <AccountRow icon="calendar" label="My bookings" onPress={() => router.push('/bookings')} />
           <AccountRow icon="map-pin" label="Saved addresses" onPress={() => router.push('/addresses')} />
           <AccountRow icon="message-circle" label="Messages" badge={chatUnread} onPress={() => router.push('/chat')} />
           <AccountRow icon="bell" label="Notifications" badge={notificationUnread} onPress={() => router.push('/notifications')} />

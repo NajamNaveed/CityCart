@@ -24,6 +24,7 @@ CityCart/
    │  │  ├─ (tabs)/            index (home feed), services, nearby, cart, account
    │  │  ├─ store/[id].jsx     a shop's public page                   (Phase 8)
    │  │  ├─ service/[slug]/    index (provider page), book            (Phase 9)
+   │  │  ├─ bookings/          index (filtered list), [id] (detail)   (Phase 10)
    │  │  ├─ product/[id].jsx                                        (Phase 3)
    │  │  ├─ checkout.jsx  order-placed.jsx                          (Phase 5)
    │  │  ├─ orders/            index, [id]                          (Phase 5)
@@ -32,8 +33,8 @@ CityCart/
    │  ├─ components/ui/  AppText, Screen, Button, Card, Spinner, EmptyState
    │  ├─ context/        AuthProvider (more providers arrive with their screens)
    │  ├─ hooks/
-   │  ├─ services/       api.js (axios + bearer token), storage.js, session.js, config.js, socket.js (the live connection), chats.js, services.js
-   │  ├─ utils/          formatting, geo, range, chat and serviceSlots (ported from client/src)
+   │  ├─ services/       api.js (axios + bearer token), storage.js, session.js, config.js, socket.js (the live connection), chats.js, services.js, bookings.js
+   │  ├─ utils/          formatting, geo, range, chat, serviceSlots and notificationTarget (ported from client/src)
    │  └─ theme.js        the web app's colours, Poppins and Fraunces
    ├─ __tests__/         unit tests (jest-expo)
    └─ assets/            icon, splash
@@ -91,6 +92,7 @@ Installed once, inside `mobile/`, each with a stated reason:
 | 7 | Polish and release: states, offline handling, icon/splash, Android build, device tests | done |
 | 8 | Shopper discovery: a city-scoped home feed of stores and a picked shelf, the store page, and store links from every browsing screen | done |
 | 9 | Services: providers in the shopper's area, the provider page, a booking request with a map pin, and direct chat with a provider | done |
+| 10 | Bookings: the filtered booking list, the detail with every customer action (proposal, completion, dispute, cancel, review), booking chat, merged chat filters and notification deep links | done |
 | later | Push notifications when the app is closed (needs a server device-token model); seller inbox | |
 
 Each phase ends with the server tests, lint and a successful app bundle.
@@ -258,9 +260,13 @@ permissions are checked.
   unread counts (capped at "9+"). Counts always come from the server: a push
   only triggers a re-read, and `ChatProvider` debounces a burst of pushes into
   one (300 ms), like the web app.
-* **Messages** (`chat/index`): the conversation list (twenty at a time, pull
-  down to refresh) with the last message, its time and an unread pill per row.
-  It re-reads on focus and when a push or reconnect arrives.
+* **Messages** (`chat/index`): one inbox for store threads and direct provider
+  threads, with **All chats / Stores / Service providers** filters. The merged
+  view tags each row with its kind and sorts both collections together by last
+  message; the store list drives paging, and providers are re-asked only when
+  the filter is providers-only (the same rule as the web chat panel). Twenty at
+  a time, pull down to refresh, and it re-reads on focus and when a push or
+  reconnect arrives.
 * **Thread** (`chat/[id]`): messages bubble WhatsApp-style with day dividers,
   older pages load with the server's `before` cursor, and a message received
   while the thread is open is shown and marked read at once. The composer
@@ -268,7 +274,12 @@ permissions are checked.
   one is in flight, and reports the server's answer on failure with the draft
   kept. A seller that is not taking messages (`canSend`) closes the composer;
   the server enforces it for real either way. A brand-new conversation opens
-  from memory the moment the first message starts it.
+  from memory the moment the first message starts it. The same screen carries
+  the direct provider thread (`kind=provider`) and the booking thread
+  (`kind=booking`): the booking thread is keyed by the booking id, takes live
+  `SERVICE_BOOKING` events addressed by `bookingId` (its server-side
+  conversation id is not the route id), and stays closed until the provider
+  accepts.
 * **Starting from a product** ("Chat with seller" on the product page):
   `/chat?product=<id>` asks the server for the product's chat context; an
   existing thread with that brand opens straight away, otherwise the first
@@ -276,16 +287,20 @@ permissions are checked.
   `?next=/chat?product=<id>` and returns to the same place.
 * **Notifications** (`notifications`): the inbox loads twenty at a time with
   All / Unread filters (unread is counted from what is loaded), tap reads the
-  notification and follows it to the order when it has one, and rows can be
-  deleted or all marked read. Reads, deletes and mark-all keep the badge in
-  step immediately, then the next fetch confirms it.
+  notification and follows it where `notificationTarget` says (the same
+  mapping as the web inbox): an order to `/orders/:id`, a booking to
+  `/bookings/:id`, provider-only news to `/services` and product news to
+  `/product/:id`. Service notifications carry their own calendar icon and
+  colour. Rows can be deleted or all marked read; reads, deletes and mark-all
+  keep the badge in step immediately, then the next fetch confirms it.
 
 Tests: `chat.test.js` (requests, cursor, live-connection rules, time stamps),
 `live.test.js` (socket lifecycle, badge honesty, fan-out and the debounced
 re-read), `chat-screens.test.js` and `notifications-screen.test.js` (the
-screens against a fake server). `chat-screens.test.js` also covers the direct
-provider thread (§12): its own endpoints, its own live event kind, and the
-events it must ignore.
+screens against a fake server). `chat-screens.test.js` also covers the merged
+inbox and its filters, the direct provider thread (§12) with its own endpoints
+and live event kind, and the booking thread with events addressed by
+`bookingId`; `notifications-screen.test.js` covers the service deep links.
 
 ## 12. Local services (Phase 9)
 
@@ -346,12 +361,41 @@ working hours.
   taking messages closes the composer with its own wording. The thread is not
   tied to a booking, so a question can be asked before requesting a time.
 
+* **Bookings** (`bookings/index`, from Account → **My bookings** or the
+  booking success screen): the customer's `GET /services/bookings` list, ten at
+  a time, with status chips (All, Requested, Price ready, Accepted, In progress,
+  Completed, Confirmed, Declined, Cancelled, Disputed) and pull-to-refresh. Each
+  row shows the service photo, status, provider and booking number, the Karachi
+  appointment time and the amount that matters now (`priceOf`: final, agreed,
+  live proposal, the shopper's offer, then the guide price), plus a prompt for
+  *Price ready* and *Confirm the job*. A status with no rows offers another
+  filter; an empty list opens services discovery.
+* **Booking detail** (`bookings/[id]`): the same information as the web page,
+  with every customer action and nothing the serialized booking does not
+  allow. **Next step** explains the current state and then offers only that
+  state's action: accept or decline a proposal (with a confirmation before
+  declining), confirm the finished job (with a confirmation and the auto-confirm
+  date) or report a problem with a written reason, and post a 1–5 star review
+  once confirmed (the existing review is shown with the provider's reply).
+  Accepting, confirming, disputing and cancelling each replace the screen with
+  the booking the server returned; a notice says what changed. **Messages**
+  opens the booking thread when `canChat`; the history shows the server's
+  events with their prices and notes; cancelling is offered only while the
+  server lists the status as cancelable, asks for a reason, and warns that an
+  accepted job counts as a late cancellation. The provider card opens their
+  profile page and says payment is at the door. A gone booking (400/404) reads
+  **Booking not found** with a link to the list; a network failure offers
+  **Try again**.
+
 Tests: `services.test.js` (the discovery query and fetchers), `service-slots.test.js`
-(Karachi time, windows, blackouts, custom times, paisa), `services-screen.test.js`
+(Karachi time, windows, blackouts, custom times, paisa), `bookings.test.js`
+(`priceOf`, cancel rules, timeline labels and details), `notification-target.test.js`
+(where each notification points), `services-screen.test.js`
 (the tab against a fake server), `provider-screen.test.js` (profile states,
 booking and chat entry points), `booking-request.test.js` (the form, its
-validation, saved and manual addresses, the pin, published and free times) and
-the provider thread cases in `chat-screens.test.js`.
+validation, saved and manual addresses, the pin, published and free times),
+`bookings-screens.test.js` (the list, filters and every detail action) and
+the provider and booking thread cases in `chat-screens.test.js`.
 
 ## 13. Polish and release (Phase 7)
 
@@ -416,7 +460,9 @@ phone (Expo Go while developing, a preview APK for release behaviour):
 7. **Chat** — start from a product page, send and receive with the seller on
    the web dashboard, unread pill on the conversation and the Account tab,
    receiving while the thread is open shows the message at once, badges settle
-   after backgrounding and returning.
+   after backgrounding and returning. The All chats / Stores / Service
+   providers filters switch the inbox without mixing the collections, and a
+   provider row opens the direct thread.
 8. **Local services** — the Services tab lists providers in the chosen area,
    the category and sort sheets and the search narrow the list, and a card
    opens the provider page (services, working hours in Pakistan time, reviews,
@@ -426,12 +472,20 @@ phone (Expo Go while developing, a preview APK for release behaviour):
    booking number. Message the provider: the thread opens, a reply from the
    provider dashboard arrives live in it, and a provider with messages closed
    shows the composer notice instead.
-9. **Notifications** — an order update arrives live, the badge increments,
-   tap follows to the order, mark-all-read and delete keep the badge honest.
-10. **Offline** — airplane mode shows the banner on every screen and requests
+9. **Bookings** — Account → My bookings lists the request just made; the status
+   chips filter it and each row opens the detail. As the provider moves the
+   booking on the web dashboard (proposal, acceptance, start, completion), the
+   detail's Next step offers the matching action: accept or decline a price,
+   confirm the finished job or report a problem with a reason, then post a
+   review. Cancelling asks for a reason and warns when it is late. The chat
+   button opens the booking thread, and a message from either side arrives live.
+10. **Notifications** — an order update and a booking update arrive live, the
+    badge increments, tapping each follows to the order and the booking
+    respectively, mark-all-read and delete keep the badge honest.
+11. **Offline** — airplane mode shows the banner on every screen and requests
     fail with "Cannot reach the server"; turning the connection back removes
     the banner and pull-to-refresh recovers without restarting the app.
-11. **Release build** — install the preview APK, repeat sign-in, nearby map and
+12. **Release build** — install the preview APK, repeat sign-in, nearby map and
     one order end to end; the launcher icon and splash are the branded set.
 
 ## 14. Development

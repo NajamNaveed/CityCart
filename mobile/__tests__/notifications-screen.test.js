@@ -44,6 +44,11 @@ const NOTIFICATIONS = [
   { _id: ID(2), type: 'ORDER_CONFIRMED', title: 'Order confirmed', message: 'The seller confirmed CC-6.', data: { orderId: ID(6), orderNumber: 'CC-6' }, isRead: true, readAt: NOW, createdAt: NOW },
 ]
 
+const SERVICE_NOTIFICATIONS = [
+  { _id: ID(3), type: 'SERVICE_BOOKING_ACCEPTED', title: 'Booking accepted', message: 'Ali Plumbing accepted your request.', data: { bookingId: ID(7), bookingNumber: 'BK-2', providerId: ID(8), serviceTitle: 'Leak repair', status: 'ACCEPTED' }, isRead: false, readAt: null, createdAt: NOW },
+  { _id: ID(4), type: 'SERVICE_REVIEW_REPLIED', title: 'Provider replied', message: 'Ali Plumbing replied to your review.', data: { providerId: ID(8), serviceTitle: 'Leak repair' }, isRead: true, readAt: NOW, createdAt: NOW },
+]
+
 afterEach(cleanup)
 
 beforeEach(() => {
@@ -51,8 +56,8 @@ beforeEach(() => {
   mockParams = {}
 })
 
-const openInbox = async (notificationsOver) => {
-  api.get.mockResolvedValue({ data: { notifications: NOTIFICATIONS, pagination: { page: 1, pages: 1, total: 2 }, unreadCount: 1 } })
+const openInbox = async (notificationsOver, rows = NOTIFICATIONS) => {
+  api.get.mockResolvedValue({ data: { notifications: rows, pagination: { page: 1, pages: 1, total: rows.length }, unreadCount: rows.filter((n) => !n.isRead).length } })
   return show(<NotificationsScreen />, { auth: signedIn(), notifications: notificationsValue(notificationsOver) })
 }
 
@@ -139,5 +144,19 @@ describe('notifications inbox', () => {
     api.get.mockClear()
     await act(async () => listener('message', {}))
     expect(api.get).toHaveBeenCalledWith('/notifications', { params: { page: 1, limit: 20 } })
+  })
+
+  it('follows a booking notification to the booking', async () => {
+    const notifications = notificationsValue()
+    const screen = await openInbox(notifications, SERVICE_NOTIFICATIONS)
+    await pressByLabel(screen, 'Booking accepted. Unread. Ali Plumbing accepted your request.')
+    expect(notifications.markRead).toHaveBeenCalledWith(ID(3))
+    expect(mockRouter.push).toHaveBeenCalledWith(`/bookings/${ID(7)}`)
+  })
+
+  it('sends a provider-only notification to services discovery', async () => {
+    const screen = await openInbox(notificationsValue(), SERVICE_NOTIFICATIONS)
+    await pressByLabel(screen, 'Provider replied. Ali Plumbing replied to your review.')
+    expect(mockRouter.push).toHaveBeenCalledWith('/services')
   })
 })

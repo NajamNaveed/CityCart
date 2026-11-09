@@ -5,6 +5,7 @@ import {
   dateOptionsFromSlots,
   durationLabel,
   formatKarachiDate,
+  formatKarachiDateTime,
   karachiDateKey,
   karachiDateTimeToIso,
   minuteLabel,
@@ -46,6 +47,13 @@ describe('labels', () => {
     expect(formatKarachiDate('2026-11-09T20:00:00.000Z')).toBe('10 Nov 2026')
     expect(formatKarachiDate('')).toBe('')
     expect(formatKarachiDate('not a date')).toBe('')
+  })
+
+  it('formats an instant as a Karachi date and time', () => {
+    expect(formatKarachiDateTime('2026-11-09T09:30:00.000Z')).toBe('9 Nov 2026, 2:30 pm')
+    expect(formatKarachiDateTime('2026-11-09T20:00:00.000Z')).toBe('10 Nov 2026, 1:00 am')
+    expect(formatKarachiDateTime('')).toBe('')
+    expect(formatKarachiDateTime('not a date')).toBe('')
   })
 })
 

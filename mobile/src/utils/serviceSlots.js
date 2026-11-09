@@ -165,3 +165,13 @@ export function formatKarachiDate(value) {
   const shifted = new Date(date.getTime() + KARACHI_OFFSET_MS)
   return `${shifted.getUTCDate()} ${MONTHS[shifted.getUTCMonth()]} ${shifted.getUTCFullYear()}`
 }
+
+/** "15 Nov 2026, 2:30 pm" in Pakistan time; empty for a missing or invalid date. */
+export function formatKarachiDateTime(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const shifted = new Date(date.getTime() + KARACHI_OFFSET_MS)
+  return `${shifted.getUTCDate()} ${MONTHS[shifted.getUTCMonth()]} ${shifted.getUTCFullYear()}, ${minuteLabel(
+    shifted.getUTCHours() * 60 + shifted.getUTCMinutes(),
+  )}`
+}

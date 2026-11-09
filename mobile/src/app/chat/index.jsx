@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FlatList, Pressable, View } from 'react-native'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -18,13 +18,49 @@ import { usePagedList } from '../../hooks/usePagedList'
 import { useRemote } from '../../hooks/useRemote'
 import { getErrorMessage } from '../../services/api'
 import { cleanMessageBody, fetchConversations, fetchProductChat, startChat } from '../../services/chats'
+import { fetchProviderConversations } from '../../services/providerChats'
 import { listTime, MAX_MESSAGE_LENGTH } from '../../utils/chat'
 import { isObjectId } from '../../utils/ids'
 import { colors, radius, spacing } from '../../theme'
 
+const FILTERS = [
+  { value: 'all', label: 'All chats' },
+  { value: 'store', label: 'Stores' },
+  { value: 'provider', label: 'Service providers' },
+]
+
+const KIND_LABEL = { store: 'Store', provider: 'Service' }
+
+/**
+ * One page of the inbox. Stores and direct provider chats live in different
+ * collections, so a merged view asks both; the store list drives paging, and
+ * providers are only asked again when the filter is providers-only (the same
+ * rule the web chat panel uses).
+ */
+async function fetchInbox(scope, page) {
+  const includeStore = scope !== 'provider'
+  const includeProvider = scope !== 'store'
+  const [store, provider] = await Promise.all([
+    includeStore ? fetchConversations(page) : null,
+    includeProvider && (scope === 'provider' || page === 1) ? fetchProviderConversations(page) : null,
+  ])
+  const items = [
+    ...(store?.items || []).map((conversation) => ({ ...conversation, kind: 'store' })),
+    ...(provider?.items || []).map((conversation) => ({ ...conversation, kind: 'provider' })),
+  ]
+  return { items, pagination: (includeStore ? store : provider)?.pagination }
+}
+
 function ConversationsList({ userId }) {
   const router = useRouter()
-  const list = usePagedList(`chats:${userId}`, (page) => fetchConversations(page))
+  const [scope, setScope] = useState('all')
+  const list = usePagedList(`chats:${userId}:${scope}`, (page) => fetchInbox(scope, page))
+  // Later store pages arrive without provider rows, so the merged order is
+  // rebuilt from the whole list rather than trusting arrival order.
+  const items = useMemo(
+    () => [...list.items].sort((a, b) => new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0)),
+    [list.items],
+  )
   const { subscribe, refreshUnread } = useChat()
   // One subscription for the screen's lifetime; the latest refresh is picked
   // up in an effect, so a new render never re-subscribes.
@@ -47,69 +83,121 @@ function ConversationsList({ userId }) {
   )
 
   return (
-    <FlatList
-      data={list.items}
-      keyExtractor={(conversation) => conversation._id}
-      contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.md }}
-      refreshing={list.refreshing}
-      onRefresh={list.refresh}
-      onEndReached={list.loadMore}
-      onEndReachedThreshold={0.6}
-      ListEmptyComponent={
-        list.loading ? (
-          <View style={{ gap: spacing.md }}>
-            {[0, 1, 2].map((i) => (
-              <Skeleton key={i} height={84} />
-            ))}
-          </View>
-        ) : list.error ? (
-          <EmptyState icon="wifi-off" tone="error" title="Couldn't load your messages" message={list.error} action={<Button title="Try again" onPress={list.refresh} />} />
-        ) : (
-          <EmptyState icon="message-circle" title="No conversations yet" message="Open any product and choose “Chat with seller” to start one." action={<Button title="Browse shops" onPress={() => router.navigate('/nearby')} />} />
-        )
-      }
-      renderItem={({ item: conversation }) => (
-        <Pressable
-          onPress={() =>
-            router.push({
-              pathname: `/chat/${conversation._id}`,
-              params: { name: conversation.with?.name || 'Seller', canSend: conversation.canSend ? '1' : '0' },
-            })
-          }
-          accessibilityRole="button"
-          accessibilityLabel={`Chat with ${conversation.with?.name || 'seller'}${conversation.unread ? `, ${conversation.unread} unread` : ''}`}
-          style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: pressed ? colors.sand : colors.surface })}
-        >
-          <BrandLogo brand={{ name: conversation.with?.name || '?', logo: conversation.with?.image }} size={48} />
-          <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-              <AppText variant="strong" numberOfLines={1} style={{ flex: 1 }}>
-                {conversation.with?.name || 'Seller'}
+    <View style={{ flex: 1 }}>
+      <View style={{ flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm }}>
+        {FILTERS.map((filter) => {
+          const selected = filter.value === scope
+          return (
+            <Pressable
+              key={filter.value}
+              onPress={() => setScope(filter.value)}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              accessibilityLabel={`Show ${filter.label}`}
+              style={{
+                minHeight: 36,
+                paddingHorizontal: spacing.md,
+                borderRadius: radius.pill,
+                borderWidth: 1,
+                borderColor: selected ? colors.ink : colors.line,
+                backgroundColor: selected ? colors.ink : colors.surface,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <AppText variant="label" style={{ color: selected ? colors.white : colors.ink, fontSize: 13 }}>
+                {filter.label}
               </AppText>
-              <AppText variant="small" style={{ fontSize: 12 }}>
-                {listTime(conversation.lastMessageAt)}
-              </AppText>
+            </Pressable>
+          )
+        })}
+      </View>
+
+      <FlatList
+        data={items}
+        keyExtractor={(conversation) => `${conversation.kind}:${conversation._id}`}
+        contentContainerStyle={{ padding: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.xxl, gap: spacing.md }}
+        refreshing={list.refreshing}
+        onRefresh={list.refresh}
+        onEndReached={list.loadMore}
+        onEndReachedThreshold={0.6}
+        ListEmptyComponent={
+          list.loading ? (
+            <View style={{ gap: spacing.md }}>
+              {[0, 1, 2].map((i) => (
+                <Skeleton key={i} height={84} />
+              ))}
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-              <AppText variant="small" numberOfLines={1} style={{ flex: 1 }}>
-                {conversation.lastSenderRole === 'CUSTOMER' ? 'You: ' : ''}
-                {conversation.lastMessagePreview || '…'}
+          ) : list.error ? (
+            <EmptyState icon="wifi-off" tone="error" title="Couldn't load your messages" message={list.error} action={<Button title="Try again" onPress={list.refresh} />} />
+          ) : scope === 'provider' ? (
+            <EmptyState icon="message-circle" title="No provider chats yet" message="Open a service provider and choose “Message” to ask a question." action={<Button title="Browse services" onPress={() => router.navigate('/services')} />} />
+          ) : scope === 'store' ? (
+            <EmptyState icon="message-circle" title="No store chats yet" message="Open any product and choose “Chat with seller” to start one." action={<Button title="Browse shops" onPress={() => router.navigate('/nearby')} />} />
+          ) : (
+            <EmptyState icon="message-circle" title="No conversations yet" message="Chat with a seller about a product, or message a service provider about a job." action={<Button title="Browse shops" onPress={() => router.navigate('/nearby')} />} />
+          )
+        }
+        renderItem={({ item: conversation }) => {
+          const provider = conversation.kind === 'provider'
+          const kindLabel = provider ? KIND_LABEL.provider : KIND_LABEL.store
+          return (
+            <Pressable
+              onPress={() =>
+                router.push({
+                  pathname: `/chat/${conversation._id}`,
+                  params: {
+                    name: conversation.with?.name || (provider ? 'Service provider' : 'Seller'),
+                    // Direct provider threads carry no canSend flag; the server
+                    // still refuses if the thread is closed.
+                    canSend: conversation.canSend === false ? '0' : '1',
+                    ...(provider && { kind: 'provider' }),
+                  },
+                })
+              }
+              accessibilityRole="button"
+              accessibilityLabel={`${kindLabel} chat with ${conversation.with?.name || (provider ? 'service provider' : 'seller')}${conversation.unread ? `, ${conversation.unread} unread` : ''}`}
+              style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: pressed ? colors.sand : colors.surface })}
+            >
+              <BrandLogo brand={{ name: conversation.with?.name || '?', logo: conversation.with?.image }} size={48} />
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                  <AppText variant="strong" numberOfLines={1} style={{ flex: 1 }}>
+                    {conversation.with?.name || (provider ? 'Service provider' : 'Seller')}
+                  </AppText>
+                  <AppText variant="small" style={{ fontSize: 12 }}>
+                    {listTime(conversation.lastMessageAt)}
+                  </AppText>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                  {scope === 'all' ? (
+                    <View style={{ paddingHorizontal: spacing.xs, paddingVertical: 1, borderRadius: radius.sm, backgroundColor: colors.sand }}>
+                      <AppText variant="small" style={{ fontSize: 10, lineHeight: 14, letterSpacing: 0.8, textTransform: 'uppercase', color: colors.ink }}>
+                        {kindLabel}
+                      </AppText>
+                    </View>
+                  ) : null}
+                  <AppText variant="small" numberOfLines={1} style={{ flex: 1 }}>
+                    {conversation.lastSenderRole === 'CUSTOMER' ? 'You: ' : ''}
+                    {conversation.lastMessagePreview || '…'}
+                  </AppText>
+                  {conversation.unread > 0 ? <UnreadPill count={conversation.unread} /> : null}
+                </View>
+              </View>
+            </Pressable>
+          )
+        }}
+        ListFooterComponent={
+          list.loadingMore ? null : list.hasMore ? (
+            <Pressable onPress={list.loadMore} accessibilityRole="button" style={{ alignItems: 'center', padding: spacing.lg }}>
+              <AppText variant="label" style={{ color: colors.clay }}>
+                Show more conversations
               </AppText>
-              {conversation.unread > 0 ? <UnreadPill count={conversation.unread} /> : null}
-            </View>
-          </View>
-        </Pressable>
-      )}
-      ListFooterComponent={
-        list.loadingMore ? null : list.hasMore ? (
-          <Pressable onPress={list.loadMore} accessibilityRole="button" style={{ alignItems: 'center', padding: spacing.lg }}>
-            <AppText variant="label" style={{ color: colors.clay }}>
-              Show more conversations
-            </AppText>
-          </Pressable>
-        ) : null
-      }
-    />
+            </Pressable>
+          ) : null
+        }
+      />
+    </View>
   )
 }
 
