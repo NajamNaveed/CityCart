@@ -348,7 +348,7 @@ function ProviderBody({ provider }) {
                     </AppText>
                   ) : null}
                   {review.providerReply?.body ? (
-                    <View style={{ backgroundColor: colors.paper, borderRadius: radius.md, padding: spacing.md, marginTop: spacing.xs }}>
+                    <View style={{ backgroundColor: colors.cream, borderRadius: radius.md, padding: spacing.md, marginTop: spacing.xs }}>
                       <AppText variant="small" style={{ lineHeight: 19 }}>
                         <AppText variant="label">{provider.displayName} replied: </AppText>
                         {review.providerReply.body}

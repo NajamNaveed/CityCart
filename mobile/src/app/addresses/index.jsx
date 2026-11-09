@@ -48,7 +48,7 @@ function AddressCard({ address, busy, onEdit, onDefault, onDelete }) {
           {address.label}
         </AppText>
         {address.isDefault ? (
-          <View style={{ backgroundColor: colors.paper, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 2 }}>
+          <View style={{ backgroundColor: colors.cream, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 2 }}>
             <AppText variant="small" style={{ textTransform: 'uppercase', letterSpacing: 0.6, fontSize: 10 }}>
               Default
             </AppText>

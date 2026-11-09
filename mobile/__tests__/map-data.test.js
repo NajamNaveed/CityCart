@@ -125,6 +125,18 @@ describe('the WebView map', () => {
     expect(MAP_HTML).toContain('recenter: function ()')
   })
 
+  it('keeps a chosen city framed and never jumps to the fallback on empty data', () => {
+    // The first payload frames the map; later ones leave the camera alone.
+    expect(MAP_HTML).toContain('if (!fitted) fit();')
+    expect(MAP_HTML).toContain('cityBounds = bounds;')
+    // A city pick wins over a stale origin pin or an empty result.
+    expect(MAP_HTML).toContain('if (cityBounds) frameBounds(cityBounds);')
+    // A search centre from a city the shopper left cannot stretch the view.
+    expect(MAP_HTML).toContain("if (data.pin.kind !== 'origin' || points.length === 0) {")
+    // No points means stay put, unless the map has never been framed at all.
+    expect(MAP_HTML).toContain('if (!everRendered) {\n        state.center = { lat: FALLBACK.lat, lng: FALLBACK.lng };')
+  })
+
   it('names itself for the WebView screen reader', () => {
     expect(MAP_HTML).toContain("map.setAttribute('aria-label'")
     expect(MAP_HTML).toContain("|| 'Map'")

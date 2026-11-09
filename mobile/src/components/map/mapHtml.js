@@ -18,7 +18,7 @@ export const MAP_HTML = `<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="preconnect" href="https://tile.openstreetmap.org" crossorigin>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #f8f2e7; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #ffffff; }
   #map { position: fixed; inset: 0; overflow: hidden; touch-action: none; cursor: grab; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
   #map.pickable { cursor: crosshair; }
   /* Everything inside #world is positioned in world pixels relative to #layout,
@@ -27,26 +27,28 @@ export const MAP_HTML = `<!doctype html>
   #under, #tiles, #zones, #marks { position: absolute; left: 0; top: 0; width: 0; height: 0; }
   #zones, #marks { pointer-events: none; }
   #under img { position: absolute; opacity: 1; pointer-events: none; }
-  #tiles img { position: absolute; width: 256px; height: 256px; pointer-events: none; user-select: none; -webkit-user-drag: none; opacity: 0; transition: opacity .12s linear; background: #f0e9df; }
-  .marker { position: absolute; width: 26px; height: 26px; margin: 0; padding: 0; border: 0; background: transparent; transform: translate(-13px, -26px); pointer-events: auto; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-  .pin { display: block; width: 26px; height: 26px; border-radius: 50% 50% 50% 0; border: 2px solid #fff; box-shadow: 0 1px 5px rgba(0,0,0,.45); transform: rotate(-45deg); box-sizing: border-box; }
-  .pin span { display: block; width: 8px; height: 8px; margin: 7px; border-radius: 50%; background: #fff; }
+  #tiles img { position: absolute; width: 256px; height: 256px; pointer-events: none; user-select: none; -webkit-user-drag: none; opacity: 0; transition: opacity .12s linear; background: #eef0f2; }
+  /* A 40px tap target with the 28px pin sitting at its bottom edge: the tip is
+     still exactly on the coordinate, but a thumb can hit it. */
+  .marker { position: absolute; width: 40px; height: 40px; margin: 0; padding: 0; border: 0; background: transparent; display: flex; align-items: flex-end; justify-content: center; transform: translate(-20px, -40px); pointer-events: auto; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .pin { display: block; width: 28px; height: 28px; border-radius: 50% 50% 50% 0; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(21,20,15,.35); transform: rotate(-45deg); box-sizing: border-box; }
+  .pin span { display: block; width: 8px; height: 8px; margin: 8px; border-radius: 50%; background: #fff; }
   .pin.shop { background: #b6472a; }
   .pin.provider { background: #1c3a2e; }
   .pin.chosen { background: #3b5b7c; }
-  .marker.dot { width: 18px; height: 18px; transform: translate(-9px, -9px); }
-  .dot { display: block; width: 18px; height: 18px; border-radius: 50%; border: 2px solid #fff; background: #3b5b7c; box-shadow: 0 1px 4px rgba(0,0,0,.35); box-sizing: border-box; }
+  .marker.dot { width: 32px; height: 32px; align-items: center; transform: translate(-16px, -16px); }
+  .dot { display: block; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #fff; background: #3b5b7c; box-shadow: 0 2px 5px rgba(21,20,15,.3); box-sizing: border-box; }
   .dot.rider { background: #b6472a; }
-  #zoom { position: absolute; top: 10px; left: 10px; z-index: 7; display: flex; flex-direction: column; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 5px rgba(0,0,0,.35); }
-  #zoom button { width: 36px; height: 36px; margin: 0; padding: 0; border: 0; background: #fffcf6; color: #15140f; font: 22px/1 system-ui, sans-serif; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-  #zoom button + button { border-top: 1px solid #e7ddcb; }
-  #zoom button:active { background: #f0e9df; }
-  #popup { position: absolute; z-index: 8; display: none; width: 210px; box-sizing: border-box; padding: 10px 12px; border: 1px solid #e7ddcb; border-radius: 10px; background: #fffcf6; box-shadow: 0 8px 24px rgba(21,20,15,.2); pointer-events: auto; }
-  #popup strong { display: block; font-size: 14px; color: #15140f; }
-  #popup span { display: block; margin-top: 2px; font-size: 12px; line-height: 1.35; color: #5f6b7c; }
-  #popup button { display: inline-block; margin-top: 7px; padding: 0; border: 0; background: transparent; color: #b6472a; font-size: 12.5px; font-weight: 600; text-decoration: underline; cursor: pointer; }
-  #popup .close { position: absolute; top: 4px; right: 6px; margin: 0; font-size: 16px; line-height: 1; color: #5f6b7c; text-decoration: none; }
-  #attrib { position: absolute; right: 4px; bottom: 4px; z-index: 6; padding: 2px 5px; border-radius: 4px; background: rgba(255,252,246,.9); font-size: 10px; color: #3f4a44; pointer-events: auto; }
+  #zoom { position: absolute; top: 10px; left: 10px; z-index: 7; display: flex; flex-direction: column; border-radius: 10px; overflow: hidden; border: 1px solid #e5e3dd; box-shadow: 0 2px 10px rgba(21,20,15,.12); }
+  #zoom button { width: 38px; height: 38px; margin: 0; padding: 0; border: 0; background: #ffffff; color: #15140f; font: 21px/1 system-ui, sans-serif; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  #zoom button + button { border-top: 1px solid #e5e3dd; }
+  #zoom button:active { background: #f4f2ee; }
+  #popup { position: absolute; z-index: 8; display: none; width: 220px; box-sizing: border-box; padding: 12px 14px; border: 1px solid #e5e3dd; border-radius: 12px; background: #ffffff; box-shadow: 0 10px 30px rgba(21,20,15,.16); pointer-events: auto; }
+  #popup strong { display: block; font-size: 14px; line-height: 1.3; color: #15140f; }
+  #popup span { display: block; margin-top: 3px; font-size: 12px; line-height: 1.4; color: #5d6979; }
+  #popup button { display: inline-block; margin-top: 8px; padding: 0; border: 0; background: transparent; color: #b6472a; font-size: 12.5px; font-weight: 600; text-decoration: underline; cursor: pointer; }
+  #popup .close { position: absolute; top: 4px; right: 6px; margin: 0; font-size: 17px; line-height: 1; color: #5d6979; text-decoration: none; }
+  #attrib { position: absolute; right: 4px; bottom: 4px; z-index: 6; padding: 2px 6px; border-radius: 5px; background: rgba(255,255,255,.92); font-size: 10px; color: #3f4a44; pointer-events: auto; }
   #attrib a { color: #3f4a44; }
 </style>
 </head>
@@ -80,6 +82,12 @@ export const MAP_HTML = `<!doctype html>
   var FALLBACK = { lat: 31.4504, lng: 73.135, zoom: 12 };
   var state = { center: { lat: FALLBACK.lat, lng: FALLBACK.lng }, zoom: FALLBACK.zoom, data: null };
   var view = { zoom: FALLBACK.zoom, x: 0, y: 0 };
+  // The camera belongs to the shopper after the first data fit, and to the city
+  // they picked after setFocus. Later payloads never move it on their own, so an
+  // empty result or a stale pin cannot teleport the view to another place.
+  var fitted = false;
+  var everRendered = false;
+  var cityBounds = null;
   // World pixel that children's CSS (0, 0) sits on. Fixed while the finger is
   // down; only render() moves it.
   var layout = { x: 0, y: 0 };
@@ -542,32 +550,52 @@ export const MAP_HTML = `<!doctype html>
     }
     var data = state.data;
     var points = [];
+    var real = false;
     if (data) {
       (data.zones || []).forEach(function (zone) { zone.ring.forEach(function (p) { points.push({ lat: p[0], lng: p[1] }); }); });
       (data.pins || []).forEach(function (p) { points.push({ lat: p.lat, lng: p.lng }); });
+      if (points.length > 0) real = true;
       if (data.pin) {
-        points.push({ lat: data.pin.lat, lng: data.pin.lng });
-        if (data.radiusKm) {
-          var dLat = data.radiusKm / 111.32;
-          var dLng = data.radiusKm / (111.32 * Math.cos(data.pin.lat * Math.PI / 180));
-          points.push({ lat: data.pin.lat + dLat, lng: data.pin.lng });
-          points.push({ lat: data.pin.lat - dLat, lng: data.pin.lng });
-          points.push({ lat: data.pin.lat, lng: data.pin.lng + dLng });
-          points.push({ lat: data.pin.lat, lng: data.pin.lng - dLng });
+        // The search centre may belong to another city the shopper left. It
+        // only frames the map when it is all there is to show; otherwise the
+        // city's zones and pins decide the extent.
+        if (data.pin.kind !== 'origin' || points.length === 0) {
+          points.push({ lat: data.pin.lat, lng: data.pin.lng });
+          if (data.pin.kind !== 'origin') real = true;
+          if (data.radiusKm) {
+            var dLat = data.radiusKm / 111.32;
+            var dLng = data.radiusKm / (111.32 * Math.cos(data.pin.lat * Math.PI / 180));
+            points.push({ lat: data.pin.lat + dLat, lng: data.pin.lng });
+            points.push({ lat: data.pin.lat - dLat, lng: data.pin.lng });
+            points.push({ lat: data.pin.lat, lng: data.pin.lng + dLng });
+            points.push({ lat: data.pin.lat, lng: data.pin.lng - dLng });
+          }
         }
       }
       // The customer's rider: the first sight of it also frames the way to the door.
-      if (data.rider) points.push({ lat: data.rider.lat, lng: data.rider.lng });
+      if (data.rider) {
+        points.push({ lat: data.rider.lat, lng: data.rider.lng });
+        real = true;
+      }
     }
     if (points.length === 0) {
-      state.center = { lat: FALLBACK.lat, lng: FALLBACK.lng };
-      state.zoom = FALLBACK.zoom;
-      render();
+      // Nothing to frame: stay where the shopper (or the chosen city) put the
+      // camera. Only a map that has never shown data starts at the fallback.
+      if (!everRendered) {
+        state.center = { lat: FALLBACK.lat, lng: FALLBACK.lng };
+        state.zoom = FALLBACK.zoom;
+        render();
+        everRendered = true;
+      }
       return;
     }
     if (points.length === 1) {
       state.center = points[0];
       state.zoom = 15;
+      everRendered = true;
+      // A lone search centre is only a placeholder: the city's real extent may
+      // arrive on the next payload, and that payload should still frame it.
+      fitted = fitted || real;
       render();
       return;
     }
@@ -582,6 +610,26 @@ export const MAP_HTML = `<!doctype html>
     var scale = Math.min((width() - 64) / dx, (height() - 64) / dy);
     state.zoom = clamp(Math.round(Math.log(scale) / Math.LN2), 9, 17);
     state.center = unproject((minX + maxX) / 2, (minY + maxY) / 2, 0);
+    everRendered = true;
+    fitted = fitted || real;
+    render();
+  }
+
+  // Frames a rectangle (a city's blocks) with a little breathing room. A whole
+  // city reads as a city, so the zoom never goes past 13.
+  function frameBounds(bounds) {
+    // The WebView can report a zero-sized viewport during its first layout pass.
+    if (width() < 80 || height() < 80) {
+      setTimeout(function () { frameBounds(bounds); }, 60);
+      return;
+    }
+    var sw = project(bounds.south, bounds.west, 0);
+    var ne = project(bounds.north, bounds.east, 0);
+    var dx = Math.max(Math.abs(ne.x - sw.x), 0.000001);
+    var dy = Math.max(Math.abs(ne.y - sw.y), 0.000001);
+    var scale = Math.min((width() - 32) / dx, (height() - 32) / dy);
+    state.zoom = clamp(Math.round(Math.log(scale) / Math.LN2), 8, 13);
+    state.center = unproject((sw.x + ne.x) / 2, (sw.y + ne.y) / 2, 0);
     render();
   }
 
@@ -792,27 +840,32 @@ export const MAP_HTML = `<!doctype html>
       closePopup();
       map.className = data && data.pickable ? 'pickable' : '';
       map.setAttribute('aria-label', (data && data.label) || 'Map');
-      fit();
+      // Only the first payload frames the map. Afterwards the camera belongs to
+      // the shopper, or to the city they picked: a search, a layer toggle or a
+      // stale pin must never pull the view to another place.
+      if (!fitted) fit();
+      else {
+        drawShapes();
+        drawMarks();
+      }
     },
-    // A city choice or a recenter frames a whole rectangle instead of fitting
-    // the pins, so the view can leave the current results behind.
+    // A city choice frames a whole rectangle instead of fitting the pins, and
+    // keeps it until the shopper pans away or asks to recenter.
     setFocus: function (bounds) {
       if (!bounds) return;
       stopInertia();
       closePopup();
-      var sw = project(bounds.south, bounds.west, 0);
-      var ne = project(bounds.north, bounds.east, 0);
-      var dx = Math.max(Math.abs(ne.x - sw.x), 0.000001);
-      var dy = Math.max(Math.abs(ne.y - sw.y), 0.000001);
-      var scale = Math.min((width() - 32) / dx, (height() - 32) / dy);
-      state.zoom = clamp(Math.round(Math.log(scale) / Math.LN2), 8, 13);
-      state.center = unproject((sw.x + ne.x) / 2, (sw.y + ne.y) / 2, 0);
-      render();
+      cityBounds = bounds;
+      fitted = true;
+      frameBounds(bounds);
     },
+    // Recenter returns to the city the shopper picked, or to whatever the map
+    // currently draws when no city was chosen on the map.
     recenter: function () {
       stopInertia();
       closePopup();
-      fit();
+      if (cityBounds) frameBounds(cityBounds);
+      else fit();
     },
     // Move only the rider dot. The first shared position (or a fresh one after a
     // pause) frames the rider and the delivery pin together; later moves do not

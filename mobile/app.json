@@ -7,7 +7,7 @@
     "scheme": "citycart",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "light",
-    "backgroundColor": "#f8f9fa",
+    "backgroundColor": "#ffffff",
     "ios": {
       "bundleIdentifier": "com.citycart.app",
       "supportsTablet": false

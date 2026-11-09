@@ -95,7 +95,7 @@ export default function ServiceProviderCard({ provider, onPress }) {
           {offerings.map((offering) => (
             <View
               key={offering._id}
-              style={{ paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper }}
+              style={{ paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.cream }}
             >
               <AppText variant="small" style={{ fontSize: 12, color: colors.ink }}>
                 {offering.title}

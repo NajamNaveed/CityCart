@@ -17,11 +17,11 @@ function contrast(foreground, background) {
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
 }
 
-describe('the warm v3 palette', () => {
-  it('matches the web customer tokens', () => {
-    expect(colors.paper).toBe('#f8f2e7')
-    expect(colors.surface).toBe('#fffcf6')
-    expect(colors.line).toBe('#e7ddcb')
+describe('the v3 palette on a white canvas', () => {
+  it('keeps the pages and cards white, with the web accents', () => {
+    expect(colors.paper).toBe('#ffffff')
+    expect(colors.surface).toBe('#ffffff')
+    expect(colors.line).toBe('#e5e3dd')
     expect(colors.ink).toBe('#15140f')
     expect(colors.pine).toBe('#1c3a2e')
     expect(colors.clay).toBe('#b6472a')

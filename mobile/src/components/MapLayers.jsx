@@ -8,6 +8,16 @@ import { colors, radius, spacing } from '../theme'
 const STATE_LABEL = { all: 'All', mine: 'Mine', off: 'Off' }
 const NEXT_LABEL = { all: 'only mine', mine: 'off', off: 'everything' }
 
+// Controls float over the map, so they carry a soft lift to stay legible on
+// busy tiles.
+const float = {
+  elevation: 2,
+  shadowColor: '#15140f',
+  shadowOpacity: 0.12,
+  shadowRadius: 6,
+  shadowOffset: { width: 0, height: 2 },
+}
+
 const buttonStyle = (on) => ({
   flexDirection: 'row',
   alignItems: 'center',
@@ -18,6 +28,7 @@ const buttonStyle = (on) => ({
   borderRadius: radius.sm,
   borderWidth: 1,
   borderColor: colors.line,
+  ...float,
 })
 
 function Control({ icon, label, badge, on, onPress, accessibilityLabel }) {
@@ -75,7 +86,7 @@ export default function MapLayers({ cities = [], cityId, onCityChange, layers = 
       ) : null}
 
       {layers.length > 0 ? (
-        <View style={{ flexDirection: 'row', borderRadius: radius.sm, overflow: 'hidden', borderWidth: 1, borderColor: colors.line }}>
+        <View style={[{ flexDirection: 'row', borderRadius: radius.sm, overflow: 'hidden', borderWidth: 1, borderColor: colors.line }, float]}>
           {layers.map(({ key, label, mineLabel, icon, state, onCycle }, index) => {
             const on = state !== 'off'
             return (

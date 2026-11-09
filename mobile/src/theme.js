@@ -1,11 +1,11 @@
-// The web app's v3 customer tokens (client/src/index.css: canvas, paper-warm,
-// line-warm, noir, forest), so the two look like one product.
+// The web app's v3 customer accents (clay, forest, warm washes) on a clean
+// white canvas, so the shopper app reads light and the two look like one product.
 export const colors = {
-  paper: '#f8f2e7', // canvas: page background
-  surface: '#fffcf6', // paper-warm: cards, bars, sheets
+  paper: '#ffffff', // canvas: page background
+  surface: '#ffffff', // cards, bars, sheets; separated by hairlines
   cream: '#fdf5ed', // warm accent wash
-  sand: '#f0e9df', // image placeholders, quiet wells
-  line: '#e7ddcb', // line-warm hairlines
+  sand: '#f2f0eb', // image placeholders, quiet wells
+  line: '#e5e3dd', // hairlines
   ink: '#15140f', // noir: primary text, solid buttons
   inkSoft: '#24211b',
   // Darker than the web's slate-500 so small text clears WCAG AA (4.5:1) on

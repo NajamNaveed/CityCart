@@ -198,7 +198,7 @@ export default function CartScreen() {
 
             {cart.groups.map((group) => (
               <View key={group.brand._id} style={{ borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, overflow: 'hidden' }}>
-                <View style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, backgroundColor: colors.paper, borderBottomWidth: 1, borderBottomColor: colors.line }}>
+                <View style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.line }}>
                   <AppText variant="small" style={{ textTransform: 'uppercase', letterSpacing: 1.2, fontSize: 11 }}>
                     {group.brand.name || 'Brand'}
                   </AppText>

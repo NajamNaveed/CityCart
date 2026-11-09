@@ -247,7 +247,7 @@ function CompletionCard({ booking, onDone }) {
 
   return (
     <View style={{ gap: spacing.md }}>
-      <View style={{ padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.paper }}>
+      <View style={{ padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.cream }}>
         <AppText variant="small" style={{ lineHeight: 20 }}>
           The provider finished the job for{' '}
           <AppText variant="label" style={{ color: colors.ink }}>
@@ -399,7 +399,7 @@ function ReviewCard({ booking, onReview }) {
           </AppText>
         ) : null}
         {booking.review.providerReply?.body ? (
-          <View style={{ padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.paper }}>
+          <View style={{ padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.cream }}>
             <AppText variant="small" style={{ lineHeight: 19 }}>
               <AppText variant="label">The provider replied: </AppText>
               {booking.review.providerReply.body}
@@ -589,7 +589,7 @@ function BookingDetail({ id }) {
           ) : null}
         </View>
         {booking.note ? (
-          <View style={{ padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.paper }}>
+          <View style={{ padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.cream }}>
             <AppText variant="small" style={{ lineHeight: 19 }}>
               <AppText variant="label">Your note: </AppText>
               {booking.note}
@@ -597,7 +597,7 @@ function BookingDetail({ id }) {
           </View>
         ) : null}
         {booking.completionNote ? (
-          <View style={{ padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.paper }}>
+          <View style={{ padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.cream }}>
             <AppText variant="small" style={{ lineHeight: 19 }}>
               <AppText variant="label">Provider’s note: </AppText>
               {booking.completionNote}

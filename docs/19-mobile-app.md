@@ -179,7 +179,10 @@ The same area model as the web app, on the same public endpoints
   what a tap will show next in its accessibility label. The chips frame the whole city rather than
   one pin (`hooks/useMapFocus.js` and `boundsOfBlocks`), read that city's blocks with `GET /blocks`,
   and the map draws them with `setFocus(bounds)`; choosing a city swaps the active city and its
-  results, never the shopper's saved spot. **Recenter** re-fits whatever the map currently draws.
+  results, never the shopper's saved spot. The city rectangle is **sticky**: later payloads (an
+  empty result, a layer toggle, a search centre left over from the previous city) never move the
+  camera, so the view cannot jump to another place. **Recenter** returns to that city rectangle
+  when one was chosen on the map, otherwise it re-fits whatever the map currently draws.
   Home no longer shows a city chip or a location setter, and the website no longer shows a location
   control in its navbar; the website still asks for the shopper's position automatically on a first
   visit.
@@ -227,7 +230,10 @@ The same area model as the web app, on the same public endpoints
   to a whole zoom when the fingers lift; and a zoom step stretches the tiles already
   on screen underneath the new level until it loads, so the map never flashes blank.
   That keeps it as smooth as the Leaflet map on the website on low-end phones. The
-  +/− buttons zoom, and the pins/dot use the same shapes as the website map. A tap
+  +/− buttons zoom, and the pins/dot use the same shapes as the website map. On a
+  white page the map gets a hairline frame with a soft lift, white zoom/popup chrome
+  and slightly larger pin tap targets. A search centre only frames the map when it
+  is all there is to show; a city's blocks and pins otherwise decide the extent. A tap
   chooses the shopper's spot (see above) and a pin's popup opens that shop's store
   page (**See products**) or the provider's page (**View services**). Directions
   still opens the phone's own maps app with `mapsUrl`. The map only needs a data
@@ -487,19 +493,20 @@ missing-address fallback and the Account entry points).
   ```
   No maps key is needed for any profile: the map is OpenStreetMap inside a
   WebView, so release builds show it with no extra configuration.
-* **Warm palette (Phase 12).** `src/theme.js` now carries the web app's v3
-  customer tokens instead of its own blues: `paper #f8f2e7` (the canvas),
-  `surface #fffcf6` (paper-warm cards, bars and sheets), `line #e7ddcb`
-  (line-warm hairlines) and `ink #15140f` (noir text and solid buttons), with
-  `sand` for image wells and `pine #1c3a2e` for service providers. Radii follow
-  the web too — tiles 10, cards 14, sheets 20. Because every screen reads the
-  theme, the change is one file plus the surfaces the theme does not reach: the
-  map HTML (`components/map/mapHtml.js` — warm tiles, zoom buttons, popups and
-  zone strokes), the modal scrims (`rgba(21,20,15,0.45)`) and the store and
-  provider hero overlays.
-* **Contrast.** `muted` was darkened to `#5d6979` so small secondary text clears
-  WCAG AA (4.5:1) on the canvas (5.01:1), on cards (5.45:1) and on sand wells
-  (4.63:1); `ink` and `clay` already clear it. `__tests__/theme.test.js` pins the
+* **White canvas, v3 accents (Phase 12, revised).** `src/theme.js` keeps the web
+  app's v3 customer accents but sets both `paper` (the canvas) and `surface`
+  (cards, bars and sheets) to `#ffffff`, separated by `line #e5e3dd` hairlines.
+  `cream #fdf5ed` is the warm inset wash and `sand #f2f0eb` the image well;
+  `ink #15140f` and `clay #b6472a` stay as the text and action colours, with
+  `pine #1c3a2e` for service providers. Radii follow the web too — tiles 10,
+  cards 14, sheets 20. Because every screen reads the theme, the change is one
+  file plus the surfaces the theme does not reach: the map HTML
+  (`components/map/mapHtml.js` — white chrome, neutral tile wells), the modal
+  scrims (`rgba(21,20,15,0.45)`) and the store and provider hero overlays. The
+  native window background in `app.json` is white as well.
+* **Contrast.** Small secondary text (`muted #5d6979`) clears WCAG AA (4.5:1) on
+  the white canvas (5.58:1), on sand wells (4.90:1) and on cream (5.17:1); `ink`
+  (18.44:1) and `clay` (5.35:1) clear it too. `__tests__/theme.test.js` pins the
   tokens, computes the contrast of every used pair from first principles, and
   fails if one drops below its floor.
 * **Reduced motion.** `hooks/useReduceMotion.js` reads the OS setting and keeps

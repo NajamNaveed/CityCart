@@ -39,7 +39,7 @@ function ProductChip({ product }) {
       onPress={() => router.push(`/product/${product._id}`)}
       accessibilityRole="link"
       accessibilityLabel={`Open ${product.name}`}
-      style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, marginBottom: spacing.xs, borderRadius: radius.sm, backgroundColor: pressed ? colors.sand : colors.paper, borderWidth: 1, borderColor: colors.line, alignSelf: 'stretch' })}
+      style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, marginBottom: spacing.xs, borderRadius: radius.sm, backgroundColor: pressed ? colors.sand : colors.cream, borderWidth: 1, borderColor: colors.line, alignSelf: 'stretch' })}
     >
       <Feather name="package" size={14} color={colors.clay} />
       <View style={{ flex: 1 }}>

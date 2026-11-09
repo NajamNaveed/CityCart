@@ -130,7 +130,7 @@ export default function NearbyMap({ items, providers = [], zones = [], selectedI
         bounces={false}
         overScrollMode="never"
         mixedContentMode="never"
-        style={{ flex: 1, backgroundColor: colors.paper }}
+        style={{ flex: 1, backgroundColor: colors.surface }}
       />
       {!ready && !failed ? (
         <View pointerEvents="none" style={styles.overlay}>
@@ -151,11 +151,16 @@ export default function NearbyMap({ items, providers = [], zones = [], selectedI
 
 const styles = StyleSheet.create({
   frame: {
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.line,
-    backgroundColor: colors.paper,
+    backgroundColor: colors.surface,
+    elevation: 2,
+    shadowColor: '#15140f',
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
@@ -163,6 +168,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.sm,
     padding: spacing.lg,
-    backgroundColor: 'rgba(250,247,242,0.9)',
+    backgroundColor: 'rgba(255,255,255,0.92)',
   },
 })
