@@ -11,6 +11,7 @@ import BackButton from '../../components/BackButton'
 import { useChat } from '../../hooks/useChat'
 import { getErrorMessage } from '../../services/api'
 import { cleanMessageBody, fetchMessages, markConversationRead, sendMessage } from '../../services/chats'
+import { fetchProviderMessages, markProviderChatRead, sendProviderMessage } from '../../services/providerChats'
 import { clockTime, dayLabel, MAX_MESSAGE_LENGTH } from '../../utils/chat'
 import { colors, radius, spacing } from '../../theme'
 
@@ -137,6 +138,13 @@ export default function ChatThread() {
   const params = useLocalSearchParams()
   const name = Array.isArray(params.name) ? params.name[0] : params.name
   const canSendParam = Array.isArray(params.canSend) ? params.canSend[0] : params.canSend
+  const kindParam = Array.isArray(params.kind) ? params.kind[0] : params.kind
+  // A direct chat with a service provider uses its own endpoints and its own
+  // live event kind; everything else is the product chat with a seller.
+  const providerThread = kindParam === 'provider'
+  const loadMessages = providerThread ? fetchProviderMessages : fetchMessages
+  const sendThreadMessage = providerThread ? sendProviderMessage : sendMessage
+  const markRead = providerThread ? markProviderChatRead : markConversationRead
   const { subscribe, refreshUnread } = useChat()
 
   const [thread, setThread] = useState({ id, status: 'loading', messages: [], hasMore: false, error: '' })
@@ -149,17 +157,17 @@ export default function ChatThread() {
   const load = useCallback(async () => {
     setThread((current) => ({ ...current, id, status: current.id === id && current.messages.length ? current.status : 'loading', error: '' }))
     try {
-      const { messages, hasMore } = await fetchMessages(id)
+      const { messages, hasMore } = await loadMessages(id)
       seen.current = new Set(messages.map((m) => m._id))
       setThread({ id, status: 'ready', messages, hasMore, error: '' })
-      await markConversationRead(id)
+      await markRead(id)
       refreshUnread()
     } catch (err) {
       setThread({ id, status: 'error', messages: [], hasMore: false, error: getErrorMessage(err, "Couldn't load this conversation.") })
     }
-    // refreshUnread is stable for the signed-in user.
+    // refreshUnread is stable for the signed-in user; the transport is fixed per thread kind.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id])
+  }, [id, loadMessages, markRead])
 
   useEffect(() => {
     load()
@@ -174,7 +182,7 @@ export default function ChatThread() {
     [],
   )
 
-  // Live arrivals: append, and a message from the seller is read immediately.
+  // Live arrivals: append, and a message from the other side is read immediately.
   useEffect(() => {
     const unsubscribe = subscribe((type, payload) => {
       if (type === 'resync') {
@@ -182,22 +190,23 @@ export default function ChatThread() {
         return
       }
       if (payload?.conversationId !== id) return
+      if (providerThread ? payload.kind !== 'PROVIDER' : Boolean(payload.kind)) return
       appendMessage(payload.message)
       if (payload.message && !payload.message.mine) {
-        markConversationRead(id).catch(() => {})
+        markRead(id).catch(() => {})
         refreshUnread()
       }
     })
     return unsubscribe
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subscribe, id, load])
+  }, [subscribe, id, load, providerThread, markRead])
 
   async function loadEarlier() {
     const oldest = thread.messages[0]
     if (!oldest || loadingEarlier || !thread.hasMore) return
     setLoadingEarlier(true)
     try {
-      const { messages, hasMore } = await fetchMessages(id, { before: oldest._id })
+      const { messages, hasMore } = await loadMessages(id, { before: oldest._id })
       const fresh = messages.filter((m) => !seen.current.has(m._id))
       fresh.forEach((m) => seen.current.add(m._id))
       setThread((current) => ({ ...current, messages: [...fresh, ...current.messages], hasMore }))
@@ -214,7 +223,7 @@ export default function ChatThread() {
     setSending(true)
     setSendError('')
     try {
-      const message = await sendMessage(id, body)
+      const message = await sendThreadMessage(id, body)
       appendMessage(message)
       setDraft('')
     } catch (err) {
@@ -232,7 +241,7 @@ export default function ChatThread() {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: colors.surface }}>
         <BackButton />
         <AppText variant="heading" accessibilityRole="header" style={{ flex: 1 }} numberOfLines={1}>
-          {name || 'Chat'}
+          {name || (providerThread ? 'Service provider' : 'Chat')}
         </AppText>
       </View>
 
@@ -262,7 +271,15 @@ export default function ChatThread() {
             }
             ListEmptyComponent={
               <View style={{ transform: [{ scaleY: -1 }] }}>
-                <EmptyState icon="message-circle" title="Say hello" message="Your message goes straight to the seller." />
+                <EmptyState
+                  icon="message-circle"
+                  title="Say hello"
+                  message={
+                    providerThread
+                      ? `Ask ${name || 'the provider'} about the job. Prices and times are still agreed in a booking.`
+                      : 'Your message goes straight to the seller.'
+                  }
+                />
               </View>
             }
             ListFooterComponent={
@@ -282,7 +299,7 @@ export default function ChatThread() {
           ) : null}
           <Composer
             disabled={!canSend}
-            notice={canSend ? null : 'This seller is not taking messages right now.'}
+            notice={canSend ? null : providerThread ? 'This provider is not taking messages right now.' : 'This seller is not taking messages right now.'}
             draft={draft}
             setDraft={setDraft}
             onSend={send}

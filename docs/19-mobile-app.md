@@ -21,8 +21,9 @@ CityCart/
    │  ├─ app/          screens; each file is a route (Expo Router, SDK 57 puts routes in src/app)
    │  │  ├─ _layout.jsx        fonts, providers, splash screen
    │  │  ├─ (auth)/            login, register                     (Phase 2)
-   │  │  ├─ (tabs)/            index (home feed), nearby, cart, account
+   │  │  ├─ (tabs)/            index (home feed), services, nearby, cart, account
    │  │  ├─ store/[id].jsx     a shop's public page                   (Phase 8)
+   │  │  ├─ service/[slug]/    index (provider page), book            (Phase 9)
    │  │  ├─ product/[id].jsx                                        (Phase 3)
    │  │  ├─ checkout.jsx  order-placed.jsx                          (Phase 5)
    │  │  ├─ orders/            index, [id]                          (Phase 5)
@@ -31,8 +32,8 @@ CityCart/
    │  ├─ components/ui/  AppText, Screen, Button, Card, Spinner, EmptyState
    │  ├─ context/        AuthProvider (more providers arrive with their screens)
    │  ├─ hooks/
-   │  ├─ services/       api.js (axios + bearer token), storage.js, session.js, config.js, socket.js (the live connection, Phase 6)
-   │  ├─ utils/          formatting now; geo, range, chat later (ported from client/src/utils)
+   │  ├─ services/       api.js (axios + bearer token), storage.js, session.js, config.js, socket.js (the live connection), chats.js, services.js
+   │  ├─ utils/          formatting, geo, range, chat and serviceSlots (ported from client/src)
    │  └─ theme.js        the web app's colours, Poppins and Fraunces
    ├─ __tests__/         unit tests (jest-expo)
    └─ assets/            icon, splash
@@ -88,7 +89,8 @@ Installed once, inside `mobile/`, each with a stated reason:
 | 5 | Cart (with the area delivery warning), checkout with saved addresses and a delivery pin, order confirmation, orders and tracking; saved-address book | done |
 | 6 | Chat and notifications, unread badges | done |
 | 7 | Polish and release: states, offline handling, icon/splash, Android build, device tests | done |
-| 8 | Shopper discovery: a city-scoped home feed of stores and a picked shelf, the store page, and store links from every browsing screen | in progress |
+| 8 | Shopper discovery: a city-scoped home feed of stores and a picked shelf, the store page, and store links from every browsing screen | done |
+| 9 | Services: providers in the shopper's area, the provider page, a booking request with a map pin, and direct chat with a provider | done |
 | later | Push notifications when the app is closed (needs a server device-token model); seller inbox | |
 
 Each phase ends with the server tests, lint and a successful app bundle.
@@ -281,9 +283,77 @@ permissions are checked.
 Tests: `chat.test.js` (requests, cursor, live-connection rules, time stamps),
 `live.test.js` (socket lifecycle, badge honesty, fan-out and the debounced
 re-read), `chat-screens.test.js` and `notifications-screen.test.js` (the
-screens against a fake server).
+screens against a fake server). `chat-screens.test.js` also covers the direct
+provider thread (§12): its own endpoints, its own live event kind, and the
+events it must ignore.
 
-## 12. Polish and release (Phase 7)
+## 12. Local services (Phase 9)
+
+The shopper side of the local-services marketplace, on the public
+`/services` endpoints and the customer booking and direct-chat endpoints
+(docs/24); no server changes. Money moves in **paisa** on the wire, and only
+the screens divide by 100 to show rupees. The server stays authoritative for
+the provider's block, the price floor, the pin inside that block, and the
+working hours.
+
+* **Discovery** (`(tabs)/services`): the providers in the shopper's chosen
+  area, using the same area model as Nearby (`GET /services/discover` with
+  `scope=area`, the chosen `blockIds`, and a radius when one is set). Without
+  an area it searches the whole city, and with no city it asks for one. The
+  card shows the category and block, rating, a "From" price and up to two
+  offerings ("+n more"). The heading reads **Local services** and
+  **Looking in {block}**. A category sheet and a sort sheet (Recommended, Top
+  rated, Lowest starting price) narrow the list, and the search box debounces
+  typing by 400 ms. Results load twelve at a time. An empty area suggests a
+  wider range (**Try 5 km**), and a failure offers **Try again**. The query
+  builder lives in `services/services.js`, unit tested.
+* **Provider page** (`service/[slug]`): the public profile from
+  `GET /services/providers/:slug` — cover, avatar, category, name, the block
+  and city they serve, rating (or **New on CityCart**), completed jobs and the
+  starting price; an expandable bio; the published services with price and
+  duration; the weekly working hours and blackout dates in Pakistan time; the
+  reviews with the provider's reply; and the service area. **Request a
+  booking** opens the form (a visitor signs in first and returns to it), and
+  **Message {provider}** starts a direct chat. A seller or admin account sees
+  that only customer accounts can book. A gone provider (404) reads
+  **Provider not found** with a link to the services list; a network failure
+  offers **Try again**.
+* **Booking request** (`service/[slug]/book`, customers only): choose a
+  service, then a time. When the provider publishes hours, the form offers
+  their own slots for the next ten days at the service's duration, saying
+  plainly when the next ten days are full. When they publish none, the shopper
+  asks for any future time over the next two weeks. All times are Karachi
+  wall-clock, converted to the UTC instant the server stores
+  (`utils/serviceSlots.js`, unit tested, no timezone database and no device
+  timezone dependence). An optional **Your price for the job (Rs)** becomes
+  `customerOfferPaisa`; leaving it blank lets the provider quote. The address
+  comes from saved addresses **only when their blocks include the provider's
+  block**; otherwise the form asks for the person, phone and address, and the
+  job's spot is a pin on the map, movable by tapping or by **Use my current
+  location**. The note is capped at 1,000 characters. The request sends only
+  `providerId`, `offeringId`, `scheduledStart`, `address`, `location` and the
+  optional `note`/`customerOfferPaisa`; the server re-checks the pin, the price
+  and the hours (`OUTSIDE_SERVICE_BLOCK` and the validator's messages are shown
+  on the field that caused them). Success shows the booking number and returns
+  to the provider page; no payment is taken in the app.
+* **Direct chat:** from the provider page, `POST /services/direct-chats/start`
+  opens (or reopens) the thread and the app shows it in the existing chat
+  screen with `kind=provider`. That one screen then uses the provider message
+  endpoints (`/services/direct-chats/:id/messages`, `/read`) instead of the
+  seller ones, and accepts only `kind: 'PROVIDER'` live events — product-chat
+  pushes (no `kind`) and booking-chat pushes (`SERVICE_BOOKING`) are ignored,
+  so the three threads never leak into each other. A provider that is not
+  taking messages closes the composer with its own wording. The thread is not
+  tied to a booking, so a question can be asked before requesting a time.
+
+Tests: `services.test.js` (the discovery query and fetchers), `service-slots.test.js`
+(Karachi time, windows, blackouts, custom times, paisa), `services-screen.test.js`
+(the tab against a fake server), `provider-screen.test.js` (profile states,
+booking and chat entry points), `booking-request.test.js` (the form, its
+validation, saved and manual addresses, the pin, published and free times) and
+the provider thread cases in `chat-screens.test.js`.
+
+## 13. Polish and release (Phase 7)
 
 * **States.** Loading, empty and error states were built screen by screen in
   Phases 2–6 (skeletons while loading, an explanation with "Try again" on
@@ -347,15 +417,24 @@ phone (Expo Go while developing, a preview APK for release behaviour):
    the web dashboard, unread pill on the conversation and the Account tab,
    receiving while the thread is open shows the message at once, badges settle
    after backgrounding and returning.
-8. **Notifications** — an order update arrives live, the badge increments,
+8. **Local services** — the Services tab lists providers in the chosen area,
+   the category and sort sheets and the search narrow the list, and a card
+   opens the provider page (services, working hours in Pakistan time, reviews,
+   service area). Request a booking as a customer: pick a service and a
+   published slot, use a saved address inside the block or a manual one with
+   the map pin and current location, add an optional price offer, and see the
+   booking number. Message the provider: the thread opens, a reply from the
+   provider dashboard arrives live in it, and a provider with messages closed
+   shows the composer notice instead.
+9. **Notifications** — an order update arrives live, the badge increments,
    tap follows to the order, mark-all-read and delete keep the badge honest.
-9. **Offline** — airplane mode shows the banner on every screen and requests
-   fail with "Cannot reach the server"; turning the connection back removes
-   the banner and pull-to-refresh recovers without restarting the app.
-10. **Release build** — install the preview APK, repeat sign-in, nearby map and
+10. **Offline** — airplane mode shows the banner on every screen and requests
+    fail with "Cannot reach the server"; turning the connection back removes
+    the banner and pull-to-refresh recovers without restarting the app.
+11. **Release build** — install the preview APK, repeat sign-in, nearby map and
     one order end to end; the launcher icon and splash are the branded set.
 
-## 13. Development
+## 14. Development
 
 ```bash
 cd mobile
@@ -369,14 +448,14 @@ The phone must be able to reach the API: use the deployed (https) address, or
 your computer's address on the same Wi-Fi. Plain `http` addresses work while
 developing but not in release builds of Android.
 
-## 14. Known limits
+## 15. Known limits
 
 * A bearer token cannot be revoked individually; it ends at expiry, on account
   deactivation, or when the password version changes. A lost phone is
   therefore covered by deactivating the account or changing the password.
 * No refresh tokens or push notifications in the first version.
 
-## 15. Related: the Staff and Delivery apps
+## 16. Related: the Staff and Delivery apps
 
 Riders and the people who keep order records use two separate apps that share
 this app's stack and API:

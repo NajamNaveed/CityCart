@@ -23,6 +23,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" options={tab('Home', 'home')} />
       <Tabs.Screen name="nearby" options={tab('Nearby', 'map-pin')} />
+      <Tabs.Screen name="services" options={tab('Services', 'tool')} />
       <Tabs.Screen
         name="cart"
         options={{

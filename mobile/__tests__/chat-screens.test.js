@@ -237,3 +237,79 @@ describe('starting a chat from a product', () => {
     expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/login', params: { next: `/chat?product=${ID(9)}` } })
   })
 })
+
+describe('thread with a service provider', () => {
+  const PROVIDER_MESSAGES = [
+    { _id: ID(3), conversationId: ID(1), senderRole: 'CUSTOMER', mine: true, body: 'Can you come on Friday?', createdAt: YESTERDAY },
+    { _id: ID(4), conversationId: ID(1), senderRole: 'PROVIDER', mine: false, body: 'Friday at 10 works.', createdAt: TODAY },
+  ]
+
+  beforeEach(() => {
+    mockParams = { id: ID(1), name: 'Ali Plumbing', kind: 'provider' }
+  })
+
+  const openProviderThread = async (extra = {}) => {
+    api.get.mockResolvedValue({ data: { messages: PROVIDER_MESSAGES, hasMore: false } })
+    api.post.mockResolvedValue({ data: { success: true } })
+    return show(<ChatThread />, { auth: signedIn(), ...extra })
+  }
+
+  it('reads the direct-chat thread and marks it read', async () => {
+    const screen = await openProviderThread()
+    const text = screenText(screen)
+    expect(text).toContain('Ali Plumbing')
+    expect(text).toContain('Can you come on Friday?')
+    expect(text).toContain('Friday at 10 works.')
+    expect(api.get).toHaveBeenCalledWith(`/services/direct-chats/${ID(1)}/messages`, { params: { limit: 30 } })
+    expect(api.post).toHaveBeenCalledWith(`/services/direct-chats/${ID(1)}/read`)
+  })
+
+  it('sends through the provider endpoint', async () => {
+    const screen = await openProviderThread()
+    api.post.mockResolvedValue({ data: { message: { ...PROVIDER_MESSAGES[0], _id: ID(6), body: 'See you then.', createdAt: TODAY } } })
+    await type(screen, 'Message', 'See you then.')
+    await pressByLabel(screen, 'Send message')
+
+    expect(api.post).toHaveBeenCalledWith(`/services/direct-chats/${ID(1)}/messages`, { body: 'See you then.' })
+    expect(screenText(screen)).toContain('See you then.')
+  })
+
+  it('appends a live provider message and reads it straight away', async () => {
+    let listener
+    const screen = await openProviderThread({ chat: chatValue({ subscribe: (fn) => { listener = fn; return () => {} } }) })
+    await act(async () =>
+      listener('message', {
+        kind: 'PROVIDER',
+        conversationId: ID(1),
+        message: { _id: ID(7), conversationId: ID(1), senderRole: 'PROVIDER', mine: false, body: 'Running ten minutes late.', createdAt: TODAY },
+      }),
+    )
+    expect(screenText(screen)).toContain('Running ten minutes late.')
+    expect(api.post).toHaveBeenCalledWith(`/services/direct-chats/${ID(1)}/read`)
+  })
+
+  it('ignores product and booking chat events', async () => {
+    let listener
+    const screen = await openProviderThread({ chat: chatValue({ subscribe: (fn) => { listener = fn; return () => {} } }) })
+    await act(async () => listener('message', { conversationId: ID(1), message: { _id: ID(8), conversationId: ID(1), mine: false, body: 'Booking is confirmed.', createdAt: TODAY } }))
+    await act(async () => listener('message', { kind: 'SERVICE_BOOKING', conversationId: ID(1), message: { _id: ID(9), conversationId: ID(1), mine: false, body: 'Your booking moved.', createdAt: TODAY } }))
+
+    const text = screenText(screen)
+    expect(text).not.toContain('Booking is confirmed.')
+    expect(text).not.toContain('Your booking moved.')
+  })
+
+  it('closes the composer when the provider is not taking messages', async () => {
+    mockParams = { ...mockParams, canSend: '0' }
+    const screen = await openProviderThread()
+    expect(screenText(screen)).toContain('This provider is not taking messages right now.')
+    expect(screen.root.findAll((n) => n.props.accessibilityLabel === 'Message').length).toBe(0)
+  })
+
+  it('invites a question when the thread is still empty', async () => {
+    api.get.mockResolvedValue({ data: { messages: [], hasMore: false } })
+    api.post.mockResolvedValue({ data: { success: true } })
+    const screen = await show(<ChatThread />, { auth: signedIn() })
+    expect(screenText(screen)).toContain('Ask Ali Plumbing about the job.')
+  })
+})

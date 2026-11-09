@@ -1,6 +1,7 @@
-import { useWindowDimensions, View } from 'react-native'
+import { Pressable, useWindowDimensions, View } from 'react-native'
 import { useState } from 'react'
 import { useRouter } from 'expo-router'
+import Feather from '@expo/vector-icons/Feather'
 import AppText from '../../components/ui/AppText'
 import Button from '../../components/ui/Button'
 import Chip from '../../components/ui/Chip'
@@ -17,7 +18,7 @@ import { useNearby } from '../../hooks/useNearby'
 import { useRemote } from '../../hooks/useRemote'
 import { fetchHomeFeed, storeInBlocks } from '../../services/home'
 import { nearbyHref } from '../../utils/nav'
-import { spacing } from '../../theme'
+import { colors, radius, spacing } from '../../theme'
 
 function SectionSkeleton({ cardWidth }) {
   return (
@@ -141,6 +142,32 @@ export default function Home() {
       </View>
 
       <SearchBar value={search} onChangeText={setSearch} onSubmit={goSearch} placeholder="Search shops or products…" label="Search shops or products" />
+
+      <Pressable
+        onPress={() => router.navigate('/services')}
+        accessibilityRole="button"
+        accessibilityLabel="Browse local services"
+        style={({ pressed }) => ({
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: spacing.md,
+          marginTop: spacing.md,
+          padding: spacing.md,
+          borderRadius: radius.lg,
+          borderWidth: 1,
+          borderColor: colors.line,
+          backgroundColor: pressed ? colors.sand : colors.surface,
+        })}
+      >
+        <View style={{ width: 40, height: 40, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cream }}>
+          <Feather name="tool" size={18} color={colors.clay} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <AppText variant="strong">Local services</AppText>
+          <AppText variant="small">Cleaners, repairs, beauty and more in your block.</AppText>
+        </View>
+        <Feather name="chevron-right" size={20} color={colors.muted} />
+      </Pressable>
 
       <View style={{ marginTop: spacing.xl }}>{feed}</View>
     </Screen>
