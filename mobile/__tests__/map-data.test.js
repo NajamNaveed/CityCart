@@ -45,6 +45,35 @@ describe('buildMapData', () => {
     expect(data.radiusKm).toBe(0)
     expect(data.pickable).toBe(false)
   })
+
+  it('draws providers at their block centre, in paisa-to-rupee prices', () => {
+    const data = buildMapData({
+      providers: [
+        {
+          _id: 'provider-1',
+          displayName: 'Ali Plumbing',
+          startingAtPrice: 150000,
+          category: { name: 'Plumbing' },
+          block: { _id: 'zone-1', name: 'Gulberg', center: { lat: 31.401, lng: 73.101 } },
+          distanceKm: 0.4,
+        },
+        { _id: 'provider-2', displayName: 'No pin', block: { name: 'Gulberg' } },
+      ],
+    })
+
+    expect(data.pins).toEqual([
+      {
+        providerId: 'provider-1',
+        providerName: 'Ali Plumbing',
+        categoryName: 'Plumbing',
+        blockName: 'Gulberg',
+        price: 'From Rs 1,500',
+        distance: '400 m away',
+        lat: 31.401,
+        lng: 73.101,
+      },
+    ])
+  })
 })
 
 describe('the WebView map', () => {
@@ -73,5 +102,13 @@ describe('the WebView map', () => {
     expect(MAP_HTML).toContain("dotMarker(data.rider.lat, data.rider.lng, 'Your rider'")
     expect(MAP_HTML).toContain('setRider: function (lat, lng)')
     expect(MAP_HTML).toContain('if (state.data.rider && !shown) fit();')
+  })
+
+  it('draws provider pins in their own colour and frames a city on request', () => {
+    expect(MAP_HTML).toContain('.pin.provider')
+    expect(MAP_HTML).toContain('View services')
+    expect(MAP_HTML).toContain("targetKind: item.target.kind")
+    expect(MAP_HTML).toContain('setFocus: function (bounds)')
+    expect(MAP_HTML).toContain('recenter: function ()')
   })
 })

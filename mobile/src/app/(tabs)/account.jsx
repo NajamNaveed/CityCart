@@ -55,6 +55,7 @@ export default function Account() {
           <AccountRow icon="map-pin" label="Saved addresses" onPress={() => router.push('/addresses')} />
           <AccountRow icon="message-circle" label="Messages" badge={chatUnread} onPress={() => router.push('/chat')} />
           <AccountRow icon="bell" label="Notifications" badge={notificationUnread} onPress={() => router.push('/notifications')} />
+          <AccountRow icon="help-circle" label="Help & support" onPress={() => router.push('/help')} />
         </View>
         <Button title="Sign out" variant="outline" onPress={confirmSignOut} style={{ marginTop: spacing.xl }} />
       </Screen>
@@ -85,6 +86,10 @@ export default function Account() {
         <Button title="Sign in" onPress={() => router.push('/login')} />
         <Button title="Create an account" variant="outline" onPress={() => router.push('/register')} style={{ marginTop: spacing.md }} />
       </Card>
+
+      <View style={{ gap: spacing.md, marginTop: spacing.lg }}>
+        <AccountRow icon="help-circle" label="Help & support" onPress={() => router.push('/help')} />
+      </View>
     </Screen>
   )
 }

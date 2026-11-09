@@ -1,4 +1,4 @@
-import { formatDistance, isValidLatLng, latLngOfGeoPoint, mapsUrl, roundCoord } from '../src/utils/geo'
+import { boundsOfBlocks, formatDistance, isValidLatLng, latLngOfGeoPoint, mapsUrl, roundCoord } from '../src/utils/geo'
 
 describe('formatDistance', () => {
   it('reads as metres under a kilometre and kilometres above', () => {
@@ -53,5 +53,24 @@ describe('latLngOfGeoPoint', () => {
     expect(latLngOfGeoPoint({})).toBeNull()
     expect(latLngOfGeoPoint({ coordinates: [73.06] })).toBeNull()
     expect(latLngOfGeoPoint({ coordinates: [200, 31.42] })).toBeNull()
+  })
+})
+
+describe('boundsOfBlocks', () => {
+  it('wraps every outline of the city in one rectangle', () => {
+    const bounds = boundsOfBlocks([
+      { _id: 'a', polygon: [[31.39, 73.09], [31.41, 73.09], [31.41, 73.11], [31.39, 73.11]] },
+      { _id: 'b', polygon: [[31.42, 73.07], [31.44, 73.07], [31.44, 73.09]] },
+    ])
+    expect(bounds).toEqual({ south: 31.39, north: 31.44, west: 73.07, east: 73.11 })
+  })
+
+  it('falls back to the centre of a block that has no outline', () => {
+    expect(boundsOfBlocks([{ _id: 'c', latitude: 31.4, longitude: 73.1 }])).toEqual({ south: 31.4, north: 31.4, west: 73.1, east: 73.1 })
+  })
+
+  it('gives nothing when no block has a usable position', () => {
+    expect(boundsOfBlocks([])).toBeNull()
+    expect(boundsOfBlocks([{ _id: 'x', polygon: [['bad', 'ring']] }])).toBeNull()
   })
 })

@@ -43,6 +43,7 @@ import Nearby from '../src/app/(tabs)/nearby'
 
 const ID = (n) => `64b7f0c2a1b2c3d4e5f6070${n}`
 const CITY = { _id: ID(9), name: 'Faisalabad' }
+const CITY2 = { _id: ID(8), name: 'Lahore' }
 const GULBERG = { _id: ID(4), name: 'Gulberg', cityId: CITY._id, polygon: [[31.39, 73.09], [31.41, 73.09], [31.41, 73.11], [31.39, 73.11]] }
 const DGROUND = { _id: ID(7), name: 'D Ground', cityId: CITY._id, polygon: [[31.42, 73.07], [31.44, 73.07], [31.44, 73.09], [31.42, 73.09]] }
 const POSITION = { lat: 31.4, lng: 73.1 }
@@ -53,8 +54,8 @@ const BRAND = {
   nearestKm: 1.2,
   branchCount: 2,
   branches: [
-    { _id: ID(5), name: 'Loom & Co. Gulberg', blockName: 'Gulberg', address: 'Plot 31, Main Boulevard', phone: '+92 41 8714 305', distanceKm: 1.2, latitude: 31.401, longitude: 73.101 },
-    { _id: ID(6), name: 'Loom & Co. D Ground', blockName: 'D Ground', address: 'Shop 7', phone: '', distanceKm: 3.4, latitude: 31.43, longitude: 73.09 },
+    { _id: ID(5), name: 'Loom & Co. Gulberg', blockId: GULBERG._id, blockName: 'Gulberg', address: 'Plot 31, Main Boulevard', phone: '+92 41 8714 305', distanceKm: 1.2, latitude: 31.401, longitude: 73.101 },
+    { _id: ID(6), name: 'Loom & Co. D Ground', blockId: DGROUND._id, blockName: 'D Ground', address: 'Shop 7', phone: '', distanceKm: 3.4, latitude: 31.43, longitude: 73.09 },
   ],
   products: [{ _id: ID(2), name: 'Mehrunisa Printed Lawn', price: 3600, image: '', availability: 'IN_STOCK', availableAt: ['Gulberg'] }],
 }
@@ -65,7 +66,7 @@ function serve() {
   discoverItems = [BRAND]
   atResult = { containing: [GULBERG], nearest: [] }
   api.get.mockImplementation(async (url, config) => {
-    if (url === '/cities') return { data: { cities: [CITY] } }
+    if (url === '/cities') return { data: { cities: [CITY, CITY2] } }
     if (url === '/blocks') return { data: { blocks: [GULBERG, DGROUND] } }
     if (url === '/blocks/at') {
       if (atResult instanceof Error) throw atResult
@@ -125,6 +126,13 @@ const discoverCalls = () => api.get.mock.calls.filter(([url]) => url === '/disco
 async function press(renderer, label) {
   const target = renderer.root.findAll((n) => typeof n.props.onPress === 'function' && n.findAllByType(Text).some((t) => textOf(t) === label))[0]
   if (!target) throw new Error(`nothing to press labelled "${label}" in: ${screenText(renderer)}`)
+  await act(async () => target.props.onPress())
+  await tick()
+}
+
+async function pressByLabel(renderer, label) {
+  const target = renderer.root.findAll((n) => n.props.accessibilityLabel === label && typeof n.props.onPress === 'function')[0]
+  if (!target) throw new Error(`no control with accessibility label "${label}"`)
   await act(async () => target.props.onPress())
   await tick()
 }
@@ -250,7 +258,7 @@ describe('a remembered area', () => {
     expect(renderer.root.findAllByProps({ testID: 'map' }).length).toBeGreaterThan(0)
     let map = mockMaps.views.at(-1)
     expect(map.items).toEqual([BRAND])
-    expect(map.zones).toEqual([GULBERG]) // the chosen block is shaded
+    expect(map.zones).toEqual([GULBERG, DGROUND]) // every block of the city, until "Mine"
     expect(map.radiusKm).toBeNull()
     expect(map.origin).toEqual(POSITION)
     expect(map.pickable).toBe(false) // an area is already set
@@ -262,6 +270,32 @@ describe('a remembered area', () => {
     // tapping a shop pin's "See products" opens that shop's page
     map.onOpenBrand(BRAND)
     expect(mockRouter.push).toHaveBeenCalledWith(`/store/${BRAND._id}`)
+  })
+
+  it('cycles each layer, recenters, and frames another city', async () => {
+    await AsyncStorage.setItem('citycart.nearbyAsked', 'true')
+    const renderer = await open()
+    await press(renderer, 'Map')
+
+    // "Mine" keeps only the shop that has a branch in the chosen block.
+    await pressByLabel(renderer, 'Stores: showing All. Tap to show only mine.')
+    expect(mockMaps.views.at(-1).items.map((item) => item._id)).toEqual([BRAND._id])
+
+    // Blocks: everything -> only mine -> hidden.
+    await pressByLabel(renderer, 'Blocks: showing All. Tap to show only mine.')
+    expect(mockMaps.views.at(-1).zones).toEqual([GULBERG])
+    await pressByLabel(renderer, 'Blocks: showing my block. Tap to show off.')
+    expect(mockMaps.views.at(-1).zones).toEqual([])
+
+    const before = mockMaps.views.at(-1).recenter
+    await pressByLabel(renderer, 'Recenter')
+    expect(mockMaps.views.at(-1).recenter).toBe(before + 1)
+
+    // The city control swaps the active city (and frames it) without a new pin.
+    await pressByLabel(renderer, 'City shown on the map: Faisalabad. Tap to change.')
+    await press(renderer, 'Lahore')
+    expect(api.get).toHaveBeenCalledWith('/blocks', { params: { cityId: CITY2._id, isActive: true } })
+    expect(mockMaps.views.at(-1).focus.bounds).toEqual({ south: 31.39, north: 31.44, west: 73.07, east: 73.11 })
   })
 
   it('changes the area from a pin dropped on the map', async () => {

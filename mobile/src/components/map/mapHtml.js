@@ -32,6 +32,7 @@ export const MAP_HTML = `<!doctype html>
   .pin { display: block; width: 26px; height: 26px; border-radius: 50% 50% 50% 0; border: 2px solid #fff; box-shadow: 0 1px 5px rgba(0,0,0,.45); transform: rotate(-45deg); box-sizing: border-box; }
   .pin span { display: block; width: 8px; height: 8px; margin: 7px; border-radius: 50%; background: #fff; }
   .pin.shop { background: #b6472a; }
+  .pin.provider { background: #1c3a2e; }
   .pin.chosen { background: #3b5b7c; }
   .marker.dot { width: 18px; height: 18px; transform: translate(-9px, -9px); }
   .dot { display: block; width: 18px; height: 18px; border-radius: 50%; border: 2px solid #fff; background: #3b5b7c; box-shadow: 0 1px 4px rgba(0,0,0,.35); box-sizing: border-box; }
@@ -394,13 +395,13 @@ export const MAP_HTML = `<!doctype html>
       popup.appendChild(row);
     });
 
-    if (item.brandId) {
+    if (item.target) {
       var open = document.createElement('button');
       open.type = 'button';
-      open.textContent = 'See products';
+      open.textContent = item.action || 'Open';
       open.addEventListener('pointerup', function (event) {
         event.stopPropagation();
-        post({ type: 'open', brandId: item.brandId });
+        post({ type: 'open', targetKind: item.target.kind, targetId: item.target.id });
       });
       popup.appendChild(open);
     }
@@ -418,26 +419,46 @@ export const MAP_HTML = `<!doctype html>
     markBox.innerHTML = '';
     if (!data) return;
     (data.pins || []).forEach(function (pin) {
-      pinMarker(pin.lat, pin.lng, 'shop', pin.brandName + ', ' + pin.branchName, function (x, y) {
-        showPopup({ title: pin.brandName, lines: [pin.branchName, pin.where, pin.distance], brandId: pin.brandId }, x, y);
+      // Shop branches and service providers share the map; the pin colour and
+      // the popup's action say which one it is.
+      var isProvider = Boolean(pin.providerId);
+      var name = isProvider ? pin.providerName : pin.brandName;
+      pinMarker(pin.lat, pin.lng, isProvider ? 'provider' : 'shop', name + ', ' + (isProvider ? pin.blockName : pin.branchName), function (x, y) {
+        showPopup(
+          isProvider
+            ? {
+                title: pin.providerName,
+                lines: [pin.categoryName, pin.blockName, pin.price, pin.distance],
+                action: 'View services',
+                target: { kind: 'provider', id: pin.providerId },
+              }
+            : {
+                title: pin.brandName,
+                lines: [pin.branchName, pin.where, pin.distance],
+                action: 'See products',
+                target: { kind: 'brand', id: pin.brandId },
+              },
+          x,
+          y,
+        );
       });
     });
     if (data.pin) {
       if (data.pin.kind === 'origin') {
         // The website draws the search point as a small blue dot, not a pin.
         dotMarker(data.pin.lat, data.pin.lng, data.pin.label, function (x, y) {
-          showPopup({ title: data.pin.label, lines: [], brandId: null }, x, y);
+          showPopup({ title: data.pin.label, lines: [] }, x, y);
         });
       } else {
         pinMarker(data.pin.lat, data.pin.lng, 'chosen', data.pin.label, function (x, y) {
-          showPopup({ title: data.pin.label, lines: [], brandId: null }, x, y);
+          showPopup({ title: data.pin.label, lines: [] }, x, y);
         });
       }
     }
     // The rider's last shared position, drawn as a clay dot on top of the stops.
     if (data.rider) {
       dotMarker(data.rider.lat, data.rider.lng, 'Your rider', function (x, y) {
-        showPopup({ title: 'Your rider', lines: ['Last shared position'], brandId: null }, x, y);
+        showPopup({ title: 'Your rider', lines: ['Last shared position'] }, x, y);
       }, 'rider');
     }
     cullMarks();
@@ -770,6 +791,26 @@ export const MAP_HTML = `<!doctype html>
       if (state.data && rider) state.data.rider = rider;
       closePopup();
       map.className = data && data.pickable ? 'pickable' : '';
+      fit();
+    },
+    // A city choice or a recenter frames a whole rectangle instead of fitting
+    // the pins, so the view can leave the current results behind.
+    setFocus: function (bounds) {
+      if (!bounds) return;
+      stopInertia();
+      closePopup();
+      var sw = project(bounds.south, bounds.west, 0);
+      var ne = project(bounds.north, bounds.east, 0);
+      var dx = Math.max(Math.abs(ne.x - sw.x), 0.000001);
+      var dy = Math.max(Math.abs(ne.y - sw.y), 0.000001);
+      var scale = Math.min((width() - 32) / dx, (height() - 32) / dy);
+      state.zoom = clamp(Math.round(Math.log(scale) / Math.LN2), 8, 13);
+      state.center = unproject((sw.x + ne.x) / 2, (sw.y + ne.y) / 2, 0);
+      render();
+    },
+    recenter: function () {
+      stopInertia();
+      closePopup();
       fit();
     },
     // Move only the rider dot. The first shared position (or a fresh one after a

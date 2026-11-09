@@ -29,7 +29,8 @@ CityCart/
    │  │  ├─ checkout.jsx  order-placed.jsx                          (Phase 5)
    │  │  ├─ orders/            index, [id]                          (Phase 5)
    │  │  ├─ chat/              index, [id]                          (Phase 6)
-   │  │  └─ notifications.jsx                                       (Phase 6)
+   │  │  ├─ notifications.jsx                                       (Phase 6)
+   │  │  └─ help.jsx            help, FAQ and support contact        (Phase 11)
    │  ├─ components/ui/  AppText, Screen, Button, Card, Spinner, EmptyState
    │  ├─ context/        AuthProvider (more providers arrive with their screens)
    │  ├─ hooks/
@@ -93,6 +94,7 @@ Installed once, inside `mobile/`, each with a stated reason:
 | 8 | Shopper discovery: a city-scoped home feed of stores and a picked shelf, the store page, and store links from every browsing screen | done |
 | 9 | Services: providers in the shopper's area, the provider page, a booking request with a map pin, and direct chat with a provider | done |
 | 10 | Bookings: the filtered booking list, the detail with every customer action (proposal, completion, dispute, cancel, review), booking chat, merged chat filters and notification deep links | done |
+| 11 | Maps and support: a city selector, tri-state Blocks/Stores (and Blocks/Providers) layers and recenter on both maps, provider pins on the services map, and a Help & support screen fed by the public support settings | done |
 | later | Push notifications when the app is closed (needs a server device-token model); seller inbox | |
 
 Each phase ends with the server tests, lint and a successful app bundle.
@@ -162,16 +164,22 @@ and the storefront fetcher are unit tested; `__tests__/screens.test.js`,
 `__tests__/home-screen.test.js` and `__tests__/storefront-screen.test.js` render the real
 screens against a fake API (what is shown and its loading, empty and error states).
 
-## 9. Nearby and the shopping area (Phases 4 and v2 Phase 3)
+## 9. Nearby and the shopping area (Phases 4, v2 Phase 3 and 11)
 
 The same area model as the web app, on the same public endpoints
 (`GET /blocks`, `GET /blocks/at`, `GET /discover?scope=area`).
 
 * **Location controls live in the map view.** The Nearby map owns the area picker; there is no
-  separate location pop-up. Its top-right buttons toggle **Blocks** (outlines) and **Shops** (pins)
-  and offer **Choose location** (or **Cancel** while choosing). Home no longer shows a city chip or
-  a location setter, and the website no longer shows a location control in its navbar; the website
-  still asks for the shopper's position automatically on a first visit.
+  separate location pop-up. Its overlay (`components/MapLayers.jsx`, shared with Services) has a
+  **city chip**, one button per layer and the screen's actions. Each layer button is tri-state and
+  cycles **everything → only mine → hidden** (`utils/layerState.js`), and says what it shows now and
+  what a tap will show next in its accessibility label. The chips frame the whole city rather than
+  one pin (`hooks/useMapFocus.js` and `boundsOfBlocks`), read that city's blocks with `GET /blocks`,
+  and the map draws them with `setFocus(bounds)`; choosing a city swaps the active city and its
+  results, never the shopper's saved spot. **Recenter** re-fits whatever the map currently draws.
+  Home no longer shows a city chip or a location setter, and the website no longer shows a location
+  control in its navbar; the website still asks for the shopper's position automatically on a first
+  visit.
 * **Finding the shopper.** The first time the Nearby tab opens, the app asks for the
   phone's position once (the system permission prompt appears then, not at launch). It
   uses a recent known position when there is one (instant), otherwise waits up to 12
@@ -203,8 +211,11 @@ The same area model as the web app, on the same public endpoints
   the shop's store page. The former **Products** view was removed: the public catalogue listing
   no longer exists, so products are reached through their shop or a product page.
 * **Map.** A `react-native-webview` showing a self-contained OpenStreetMap viewer
-  (`src/components/map/`): pins per branch, the delivery/shopping pin, a circle for a
-  radius search, and a highlighted outline for every selected block. Tiles come from
+  (`src/components/map/`): pins per branch (and per service provider), the delivery/shopping pin,
+  a circle for a radius search, and a highlighted outline for every selected block. The **All**
+  state of a layer is the whole city, not only the loaded list: `hooks/useCityDirectory.js` asks
+  `/discover` or `/services/discover` with `scope=city&limit=30` (same search text and category),
+  while **Mine** keeps the block-scoped results and **Off** hides the layer. Tiles come from
   `tile.openstreetmap.org` with visible attribution, so there is no Google Maps key,
   no native map SDK and no platform-specific setup; it behaves the same in Expo Go
   and in release builds. Tiles, blocks and pins are laid out once in world pixels, so
@@ -215,7 +226,7 @@ The same area model as the web app, on the same public endpoints
   That keeps it as smooth as the Leaflet map on the website on low-end phones. The
   +/− buttons zoom, and the pins/dot use the same shapes as the website map. A tap
   chooses the shopper's spot (see above) and a pin's popup opens that shop's store
-  page. Directions
+  page (**See products**) or the provider's page (**View services**). Directions
   still opens the phone's own maps app with `mapsUrl`. The map only needs a data
   connection for its tiles; when they cannot load the viewer shows a short "could not
   load" message.
@@ -226,7 +237,10 @@ The same area model as the web app, on the same public endpoints
 * The area is kept in `context/NearbyProvider.jsx` and the rules (query building, saved
   value checks, "find me" outcomes) in `services/nearby.js` and `services/location.js`,
   both unit tested; the screen is covered by `__tests__/nearby-screen.test.js` and the
-  offers list by `__tests__/also-sold-by.test.js`.
+  offers list by `__tests__/also-sold-by.test.js`. The map helpers are covered by
+  `__tests__/layer-state.test.js` (the cycle), `__tests__/city-map.test.js` (the city-wide
+  directory and focus, including a late answer from a city that was replaced) and
+  `__tests__/geo.test.js` (`boundsOfBlocks`).
 
 ## 10. Cart, checkout, addresses and orders (Phases 5 and v2 Phase 3)
 
@@ -302,7 +316,7 @@ inbox and its filters, the direct provider thread (§12) with its own endpoints
 and live event kind, and the booking thread with events addressed by
 `bookingId`; `notifications-screen.test.js` covers the service deep links.
 
-## 12. Local services (Phase 9)
+## 12. Local services (Phases 9 and 11)
 
 The shopper side of the local-services marketplace, on the public
 `/services` endpoints and the customer booking and direct-chat endpoints
@@ -322,6 +336,15 @@ working hours.
   typing by 400 ms. Results load twelve at a time. An empty area suggests a
   wider range (**Try 5 km**), and a failure offers **Try again**. The query
   builder lives in `services/services.js`, unit tested.
+* **Map view:** the same map as Nearby (`components/NearbyMap.jsx`) with provider pins at
+  their block centre in the pine colour, the popup reading category, block, "From" price and
+  distance, and **View services** opening the provider page. The header toggles **Providers**
+  and **Map**; the map overlay is the shared `MapLayers` with the city chip, **Blocks** and
+  **Providers** layers (each everything → only mine → hidden) and **Recenter** / **Choose
+  location**. The **All** providers layer is the whole city (`/services/discover?scope=city`,
+  30 at a time, current search and category), while **mine** keeps the area results. Tapping
+  the map sets the shopping spot only while choosing a location, exactly as in Nearby, and
+  the area warning's **Choose on the map** opens the map ready to pick.
 * **Provider page** (`service/[slug]`): the public profile from
   `GET /services/providers/:slug` — cover, avatar, category, name, the block
   and city they serve, rating (or **New on CityCart**), completed jobs and the
@@ -397,7 +420,30 @@ validation, saved and manual addresses, the pin, published and free times),
 `bookings-screens.test.js` (the list, filters and every detail action) and
 the provider and booking thread cases in `chat-screens.test.js`.
 
-## 13. Polish and release (Phase 7)
+## 13. Help and support (Phase 11)
+
+`help.jsx`, reached from the Account tab (**Help & support**, signed in or not) and
+directly at `/help`.
+
+* The support address and phone come from the existing public settings endpoint
+  (`GET /settings/public`: `platformName`, `supportEmail`, `supportPhone`). The request
+  is made once and shared (`services/settings.js`, `hooks/usePublicSettings.js`).
+  **Email support** and the address itself open the phone's mail app (`mailto:`); the
+  phone row opens the dialer (`tel:`) using only digits and a leading `+`. When no
+  address is configured the card says it is being set up and points to the order's
+  Messages thread — the app never invents a support contact.
+* The FAQ is the website help centre's approved copy (cash on delivery, delivery
+  areas, multi-shop carts, damaged or missing items, booking a service, cancelling),
+  so the app and the website give the same answers. Answers expand in place and carry
+  `accessibilityState.expanded`.
+* Topic rows open **My orders**, **My bookings** and **Saved addresses**; a visitor is
+  sent through the usual sign-in gate and returns to the chosen screen.
+
+Tests: `__tests__/settings.test.js` (defaults, one shared request, offline fallback)
+and `__tests__/help-screen.test.js` (the support card, mail/phone links, the FAQ, the
+missing-address fallback and the Account entry points).
+
+## 14. Polish and release (Phase 7)
 
 * **States.** Loading, empty and error states were built screen by screen in
   Phases 2–6 (skeletons while loading, an explanation with "Try again" on
@@ -442,10 +488,11 @@ phone (Expo Go while developing, a preview APK for release behaviour):
    work, and "Chat with seller" asks a visitor to sign in and returns to the same product.
 3. **Nearby and the area** — the location-permission wording appears, the **Use my
    location** button re-detects, blocks load with their outlines, the map shows pins and
-   pans to results (OpenStreetMap tiles render in the release build), the Blocks/Shops
-   toggles work, a pin's popup opens its store page, Directions opens the maps app. Then: an
-   overlap starts with both blocks ticked, a border point offers the nearest blocks, with
-   no area a map tap sets it and **Choose location** changes it later, and a product
+   pans to results (OpenStreetMap tiles render in the release build). The city chip frames
+   the chosen city; **All → Mine → Off** on Blocks and Stores changes what is drawn and
+   **Recenter** re-fits it; a pin's popup opens its store page; Directions opens the maps app.
+   Then: an overlap starts with both blocks ticked, a border point offers the nearest blocks,
+   with no area a map tap sets it and **Choose location** changes it later, and a product
    page's "Also sold by" lists the area's other stores.
 4. **Cart and checkout** — quantities, remove, an out-of-stock line blocks
    checkout, a cart line the area's stores cannot deliver shows the warning with
@@ -466,7 +513,10 @@ phone (Expo Go while developing, a preview APK for release behaviour):
 8. **Local services** — the Services tab lists providers in the chosen area,
    the category and sort sheets and the search narrow the list, and a card
    opens the provider page (services, working hours in Pakistan time, reviews,
-   service area). Request a booking as a customer: pick a service and a
+   service area). The **Map** view draws provider pins city-wide (Blocks and
+   Providers cycle All → Mine → Off, city chip and Recenter work), a pin's
+   **View services** opens the provider, and **Choose location** moves the
+   shopping spot. Request a booking as a customer: pick a service and a
    published slot, use a saved address inside the block or a manual one with
    the map pin and current location, add an optional price offer, and see the
    booking number. Message the provider: the thread opens, a reply from the
@@ -485,10 +535,15 @@ phone (Expo Go while developing, a preview APK for release behaviour):
 11. **Offline** — airplane mode shows the banner on every screen and requests
     fail with "Cannot reach the server"; turning the connection back removes
     the banner and pull-to-refresh recovers without restarting the app.
-12. **Release build** — install the preview APK, repeat sign-in, nearby map and
+12. **Help & support** — Account → Help & support (signed in and signed out):
+    the support email and phone match the admin settings, the buttons open the
+    mail and dialer with the address prefilled, an answer expands and folds,
+    the topic rows open orders, bookings and addresses, and with no support
+    address configured the card explains that instead of showing a dead link.
+13. **Release build** — install the preview APK, repeat sign-in, nearby map and
     one order end to end; the launcher icon and splash are the branded set.
 
-## 14. Development
+## 15. Development
 
 ```bash
 cd mobile
@@ -502,14 +557,14 @@ The phone must be able to reach the API: use the deployed (https) address, or
 your computer's address on the same Wi-Fi. Plain `http` addresses work while
 developing but not in release builds of Android.
 
-## 15. Known limits
+## 16. Known limits
 
 * A bearer token cannot be revoked individually; it ends at expiry, on account
   deactivation, or when the password version changes. A lost phone is
   therefore covered by deactivating the account or changing the password.
 * No refresh tokens or push notifications in the first version.
 
-## 16. Related: the Staff and Delivery apps
+## 17. Related: the Staff and Delivery apps
 
 Riders and the people who keep order records use two separate apps that share
 this app's stack and API:

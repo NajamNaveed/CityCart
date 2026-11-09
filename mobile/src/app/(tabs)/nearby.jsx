@@ -2,21 +2,25 @@ import { useEffect, useState } from 'react'
 import { ActivityIndicator, FlatList, Pressable, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import Feather from '@expo/vector-icons/Feather'
 import AppText from '../../components/ui/AppText'
 import Button from '../../components/ui/Button'
 import EmptyState from '../../components/ui/EmptyState'
 import SearchBar from '../../components/ui/SearchBar'
 import Skeleton from '../../components/ui/Skeleton'
+import MapLayers from '../../components/MapLayers'
 import NearbyBrandCard from '../../components/NearbyBrandCard'
 import NearbyMap from '../../components/NearbyMap'
 import RangeBar from '../../components/RangeBar'
+import ViewToggle from '../../components/ViewToggle'
 import { useCity } from '../../hooks/useCity'
+import { useCityDirectory } from '../../hooks/useCityDirectory'
 import { useDebounced } from '../../hooks/useDebounced'
+import { useMapFocus } from '../../hooks/useMapFocus'
 import { useNearby } from '../../hooks/useNearby'
 import { usePagedList } from '../../hooks/usePagedList'
 import { discoverQuery, fetchDiscover, needsArea } from '../../services/nearby'
 import { isRadius, nextRange, rangeLabel } from '../../utils/range'
+import { nextLayerState } from '../../utils/layerState'
 import { colors, radius, spacing } from '../../theme'
 
 const NOTHING = { items: [], pagination: { page: 1, pages: 0, total: 0 } }
@@ -27,61 +31,12 @@ const VIEWS = [
   ['map', 'Map', 'map'],
 ]
 
-function ViewToggle({ view, onChange }) {
-  return (
-    <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', width: '100%', borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, overflow: 'hidden', backgroundColor: colors.surface }}>
-      {VIEWS.map(([value, label, icon]) => (
-        <Pressable
-          key={value}
-          onPress={() => onChange(value)}
-          accessibilityRole="radio"
-          accessibilityState={{ selected: view === value }}
-          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 40, paddingHorizontal: spacing.sm, backgroundColor: view === value ? colors.ink : colors.surface }}
-        >
-          <Feather name={icon} size={15} color={view === value ? colors.white : colors.ink} />
-          <AppText variant="label" numberOfLines={1} style={{ color: view === value ? colors.white : colors.ink }}>
-            {label}
-          </AppText>
-        </Pressable>
-      ))}
-    </View>
-  )
-}
-
-// A small on-map control: Blocks, Shops, or the location picker.
-function MapControl({ label, icon, on, onPress }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityState={{ selected: on }}
-      accessibilityLabel={label}
-      hitSlop={6}
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 5,
-        minHeight: 36,
-        paddingHorizontal: spacing.sm,
-        backgroundColor: on ? colors.ink : colors.surface,
-        borderRadius: radius.sm,
-        borderWidth: 1,
-        borderColor: colors.line,
-      }}
-    >
-      <Feather name={icon} size={14} color={on ? colors.white : colors.ink} />
-      <AppText variant="label" style={{ color: on ? colors.white : colors.ink, fontSize: 12 }}>
-        {label}
-      </AppText>
-    </Pressable>
-  )
-}
-
 export default function Nearby() {
   const router = useRouter()
-  const { city, cityId } = useCity()
+  const { city, cityId, cities } = useCity()
   const nearby = useNearby()
-  const { ready, asked, blocksReady, blockIds, selectedBlocks, areaName, coords, pinned, origin, range, detect, setPin, setRange, status } = nearby
+  const { ready, asked, blocks, blocksReady, blockIds, selectedBlocks, areaName, coords, pinned, origin, range, detect, setPin, setRange, status } = nearby
+  const { focus, chooseCity } = useMapFocus(blocks)
   const params = useLocalSearchParams()
   const qParam = paramText(params.q)
   const requestId = paramText(params.t)
@@ -89,9 +44,11 @@ export default function Nearby() {
 
   const [draft, setDraft] = useState(qParam)
   const [view, setView] = useState('shops')
-  const [showBlocks, setShowBlocks] = useState(true)
-  const [showShops, setShowShops] = useState(true)
+  // Each overlay shows everything, only the shopper's own, or nothing.
+  const [blockLayer, setBlockLayer] = useState('all')
+  const [storeLayer, setStoreLayer] = useState('all')
   const [picking, setPicking] = useState(false)
+  const [recenter, setRecenter] = useState(0)
 
   // This tab stays mounted, so a search sent from Home (or a "change area" link)
   // arrives as new params.
@@ -113,11 +70,23 @@ export default function Nearby() {
 
   const query = discoverQuery({ cityId, blockIds, coords: origin, range, q })
   const shops = usePagedList(JSON.stringify(query), (page) => (query ? fetchDiscover({ ...query, page }) : Promise.resolve(NOTHING)))
+  // "All stores" on the map means the whole city, even while the list keeps
+  // searching inside the shopper's block.
+  const cityStores = useCityDirectory({
+    cityId,
+    kind: 'stores',
+    enabled: view === 'map' && storeLayer === 'all',
+    q,
+  })
 
   const areaMissing = Boolean(cityId) && needsArea({ range, blockIds, coords: origin })
   const wider = nextRange(range)
   const scopeLabel = range === 'block' && blockIds.length > 1 ? 'your blocks' : rangeLabel(range)
   const hasLocation = blockIds.length > 0 || Boolean(coords)
+  const blockSet = new Set(blockIds.map(String))
+  const inBlock = (store) => (store.branches || []).some((branch) => blockSet.has(String(branch.blockId)))
+  const zones = blockLayer === 'all' ? blocks : blockLayer === 'mine' ? selectedBlocks : []
+  const mapStores = storeLayer === 'all' ? (cityStores ?? shops.items) : storeLayer === 'mine' ? shops.items.filter(inBlock) : []
 
   // "See all products" opens the shop's own page, where its whole shelf lives.
   const openBrand = (brand) => router.push(`/store/${brand._id}`)
@@ -136,8 +105,8 @@ export default function Nearby() {
   const map = view === 'map' && (
     <View style={{ borderRadius: radius.md }}>
       <NearbyMap
-        items={showShops ? shops.items : []}
-        zones={showBlocks ? selectedBlocks : []}
+        items={mapStores}
+        zones={zones}
         selectedIds={blockIds}
         origin={origin}
         pin={coords && pinned ? coords : null}
@@ -146,14 +115,22 @@ export default function Nearby() {
         pickable={picking || !hasLocation}
         onPick={handlePick}
         onOpenBrand={openBrand}
+        focus={focus}
+        recenter={recenter}
       />
-      <View style={{ position: 'absolute', top: spacing.sm, right: spacing.sm, alignItems: 'flex-end', gap: spacing.sm }}>
-        <View style={{ flexDirection: 'row', gap: spacing.xs }}>
-          <MapControl label="Blocks" icon="layers" on={showBlocks} onPress={() => setShowBlocks((v) => !v)} />
-          <MapControl label="Shops" icon="shopping-bag" on={showShops} onPress={() => setShowShops((v) => !v)} />
-        </View>
-        <MapControl label={picking ? 'Cancel' : 'Choose location'} icon="map-pin" on={picking} onPress={() => setPicking((v) => !v)} />
-      </View>
+      <MapLayers
+        cities={cities}
+        cityId={cityId}
+        onCityChange={chooseCity}
+        layers={[
+          { key: 'blocks', label: 'Blocks', mineLabel: 'my block', icon: 'layers', state: blockLayer, onCycle: () => setBlockLayer(nextLayerState) },
+          { key: 'stores', label: 'Stores', mineLabel: 'my stores', icon: 'shopping-bag', state: storeLayer, onCycle: () => setStoreLayer(nextLayerState) },
+        ]}
+        actions={[
+          { key: 'recenter', label: 'Recenter', icon: 'crosshair', onPress: () => setRecenter((n) => n + 1) },
+          { key: 'pick', label: picking ? 'Cancel' : 'Choose location', icon: 'map-pin', active: picking, onPress: () => setPicking((v) => !v) },
+        ]}
+      />
       {picking || !hasLocation ? (
         <View pointerEvents="none" style={{ position: 'absolute', left: spacing.sm, right: spacing.sm, bottom: spacing.sm, alignItems: 'center' }}>
           <View style={{ backgroundColor: 'rgba(30,58,47,0.92)', borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.xs }}>
@@ -193,7 +170,7 @@ export default function Nearby() {
         </Pressable>
       ) : null}
 
-      {blocksReady ? <ViewToggle view={view} onChange={setView} /> : null}
+      {blocksReady ? <ViewToggle view={view} onChange={setView} options={VIEWS} /> : null}
 
       {view === 'shops' ? (
         <AppText variant="small" accessibilityLiveRegion="polite">
@@ -207,11 +184,11 @@ export default function Nearby() {
 
       {view === 'map' ? (
         <AppText variant="small">
-          Tap a pin, then its label, to see that brand’s products. Shaded areas are the blocks you are shopping in.
-          {shops.hasMore ? ' The map shows the shops loaded so far.' : ''}
+          Tap a pin, then its label, to open that store. Each layer can show everything, only yours, or be hidden.
+          {storeLayer !== 'all' && shops.hasMore ? ' The map shows the shops loaded so far.' : ''}
         </AppText>
       ) : null}
-      {view === 'map' && shops.hasMore ? (
+      {view === 'map' && storeLayer !== 'all' && shops.hasMore ? (
         <Button title="Load more shops" variant="outline" onPress={shops.loadMore} loading={shops.loadingMore} />
       ) : null}
     </View>

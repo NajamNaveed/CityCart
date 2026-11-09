@@ -1,12 +1,13 @@
 import { formatDistance } from '../../utils/geo'
+import { formatPrice } from '../../utils/format'
 
 const isCoord = (lat, lng) => Number.isFinite(lat) && Number.isFinite(lng)
 
 /**
  * Everything the map needs, as plain JSON the WebView can receive.
- * The map draws zones, shop pins, the chosen pin and the radius circle.
+ * The map draws zones, shop or provider pins, the chosen pin and the radius circle.
  */
-export function buildMapData({ items = [], zones = [], selectedIds = [], origin = null, pin = null, radiusKm = null, originLabel = '', pickable = false }) {
+export function buildMapData({ items = [], providers = [], zones = [], selectedIds = [], origin = null, pin = null, radiusKm = null, originLabel = '', pickable = false }) {
   const chosen = new Set(selectedIds.map(String))
   const shapes = zones
     .filter((zone) => Array.isArray(zone.polygon) && zone.polygon.length >= 3)
@@ -32,6 +33,23 @@ export function buildMapData({ items = [], zones = [], selectedIds = [], origin 
         lng: branch.longitude,
       })
     }
+  }
+
+  // A provider is pinned at its block centre: the only public, approximate
+  // location until a booking is accepted (docs/24 §4.3).
+  for (const provider of providers) {
+    const center = provider.block?.center
+    if (!isCoord(center?.lat, center?.lng)) continue
+    pins.push({
+      providerId: String(provider._id),
+      providerName: provider.displayName || '',
+      categoryName: provider.category?.name || '',
+      blockName: provider.block?.name || '',
+      price: `From ${formatPrice((provider.startingAtPrice || 0) / 100)}`,
+      distance: provider.distanceKm == null ? '' : `${formatDistance(provider.distanceKm)} away`,
+      lat: center.lat,
+      lng: center.lng,
+    })
   }
 
   const shown = pin || origin
