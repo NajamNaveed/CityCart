@@ -515,6 +515,12 @@ Supported filters may include:
 
 Public users should normally only receive active brands.
 
+Anonymous responses are allow-listed to `_id`, `name`, `slug`, `description`,
+`logo`, `coverImage`, `cityId` and `status`. Billing state, termination audit
+fields, `contact`, `settings` and other internal fields are never returned to a
+public caller (docs/26 SEC-26-02). Seller and admin endpoints return the full
+document to their authorized callers.
+
 ---
 
 ## Get Brand
@@ -523,7 +529,8 @@ Public users should normally only receive active brands.
 GET /api/v1/brands/:id
 ```
 
-Public for active brands.
+Public for active brands, with the same public field allow-list as the list
+endpoint. The storefront response reuses it for its `brand` object.
 
 ---
 

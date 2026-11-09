@@ -59,6 +59,52 @@ describe('global error handling', () => {
   });
 });
 
+describe('CSRF guard (cross-site writes)', () => {
+  it('refuses an unsafe request from an origin outside the allow-list', async () => {
+    const res = await request(app)
+      .post('/api/v1/auth/logout')
+      .set('Origin', 'https://evil.example');
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('CSRF_ORIGIN');
+  });
+
+  it('allows an unsafe request from the configured web client origin', async () => {
+    const res = await request(app)
+      .post('/api/v1/auth/logout')
+      .set('Origin', 'http://localhost:5173');
+    expect(res.status).toBe(200);
+  });
+
+  it('allows requests with no Origin (native apps, curl, server-to-server)', async () => {
+    const res = await request(app).post('/api/v1/auth/logout');
+    expect(res.status).toBe(200);
+  });
+
+  it('falls back to Referer when Origin is absent', async () => {
+    const blocked = await request(app)
+      .post('/api/v1/auth/logout')
+      .set('Referer', 'https://evil.example/page');
+    expect(blocked.status).toBe(403);
+
+    const allowed = await request(app)
+      .post('/api/v1/auth/logout')
+      .set('Referer', 'http://localhost:5173/checkout');
+    expect(allowed.status).toBe(200);
+  });
+
+  it('does not interfere with safe methods', async () => {
+    const res = await request(app).get('/health').set('Origin', 'https://evil.example');
+    expect(res.status).toBe(200);
+  });
+
+  it('blocks the "null" origin sent by sandboxed frames', async () => {
+    const res = await request(app)
+      .post('/api/v1/auth/logout')
+      .set('Origin', 'null');
+    expect(res.status).toBe(403);
+  });
+});
+
 describe('invalid ObjectId on PATCH routes returns 400, not 500', () => {
   function adminCookie() {
     const admin = {

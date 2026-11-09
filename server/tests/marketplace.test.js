@@ -120,6 +120,27 @@ describe('GET /api/v1/brands/:id/storefront', () => {
     expect(limit).toHaveBeenCalledWith(FEATURED_LIMIT);
   });
 
+  it('never exposes private brand fields on the storefront', async () => {
+    const brandId = oid();
+    Brand.findOne.mockResolvedValue({
+      _id: brandId,
+      name: 'Nike',
+      slug: 'nike',
+      billingStatus: 'FROZEN',
+      terminationReason: 'policy',
+      settings: { deliveryFee: 1 },
+    });
+    Store.findOne.mockResolvedValue(null);
+    Product.distinct.mockResolvedValue([]);
+    Category.find.mockReturnValue({ sort: jest.fn().mockResolvedValue([]) });
+    const limit = jest.fn().mockResolvedValue([]);
+    Product.find.mockReturnValue({ sort: () => ({ limit }) });
+
+    const res = await request(app).get(`/api/v1/brands/${brandId}/storefront`);
+
+    expect(res.body.brand).toEqual({ _id: String(brandId), name: 'Nike', slug: 'nike' });
+  });
+
   it('only ever queries this brand and ACTIVE data', async () => {
     const brandId = oid();
     mockStorefront(brandId);

@@ -861,3 +861,85 @@ Rollback: redeploy the previous Render and Vercel deployments. The database is a
 ### 30.5 What an AI agent may and may not do here
 
 The repository side (tests, build, config, docs, seed scripts) is automated. **Deploying to Render/Vercel and building with EAS are owner actions**: they need credentials, cost build minutes, and touch shared/production systems. An agent must not run them without explicit approval.
+
+---
+
+## 31. Security operations runbook (Phase 9, November 2026)
+
+This section is the operational half of `26-security-audit.md`. It is written for
+the owner or an on-call engineer, not for an AI agent: every step that touches
+Render, Vercel, Atlas, Cloudinary, Brevo or EAS is a human action.
+
+### 31.1 Incident severity
+
+| Level | Example | First response |
+|---|---|---|
+| SEV-1 | Cross-tenant data access, admin takeover, payment/invoice fraud, leaked secrets | Contain immediately, rotate secrets, notify owner; consider taking the API offline |
+| SEV-2 | Auth bypass on one role, mass enumeration, frozen seller still selling | Contain within 1 hour, fix forward or roll back |
+| SEV-3 | Single-account abuse, spam, upload abuse | Block the account/route, fix in the next deployment |
+| SEV-4 | Dependency advisory with no known exploit path | Record in docs/26 §9 and schedule |
+
+### 31.2 First 30 minutes (SEV-1/SEV-2)
+
+1. **Preserve evidence.** Copy the Render log window, affected request ids and
+   database documents before changing anything. Do not delete messages, orders or
+   audit rows.
+2. **Contain.** Suspend the offending account or membership; for a platform-wide
+   issue enable restricted-access mode (agents and customers read-only) or take
+   the API down. Suspend the tenant through the admin UI rather than editing
+   production records by hand.
+3. **Rotate** every credential whose exposure is plausible (§31.3). Rotate first,
+   investigate second; rotation is cheap, a leaked key is not.
+4. **Check blast radius.** Search audit logs and notifications for the affected
+   user/tenant ids, and check whether financial or order state changed.
+5. **Communicate.** The owner decides what affected sellers or customers are
+   told. Do not publish a root cause before it is known.
+
+### 31.3 Secret rotation
+
+All values live in Render (API) or Vercel (website) environment settings and are
+never in Git. After rotating, redeploy the service.
+
+| Secret | Rotate how | Blast radius |
+|---|---|---|
+| `JWT_SECRET` | Generate a long random value, update Render, redeploy | Every session becomes invalid; all users sign in again. Do this on suspected token compromise and at least annually |
+| `MONGODB_URI` | Rotate the Atlas database user password, update Render | API reconnects; no data change |
+| `CLOUDINARY_API_SECRET` / `API_KEY` | Regenerate in the Cloudinary console, update Render | New uploads and signed proof links use the new pair; already-uploaded files remain |
+| `BREVO_API_KEY` | Revoke and create a new key, update Render | Verification and reset emails pause until redeployed |
+| `EXPO_ACCESS_TOKEN` | Revoke and create, update Render and EAS | Push delivery pauses until both sides are updated |
+| `RENDER_DEPLOY_HOOK`, `VERCEL_DEPLOY_HOOK` | Regenerate in the platform, update GitHub secrets | CI deploy job fails until updated |
+
+A suspected **single account** compromise does not need a secret rotation: bump
+that user's `passwordVersion` (a password change or an admin reset does it) and
+the account's tokens and sockets stop working.
+
+If a secret is committed by accident: rotate it first, then remove it from the
+working tree; do not rewrite public history as the primary response.
+
+### 31.4 Dependency update policy
+
+* Run `npm audit --omit=dev` in `server/`, `client/`, `mobile/`, `partner/` and
+  `delivery/` monthly and before every release.
+* **Critical / high** in a production dependency: patch or mitigate within
+  7 days. If no patch exists, record the accepted risk in `docs/26-security-audit.md` §9.
+* **Moderate**: 30 days. **Low / dev-only**: next scheduled maintenance.
+* Never run `npm audit fix --force` on the Expo apps: it proposes Expo 52 and
+  breaks the SDK 57 toolchain. Use non-breaking `npm audit fix`, then
+  `npm install` to restore dev modules (the omit-dev run prunes them locally).
+* A major SDK/framework upgrade is its own phase with a full app bundle and
+  device check, not a release-week patch.
+* Adding a dependency still requires the justification in AGENTS.md §29.
+* Lockfiles are committed. Deployments install from them.
+
+### 31.5 Backup, restore and load checks
+
+The drill procedure and the load-test procedure are in `26-security-audit.md`
+§6 and §7. Neither has been executed yet; both are owner actions and must pass
+before public launch. Until the restore drill passes, treat backups as unverified.
+
+### 31.6 After an incident
+
+Write a short post-mortem within five days: timeline, root cause, what limited
+the blast radius, the fix, the regression test that now covers it, and the one
+control that would have prevented it. Add the test to the suite before closing
+the incident; an incident without a regression test is not closed.

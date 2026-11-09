@@ -1,6 +1,9 @@
 # 24 — Marketplace v3: Services, Seller Billing, Redesign, Flutter and Security
 
-Status: **approved 2026-11-06; Phases 0, 1, 2a, 2b, 2c and 3 implemented. Phase 4 is in progress: design system, discovery, purchase funnel, services funnel, the account/communication screens, the seller site and all three dashboards are rebuilt.** This document is the
+Status: **approved 2026-11-06; Phases 0, 1, 2a, 2b, 2c, 3 and 4 implemented. The
+three React Native apps (docs/19, 20, 23) have completed their v3 hardening
+batches, and the Phase 9 internal audit is complete (docs/26). The Flutter
+programme (§7), the combined device pass (docs/25) and release remain.** This document is the
 authoritative plan for the v3 programme. Where it conflicts with an earlier
 document, this document wins until the earlier document is updated.
 
@@ -1068,6 +1071,15 @@ Specific risks to test in later phases: booking IDOR, provider block bypass,
 chat access, review eligibility, invoice/claim tampering, freeze bypass,
 commission manipulation, service media access and ranking manipulation.
 
+**Status 2026-11-09:** the internal audit is complete and written up in
+`26-security-audit.md`. It maps ASVS L2, inventories all 277 routes (236 guarded,
+41 public) with a router-walking authorization suite, and fixed two findings:
+the cross-site write gap created by `SameSite=None` cookies, and internal brand
+fields exposed to anonymous callers. Server and website production dependencies
+are clean. Open items are the app dependency advisory (`decode-uri-component`,
+requires Expo SDK 58), the external pen test (owner decision), and the
+backup/restore and load drills (owner actions, no staging access).
+
 ---
 
 ## 9. Data and migration rules
@@ -1167,6 +1179,8 @@ explicit instruction.
 18-development-roadmap.md         v3 programme addendum
 20-partner-app.md                 online-payment phase marked removed in v3
 22-marketplace-v2-plan.md         superseded Flutter and security decisions
+25-device-test-checklist.md       combined real-device pass before release
+26-security-audit.md              Phase 9 internal audit, ASVS L2 map, accepted risks
 ```
 
 ---

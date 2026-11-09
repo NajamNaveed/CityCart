@@ -935,15 +935,32 @@ when authenticated cookies are involved.
 
 Because authentication uses cookies, CSRF must be considered. (Native app requests authenticate with an explicit `Authorization` header instead, which a browser never adds on its own, so they are not affected; see §9, Native App Sessions.)
 
-CityCart should use appropriate:
+Production cookies are `SameSite=None; Secure` because the website and API are on
+different domains (docs/17 §15), so `SameSite` alone cannot block a cross-site
+write. CORS blocks *reads* from foreign origins, not the request itself.
 
-* `SameSite` cookie settings
-* Trusted CORS configuration
-* CSRF protection where required by the deployment architecture
+The implementation is an origin guard for unsafe methods:
 
-State-changing requests must not rely solely on the browser automatically sending authentication cookies.
+```text
+server/src/middleware/csrfGuard.js
+mounted after cookieParser in server/src/app.js
+```
 
-The final implementation should be tested specifically for CSRF behavior.
+For `POST`, `PUT`, `PATCH` and `DELETE`:
+
+* if `Origin` is present it must be in the CORS allow-list (`config/cors.js`);
+* otherwise, if `Referer` is present its origin must be in the allow-list;
+* if neither header is present the request is allowed, because native apps and
+  server-to-server callers do not send them and cannot be driven by a browser.
+
+A refused request answers `403` with `code: "CSRF_ORIGIN"`.
+
+Tests: `server/tests/hardening.test.js` covers a foreign Origin, an allowed
+Origin, no Origin, the Referer fallback, a safe `GET`, and `Origin: null`.
+
+A browser too old to send `Origin` on a form POST would bypass the guard; every
+browser in the support matrix sends it. Phase 9 recorded this residual risk in
+docs/26 §9.
 
 ---
 
@@ -1189,6 +1206,15 @@ Test:
 * CSRF behavior
 * Security headers
 
+The Phase 9 suite adds two structural tests that must stay green:
+
+* `server/tests/authorizationMatrix.test.js` walks the real router and fails if
+  any of the 236 guarded routes stops refusing a signed-out or malformed token,
+  or if the 41 public routes change without a decision in that file.
+* `server/tests/hardening.test.js` covers the CSRF origin guard, and
+  `server/tests/brands.test.js` / `marketplace.test.js` cover public field
+  allow-lists. The full report is `docs/26-security-audit.md`.
+
 ---
 
 # 34. Production Security Checklist
@@ -1219,6 +1245,10 @@ Before production deployment:
 [ ] Service-provider tenant isolated from brand tenant
 [ ] Seller invoices and claims tamper-tested
 [ ] Password, token and bank-detail log redaction verified
+[ ] CSRF origin guard enabled (SameSite=None in production)
+[ ] Public brand, storefront and provider fields allow-listed
+[ ] Authorization matrix suite green (all guarded routes refuse signed out)
+[ ] Production dependency audit reviewed (docs/26 §8)
 [ ] Backup strategy configured
 ```
 

@@ -111,6 +111,42 @@ describe('GET /api/v1/brands/:id (public)', () => {
     const res = await request(app).get(`/api/v1/brands/${id}`);
     expect(res.status).toBe(404);
   });
+
+  it('never exposes billing, termination or private settings to a visitor', async () => {
+    const id = new mongoose.Types.ObjectId().toString();
+    Brand.findOne.mockResolvedValue({
+      _id: id,
+      name: 'Acme',
+      slug: 'acme',
+      status: 'ACTIVE',
+      contact: { supportEmail: 'owner@acme.test' },
+      settings: { estimatedDeliveryTime: 30 },
+      billingStatus: 'GRACE',
+      billingGraceUntil: new Date(),
+      billingOverride: { status: 'ACTIVE', by: new mongoose.Types.ObjectId() },
+      terminationReason: 'policy',
+      terminatedBy: new mongoose.Types.ObjectId(),
+      accessEndsAt: new Date(),
+    });
+
+    const res = await request(app).get(`/api/v1/brands/${id}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.brand).toEqual({ _id: id, name: 'Acme', slug: 'acme', status: 'ACTIVE' });
+  });
+});
+
+describe('GET /api/v1/brands (public exposure)', () => {
+  it('lists only the public brand fields', async () => {
+    const sort = jest.fn().mockResolvedValue([
+      { _id: 'a', name: 'Acme', status: 'ACTIVE', billingStatus: 'FROZEN', settings: { deliveryFee: 1 } },
+    ]);
+    Brand.find.mockReturnValue({ sort });
+
+    const res = await request(app).get('/api/v1/brands');
+
+    expect(res.body.brands).toEqual([{ _id: 'a', name: 'Acme', status: 'ACTIVE' }]);
+  });
 });
 
 describe('POST /api/v1/brands (Super Admin only)', () => {

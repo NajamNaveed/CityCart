@@ -4,6 +4,7 @@ const Category = require('../models/category.model');
 const Product = require('../models/product.model');
 const { buildCategoryTree } = require('./category.service');
 const { withAvailability } = require('./product.service');
+const { toPublicBrand } = require('./brand.service');
 
 const FEATURED_LIMIT = 8;
 
@@ -61,7 +62,7 @@ async function getBrandStorefront(brandId) {
   const categories = await categoriesWithParents(usedCategoryIds);
 
   return {
-    brand,
+    brand: toPublicBrand(brand),
     store,
     categories: buildCategoryTree(categories),
     featuredProducts: await withAvailability(featured),

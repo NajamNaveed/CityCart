@@ -59,6 +59,7 @@ const billingRoutes = require('./routes/billing.routes');
 const adminBillingRoutes = require('./routes/adminBilling.routes');
 
 const requestLogger = require('./middleware/requestLogger');
+const csrfGuard = require('./middleware/csrfGuard');
 const { apiLimiter } = require('./middleware/rateLimiters');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
@@ -79,6 +80,9 @@ app.use(express.urlencoded({ extended: true }));
 // Required to populate req.cookies for the HTTP-only auth cookie (see
 // config/cookie.js and middleware/authenticate.js).
 app.use(cookieParser());
+// Cross-site writes are refused; production cookies are SameSite=None because
+// the client and API live on different domains (see middleware/csrfGuard.js).
+app.use(csrfGuard);
 
 // Foundation-level health check (see docs/18-development-roadmap.md, Phase 0/1)
 app.use('/health', healthRoutes);

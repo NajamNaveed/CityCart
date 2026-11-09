@@ -11,6 +11,20 @@ class BrandError extends Error {
   }
 }
 
+// What an anonymous visitor may see on a brand (docs/05 §9, docs/24 §8.2).
+// Billing state, termination audit, contact and settings belong to the seller
+// dashboard (/brands/me) and the admin panel, never to the public marketplace.
+const PUBLIC_BRAND_FIELDS = ['_id', 'name', 'slug', 'description', 'logo', 'coverImage', 'cityId', 'status'];
+
+function toPublicBrand(brand) {
+  if (!brand) return brand;
+  const source = typeof brand.toObject === 'function' ? brand.toObject() : brand;
+  return PUBLIC_BRAND_FIELDS.reduce((publicBrand, field) => {
+    if (source[field] !== undefined) publicBrand[field] = source[field];
+    return publicBrand;
+  }, {});
+}
+
 /**
  * Public brand listing, per docs/05-api-specification.md §9. ACTIVE-only,
  * always (hardening pass: the old ?status= override let anonymous users
@@ -29,7 +43,8 @@ async function listPublicBrands({ cityId, search } = {}) {
     filter.name = { $regex: escapeRegex(search), $options: 'i' };
   }
 
-  return Brand.find(filter).sort({ name: 1 });
+  const brands = await Brand.find(filter).sort({ name: 1 });
+  return brands.map(toPublicBrand);
 }
 
 /**
@@ -43,7 +58,7 @@ async function getPublicBrandById(id) {
   if (!brand) {
     throw new BrandError(404, 'Brand not found.');
   }
-  return brand;
+  return toPublicBrand(brand);
 }
 
 /**
@@ -134,6 +149,7 @@ module.exports = {
   listPublicBrands,
   getPublicBrandById,
   getBrandByIdRaw,
+  toPublicBrand,
   createBrand,
   applyBrandUpdate,
   updateBrandStatus,

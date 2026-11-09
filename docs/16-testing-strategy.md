@@ -601,6 +601,12 @@ Also test:
 * Expired authentication.
 * Privilege escalation.
 
+Phase 9 adds a structural suite, `server/tests/authorizationMatrix.test.js`,
+which walks the real router and fails if any guarded route stops refusing a
+signed-out or malformed token, or if the declared public-route list changes. It
+complements the per-domain suites; it does not replace them. The full internal
+audit is `docs/26-security-audit.md`.
+
 ---
 
 ## 24. Test Database

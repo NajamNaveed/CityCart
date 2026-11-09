@@ -448,7 +448,10 @@ CityCart/
 │   ├── 20-partner-app.md       # Staff app programme: plan, status, handoff
 │   ├── 21-next-features-plan.md
 │   ├── 22-marketplace-v2-plan.md
-│   └── 23-delivery-app.md
+│   ├── 23-delivery-app.md
+│   ├── 24-marketplace-v3-plan.md
+│   ├── 25-device-test-checklist.md
+│   └── 26-security-audit.md
 │
 ├── AGENTS.md
 ├── .gitignore
@@ -794,8 +797,9 @@ The `docs/` directory contains the complete CityCart source of truth.
 | 23       | Delivery App              |
 | 24       | Marketplace v3 Plan       |
 | 25       | Device Test Checklist     |
+| 26       | Security Audit            |
 
-Release plans, runbooks, and per-phase status live in the plan documents (21–25). `docs/17-deployment.md` §30 holds the v2 release runbook.
+Release plans, runbooks, and per-phase status live in the plan documents (21–26). `docs/17-deployment.md` §30 holds the v2 release runbook and §31 the security operations runbook; `docs/26-security-audit.md` is the Phase 9 internal audit.
 
 When implementation conflicts with documented business rules, the conflict should be identified and resolved before changing the architecture.
 

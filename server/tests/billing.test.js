@@ -11,11 +11,15 @@ const mongoose = require('mongoose');
 
 const Brand = require('../src/models/brand.model');
 const SellerInvoice = require('../src/models/sellerInvoice.model');
+const CommissionEntry = require('../src/models/commissionEntry.model');
+const SellerPaymentClaim = require('../src/models/sellerPaymentClaim.model');
 const PlatformSettings = require('../src/models/platformSettings.model');
 const {
   commissionForPaisa,
   refreshSellerBillingState,
   assertSellerCanSell,
+  getSellerInvoice,
+  createPaymentClaim,
 } = require('../src/services/billing.service');
 const requireSellerTenant = require('../src/middleware/requireSellerTenant');
 const {
@@ -322,5 +326,63 @@ describe('billing validators', () => {
     expect(billingSettingsSchema.safeParse({ freezeAfterDays: 5, restrictAfterDays: 7 }).success).toBe(false);
     expect(billingSettingsSchema.safeParse({}).success).toBe(false);
     expect(billingSettingsSchema.safeParse({ rateBps: 10001 }).success).toBe(false);
+  });
+});
+
+describe('seller-scoped billing access (IDOR)', () => {
+  it('loads an invoice only inside the caller\'s seller scope', async () => {
+    const sellerId = oid();
+    const invoiceId = oid();
+    SellerInvoice.findOne.mockResolvedValue(null);
+
+    await expect(getSellerInvoice('BRAND', sellerId, invoiceId)).rejects.toMatchObject({ status: 404 });
+    expect(SellerInvoice.findOne).toHaveBeenCalledWith({ _id: invoiceId, sellerType: 'BRAND', sellerId });
+  });
+
+  it('cannot claim against another seller\'s invoice', async () => {
+    SellerInvoice.findOne.mockResolvedValue(null);
+
+    await expect(
+      createPaymentClaim({
+        sellerType: 'BRAND',
+        sellerId: oid(),
+        invoiceId: oid(),
+        data: { amountPaisa: 100 },
+      })
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('refuses a receipt uploaded into another seller\'s folder', async () => {
+    const sellerId = oid();
+    SellerInvoice.findOne.mockResolvedValue({ _id: oid(), status: 'ISSUED', amountDuePaisa: 1000 });
+
+    await expect(
+      createPaymentClaim({
+        sellerType: 'BRAND',
+        sellerId,
+        invoiceId: oid(),
+        data: {
+          amountPaisa: 100,
+          receipt: { publicId: `citycart/billing/brands/${oid()}/receipts/x`, fingerprint: 'abc' },
+        },
+      })
+    ).rejects.toMatchObject({ status: 422, code: 'RECEIPT_NOT_YOURS' });
+  });
+
+  it('refuses a receipt path that tries to climb out of the folder', async () => {
+    const sellerId = oid();
+    SellerInvoice.findOne.mockResolvedValue({ _id: oid(), status: 'ISSUED', amountDuePaisa: 1000 });
+
+    await expect(
+      createPaymentClaim({
+        sellerType: 'BRAND',
+        sellerId,
+        invoiceId: oid(),
+        data: {
+          amountPaisa: 100,
+          receipt: { publicId: `citycart/billing/brands/${sellerId}/receipts/../../other/x`, fingerprint: 'abc' },
+        },
+      })
+    ).rejects.toMatchObject({ code: 'RECEIPT_NOT_YOURS' });
   });
 });
