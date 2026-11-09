@@ -1,4 +1,4 @@
-import { formatPaymentMethod, formatPrice, humanize, timeAgo } from '../src/utils/format'
+import { formatPaymentMethod, formatPrice, humanize, lastSeen, timeAgo } from '../src/utils/format'
 
 describe('formatting', () => {
   it('prices look like the web app', () => {
@@ -24,5 +24,13 @@ describe('formatting', () => {
     expect(timeAgo(new Date(Date.now() - 5 * 60 * 1000))).toBe('5m')
     expect(timeAgo(new Date(Date.now() - 3 * 3600 * 1000))).toBe('3h')
     expect(timeAgo('nonsense')).toBe('')
+  })
+
+  it('lastSeen reads as a sentence, never "just now ago"', () => {
+    expect(lastSeen(new Date())).toBe('Last seen just now')
+    expect(lastSeen(new Date(Date.now() - 5 * 60 * 1000))).toBe('Last seen 5m ago')
+    const old = new Date(Date.now() - 30 * 24 * 3600 * 1000)
+    expect(lastSeen(old)).toMatch(/^Last seen on [A-Za-z]+ \d/)
+    expect(lastSeen('nonsense')).toBe('')
   })
 })

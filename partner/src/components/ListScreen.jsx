@@ -4,7 +4,30 @@ import AppText from './ui/AppText'
 import Button from './ui/Button'
 import EmptyState from './ui/EmptyState'
 import Skeleton from './ui/Skeleton'
+import Spinner from './ui/Spinner'
 import { colors, spacing } from '../theme'
+
+// The end of a list is not silent: a failure to fetch the next page, or to
+// refresh, says so and offers another try.
+function ListFooter({ list }) {
+  if (list.moreError) {
+    return (
+      <View style={{ gap: spacing.sm, paddingTop: spacing.md }}>
+        <AppText variant="small">Couldn&apos;t load more. {list.moreError}</AppText>
+        <Button title="Try again" variant="outline" onPress={list.loadMore} />
+      </View>
+    )
+  }
+  if (list.refreshError) {
+    return (
+      <View style={{ gap: spacing.sm, paddingTop: spacing.md }}>
+        <AppText variant="small">Couldn&apos;t refresh. {list.refreshError}</AppText>
+        <Button title="Try again" variant="outline" onPress={list.refresh} />
+      </View>
+    )
+  }
+  return list.loadingMore ? <Spinner label="Loading more" /> : null
+}
 
 // The frame every records list shares: a title, optional filters, then a paged,
 // pull-to-refresh list with loading, error and empty states.
@@ -38,6 +61,7 @@ export default function ListScreen({ title, header, list, renderItem, keyExtract
             <EmptyState icon={empty.icon} title={empty.title} message={empty.message} />
           )
         }
+        ListFooterComponent={list.items.length > 0 ? <ListFooter list={list} /> : null}
         renderItem={renderItem}
       />
     </SafeAreaView>

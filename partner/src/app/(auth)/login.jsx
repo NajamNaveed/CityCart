@@ -19,6 +19,7 @@ export default function Login() {
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [workspace, setWorkspace] = useState(null)
+  const [pickingId, setPickingId] = useState(null)
 
   // Signing in flips `status`; this one redirect then sends each person to their own screens.
   if (status === 'signedIn') return <Redirect href="/" />
@@ -47,13 +48,16 @@ export default function Login() {
   }
 
   async function pickWorkspace(membership) {
+    if (submitting) return
     setError('')
     setSubmitting(true)
+    setPickingId(membership.brandId)
     try {
       await chooseWorkspace({ workspaceToken: workspace.workspaceToken, brandId: membership.brandId })
     } catch (err) {
       setError(getErrorMessage(err))
       setSubmitting(false)
+      setPickingId(null)
     }
   }
 
@@ -89,7 +93,9 @@ export default function Login() {
                 title={`${m.brandName}${m.role === 'PICKER' ? ' · Picker' : ''}`}
                 variant="outline"
                 onPress={() => pickWorkspace(m)}
-                loading={submitting}
+                loading={pickingId === m.brandId}
+                disabled={submitting && pickingId !== m.brandId}
+                accessibilityLabel={`Sign in to ${m.brandName}`}
               />
             </View>
           ))}
@@ -100,7 +106,9 @@ export default function Login() {
             onPress={() => {
               setWorkspace(null)
               setError('')
+              setPickingId(null)
             }}
+            disabled={submitting}
           />
         </ScrollView>
       </SafeAreaView>

@@ -147,8 +147,10 @@ function Cash({ segments }) {
                 style={({ pressed }) => ({ padding: spacing.lg, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: pressed ? colors.sand : colors.surface, gap: 2 })}
               >
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm }}>
-                  <AppText variant="strong">{c.name}</AppText>
-                  <AppText variant="strong" style={{ color: colors.pine }}>
+                  <AppText variant="strong" style={{ flex: 1 }}>
+                    {c.name}
+                  </AppText>
+                  <AppText variant="strong" style={{ flexShrink: 1, textAlign: 'right', color: colors.pine }}>
                     {formatPrice(c.total)}
                   </AppText>
                 </View>

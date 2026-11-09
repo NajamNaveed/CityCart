@@ -15,7 +15,7 @@ import { useRemote } from '../../hooks/useRemote'
 import { getErrorMessage } from '../../services/api'
 import { assignRider, fetchActiveRiders, fetchRiderLocation, fetchShipment } from '../../services/records'
 import { addressLine, isClosed, locationMapUrl, telUrl } from '../../utils/delivery'
-import { formatDateTime, timeAgo } from '../../utils/format'
+import { formatDateTime, lastSeen } from '../../utils/format'
 import { can } from '../../utils/permissions'
 import { colors, minTouch, radius, spacing } from '../../theme'
 
@@ -87,7 +87,7 @@ function RiderWhereabouts({ deliveryId }) {
       {remote.status === 'ready' && !point ? <AppText variant="small">The rider is not sharing their location right now.</AppText> : null}
       {remote.status === 'ready' && point ? (
         <>
-          <AppText>Last seen {timeAgo(point.recordedAt)} ago</AppText>
+          <AppText>{lastSeen(point.recordedAt)}</AppText>
           <Button title="Open in Maps" variant="outline" onPress={() => Linking.openURL(locationMapUrl(point)).catch(() => setError('Could not open Maps on this phone.'))} style={{ marginTop: spacing.sm }} />
         </>
       ) : null}

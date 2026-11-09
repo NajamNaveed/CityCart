@@ -9,7 +9,7 @@ const LOOKS = {
 }
 
 // Always at least 52 points tall, so it is easy to hit with a thumb.
-export default function Button({ title, onPress, variant = 'pine', loading = false, disabled = false, style }) {
+export default function Button({ title, onPress, variant = 'pine', loading = false, disabled = false, style, accessibilityLabel }) {
   const look = LOOKS[variant]
   const inactive = disabled || loading
   return (
@@ -17,6 +17,7 @@ export default function Button({ title, onPress, variant = 'pine', loading = fal
       onPress={onPress}
       disabled={inactive}
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel || title}
       accessibilityState={{ disabled: inactive, busy: loading }}
       style={({ pressed }) => [
         {

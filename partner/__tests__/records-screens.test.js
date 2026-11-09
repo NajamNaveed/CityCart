@@ -116,6 +116,23 @@ describe('overview', () => {
     expect(text).toMatch(/Rs 3,000 coming back/)
   })
 
+  it('keeps the other counts and shows a dash when one count could not be fetched', async () => {
+    serve({
+      'GET /deliveries': (config) => {
+        if (config.params.status === 'FAILED') throw httpError(500, { message: 'Server error' })
+        return { data: { pagination: { total: counts[config.params.status] } } }
+      },
+      'GET /payments/cash/outstanding': { data: { collectors: [] } },
+      'GET /returns/summary': { data: { summary: {} } },
+    })
+    const screen = await show(<Overview />, { auth: member(...ALL) })
+    const text = screenText(screen)
+    expect(text).toMatch(/To pick up \| 4/)
+    expect(text).toMatch(/On the road \| 6/)
+    expect(text).toMatch(/Failed \| –/)
+    expect(text).toMatch(/Delivered \| 40/)
+  })
+
   it('opens the delivery list already filtered when a tile is tapped', async () => {
     serveOverview()
     const screen = await show(<Overview />, { auth: member(...ALL) })

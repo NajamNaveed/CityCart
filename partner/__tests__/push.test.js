@@ -131,12 +131,35 @@ describe('push notifications', () => {
     await expect(unregisterPush()).resolves.toBeUndefined()
   })
 
-  it('a tap opens the right screen for the role, and nothing for data it does not understand', () => {
-    expect(destinationFor('BRAND_EMPLOYEE', { orderId: 'o1' })).toBe('/order/o1')
-    expect(destinationFor('BRAND_EMPLOYEE', { deliveryId: 'd1' })).toBeNull()
-    expect(destinationFor('PICKER', { orderId: 'o1' })).toBeNull()
-    expect(destinationFor('RIDER', { deliveryId: 'd1' })).toBeNull()
-    expect(destinationFor('BRAND_EMPLOYEE', null)).toBeNull()
+  describe('where a tap opens', () => {
+    const staff = (...permissions) => ({ role: 'BRAND_EMPLOYEE', permissions })
+
+    it('opens an order for a team member who may see orders', () => {
+      expect(destinationFor('BRAND_EMPLOYEE', { orderId: 'o1' }, staff('orders.view'))).toBe('/order/o1')
+    })
+
+    it('opens a payment proof only for someone who can see payments; otherwise the order', () => {
+      const proof = { paymentId: 'p1', orderId: 'o1' }
+      expect(destinationFor('BRAND_EMPLOYEE', proof, staff('payments.view'))).toBe('/proof/p1')
+      expect(destinationFor('BRAND_EMPLOYEE', proof, staff('payments.manage'))).toBe('/proof/p1')
+      expect(destinationFor('BRAND_EMPLOYEE', proof, staff('orders.view'))).toBe('/order/o1')
+    })
+
+    it('opens a return only for someone who can see deliveries; otherwise the order', () => {
+      const back = { returnId: 'r1', orderId: 'o1' }
+      expect(destinationFor('BRAND_EMPLOYEE', back, staff('delivery.view'))).toBe('/return/r1')
+      expect(destinationFor('BRAND_EMPLOYEE', back, staff('orders.view'))).toBe('/order/o1')
+      expect(destinationFor('BRAND_EMPLOYEE', back, staff('delivery.view', 'payments.view'))).toBe('/return/r1')
+    })
+
+    it('does nothing for data it does not understand, another role, or a person without the permission', () => {
+      expect(destinationFor('BRAND_EMPLOYEE', { deliveryId: 'd1' }, staff('delivery.view'))).toBeNull()
+      expect(destinationFor('BRAND_EMPLOYEE', null, staff('orders.view'))).toBeNull()
+      expect(destinationFor('BRAND_EMPLOYEE', { orderId: 'o1' }, staff())).toBeNull()
+      expect(destinationFor('BRAND_EMPLOYEE', { orderId: 'o1' })).toBeNull() // permissions not loaded yet
+      expect(destinationFor('PICKER', { orderId: 'o1' }, { role: 'PICKER' })).toBeNull()
+      expect(destinationFor('RIDER', { deliveryId: 'd1' }, { role: 'RIDER', permissions: ['delivery.view'] })).toBeNull()
+    })
   })
 
   it('listens for taps (also the one that launched the app) and can stop listening', async () => {

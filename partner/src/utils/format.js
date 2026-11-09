@@ -42,3 +42,13 @@ export function timeAgo(value) {
   if (days < 7) return `${days}d`
   return formatDateTime(value).split(',')[0]
 }
+
+// A whole sentence for a rider's shared position: "Last seen just now",
+// "Last seen 5m ago", "Last seen on 4 Oct 2026" (never "just now ago").
+export function lastSeen(value) {
+  const ago = timeAgo(value)
+  if (!ago) return ''
+  if (ago === 'just now') return 'Last seen just now'
+  if (/^\d+[mhd]$/.test(ago)) return `Last seen ${ago} ago`
+  return `Last seen on ${ago}`
+}

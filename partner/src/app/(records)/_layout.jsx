@@ -24,6 +24,8 @@ export default function RecordsTabs() {
           tabBarActiveTintColor: colors.pine,
           tabBarInactiveTintColor: colors.muted,
           tabBarLabelStyle: { fontWeight: weights.medium, fontSize: 11 },
+          // Six labels must fit one line; letting them scale cut "Deliveries" and "Returns" off.
+          tabBarAllowFontScaling: false,
           tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.line },
         }}
       >

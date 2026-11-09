@@ -6,6 +6,7 @@ import AppText from '../../components/ui/AppText'
 import BackButton from '../../components/BackButton'
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
+import DetailRow from '../../components/ui/DetailRow'
 import EmptyState from '../../components/ui/EmptyState'
 import Skeleton from '../../components/ui/Skeleton'
 import StatusPill from '../../components/StatusPill'
@@ -16,15 +17,6 @@ import { addressLine, telUrl } from '../../utils/delivery'
 import { formatDateTime, formatPrice, humanize } from '../../utils/format'
 import { can } from '../../utils/permissions'
 import { colors, spacing } from '../../theme'
-
-function Row({ label, value, bold }) {
-  return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md }}>
-      <AppText variant={bold ? 'strong' : 'small'}>{label}</AppText>
-      <AppText variant={bold ? 'strong' : 'label'}>{value}</AppText>
-    </View>
-  )
-}
 
 function OrderDetail({ id }) {
   const router = useRouter()
@@ -56,8 +48,8 @@ function OrderDetail({ id }) {
       <View style={{ gap: spacing.lg }}>
         <Card style={{ gap: spacing.sm }}>
           <AppText variant="small">Placed {formatDateTime(order.createdAt)}</AppText>
-          <Row label="Payment" value={`${humanize(order.paymentMethod)}, ${humanize(payment?.status || order.paymentStatus)}`} />
-          <Row label="Total" value={formatPrice(order.total)} bold />
+          <DetailRow label="Payment" value={`${humanize(order.paymentMethod)}, ${humanize(payment?.status || order.paymentStatus)}`} />
+          <DetailRow label="Total" value={formatPrice(order.total)} bold />
         </Card>
 
         {order.statusHistory?.length ? (
@@ -65,8 +57,12 @@ function OrderDetail({ id }) {
             <AppText variant="small">Progress</AppText>
             {order.statusHistory.map((step, i) => (
               <View key={`${step.status}-${i}`} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md }}>
-                <AppText variant="label">{humanize(step.status)}</AppText>
-                <AppText variant="small">{formatDateTime(step.at)}</AppText>
+                <AppText variant="label" style={{ flex: 1 }}>
+                  {humanize(step.status)}
+                </AppText>
+                <AppText variant="small" style={{ flexShrink: 1, textAlign: 'right' }}>
+                  {formatDateTime(step.at)}
+                </AppText>
               </View>
             ))}
           </Card>
@@ -96,13 +92,13 @@ function OrderDetail({ id }) {
         <Card style={{ gap: spacing.sm }}>
           <AppText variant="small">Items</AppText>
           {order.items.map((item, i) => (
-            <Row key={`${item.productName}-${i}`} label={`${item.quantity} × ${item.productName}`} value={formatPrice(item.totalPrice)} />
+            <DetailRow key={`${item.productName}-${i}`} label={`${item.quantity} × ${item.productName}`} value={formatPrice(item.totalPrice)} />
           ))}
           <View style={{ height: 1, backgroundColor: colors.line, marginVertical: spacing.xs }} />
-          <Row label="Subtotal" value={formatPrice(order.subtotal)} />
-          <Row label="Delivery" value={formatPrice(order.deliveryFee)} />
-          {order.discount > 0 ? <Row label="Discount" value={`-${formatPrice(order.discount)}`} /> : null}
-          <Row label="Total" value={formatPrice(order.total)} bold />
+          <DetailRow label="Subtotal" value={formatPrice(order.subtotal)} />
+          <DetailRow label="Delivery" value={formatPrice(order.deliveryFee)} />
+          {order.discount > 0 ? <DetailRow label="Discount" value={`-${formatPrice(order.discount)}`} /> : null}
+          <DetailRow label="Total" value={formatPrice(order.total)} bold />
         </Card>
 
         {address ? (

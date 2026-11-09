@@ -4,6 +4,7 @@
  * own test files.
  */
 import React from 'react'
+import { act } from 'react-test-renderer'
 
 jest.setTimeout(30000)
 
@@ -97,6 +98,57 @@ describe('sign-in', () => {
   it('says so when the server could not be reached at start', async () => {
     const screen = await show(<Login />, { auth: signedOut(true) })
     expect(screenText(screen)).toMatch(/Cannot reach the server/)
+  })
+
+  describe('when the email belongs to more than one brand', () => {
+    const WORKSPACE = {
+      workspaceToken: 'wt-1',
+      memberships: [
+        { brandId: 'b1', brandName: 'Loom & Co.', role: 'BRAND_EMPLOYEE' },
+        { brandId: 'b2', brandName: 'Nest Home', role: 'PICKER' },
+      ],
+    }
+    const multiBrand = () => {
+      const auth = signedOut()
+      auth.login.mockRejectedValue(Object.assign(new Error('choose'), { workspace: WORKSPACE }))
+      return auth
+    }
+    const signInForm = async (screen) => {
+      await type(screen, 'Email', 'hira@example.com')
+      await type(screen, 'Password', 'correcthorse123')
+      await press(screen, 'Sign in')
+    }
+    const control = (screen, label) => screen.root.findAll((n) => n.props.accessibilityLabel === label && n.props.accessibilityRole === 'button' && n.props.accessibilityState)[0]
+
+    it('asks which brand, and opens the one chosen', async () => {
+      const auth = multiBrand()
+      const screen = await show(<Login />, { auth })
+      await signInForm(screen)
+      expect(screenText(screen)).toMatch(/Choose a workspace/)
+      expect(screenText(screen)).toMatch(/Loom & Co\./)
+      expect(screenText(screen)).toMatch(/Nest Home · Picker/)
+
+      await press(screen, 'Loom & Co.')
+      expect(auth.chooseWorkspace).toHaveBeenCalledWith({ workspaceToken: 'wt-1', brandId: 'b1' })
+    })
+
+    it('spins only the brand being opened, so a second tap cannot sign in twice', async () => {
+      const auth = multiBrand()
+      let finish
+      auth.chooseWorkspace = jest.fn(() => new Promise((resolve) => { finish = resolve }))
+      const screen = await show(<Login />, { auth })
+      await signInForm(screen)
+
+      await act(async () => {
+        control(screen, 'Sign in to Loom & Co.').props.onPress()
+      })
+
+      expect(control(screen, 'Sign in to Loom & Co.').props.accessibilityState).toMatchObject({ busy: true, disabled: true })
+      expect(control(screen, 'Sign in to Nest Home').props.accessibilityState).toMatchObject({ busy: false, disabled: true })
+      expect(control(screen, 'Use a different account').props.accessibilityState.disabled).toBe(true)
+
+      await act(async () => finish({}))
+    })
   })
 
   it('goes straight on when already signed in, and says how to reset a password', async () => {

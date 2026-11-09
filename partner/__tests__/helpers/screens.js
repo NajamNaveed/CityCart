@@ -15,7 +15,7 @@ export const tick = async (times = 6) => {
 export const PICKER = { id: 'p1', name: 'Ali Raza', email: 'ali@example.com', role: 'PICKER' }
 export const EMPLOYEE = { id: 'u2', name: 'Maryam Javed', email: 'maryam@example.com', role: 'BRAND_EMPLOYEE', permissions: ['orders.view'] }
 
-const authValue = (status, user, offline = false) => ({ status, user, isReady: status !== 'loading', offline, login: jest.fn(), logout: jest.fn(), retry: jest.fn() })
+const authValue = (status, user, offline = false) => ({ status, user, isReady: status !== 'loading', offline, login: jest.fn(), chooseWorkspace: jest.fn(), logout: jest.fn(), retry: jest.fn() })
 export const signedIn = (user = EMPLOYEE) => authValue('signedIn', user)
 export const signedOut = (offline = false) => authValue('signedOut', null, offline)
 

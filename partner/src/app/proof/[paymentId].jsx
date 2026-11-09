@@ -7,6 +7,7 @@ import AppText from '../../components/ui/AppText'
 import BackButton from '../../components/BackButton'
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
+import DetailRow from '../../components/ui/DetailRow'
 import EmptyState from '../../components/ui/EmptyState'
 import Skeleton from '../../components/ui/Skeleton'
 import TextField from '../../components/ui/TextField'
@@ -17,17 +18,6 @@ import { decideProof, fetchProofLink } from '../../services/records'
 import { formatDateTime, formatPaymentMethod, formatPrice } from '../../utils/format'
 import { can } from '../../utils/permissions'
 import { colors, radius, spacing } from '../../theme'
-
-function Row({ label, value }) {
-  return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md }}>
-      <AppText variant="small">{label}</AppText>
-      <AppText variant="label" style={{ flexShrink: 1, textAlign: 'right' }}>
-        {value}
-      </AppText>
-    </View>
-  )
-}
 
 function Notice({ tone, children }) {
   const look = tone === 'error' ? { bg: colors.dangerSoft, fg: colors.danger } : { bg: colors.successSoft, fg: colors.success }
@@ -178,12 +168,12 @@ function ProofDetail({ paymentId }) {
         )}
 
         <Card style={{ gap: spacing.sm }}>
-          <Row label="Order" value={proof.orderNumber || 'Order'} />
-          <Row label="Amount" value={formatPrice(proof.amount)} />
-          <Row label="Method" value={formatPaymentMethod(proof.method, proof.wallet)} />
-          <Row label="Reference" value={proof.reference} />
-          <Row label="Taken" value={formatDateTime(proof.submittedAt)} />
-          {proof.deliveryPending ? <Row label="Delivery" value="Still out for delivery: this check completes it." /> : null}
+          <DetailRow label="Order" value={proof.orderNumber || 'Order'} />
+          <DetailRow label="Amount" value={formatPrice(proof.amount)} />
+          <DetailRow label="Method" value={formatPaymentMethod(proof.method, proof.wallet)} />
+          <DetailRow label="Reference" value={proof.reference} />
+          <DetailRow label="Taken" value={formatDateTime(proof.submittedAt)} />
+          {proof.deliveryPending ? <DetailRow label="Delivery" value="Still out for delivery: this check completes it." /> : null}
         </Card>
 
         {proof.verification === 'SUBMITTED' ? (

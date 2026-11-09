@@ -5,6 +5,7 @@
  * screens show only names, quantities and pick state.
  */
 import React from 'react'
+import { Image } from 'react-native'
 
 jest.setTimeout(30000)
 
@@ -47,7 +48,7 @@ const LATER = new Date('2026-11-03T09:00:00.000Z').toISOString()
 const httpError = (status, data = {}) => Object.assign(new Error('http'), { response: { status, data } })
 const page = (key, items) => ({ data: { [key]: items, pagination: { page: 1, pages: 1, total: items.length } } })
 
-const LINE = { productId: 'pr1', productName: 'Printed lawn suit', sku: 'LS-1', quantity: 2, pickStatus: null, pickedQty: null }
+const LINE = { productId: 'pr1', productName: 'Printed lawn suit', sku: 'LS-1', image: 'https://example.test/lawn.jpg', quantity: 2, pickStatus: null, pickedQty: null }
 const ONE = { productId: 'pr2', productName: 'Silk scarf', sku: 'SC-2', quantity: 1, pickStatus: 'PICKED', pickedQty: 1 }
 
 const orderView = (overrides = {}) => ({
@@ -138,6 +139,14 @@ describe('one order to pick', () => {
     expect(text).not.toMatch(/House/)
   })
 
+  it("shows each line's photo, and leaves a quiet placeholder when the brand has none", async () => {
+    const screen = await open(orderView())
+    const photos = screen.root.findAllByType(Image)
+    expect(photos).toHaveLength(1) // the silk scarf line has no photo
+    expect(photos[0].props.source).toEqual({ uri: 'https://example.test/lawn.jpg' })
+    expect(photos[0].props.accessibilityLabel).toBe('Photo of Printed lawn suit')
+  })
+
   it('claims a waiting order before any line can be marked', async () => {
     const waiting = orderView({ orderStatus: 'CONFIRMED', claimedByMe: false, pickStartedAt: null })
     const claimed = orderView()
@@ -174,7 +183,7 @@ describe('one order to pick', () => {
     let loads = 0
     const screen = await open(orderView(), {
       'PATCH /picker/o1/items/i1': { data: { order: short } },
-      'GET /picker/products': { data: { products: [{ _id: 'pr9', name: 'Embroidered suit', sku: 'LS-9' }] } },
+      'GET /picker/products': { data: { products: [{ _id: 'pr9', name: 'Embroidered suit', sku: 'LS-9', image: 'https://example.test/embroidery.jpg' }] } },
       'POST /picker/o1/propose': { data: { adjustment: { _id: 'a1' } } },
       // The first load is the order before the proposal; the reload after sending shows it waiting.
       'GET /picker/o1': () => ({ data: { order: (loads += 1) === 1 ? orderView() : waiting } }),
@@ -190,6 +199,7 @@ describe('one order to pick', () => {
     await type(screen, 'Find a product', 'suit')
     await press(screen, 'Search')
     expect(api.get).toHaveBeenCalledWith('/picker/products', { params: { q: 'suit', limit: 20 } })
+    expect(screen.root.findAllByType(Image).some((image) => image.props.source?.uri === 'https://example.test/embroidery.jpg')).toBe(true)
     await pressByLabel(screen, 'Use Embroidered suit')
     expect(screenText(screen)).toMatch(/Instead: 1 × Embroidered suit/)
 

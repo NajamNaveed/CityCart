@@ -1,6 +1,7 @@
 import { Platform } from 'react-native'
 import Constants, { ExecutionEnvironment } from 'expo-constants'
 import api from './api'
+import { can } from '../utils/permissions'
 
 /**
  * Push notifications (docs/12 §31). The server sends a push for every in-app notification, to the
@@ -66,9 +67,13 @@ export async function unregisterPush() {
 }
 
 // Where a tap on a notification should open, from what the server put in it. Plain data, so it is easy to test.
-export function destinationFor(role, data) {
-  if (!data) return null
-  if (role === 'BRAND_EMPLOYEE' && data.orderId) return `/order/${data.orderId}`
+// A proof or a return needs the permission that screen itself checks; without it the order is still
+// a safe place to land, because both payloads carry the order too.
+export function destinationFor(role, data, user) {
+  if (!data || role !== 'BRAND_EMPLOYEE') return null
+  if (data.paymentId && (can(user, 'payments.view') || can(user, 'payments.manage'))) return `/proof/${data.paymentId}`
+  if (data.returnId && can(user, 'delivery.view')) return `/return/${data.returnId}`
+  if (data.orderId && can(user, 'orders.view')) return `/order/${data.orderId}`
   return null
 }
 

@@ -141,14 +141,17 @@ async function countDeliveries(status) {
 }
 
 /**
- * { counts: { READY_FOR_PICKUP: n, ... } | null, cash: { total, holders } | null, returns: { incoming, total } | null }
+ * { counts: { READY_FOR_PICKUP: n | null, ... } | null, cash: { total, holders } | null, returns: { incoming, total } | null }
  * A part the person may not see (or that fails) comes back null, so the screen shows
- * what it can and never an error for something they were never meant to see.
+ * what it can and never an error for something they were never meant to see. One
+ * failed delivery count leaves the others on screen instead of hiding them all.
  */
 export async function fetchOverview({ deliveries, money, returns }) {
   const [counts, cash, returned] = await Promise.all([
     deliveries
-      ? Promise.all(COUNTED_DELIVERIES.map(async (s) => [s, await countDeliveries(s)])).then(Object.fromEntries).catch(() => null)
+      ? Promise.all(COUNTED_DELIVERIES.map(async (s) => [s, await countDeliveries(s).catch(() => null)]))
+          .then(Object.fromEntries)
+          .then((byStatus) => (Object.values(byStatus).every((n) => n === null) ? null : byStatus))
       : null,
     money
       ? fetchCashCollectors()
@@ -168,7 +171,12 @@ export async function fetchOverview({ deliveries, money, returns }) {
 }
 
 // "On the road" is three delivery statuses to the person reading the screen.
-export const onTheRoad = (counts) => (counts ? (counts.PICKED_UP || 0) + (counts.IN_TRANSIT || 0) + (counts.OUT_FOR_DELIVERY || 0) : 0)
+// If any of the three could not be counted the total would be misleading, so it is unknown.
+const ON_THE_ROAD = ['PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY']
+export const onTheRoad = (counts) => {
+  if (!counts) return null
+  return ON_THE_ROAD.reduce((total, status) => (total === null || counts[status] == null ? null : total + counts[status]), 0)
+}
 
 // Filter chips: [server status or undefined for everything, label].
 export const ORDER_FILTERS = [

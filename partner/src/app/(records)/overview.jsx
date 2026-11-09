@@ -12,6 +12,9 @@ import { formatPrice } from '../../utils/format'
 import { hasNoAccess, visibleTabs } from '../../utils/permissions'
 import { colors, radius, spacing } from '../../theme'
 
+// A count that could not be fetched shows a dash, never a wrong zero.
+const countOrDash = (value) => (value == null ? '–' : value)
+
 function Tile({ label, value, hint, onPress }) {
   return (
     <Pressable
@@ -59,10 +62,10 @@ export default function Overview() {
         <View style={{ gap: spacing.md }}>
           {counts ? (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
-              <Tile label="To pick up" value={counts.READY_FOR_PICKUP} onPress={() => goDeliveries('READY_FOR_PICKUP')} />
-              <Tile label="On the road" value={onTheRoad(counts)} onPress={() => goDeliveries('OUT_FOR_DELIVERY')} />
-              <Tile label="Failed" value={counts.FAILED} hint="Needs another try" onPress={() => goDeliveries('FAILED')} />
-              <Tile label="Delivered" value={counts.DELIVERED} hint="All time" onPress={() => goDeliveries('DELIVERED')} />
+              <Tile label="To pick up" value={countOrDash(counts.READY_FOR_PICKUP)} onPress={() => goDeliveries('READY_FOR_PICKUP')} />
+              <Tile label="On the road" value={countOrDash(onTheRoad(counts))} onPress={() => goDeliveries('OUT_FOR_DELIVERY')} />
+              <Tile label="Failed" value={countOrDash(counts.FAILED)} hint="Needs another try" onPress={() => goDeliveries('FAILED')} />
+              <Tile label="Delivered" value={countOrDash(counts.DELIVERED)} hint="All time" onPress={() => goDeliveries('DELIVERED')} />
             </View>
           ) : null}
           {returns ? (

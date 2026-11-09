@@ -18,22 +18,20 @@ first, then the documents it points to.
 | D0 | **Returns** (found missing, see §6.1); built as **door returns** in marketplace v2 Phase 6, not the customer-request chain of decision 8 | **Done** (see §5.11) |
 | C | `partner/` Expo app: sign-in and rider screens; the shopper app and website show the delivery code and receipt | **Done** (not yet run on a real phone, see §5.4) |
 | D | Records screens in the same app: orders, deliveries and rider assignment, receipts, cash hand-over | **Done** (not yet run on a real phone, see §5.5) |
-| E | Online payments: hosted gateway, signed webhook, stock hold and release, Pay now in the shopper app and website | **Built and tested with a built-in TEST gateway.** A real gateway adapter is still to do (needs the owner's sandbox account), see §5.6 |
+| E | Online payments: hosted gateway, signed webhook, stock hold and release, Pay now in the shopper app and website | **Removed in v3.** The built-in test gateway was retired in marketplace v3 Phase 1; checkout is COD only (see §5.6) |
 | F | Push notifications to the Staff and Delivery apps, and the rider sharing their location while delivering | **Built and tested with mocks**; push needs a real EAS build to try on a phone (see §5.7) |
 | I | Payment proof photo at the door: cash/bank/wallet/card, camera photo + reference, brand verification queue, private storage, receipts | **Built and tested with mocks**; the camera needs a real phone (see §5.8) |
 | P | Picker screens (marketplace v2 Phase 4): `PICKER` role, pick queue, claim, line marking, change proposal with substitutes, pack confirmation | **Done**; needs a phone run (see §5.9) |
 | S | Split the apps (marketplace v2 Phase 5): the new `delivery/` app takes the rider screens, push routing and location sharing; `partner/` becomes the Staff app; three app-type sign-ins | **Done** (see §5.10 and `23-delivery-app.md`) |
 | R | Returned-goods inbox (marketplace v2 Phase 6): list, detail with refused lines and photos, **Mark received** with per-line restock or write-off | **Done** (see §5.11) |
 
-Server test suite: 940 tests before the programme, 1,047 after Phase A, 1,090
-after Phase B, 1,097 after Phase C (unchanged by Phase D), 1,158 after Phase E,
-1,200 after Phase F, 1,286 after Phases G–I, 1,442 after the picker phase,
-1,455 after the Phase 5 split, 1,503 after Phase 6 — plus 159 real-MongoDB
-integration tests. The Staff app (`partner/`) has 173 tests, the Delivery app
-(`delivery/`) 154, and the shopper app (`mobile/`) 335. All pass; lint is clean
-everywhere, and the integration suite runs in this environment
-(`npm run test:integration`). `test:apps` in the root package runs the staff and
-delivery suites.
+Server test suite: 1,657 unit tests in 66 suites, plus the real-MongoDB
+integration suite (`npm run test:integration`, which needs a MongoDB binary).
+The programme grew it from 940 to 1,503 by Phase 6; the v3 phases since then
+added the rest. The Staff app (`partner/`) has 191 tests in 17 suites, the
+Delivery app (`delivery/`) 156 in 9, and the shopper app (`mobile/`) 497 in 48.
+All pass; the Staff app's lint is clean. `test:apps` in the root package runs
+the staff and delivery suites.
 
 ## 1. Why this exists
 
@@ -59,10 +57,10 @@ proposed and then **approved by the owner**.
 | 4 | Brand owners and the super admin stay on the **web** | Highest-privilege accounts should not hold a long-lived bearer token on a phone |
 | 5 | Proof of delivery is a **six-digit code** the customer reads out | Strong enough, needs no camera/signature library. Chosen over four digits for safety |
 | 6 | Dependencies are kept **minimal and justified**; installs consolidated | Owner preference (see §8) |
-| 7 | Card data is **never stored**; online payments are confirmed only by the gateway's signed webhook | Security and PCI scope |
+| 7 | Card data is **never stored**; online payments were confirmed only by the gateway's signed webhook. **Superseded in v3:** there is no online payment any more; the "never store card data" rule still holds for legacy records | Security and PCI scope |
 | 8 | **Returns:** the approved version one was a customer request within 7 days of delivery (fixed reasons, whole order) → brand approves or rejects → the records person marks it returned, with a "put back in stock" checkbox → refund. **Superseded in November 2026:** marketplace v2 Phase 6 built **returns at the door** instead (the rider records refused lines when completing the delivery; the store takes them in and chooses restock or write-off, default write-off). The customer-request chain is still not built | Door returns need no approval step and fix the quantity at the moment the customer decides; the older chain remains a future feature |
-| 9 | **Payment gateway behind a small adapter** (create payment, verify webhook), so the provider can be swapped. The first provider is whichever sandbox account the owner gets approved first (JazzCash sandbox, Safepay, PayFast) | Live use needs a registered business (NTN, bank account, KYC), which is a business step, not code |
-| 10 | **Prepaid orders:** stay pending with stock held for about 30 minutes; only the signed webhook marks them paid; otherwise the order cancels and stock is released. Check the existing inventory reservation first (docs/09) | Never ship goods on an unconfirmed payment |
+| 9 | **Payment gateway behind a small adapter** (create payment, verify webhook), so the provider can be swapped. **Superseded in v3:** the adapter and its test provider were removed with online payments; a real provider would need a new, approved design | Live use needs a registered business (NTN, bank account, KYC), which is a business step, not code |
+| 10 | **Prepaid orders:** stay pending with stock held for about 30 minutes; only the signed webhook marks them paid; otherwise the order cancels and stock is released. **Superseded in v3:** prepaid orders left with the gateway; legacy ones stay readable and read-only (docs/10 §29) | Never ship goods on an unconfirmed payment |
 | 11 | **Build order:** C, then D (without the returns tab), then D0 and the returns tab, then E, then F | C needs no decisions; E needs a sandbox account |
 | 12 | **Small defaults:** a rider with open deliveries cannot be deactivated; customers never receive the internal `riderId`; brand owners stay web-only | Done in Phase C (the first two) |
 
@@ -76,8 +74,6 @@ proposed and then **approved by the owner**.
          +--------  /api/v1  (Express)  ---------+-----------------+
                            |            \
                         MongoDB      Socket.io (live updates)
-                           |
-                 Payment gateway --webhook--> server   (Phase E)
 ```
 
 Every client calls the same API. **The server checks role and brand on every
@@ -373,11 +369,11 @@ read-only (docs/10 §29).
 
 Rules and API are in `12-notification-system.md` §31 (push) and `11-delivery-system.md` §30 (location); summary for whoever continues.
 
-* **Packages:** `expo-notifications` is in both apps (each app registers its own phone token). `expo-location` is in the **Delivery app only**. The shopper app, website and server gained **no** package (push uses Node's built-in `fetch`; maps open through a plain link).
-* **Push:** the server stores each phone's token (`DeviceToken`) and, for every in-app notification, sends a push through Expo's push service when `PUSH_ENABLED=true`. Both apps register after sign-in and remove the token on sign-out. The **Delivery app** opens a delivery when a notification is tapped; the **Staff app** opens an order. Both do nothing in Expo Go (Android Expo Go cannot receive push; the app detects it) and until the app has an Expo project id. To try it on a phone: `cd delivery` (or `cd partner`) and `npx eas-cli init`, add Firebase (FCM) credentials in EAS for Android, `eas build --profile development --platform android`, set `PUSH_ENABLED=true` on the server. **Not tried on a real phone.**
+* **Packages:** `expo-notifications` is in all three apps (each registers its own phone token). `expo-location` is in the **Delivery app only**. The website gained no package; the server uses Node's built-in `fetch` to send pushes, and maps open through a plain link.
+* **Push:** the server stores each phone's token (`DeviceToken`) and, for every in-app notification, sends a push through Expo's push service when `PUSH_ENABLED=true`. Each app registers after sign-in and removes the token on sign-out. The **Delivery app** opens a delivery when a notification is tapped. The **Staff app** opens the payment proof or returned-goods detail when it carries that id and the person has the permission the screen needs (`payments.view`/`payments.manage` for a proof, `delivery.view` for a return), and otherwise the order. The shopper app opens the order or booking it is about. Every app does nothing in Expo Go (Android Expo Go cannot receive push; the app detects it) and until the app has an Expo project id. To try it on a phone: `cd delivery` (or `cd partner`/`cd mobile`) and `npx eas-cli init`, add Firebase (FCM) credentials in EAS for Android, `eas build --profile development --platform android`, set `PUSH_ENABLED=true` on the server. **Not tried on a real phone for the Staff app.**
 * **Rider location (Delivery app):** opt-in switch on the rider's Account screen (off by default, per phone, turned off on sign-out), foreground only (about every 30 s), accepted by the server only while a delivery is out, **only the last point is kept** (deleted after two hours, or at once when sharing stops), readable only by that order's customer and the brand's staff with `delivery.view`, only while out for delivery and fresh (under 10 minutes). The Staff app's delivery page, the shopper app's order page and the website's order page show "last seen" with an **Open in Maps** link (no map library).
 * **Verified:** server tests (push sending, token handling for both app roles, location rules and who may read it), Staff app push tests, Delivery app tests (push registration incl. Expo Go and missing project id, the sharing decision logic, the hook, the Account switch, sign-out cleanup), shopper and website cards; lint; Android bundle builds for both apps.
-* **Known gaps and ideas:** no background tracking (needs special store permissions: ask the owner first); location is shown as "last seen" plus a map link, not a live moving map (a map package would be needed: ask the owner first); the shopper app does not register for push yet; push needs the EAS build described above; FCM/APNs credentials are the owner's to create.
+* **Known gaps and ideas:** no background tracking (needs special store permissions: ask the owner first); location is shown as "last seen" plus a map link, not a live moving map (a map package would be needed: ask the owner first); push needs the EAS build described above; FCM/APNs credentials are the owner's to create.
 
 ### 5.8 Phase I: payment proof photo at the door
 
@@ -424,12 +420,15 @@ Rules, data and API are in `08-order-management.md` §41.9 and
   **Unavailable**, and either packs ("Pack order" → confirm "Yes, packed") or,
   if anything is short, sends a change proposal: a message to the customer plus
   an optional same-brand substitute per short line (search, "Use …", quantity).
-  Each line is numbered and shows its pick state in colour, the three answers
-  are full-width rows with plain-words descriptions ("Found all 2", "None on
-  the shelf"), and the header card carries a progress bar ("2 of 3 lines
-  checked · 1 short"). While the proposal waits the lines lock and the screen
-  says so; when the customer answers, "Check again" reloads. A packed order
-  shows "Packed and ready for a rider" and returns to the queue.
+  Each line is numbered, shows its product photo (or a package icon when the
+  product has none) and its pick state in colour; the substitute results show
+  their photos too. The picker serializers already carried `image`, so no server
+  change was needed. The three answers are full-width rows with plain-words
+  descriptions ("Found all 2", "None on the shelf"), and the header card carries
+  a progress bar ("2 of 3 lines checked · 1 short"). While the proposal waits the
+  lines lock and the screen says so; when the customer answers, "Check again"
+  reloads. A packed order shows "Packed and ready for a rider" and returns to
+  the queue.
 * **Brand admin:** the web Team page has a **Picker** account type; pickers are
   created with no permission checklist and are listed as "Picker · Staff app
   only". The server refuses an employee creating one (`PICKER_CREATE_FORBIDDEN`)
@@ -493,11 +492,11 @@ Staff app: `services/picker.js`, `app/(picker)/queue.jsx`,
 
 The Staff app side of door returns (docs/22 §F, docs/08 §41.10). The rider records refused lines in the Delivery app when completing the delivery; the goods then travel back to the store, and the store takes them in here.
 
-* **Tab and list** — `partner/src/app/(records)/returns.jsx`, shown to anyone with `delivery.view` (the same permission as the deliveries tab, since it is the same goods in transit; the server checks it again on `/returns`). Filter chips for `IN_TRANSIT` and `RECEIVED` (plus "All"), each row showing the order number, a one-line summary, the returned value, when it was created and a status pill. A pull down reloads; pages load ten at a time.
+* **Tab and list** — `partner/src/app/(records)/returns.jsx`, shown to anyone with `delivery.view` (the same permission as the deliveries tab, since it is the same goods in transit; the server checks it again on `/returns`). Filter chips for `IN_TRANSIT` and `RECEIVED` (plus "All"), each row showing the order number, a one-line summary, the returned value, when it was created and a status pill. A pull down reloads; pages load twenty at a time.
 * **Overview** — the records home gets a "Returns to receive" tile from `GET /returns/summary`: how many are `IN_TRANSIT` and the value coming back; tapping it opens the inbox filtered to `IN_TRANSIT`. The tile is left out for someone without `delivery.view`.
 * **Detail** — `partner/src/app/return/[id].jsx`, open to `BRAND_EMPLOYEE` (like the other records screens). It shows the order and return status, the value of the goods, whether the delivery fee was refunded, how much was refunded to a prepaid customer, and each refused line: product, quantity × unit price, the rider's reason, and a **View photo** button when the rider attached one. The photo is fetched through `GET /returns/:id/photo` as a short-lived signed link and opened in the system viewer; the private Cloudinary path never reaches the phone.
 * **Receiving** — the person with `delivery.manage` sees a restock choice per line: **Write off** (the default) or **Sellable: back on the shelf**. "Mark received" sends `POST /returns/:id/receive` with `{ decisions: [{ index, restock }] }` and can only succeed once; a second attempt answers `409 RETURN_ALREADY_RECEIVED` and the screen reloads. Stock changes only at this moment and only for ticked lines; a write-off records no stock movement. Someone with `delivery.view` but not `delivery.manage` can read everything and is told they cannot take the goods in.
-* **Notifications** — the brand team with `orders.view` or `delivery.view` gets `RETURN_IN_TRANSIT` when a return is created, so the inbox is known before the goods arrive (docs/12 §33). A tap on the push opens the order.
+* **Notifications** — the brand team with `orders.view` or `delivery.view` gets `RETURN_IN_TRANSIT` when a return is created, so the inbox is known before the goods arrive (docs/12 §33). A tap on the push opens the return for someone with `delivery.view`, otherwise the order.
 * **Demo:** the seed's partial COD and prepaid returns give the inbox one `IN_TRANSIT` return with a photo and one `RECEIVED` return, plus the fully rejected order.
 * **Tests:** `partner/__tests__/returns-screens.test.js` covers the list and filters, the detail (lines, reasons, money, photo link and its failure), receiving (only ticked lines restocked, default write-off), a second receive answering `409`, and the permission split between seeing and receiving. `records-screens.test.js` covers the overview tile and its tap-through.
 
@@ -532,9 +531,11 @@ built; details and the one thing still to verify are in §5.4 and §5.10.
 The Staff app's records screens are built, and the returns tab that was waiting on
 Phase D0 now exists (§5.11).
 
-### 6.4 Phase E: built with the test gateway (see §5.6)
+### 6.4 Phase E: removed in v3 (see §5.6)
 
-What remains is the real gateway adapter and real refunds (§5.6 "Not built").
+There is no online payment in v3 (docs/24 Phase 1). Nothing remains to build
+here unless the owner later approves a real gateway, which would need a new
+design and account (decision 9).
 
 ### 6.5 Phase F: built (see §5.7)
 
@@ -549,14 +550,15 @@ and its decisions remain in `21-next-features-plan.md`; the remaining ideas ther
 ## 7. Open decisions and known gaps
 
 * **Customer-initiated returns** are not built (§6.1): only returns recorded at the door exist.
-* **Payment gateway** not chosen (§6.4); prepaid order-confirmation flow undecided.
+* **Online payments:** removed in v3 (§5.6). A real gateway and prepaid flow
+  would need a new, approved design (decision 9).
 * A rider with open deliveries **cannot** be deactivated (Phase C); the brand
   reassigns first.
-* Riders do not get live socket updates yet (Phase F).
 * Neither the Staff app nor the Delivery app has been run on a physical device
   (§5.4, §5.10).
-* The Staff app polls every minute for its lists; the Delivery app polls its
-  deliveries the same way. Live sockets are not built.
+* Neither app polls or listens to sockets for its lists: they reload on pull-down,
+  on a button, and after an action. New work is announced by a push notification
+  (phase F) so the person knows to open the app.
 * Brand owners (`BRAND_ADMIN`) and the super admin cannot use either app
   (decision 4): they sign in on the website only. Widening this is a one-line
   change in `config/roles.js` (`STAFF_APP_ROLES` / `DELIVERY_APP_ROLES`) but it
@@ -595,18 +597,22 @@ Run from `server/`: `npx eslint .` and `npx jest` (unit, mocked models, fast).
 Integration tests (`npm run test:integration`) need a real MongoDB binary.
 Client: `npm run lint` (oxlint) and `npx vite build` in `client/`.
 
-Staff app (`partner/`): `npm test` runs **173 tests** in 15 suites: `api`,
+Staff app (`partner/`): `npm test` runs **191 tests** in 17 suites: `api`,
 `storage`, `session`, `delivery` (shared order helpers and sign-in validation),
 `permissions`, `records-services` (request shapes, including proofs and
 returns), `paging`, `config`, `format`, `push` (registration, tap routing for
-team members, sign-out cleanup), `filter-chips`, `screens` (sign-in, who goes
-where, role guards), `records-screens` (overview, orders, deliveries and rider
-assignment, receipts, cash hand-over, the proof queue/detail and verify/reject,
-account), `picker-screens` (queue, claim, line marking, substitute proposal,
-pack confirmation, locked waiting proposal, take-over race, picker account) and
-`returns-screens` (returned-goods inbox, detail, photos, receive decisions).
+team members to an order, payment proof or return, sign-out cleanup),
+`filter-chips`, `screens` (sign-in including the multi-brand workspace chooser,
+who goes where, role guards), `records-screens` (overview, orders, deliveries
+and rider assignment, receipts, cash hand-over, the proof queue/detail and
+verify/reject, account), `picker-screens` (queue, claim, line marking, product
+photos, substitute proposal, pack confirmation, locked waiting proposal,
+take-over race, picker account), `returns-screens` (returned-goods inbox,
+detail, photos, receive decisions), `list-screen` (a failed pull-to-refresh and
+a failed "load more" each say so and retry) and `offline-banner` (shown in the
+layout, never over the content).
 
-Delivery app (`delivery/`): `npm test` runs **154 tests** in 9 suites: `api`,
+Delivery app (`delivery/`): `npm test` runs **156 tests** in 9 suites: `api`,
 `storage`, `session` (rider-only), `delivery` (status, links, address, six-digit
 code, return counts and reasons), `push-location` (push registration and
 location sharing), `paging`, `format`, `config`, `screens` (sign-in,
@@ -614,7 +620,7 @@ deliveries, one delivery including the line review and return photo, cash,
 alerts, account). The rider screen tests moved here from `partner/` unchanged in
 intent.
 
-Shopper app: `mobile/` runs 335 tests; the order-screen tests cover the delivery
+Shopper app: `mobile/` runs 497 tests; the order-screen tests cover the delivery
 code, the receipt, how a door payment was made, the "suggested by the store's
 picker" label, and the delivered/returned quantities with the final total. Root
 `npm run test:apps` runs the staff and delivery suites; `npm run test:staff` and
@@ -699,3 +705,5 @@ in §4 has tests; add the same for new rules, in the same style.
 * **2026-11 Phase 5 (marketplace v2):** the Partner app split into the **Staff app** (`partner/`, `citycart-staff`, `com.citycart.staff`) and the new **Delivery app** (`delivery/`, `citycart-delivery`, `com.citycart.delivery`). Rider screens, rider location sharing, door-payment capture and rider push routing moved to Delivery; the Staff app keeps records and picker screens. Sign-in is now three separate doors: `/auth/mobile` (shopper), `/auth/staff/login` (`BRAND_EMPLOYEE`, `PICKER`) and `/auth/delivery/login` (`RIDER`); `/auth/partner/login` was removed. Bearer tokens carry `client: 'staff'` or `client: 'delivery'` and a token of one app is refused by the other (`403 WRONG_APP`). Root scripts are `dev:staff`, `dev:delivery`, `test:staff`, `test:delivery`, `test:apps`. Tests, both app suites, lint and docs updated; see §5.10 and `23-delivery-app.md`.
 * **2026-11 Phase 6 (marketplace v2):** the **returned-goods inbox**. The rider now records refusal at the door in the Delivery app; the Staff app gets a Returns tab (list, filters, detail with reasons and private photos, **Mark received** with per-line restock or write-off, default write-off), a "Returns to receive" tile on the home screen, and `RETURN_IN_TRANSIT` notifications. See §5.11.
 * **2026-11 Door payment waits for verification:** a non-cash door payment no longer marks itself `PAID`. The rider's answer is held on the delivery (`pendingCompletion`), the delivery stays out for delivery, and **verifying it in "To verify" completes the delivery** (payment `PAID`, return, receipt) in one transaction. A refusal keeps the delivery open, tells the rider to **collect again** (`POST /rider/deliveries/:id/payment`) and flags the owner; a refused attempt moves to `collectionHistory`. The customer sees "payment being checked". Server, Delivery app, Staff app states, demo data, tests and docs updated.
+* **2026-11 v3 Phase 1:** the Phase E online-payment test gateway was removed. Checkout is COD only; legacy `ONLINE_GATEWAY` orders and payments stay readable and read-only. The Phase E row and decisions 7, 9 and 10 in this file are marked superseded; §5.6 records what was removed.
+* **2026-11 Staff app audit and fixes:** every screen was checked for broken layout and against the v3 spec. Long values on the order, receipt and proof screens now wrap instead of pushing off the card (one shared `DetailRow`); the offline banner sits in the layout instead of covering the screen title; a failed pull-to-refresh says so and offers a retry instead of being reported as "load more"; overview counts stay visible when one count fails (a dash when a count is unknown); picker lines and substitute results show product photos; the multi-brand workspace chooser shows a spinner on the brand being opened, keeps the other buttons disabled and has screen-reader labels; tab labels no longer scale out of the bar; rider "last seen" reads as a sentence; and a push tap opens the payment proof or return when the payload and the person's permissions allow, otherwise the order. Tests: 191 in 17 suites; lint clean.

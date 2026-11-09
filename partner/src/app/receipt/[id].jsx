@@ -6,6 +6,7 @@ import AppText from '../../components/ui/AppText'
 import BackButton from '../../components/BackButton'
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
+import DetailRow from '../../components/ui/DetailRow'
 import EmptyState from '../../components/ui/EmptyState'
 import Skeleton from '../../components/ui/Skeleton'
 import { useRemote } from '../../hooks/useRemote'
@@ -15,17 +16,6 @@ import { colors, spacing } from '../../theme'
 
 // The brand's view of a non-cash payment at the door: checked, waiting, or rejected.
 const PROOF_CHECKS = { SUBMITTED: 'Waiting to be checked', VERIFIED: 'Checked', REJECTED: 'Rejected' }
-
-function Row({ label, value, bold }) {
-  return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md }}>
-      <AppText variant={bold ? 'strong' : 'small'}>{label}</AppText>
-      <AppText variant={bold ? 'strong' : 'label'} style={{ flexShrink: 1, textAlign: 'right' }}>
-        {value}
-      </AppText>
-    </View>
-  )
-}
 
 function ReceiptDetail({ id }) {
   const remote = useRemote(`receipt:${id}`, () => fetchReceipt(id))
@@ -48,32 +38,32 @@ function ReceiptDetail({ id }) {
     body = (
       <View style={{ gap: spacing.lg }}>
         <Card style={{ gap: spacing.sm }}>
-          <Row label="Brand" value={receipt.brandName} />
-          <Row label="Order" value={receipt.orderNumber} />
-          {receipt.billedTo ? <Row label="Billed to" value={receipt.billedTo} /> : null}
-          <Row label="Issued" value={formatDateTime(receipt.issuedAt)} />
+          <DetailRow label="Brand" value={receipt.brandName} />
+          <DetailRow label="Order" value={receipt.orderNumber} />
+          {receipt.billedTo ? <DetailRow label="Billed to" value={receipt.billedTo} /> : null}
+          <DetailRow label="Issued" value={formatDateTime(receipt.issuedAt)} />
         </Card>
 
         <Card style={{ gap: spacing.sm }}>
           <AppText variant="small">Items</AppText>
           {receipt.items.map((item, i) => (
-            <Row key={`${item.productName}-${i}`} label={`${item.quantity} × ${item.productName}`} value={formatPrice(item.totalPrice)} />
+            <DetailRow key={`${item.productName}-${i}`} label={`${item.quantity} × ${item.productName}`} value={formatPrice(item.totalPrice)} />
           ))}
           <View style={{ height: 1, backgroundColor: colors.line, marginVertical: spacing.xs }} />
-          <Row label="Subtotal" value={formatPrice(receipt.subtotal)} />
-          <Row label="Delivery" value={formatPrice(receipt.deliveryFee)} />
-          {receipt.discount > 0 ? <Row label="Discount" value={`-${formatPrice(receipt.discount)}`} /> : null}
-          {receipt.tax > 0 ? <Row label="Tax" value={formatPrice(receipt.tax)} /> : null}
-          <Row label="Paid" value={formatPrice(receipt.amount)} bold />
+          <DetailRow label="Subtotal" value={formatPrice(receipt.subtotal)} />
+          <DetailRow label="Delivery" value={formatPrice(receipt.deliveryFee)} />
+          {receipt.discount > 0 ? <DetailRow label="Discount" value={`-${formatPrice(receipt.discount)}`} /> : null}
+          {receipt.tax > 0 ? <DetailRow label="Tax" value={formatPrice(receipt.tax)} /> : null}
+          <DetailRow label="Paid" value={formatPrice(receipt.amount)} bold />
         </Card>
 
         <Card style={{ gap: spacing.sm }}>
-          <Row label="Method" value={formatPaymentMethod(receipt.collectionMethod || receipt.method, receipt.collectionWallet)} />
+          <DetailRow label="Method" value={formatPaymentMethod(receipt.collectionMethod || receipt.method, receipt.collectionWallet)} />
           {receipt.collectionReference || receipt.transactionReference ? (
-            <Row label="Reference" value={receipt.collectionReference || receipt.transactionReference} />
+            <DetailRow label="Reference" value={receipt.collectionReference || receipt.transactionReference} />
           ) : null}
-          {receipt.proofVerification ? <Row label="Payment check" value={PROOF_CHECKS[receipt.proofVerification] || receipt.proofVerification} /> : null}
-          {receipt.collectedByName ? <Row label="Cash taken by" value={receipt.collectedByName} /> : null}
+          {receipt.proofVerification ? <DetailRow label="Payment check" value={PROOF_CHECKS[receipt.proofVerification] || receipt.proofVerification} /> : null}
+          {receipt.collectedByName ? <DetailRow label="Cash taken by" value={receipt.collectedByName} /> : null}
         </Card>
       </View>
     )

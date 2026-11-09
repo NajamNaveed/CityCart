@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Pressable, RefreshControl, ScrollView, View } from 'react-native'
+import { Image, Pressable, RefreshControl, ScrollView, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import Feather from '@expo/vector-icons/Feather'
@@ -77,16 +77,42 @@ function ChoiceRow({ icon, title, description, selected, onPress, disabled }) {
   )
 }
 
+// The product's own photo, so the picker can match it on the shelf without
+// reading every name. A brand with no photo gets a neutral placeholder.
+function Thumb({ uri, name, size = 48 }) {
+  return (
+    <View style={{ width: size, height: size, borderRadius: radius.md, overflow: 'hidden', backgroundColor: colors.sand, alignItems: 'center', justifyContent: 'center' }}>
+      {uri ? (
+        <Image source={{ uri }} accessibilityLabel={`Photo of ${name}`} resizeMode="cover" style={{ width: '100%', height: '100%' }} />
+      ) : (
+        <Feather name="package" size={Math.round(size / 2.5)} color={colors.muted} />
+      )}
+    </View>
+  )
+}
+
 function LineCard({ item, index, editable, busy, onMark, shortFor, shortQty, setShortQty, openShort, closeShort }) {
   const checked = Boolean(item.pickStatus)
   return (
     <Card style={{ gap: spacing.sm }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md }}>
+        <Thumb uri={item.image} name={item.productName} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <AppText variant="strong">{item.productName}</AppText>
+          <AppText variant="small">
+            {item.sku ? `SKU ${item.sku} · ` : ''}
+            {item.quantity} ordered
+          </AppText>
+          <View style={{ flexDirection: 'row', marginTop: spacing.xs }}>
+            <StatusPill value={item.pickStatus || 'NOT_CHECKED'} />
+          </View>
+        </View>
         <View
           style={{
             width: 28,
             height: 28,
             borderRadius: 14,
+            marginTop: 2,
             alignItems: 'center',
             justifyContent: 'center',
             borderWidth: 1,
@@ -98,14 +124,6 @@ function LineCard({ item, index, editable, busy, onMark, shortFor, shortQty, set
             {index}
           </AppText>
         </View>
-        <View style={{ flex: 1, gap: 2 }}>
-          <AppText variant="strong">{item.productName}</AppText>
-          <AppText variant="small">
-            {item.sku ? `SKU ${item.sku} · ` : ''}
-            {item.quantity} ordered
-          </AppText>
-        </View>
-        <StatusPill value={item.pickStatus || 'NOT_CHECKED'} />
       </View>
 
       {item.pickStatus === 'SHORT' ? (
@@ -301,8 +319,12 @@ function PickDetail({ id }) {
 
         <Card style={{ gap: spacing.sm, marginBottom: spacing.lg }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md }}>
-            <AppText variant="small">Placed {formatDateTime(order.createdAt)}</AppText>
-            <AppText variant="small">For {order.customerFirstName}</AppText>
+            <AppText variant="small" style={{ flex: 1 }}>
+              Placed {formatDateTime(order.createdAt)}
+            </AppText>
+            <AppText variant="small" style={{ flexShrink: 1, textAlign: 'right' }}>
+              For {order.customerFirstName}
+            </AppText>
           </View>
           <AppText variant="strong">
             Pick {order.items.length} {order.items.length === 1 ? 'line' : 'lines'}
@@ -417,10 +439,15 @@ function PickDetail({ id }) {
                           accessibilityLabel={`Use ${product.name}`}
                           style={({ pressed }) => ({ padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, backgroundColor: pressed ? colors.sand : colors.surface })}
                         >
-                          <AppText variant="label">{product.name}</AppText>
-                          <AppText variant="small">
-                            {product.sku ? `SKU ${product.sku} · ` : ''}Send {shortfall(item)} instead
-                          </AppText>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+                            <Thumb uri={product.image} name={product.name} size={40} />
+                            <View style={{ flex: 1 }}>
+                              <AppText variant="label">{product.name}</AppText>
+                              <AppText variant="small">
+                                {product.sku ? `SKU ${product.sku} · ` : ''}Send {shortfall(item)} instead
+                              </AppText>
+                            </View>
+                          </View>
                         </Pressable>
                       ))}
                       {search.done && search.products.length === 0 ? (

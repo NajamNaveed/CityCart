@@ -123,7 +123,19 @@ describe('the overview', () => {
     expect(cash).toEqual({ total: 1250, holders: 2 })
     expect(api.get).toHaveBeenCalledWith('/deliveries', { params: { status: 'FAILED', page: 1, limit: 1 } })
     expect(onTheRoad(counts)).toBe(6)
-    expect(onTheRoad(null)).toBe(0)
+    expect(onTheRoad(null)).toBeNull()
+  })
+
+  it('keeps the delivery counts that did arrive when one of them fails', async () => {
+    api.get.mockImplementation(async (url, config) => {
+      if (url === '/deliveries' && config.params.status === 'FAILED') throw new Error('Network Error')
+      if (url === '/deliveries') return { data: { pagination: { total: { READY_FOR_PICKUP: 4, PICKED_UP: 1, IN_TRANSIT: 2, OUT_FOR_DELIVERY: 3, DELIVERED: 40 }[config.params.status] } } }
+      return { data: { collectors: [] } }
+    })
+    const { counts } = await fetchOverview({ deliveries: true })
+    expect(counts).toEqual({ READY_FOR_PICKUP: 4, PICKED_UP: 1, IN_TRANSIT: 2, OUT_FOR_DELIVERY: 3, FAILED: null, DELIVERED: 40 })
+    expect(onTheRoad(counts)).toBe(6)
+    expect(onTheRoad({ ...counts, IN_TRANSIT: null })).toBeNull()
   })
 
   it('tells the overview how many returns are on their way back', async () => {

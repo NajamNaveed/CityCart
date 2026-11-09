@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { View } from 'react-native'
 import { Stack, useRouter } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as SplashScreen from 'expo-splash-screen'
@@ -25,7 +26,7 @@ function PushSetup() {
     let stop = () => {}
     let cancelled = false
     listenForNotificationTaps((data) => {
-      const to = destinationFor(role, data)
+      const to = destinationFor(role, data, user)
       if (to) router.push(to)
     }).then((unsubscribe) => {
       if (cancelled) unsubscribe()
@@ -35,7 +36,7 @@ function PushSetup() {
       cancelled = true
       stop()
     }
-  }, [status, role, router])
+  }, [status, role, user, router])
 
   return null
 }
@@ -49,12 +50,12 @@ function Shell() {
 
   if (!isReady) return null
   return (
-    <>
+    <View style={{ flex: 1, backgroundColor: colors.paper }}>
       <StatusBar style="dark" />
       <OfflineBanner />
       <PushSetup />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.paper } }} />
-    </>
+    </View>
   )
 }
 
