@@ -60,6 +60,10 @@ const STAFF_APP_ROLES = Object.freeze([ROLES.BRAND_EMPLOYEE, ROLES.PICKER]);
 // Roles that may sign in through the CityCart Delivery app (docs/23): riders.
 const DELIVERY_APP_ROLES = Object.freeze([ROLES.RIDER]);
 
+// Native-app roles that may register a phone for push notifications: the
+// shopper app (docs/19) plus the Staff and Delivery apps (docs/20, docs/23).
+const PUSH_APP_ROLES = Object.freeze([...STAFF_APP_ROLES, ...DELIVERY_APP_ROLES, ROLES.CUSTOMER]);
+
 module.exports = {
   ROLES,
   ALL_ROLES,
@@ -67,5 +71,6 @@ module.exports = {
   STAFF_ROLES,
   STAFF_APP_ROLES,
   DELIVERY_APP_ROLES,
+  PUSH_APP_ROLES,
   PLATFORM_ADMIN_ROLES,
 };

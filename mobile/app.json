@@ -42,6 +42,13 @@
         {
           "locationWhenInUsePermission": "CityCart uses your location to show the shops closest to you. It is only used while you are in the app."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#b6472a",
+          "defaultChannel": "default"
+        }
       ]
     ],
     "extra": {

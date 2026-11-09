@@ -1924,7 +1924,7 @@ Errors: `503 PROOF_NOT_CONFIGURED`, `404 PROOF_NOT_FOUND` (no photo, or deleted)
 # 22e. Device and Rider Location Endpoints
 
 ```text
-PUT    /api/v1/devices/push-token                      riders, team members: { token, platform? }   (docs/12 §31)
+PUT    /api/v1/devices/push-token                      shoppers, riders, team members: { token, platform? }   (docs/12 §31)
 DELETE /api/v1/devices/push-token                      the same people: { token }
 PUT    /api/v1/rider/deliveries/location               rider: { latitude, longitude, accuracy? }    (docs/11 §30)
 DELETE /api/v1/rider/deliveries/location               rider

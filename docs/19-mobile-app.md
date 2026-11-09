@@ -34,7 +34,7 @@ CityCart/
    │  ├─ components/ui/  AppText, Screen, Button, Card, Spinner, EmptyState
    │  ├─ context/        AuthProvider (more providers arrive with their screens)
    │  ├─ hooks/
-   │  ├─ services/       api.js (axios + bearer token), storage.js, session.js, config.js, socket.js (the live connection), chats.js, services.js, bookings.js
+   │  ├─ services/       api.js (axios + bearer token), storage.js, session.js, config.js, socket.js (the live connection), chats.js, services.js, bookings.js, push.js
    │  ├─ utils/          formatting, geo, range, chat, serviceSlots and notificationTarget (ported from client/src)
    │  └─ theme.js        the web app's colours, Poppins and Fraunces
    ├─ __tests__/         unit tests (jest-expo)
@@ -78,6 +78,7 @@ Installed once, inside `mobile/`, each with a stated reason:
 | expo-font, @expo-google-fonts/poppins, @expo-google-fonts/fraunces | the brand fonts, importing only the five weights used |
 | @expo/vector-icons | tab and button icons (Feather, the family Lucide came from) |
 | react-native-webview | the Nearby map, which draws OpenStreetMap tiles inside the app (no Google Maps key, no native map SDK) |
+| expo-notifications | the push token that lets order and booking updates reach the phone while the app is closed (Phase 13) |
 
 ## 6. Phases
 
@@ -96,7 +97,8 @@ Installed once, inside `mobile/`, each with a stated reason:
 | 10 | Bookings: the filtered booking list, the detail with every customer action (proposal, completion, dispute, cancel, review), booking chat, merged chat filters and notification deep links | done |
 | 11 | Maps and support: a city selector, tri-state Blocks/Stores (and Blocks/Providers) layers and recenter on both maps, provider pins on the services map, and a Help & support screen fed by the public support settings | done |
 | 12 | Theme and accessibility: the web's v3 warm palette in `theme.js`, reduced-motion sheets, AA contrast for small text, and larger tap targets | done |
-| later | Push notifications when the app is closed (needs a server device-token model); seller inbox | |
+| 13 | Push notifications: the phone registers after sign-in, the server's existing Expo pipeline delivers order and booking updates while the app is closed, and a tap opens the matching screen | done |
+| later | Seller inbox on mobile | |
 
 Each phase ends with the server tests, lint and a successful app bundle.
 
@@ -308,6 +310,16 @@ permissions are checked.
   `/product/:id`. Service notifications carry their own calendar icon and
   colour. Rows can be deleted or all marked read; reads, deletes and mark-all
   keep the badge in step immediately, then the next fetch confirms it.
+* **Push, while the app is closed** (Phase 13): after sign-in the app asks for
+  notification permission, obtains an Expo push token and registers it with
+  `PUT /devices/push-token`; signing out removes it again. The server already
+  sends every in-app notification through Expo when `PUSH_ENABLED=true`
+  (docs/12 §31), so order and booking updates reach the phone even when the app
+  is not running. A tap opens the same screen as its inbox row
+  (`notificationTarget`), including the tap that launched the app. Nothing
+  breaks where push cannot work: Expo Go skips it, and without an Expo project
+  id the app stays on the in-app inbox (`services/push.js` returns a status and
+  never throws).
 
 Tests: `chat.test.js` (requests, cursor, live-connection rules, time stamps),
 `live.test.js` (socket lifecycle, badge honesty, fan-out and the debounced
@@ -316,6 +328,8 @@ screens against a fake server). `chat-screens.test.js` also covers the merged
 inbox and its filters, the direct provider thread (§12) with its own endpoints
 and live event kind, and the booking thread with events addressed by
 `bookingId`; `notifications-screen.test.js` covers the service deep links.
+`push.test.js` covers registration, the permission refusal and the unsupported
+cases, removing the token on sign-out, and where a tap lands.
 
 ## 12. Local services (Phases 9 and 11)
 
@@ -585,6 +599,12 @@ phone (Expo Go while developing, a preview APK for release behaviour):
     grows without clipping. Turn on Reduce Motion: sheets still open, without
     sliding. Finally, compare a few screens and the map with the website — the
     cream canvas, warm cards, clay accent and forest services should match.
+15. **Push notifications** — this needs an EAS development or preview build
+    (Expo Go on Android cannot receive push), `PUSH_ENABLED=true` on the server
+    and FCM credentials in EAS. Sign in and allow notifications, then have the
+    brand move an order (and the provider send a booking proposal) while the
+    app is closed: the banner arrives, and tapping it opens the matching order
+    or booking. Sign out and confirm the phone stops receiving them.
 
 ## 15. Development
 
@@ -605,7 +625,9 @@ developing but not in release builds of Android.
 * A bearer token cannot be revoked individually; it ends at expiry, on account
   deactivation, or when the password version changes. A lost phone is
   therefore covered by deactivating the account or changing the password.
-* No refresh tokens or push notifications in the first version.
+* No refresh tokens in the first version. Push notifications need an EAS
+  build (Expo Go on Android cannot receive them) and `PUSH_ENABLED=true` on
+  the server.
 
 ## 17. Related: the Staff and Delivery apps
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { setUnauthorizedHandler } from '../services/api'
+import { unregisterPush } from '../services/push'
 import { restoreSession, signIn, signOut, signUp } from '../services/session'
 import { AuthContext } from './contexts'
 
@@ -23,14 +24,21 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  const logout = useCallback(async () => {
+  // `remote: false` is for a session the server already ended: there is nobody
+  // to tell, and asking would only fail (and be answered with another sign-out).
+  const logout = useCallback(async (options) => {
+    if (options?.remote !== false) {
+      // While the token still works: this phone stops getting this person's
+      // notifications, so they do not keep arriving for whoever signs in next.
+      await Promise.allSettled([unregisterPush()])
+    }
     await signOut()
     setState({ status: 'signedOut', user: null, offline: false })
   }, [])
 
   // If the server ever says the session is over, sign out here too.
   useEffect(() => {
-    setUnauthorizedHandler(logout)
+    setUnauthorizedHandler(() => logout({ remote: false }))
     return () => setUnauthorizedHandler(null)
   }, [logout])
 

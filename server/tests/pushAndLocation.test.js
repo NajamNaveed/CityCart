@@ -38,7 +38,7 @@ function signedIn(role, permissions) {
 }
 const phone = (role, permissions) => {
   const user = signedIn(role, permissions);
-  const client = role === ROLES.RIDER ? 'delivery' : 'staff';
+  const client = role === ROLES.RIDER ? 'delivery' : role === ROLES.CUSTOMER ? undefined : 'staff';
   const token = signToken({ userId: user._id, role, brandId: user.brandId, passwordVersion: 0, client }, { expiresIn: '8h' });
   return { header: ['Authorization', `Bearer ${token}`], user };
 };
@@ -60,12 +60,27 @@ afterAll(() => {
 describe('registering a phone for push notifications', () => {
   const put = (header, body) => request(app).put('/api/v1/devices/push-token').set(...header).send(body);
 
-  it('401 when signed out; only the Staff and Delivery app roles may register', async () => {
+  it('401 when signed out; only the shopper, Staff and Delivery app roles may register', async () => {
     expect((await request(app).put('/api/v1/devices/push-token').send({ token: TOKEN })).status).toBe(401);
-    for (const role of [ROLES.CUSTOMER, ROLES.BRAND_ADMIN, ROLES.SUPER_ADMIN]) {
+    for (const role of [ROLES.BRAND_ADMIN, ROLES.SUPER_ADMIN]) {
       expect((await put(web(role).header, { token: TOKEN })).status).toBe(403);
     }
     expect(DeviceToken.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('a shopper bearer session can register, and the user still comes from the session', async () => {
+    const { header, user } = phone(ROLES.CUSTOMER);
+    DeviceToken.findOneAndUpdate.mockResolvedValue({});
+    DeviceToken.find.mockReturnValue({ sort: () => ({ select: () => Promise.resolve([]) }) });
+
+    const res = await put(header, { token: TOKEN, platform: 'android', userId: oid() });
+
+    expect(res.status).toBe(200);
+    expect(DeviceToken.findOneAndUpdate).toHaveBeenCalledWith(
+      { token: TOKEN },
+      { $set: { userId: user._id, platform: 'android', lastSeenAt: expect.any(Date) } },
+      { upsert: true }
+    );
   });
 
   it.each([[ROLES.RIDER], [ROLES.BRAND_EMPLOYEE], [ROLES.PICKER]])('a %s can register their phone, and the user comes from the session, never the body', async (role) => {
@@ -112,8 +127,8 @@ describe('registering a phone for push notifications', () => {
     expect(DeviceToken.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
-  it('signing out removes only the caller\'s own token', async () => {
-    const { header, user } = phone(ROLES.RIDER);
+  it.each([[ROLES.RIDER], [ROLES.CUSTOMER]])('a %s signing out removes only the caller\'s own token', async (role) => {
+    const { header, user } = phone(role);
     DeviceToken.deleteOne.mockResolvedValue({});
     const res = await request(app).delete('/api/v1/devices/push-token').set(...header).send({ token: TOKEN });
     expect(res.status).toBe(200);
