@@ -94,6 +94,7 @@ function ConversationsList({ userId }) {
               accessibilityRole="button"
               accessibilityState={{ selected }}
               accessibilityLabel={`Show ${filter.label}`}
+              hitSlop={{ top: 6, bottom: 6 }}
               style={{
                 minHeight: 36,
                 paddingHorizontal: spacing.md,

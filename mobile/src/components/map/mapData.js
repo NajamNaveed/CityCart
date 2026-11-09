@@ -7,7 +7,7 @@ const isCoord = (lat, lng) => Number.isFinite(lat) && Number.isFinite(lng)
  * Everything the map needs, as plain JSON the WebView can receive.
  * The map draws zones, shop or provider pins, the chosen pin and the radius circle.
  */
-export function buildMapData({ items = [], providers = [], zones = [], selectedIds = [], origin = null, pin = null, radiusKm = null, originLabel = '', pickable = false }) {
+export function buildMapData({ items = [], providers = [], zones = [], selectedIds = [], origin = null, pin = null, radiusKm = null, originLabel = '', pickable = false, label = '' }) {
   const chosen = new Set(selectedIds.map(String))
   const shapes = zones
     .filter((zone) => Array.isArray(zone.polygon) && zone.polygon.length >= 3)
@@ -69,5 +69,7 @@ export function buildMapData({ items = [], providers = [], zones = [], selectedI
     pin: picked,
     radiusKm: Number(radiusKm) || 0,
     pickable: Boolean(pickable),
+    // Read out inside the WebView, which has its own accessibility tree.
+    label: String(label || ''),
   }
 }

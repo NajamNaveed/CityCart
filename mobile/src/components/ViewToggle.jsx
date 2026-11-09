@@ -13,7 +13,7 @@ export default function ViewToggle({ view, onChange, options }) {
           onPress={() => onChange(value)}
           accessibilityRole="radio"
           accessibilityState={{ selected: view === value }}
-          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 40, paddingHorizontal: spacing.sm, backgroundColor: view === value ? colors.ink : colors.surface }}
+          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, paddingHorizontal: spacing.sm, backgroundColor: view === value ? colors.ink : colors.surface }}
         >
           <Feather name={icon} size={15} color={view === value ? colors.white : colors.ink} />
           <AppText variant="label" numberOfLines={1} style={{ color: view === value ? colors.white : colors.ink }}>

@@ -18,7 +18,7 @@ export const MAP_HTML = `<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="preconnect" href="https://tile.openstreetmap.org" crossorigin>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #eef3f0; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #f8f2e7; }
   #map { position: fixed; inset: 0; overflow: hidden; touch-action: none; cursor: grab; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
   #map.pickable { cursor: crosshair; }
   /* Everything inside #world is positioned in world pixels relative to #layout,
@@ -27,7 +27,7 @@ export const MAP_HTML = `<!doctype html>
   #under, #tiles, #zones, #marks { position: absolute; left: 0; top: 0; width: 0; height: 0; }
   #zones, #marks { pointer-events: none; }
   #under img { position: absolute; opacity: 1; pointer-events: none; }
-  #tiles img { position: absolute; width: 256px; height: 256px; pointer-events: none; user-select: none; -webkit-user-drag: none; opacity: 0; transition: opacity .12s linear; background: #e8ece9; }
+  #tiles img { position: absolute; width: 256px; height: 256px; pointer-events: none; user-select: none; -webkit-user-drag: none; opacity: 0; transition: opacity .12s linear; background: #f0e9df; }
   .marker { position: absolute; width: 26px; height: 26px; margin: 0; padding: 0; border: 0; background: transparent; transform: translate(-13px, -26px); pointer-events: auto; cursor: pointer; -webkit-tap-highlight-color: transparent; }
   .pin { display: block; width: 26px; height: 26px; border-radius: 50% 50% 50% 0; border: 2px solid #fff; box-shadow: 0 1px 5px rgba(0,0,0,.45); transform: rotate(-45deg); box-sizing: border-box; }
   .pin span { display: block; width: 8px; height: 8px; margin: 7px; border-radius: 50%; background: #fff; }
@@ -38,15 +38,15 @@ export const MAP_HTML = `<!doctype html>
   .dot { display: block; width: 18px; height: 18px; border-radius: 50%; border: 2px solid #fff; background: #3b5b7c; box-shadow: 0 1px 4px rgba(0,0,0,.35); box-sizing: border-box; }
   .dot.rider { background: #b6472a; }
   #zoom { position: absolute; top: 10px; left: 10px; z-index: 7; display: flex; flex-direction: column; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 5px rgba(0,0,0,.35); }
-  #zoom button { width: 36px; height: 36px; margin: 0; padding: 0; border: 0; background: #fff; color: #333; font: 22px/1 system-ui, sans-serif; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-  #zoom button + button { border-top: 1px solid #ccc; }
-  #zoom button:active { background: #f2f2f2; }
-  #popup { position: absolute; z-index: 8; display: none; width: 210px; box-sizing: border-box; padding: 10px 12px; border: 1px solid #e5ded4; border-radius: 10px; background: #fff; box-shadow: 0 8px 24px rgba(15,23,42,.2); pointer-events: auto; }
-  #popup strong { display: block; font-size: 14px; color: #1f2937; }
-  #popup span { display: block; margin-top: 2px; font-size: 12px; line-height: 1.35; color: #6b7280; }
+  #zoom button { width: 36px; height: 36px; margin: 0; padding: 0; border: 0; background: #fffcf6; color: #15140f; font: 22px/1 system-ui, sans-serif; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  #zoom button + button { border-top: 1px solid #e7ddcb; }
+  #zoom button:active { background: #f0e9df; }
+  #popup { position: absolute; z-index: 8; display: none; width: 210px; box-sizing: border-box; padding: 10px 12px; border: 1px solid #e7ddcb; border-radius: 10px; background: #fffcf6; box-shadow: 0 8px 24px rgba(21,20,15,.2); pointer-events: auto; }
+  #popup strong { display: block; font-size: 14px; color: #15140f; }
+  #popup span { display: block; margin-top: 2px; font-size: 12px; line-height: 1.35; color: #5f6b7c; }
   #popup button { display: inline-block; margin-top: 7px; padding: 0; border: 0; background: transparent; color: #b6472a; font-size: 12.5px; font-weight: 600; text-decoration: underline; cursor: pointer; }
-  #popup .close { position: absolute; top: 4px; right: 6px; margin: 0; font-size: 16px; line-height: 1; color: #6b7280; text-decoration: none; }
-  #attrib { position: absolute; right: 4px; bottom: 4px; z-index: 6; padding: 2px 5px; border-radius: 4px; background: rgba(255,255,255,.86); font-size: 10px; color: #3f4a44; pointer-events: auto; }
+  #popup .close { position: absolute; top: 4px; right: 6px; margin: 0; font-size: 16px; line-height: 1; color: #5f6b7c; text-decoration: none; }
+  #attrib { position: absolute; right: 4px; bottom: 4px; z-index: 6; padding: 2px 5px; border-radius: 4px; background: rgba(255,252,246,.9); font-size: 10px; color: #3f4a44; pointer-events: auto; }
   #attrib a { color: #3f4a44; }
 </style>
 </head>
@@ -291,8 +291,8 @@ export const MAP_HTML = `<!doctype html>
         }).join(' ');
         var poly = document.createElementNS(ns, 'polygon');
         poly.setAttribute('points', points);
-        poly.setAttribute('fill', zone.selected ? 'rgba(30,58,47,0.16)' : 'rgba(100,116,139,0.07)');
-        poly.setAttribute('stroke', zone.selected ? '#1e3a2f' : '#6b7280');
+        poly.setAttribute('fill', zone.selected ? 'rgba(28,58,46,0.16)' : 'rgba(100,116,139,0.07)');
+        poly.setAttribute('stroke', zone.selected ? '#1c3a2e' : '#6b7280');
         poly.setAttribute('stroke-width', zone.selected ? '2.5' : '1.5');
         var title = document.createElementNS(ns, 'title');
         title.textContent = zone.name || '';
@@ -308,8 +308,8 @@ export const MAP_HTML = `<!doctype html>
       circle.setAttribute('cx', String(center.x - layout.x));
       circle.setAttribute('cy', String(center.y - layout.y));
       circle.setAttribute('r', String(data.radiusKm * 1000 / metersPerPixel));
-      circle.setAttribute('fill', 'rgba(30,58,47,0.07)');
-      circle.setAttribute('stroke', '#1e3a2f');
+      circle.setAttribute('fill', 'rgba(28,58,46,0.07)');
+      circle.setAttribute('stroke', '#1c3a2e');
       circle.setAttribute('stroke-width', '1');
       svg.appendChild(circle);
       drawn += 1;
@@ -791,6 +791,7 @@ export const MAP_HTML = `<!doctype html>
       if (state.data && rider) state.data.rider = rider;
       closePopup();
       map.className = data && data.pickable ? 'pickable' : '';
+      map.setAttribute('aria-label', (data && data.label) || 'Map');
       fit();
     },
     // A city choice or a recenter frames a whole rectangle instead of fitting

@@ -45,7 +45,7 @@ function ProviderHero({ provider, width }) {
       {provider.coverImage ? (
         <ProductImage src={provider.coverImage} name={provider.displayName} width={width} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
       ) : null}
-      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(2,6,23,0.55)' }} />
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(21,20,15,0.55)' }} />
       <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', alignItems: 'flex-end', gap: spacing.md, padding: spacing.lg }}>
         <View style={{ width: 68, height: 68, borderRadius: radius.md, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }}>
           <ProductImage src={provider.avatar} name={provider.displayName} width={68} style={{ width: 68, height: 68 }} />

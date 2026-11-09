@@ -1,16 +1,19 @@
-// The web app's design tokens (client/src/index.css), so the two look like one product.
+// The web app's v3 customer tokens (client/src/index.css: canvas, paper-warm,
+// line-warm, noir, forest), so the two look like one product.
 export const colors = {
-  paper: '#f8f9fa', // page background
-  surface: '#ffffff', // cards, bars
+  paper: '#f8f2e7', // canvas: page background
+  surface: '#fffcf6', // paper-warm: cards, bars, sheets
   cream: '#fdf5ed', // warm accent wash
-  sand: '#f0e9df', // image placeholders
-  line: '#e7e5e4', // hairlines
-  ink: '#020617', // primary text, solid buttons
-  inkSoft: '#0f172a',
-  muted: '#64748b', // secondary text
+  sand: '#f0e9df', // image placeholders, quiet wells
+  line: '#e7ddcb', // line-warm hairlines
+  ink: '#15140f', // noir: primary text, solid buttons
+  inkSoft: '#24211b',
+  // Darker than the web's slate-500 so small text clears WCAG AA (4.5:1) on
+  // the canvas (5.01:1), cards (5.45:1) and sand wells (4.63:1).
+  muted: '#5d6979',
   clay: '#b6472a', // the shop's accent
   clayDark: '#98381f',
-  pine: '#1e3a2f', // seller side (not used in the shopper app)
+  pine: '#1c3a2e', // forest: service providers
   success: '#15803d',
   successSoft: '#ecfdf3',
   warning: '#b45309',
@@ -32,6 +35,7 @@ export const fonts = {
 }
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 }
-export const radius = { sm: 6, md: 8, lg: 12, pill: 999 }
+// v3 tile (10) and card (14); sheets round to a 20-point panel.
+export const radius = { sm: 6, md: 10, lg: 14, panel: 20, pill: 999 }
 // Smallest comfortable tap target (Apple and Google both recommend about 44-48).
 export const minTouch = 48

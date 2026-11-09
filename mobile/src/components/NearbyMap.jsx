@@ -41,10 +41,17 @@ export default function NearbyMap({ items, providers = [], zones = [], selectedI
 
   // Taps only count while the map is in choosing mode, even if a handler is passed.
   const canPick = Boolean(pickable && onPick)
+  const label = canPick
+    ? 'Map for choosing a spot'
+    : rider
+      ? 'Map of your delivery and rider'
+      : providers.length > 0
+        ? 'Map of local service providers'
+        : 'Map of nearby shops'
   // Refit only when what the map shows changes, not on every parent render.
-  const signature = JSON.stringify({ items, providers, zones, selectedIds, origin, pin, radiusKm, originLabel, canPick })
+  const signature = JSON.stringify({ items, providers, zones, selectedIds, origin, pin, radiusKm, originLabel, canPick, label })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const data = useMemo(() => JSON.stringify(buildMapData({ items, providers, zones, selectedIds, origin, pin, radiusKm, originLabel, pickable: canPick })), [signature])
+  const data = useMemo(() => JSON.stringify(buildMapData({ items, providers, zones, selectedIds, origin, pin, radiusKm, originLabel, pickable: canPick, label })), [signature])
 
   useEffect(() => {
     if (!ready) return
@@ -98,14 +105,6 @@ export default function NearbyMap({ items, providers = [], zones = [], selectedI
       if (brand) handlers.current.onOpenBrand?.(brand)
     }
   }
-
-  const label = canPick
-    ? 'Map for choosing a spot'
-    : rider
-      ? 'Map of your delivery and rider'
-      : providers.length > 0
-        ? 'Map of local service providers'
-        : 'Map of nearby shops'
 
   return (
     <View testID="map" accessibilityLabel={label} style={[styles.frame, { height }]}>

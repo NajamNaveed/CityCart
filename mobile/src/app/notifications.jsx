@@ -122,6 +122,7 @@ function NotificationsInbox({ user }) {
             onPress={() => setFilter(value)}
             accessibilityRole="button"
             accessibilityState={{ selected: filter === value }}
+            hitSlop={{ top: 6, bottom: 6 }}
             style={{ minHeight: 36, paddingHorizontal: spacing.lg, borderRadius: radius.pill, borderWidth: 1, borderColor: filter === value ? colors.ink : colors.line, backgroundColor: filter === value ? colors.ink : colors.surface, alignItems: 'center', justifyContent: 'center' }}
           >
             <AppText variant="label" style={{ color: filter === value ? colors.white : colors.ink, fontSize: 13 }}>

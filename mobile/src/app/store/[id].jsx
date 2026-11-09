@@ -78,7 +78,7 @@ function StoreBanner({ name, logo, banner, address }) {
           gap: spacing.md,
           padding: spacing.lg,
           paddingTop: spacing.xxl,
-          backgroundColor: 'rgba(15,23,42,0.78)',
+          backgroundColor: 'rgba(21,20,15,0.78)',
         }}
       >
         <BrandLogo brand={{ name, logo }} size={54} />

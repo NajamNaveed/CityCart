@@ -153,7 +153,7 @@ export default function Nearby() {
           variant="outline"
           onPress={detect}
           loading={status === 'detecting'}
-          style={{ minHeight: 40, paddingHorizontal: spacing.lg }}
+          style={{ minHeight: 44, paddingHorizontal: spacing.lg }}
         />
         <AppText variant="small" style={{ flexShrink: 1 }}>
           {areaName ? `Shopping in ${areaName}` : city ? city.name : 'Location not set'}

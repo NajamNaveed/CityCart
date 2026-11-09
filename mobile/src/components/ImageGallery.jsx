@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import Feather from '@expo/vector-icons/Feather'
 import AppText from './ui/AppText'
 import ProductImage from './ProductImage'
+import { useReduceMotion } from '../hooks/useReduceMotion'
 import { colors, spacing } from '../theme'
 
 /**
@@ -13,6 +14,7 @@ import { colors, spacing } from '../theme'
  */
 export default function ImageGallery({ images = [], name }) {
   const { width, height } = useWindowDimensions()
+  const reduceMotion = useReduceMotion()
   const photos = images.length > 0 ? images : [null]
   const [index, setIndex] = useState(0)
   const [viewing, setViewing] = useState(false)
@@ -40,12 +42,12 @@ export default function ImageGallery({ images = [], name }) {
       {photos.length > 1 ? (
         <View pointerEvents="none" style={{ position: 'absolute', bottom: spacing.md, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
           {photos.map((_, i) => (
-            <View key={i} style={{ width: i === index ? 18 : 6, height: 6, borderRadius: 3, backgroundColor: i === index ? colors.ink : 'rgba(2,6,23,0.25)' }} />
+            <View key={i} style={{ width: i === index ? 18 : 6, height: 6, borderRadius: 3, backgroundColor: i === index ? colors.ink : 'rgba(21,20,15,0.25)' }} />
           ))}
         </View>
       ) : null}
 
-      <Modal visible={viewing} animationType="fade" onRequestClose={() => setViewing(false)} statusBarTranslucent>
+      <Modal visible={viewing} animationType={reduceMotion ? 'none' : 'fade'} onRequestClose={() => setViewing(false)} statusBarTranslucent>
         <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: spacing.md }}>
             <AppText variant="small" style={{ color: '#fff' }}>

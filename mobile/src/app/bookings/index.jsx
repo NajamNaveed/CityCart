@@ -101,6 +101,7 @@ function BookingsList({ userId }) {
               accessibilityRole="button"
               accessibilityState={{ selected }}
               accessibilityLabel={`Filter ${filter.label}`}
+              hitSlop={{ top: 6, bottom: 6 }}
               style={{
                 minHeight: 36,
                 paddingHorizontal: spacing.lg,

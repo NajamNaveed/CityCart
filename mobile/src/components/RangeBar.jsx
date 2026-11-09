@@ -4,6 +4,7 @@ import AppText from './ui/AppText'
 import Button from './ui/Button'
 import Chip from './ui/Chip'
 import { useNearby } from '../hooks/useNearby'
+import { useReduceMotion } from '../hooks/useReduceMotion'
 import { isRadius, MAX_RADIUS_KM, MIN_RADIUS_KM } from '../utils/range'
 import { colors, fonts, minTouch, radius, spacing } from '../theme'
 
@@ -19,6 +20,7 @@ const PRESETS = [
 // How far to search: own block(s), a preset radius, a custom number of km, or the whole city.
 export default function RangeBar() {
   const { range, setRange, blockIds } = useNearby()
+  const reduceMotion = useReduceMotion()
   const presets = PRESETS.map(([value, label]) => (value === 'block' && blockIds.length > 1 ? [value, 'These blocks'] : [value, label]))
   const [asking, setAsking] = useState(false)
   const [draft, setDraft] = useState('')
@@ -46,13 +48,13 @@ export default function RangeBar() {
     <>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, paddingVertical: 2 }} accessibilityRole="radiogroup" accessibilityLabel="Search range">
         {presets.map(([value, label]) => (
-          <Chip key={value} label={label} selected={range === value} onPress={() => setRange(value)} />
+          <Chip key={value} role="radio" label={label} selected={range === value} onPress={() => setRange(value)} />
         ))}
-        <Chip label={custom ? `${range} km` : 'Custom'} icon="edit-2" selected={custom} onPress={openCustom} accessibilityHint="Type a distance in kilometres" />
+        <Chip role="radio" label={custom ? `${range} km` : 'Custom'} icon="edit-2" selected={custom} onPress={openCustom} accessibilityHint="Type a distance in kilometres" />
       </ScrollView>
 
-      <Modal visible={asking} transparent animationType="fade" onRequestClose={() => setAsking(false)} statusBarTranslucent>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'center', padding: spacing.xl, backgroundColor: 'rgba(2,6,23,0.45)' }}>
+      <Modal visible={asking} transparent animationType={reduceMotion ? 'none' : 'fade'} onRequestClose={() => setAsking(false)} statusBarTranslucent>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'center', padding: spacing.xl, backgroundColor: 'rgba(21,20,15,0.45)' }}>
           <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.md }}>
             <AppText variant="heading" accessibilityRole="header" style={{ fontSize: 20 }}>
               Search within…

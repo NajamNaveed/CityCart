@@ -22,6 +22,7 @@ function Action({ label, tone = 'ink', disabled, onPress }) {
       disabled={disabled}
       accessibilityRole="button"
       accessibilityState={{ disabled }}
+      hitSlop={4}
       style={{
         minHeight: 40,
         justifyContent: 'center',

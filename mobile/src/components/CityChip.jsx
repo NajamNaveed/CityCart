@@ -18,6 +18,7 @@ export default function CityChip() {
         onPress={() => setOpen(true)}
         accessibilityRole="button"
         accessibilityLabel={`City: ${city ? city.name : 'all cities'}. Change`}
+        hitSlop={4}
         style={{
           flexDirection: 'row',
           alignItems: 'center',

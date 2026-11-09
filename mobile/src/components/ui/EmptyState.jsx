@@ -17,8 +17,8 @@ export default function EmptyState({ icon = 'inbox', title, message, action, ton
         backgroundColor: colors.surface,
       }}
     >
-      <Feather name={icon} size={30} color={tone === 'error' ? colors.danger : colors.muted} />
-      <AppText variant="heading" style={{ marginTop: spacing.md, textAlign: 'center', fontSize: 19 }}>
+      <Feather name={icon} size={30} color={tone === 'error' ? colors.danger : colors.muted} accessible={false} />
+      <AppText variant="heading" accessibilityRole="header" style={{ marginTop: spacing.md, textAlign: 'center', fontSize: 19 }}>
         {title}
       </AppText>
       {message ? (

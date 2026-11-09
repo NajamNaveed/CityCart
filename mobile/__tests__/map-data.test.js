@@ -13,7 +13,15 @@ const BRAND = {
 
 describe('buildMapData', () => {
   it('passes the zones, shop pins and distances the WebView draws', () => {
-    const data = buildMapData({ items: [BRAND], zones: [ZONE], selectedIds: ['zone-1'], origin: { lat: 31.4, lng: 73.1 }, radiusKm: '2', pickable: true })
+    const data = buildMapData({
+      items: [BRAND],
+      zones: [ZONE],
+      selectedIds: ['zone-1'],
+      origin: { lat: 31.4, lng: 73.1 },
+      radiusKm: '2',
+      pickable: true,
+      label: 'Map of nearby shops',
+    })
 
     expect(data.zones).toEqual([{ id: 'zone-1', name: 'Gulberg', ring: ZONE.polygon, selected: true }])
     expect(data.pins).toEqual([
@@ -30,6 +38,11 @@ describe('buildMapData', () => {
     expect(data.pin).toEqual({ lat: 31.4, lng: 73.1, label: 'Search centre', kind: 'origin' })
     expect(data.radiusKm).toBe(2)
     expect(data.pickable).toBe(true)
+    expect(data.label).toBe('Map of nearby shops')
+  })
+
+  it('has an empty label when the caller gives none', () => {
+    expect(buildMapData({}).label).toBe('')
   })
 
   it('prefers a dropped pin and labels it, and ignores malformed zones', () => {
@@ -110,5 +123,10 @@ describe('the WebView map', () => {
     expect(MAP_HTML).toContain("targetKind: item.target.kind")
     expect(MAP_HTML).toContain('setFocus: function (bounds)')
     expect(MAP_HTML).toContain('recenter: function ()')
+  })
+
+  it('names itself for the WebView screen reader', () => {
+    expect(MAP_HTML).toContain("map.setAttribute('aria-label'")
+    expect(MAP_HTML).toContain("|| 'Map'")
   })
 })

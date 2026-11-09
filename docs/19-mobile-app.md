@@ -95,6 +95,7 @@ Installed once, inside `mobile/`, each with a stated reason:
 | 9 | Services: providers in the shopper's area, the provider page, a booking request with a map pin, and direct chat with a provider | done |
 | 10 | Bookings: the filtered booking list, the detail with every customer action (proposal, completion, dispute, cancel, review), booking chat, merged chat filters and notification deep links | done |
 | 11 | Maps and support: a city selector, tri-state Blocks/Stores (and Blocks/Providers) layers and recenter on both maps, provider pins on the services map, and a Help & support screen fed by the public support settings | done |
+| 12 | Theme and accessibility: the web's v3 warm palette in `theme.js`, reduced-motion sheets, AA contrast for small text, and larger tap targets | done |
 | later | Push notifications when the app is closed (needs a server device-token model); seller inbox | |
 
 Each phase ends with the server tests, lint and a successful app bundle.
@@ -443,7 +444,7 @@ Tests: `__tests__/settings.test.js` (defaults, one shared request, offline fallb
 and `__tests__/help-screen.test.js` (the support card, mail/phone links, the FAQ, the
 missing-address fallback and the Account entry points).
 
-## 14. Polish and release (Phase 7)
+## 14. Polish, theme and release (Phases 7 and 12)
 
 * **States.** Loading, empty and error states were built screen by screen in
   Phases 2–6 (skeletons while loading, an explanation with "Try again" on
@@ -472,6 +473,41 @@ missing-address fallback and the Account entry points).
   ```
   No maps key is needed for any profile: the map is OpenStreetMap inside a
   WebView, so release builds show it with no extra configuration.
+* **Warm palette (Phase 12).** `src/theme.js` now carries the web app's v3
+  customer tokens instead of its own blues: `paper #f8f2e7` (the canvas),
+  `surface #fffcf6` (paper-warm cards, bars and sheets), `line #e7ddcb`
+  (line-warm hairlines) and `ink #15140f` (noir text and solid buttons), with
+  `sand` for image wells and `pine #1c3a2e` for service providers. Radii follow
+  the web too — tiles 10, cards 14, sheets 20. Because every screen reads the
+  theme, the change is one file plus the surfaces the theme does not reach: the
+  map HTML (`components/map/mapHtml.js` — warm tiles, zoom buttons, popups and
+  zone strokes), the modal scrims (`rgba(21,20,15,0.45)`) and the store and
+  provider hero overlays.
+* **Contrast.** `muted` was darkened to `#5d6979` so small secondary text clears
+  WCAG AA (4.5:1) on the canvas (5.01:1), on cards (5.45:1) and on sand wells
+  (4.63:1); `ink` and `clay` already clear it. `__tests__/theme.test.js` pins the
+  tokens, computes the contrast of every used pair from first principles, and
+  fails if one drops below its floor.
+* **Reduced motion.** `hooks/useReduceMotion.js` reads the OS setting and keeps
+  listening for changes, guarding for platforms that answer nothing. The three
+  modals (`OptionSheet`, `RangeBar`, `ImageGallery`) switch to
+  `animationType="none"` when it is on, so they still open — just without the
+  slide or fade.
+* **Screen-reader labels and roles.** Sheet scrims and icons are hidden from the
+  reader where they only decorate (`EmptyState`, `UnreadPill`), empty-state and
+  section titles announce as headers, range chips and the list/map toggle report
+  as radio groups with a selected state, filter pills and small "Change" rows
+  carry `hitSlop`, and the map WebView gets an internal `aria-label` per screen
+  ("Map of nearby shops", "Map for choosing a spot" and so on) from
+  `buildMapData`.
+* **Tap targets.** Small rows that were 40 points tall — the list/map toggle,
+  the location buttons, the address actions — are 44 or use `hitSlop`, so they
+  meet the 44×44 guideline without changing how dense screens look.
+
+Tests: `__tests__/theme.test.js` (tokens, contrast pairs, radii, touch size),
+`__tests__/reduce-motion.test.js` (setting read, live change, listener cleanup,
+platform that cannot answer) and the updated `__tests__/map-data.test.js` (the
+label is carried into the map HTML).
 
 ### Device-test checklist
 
@@ -542,6 +578,13 @@ phone (Expo Go while developing, a preview APK for release behaviour):
     address configured the card explains that instead of showing a dead link.
 13. **Release build** — install the preview APK, repeat sign-in, nearby map and
     one order end to end; the launcher icon and splash are the branded set.
+14. **Accessibility and theme** — with TalkBack or VoiceOver on, the tabs,
+    buttons, cards and the list/map toggle announce a name and state, headings
+    read as headings, and the map is announced by its screen ("Map of nearby
+    shops", "Map of local service providers"). Turn the system font up: text
+    grows without clipping. Turn on Reduce Motion: sheets still open, without
+    sliding. Finally, compare a few screens and the map with the website — the
+    cream canvas, warm cards, clay accent and forest services should match.
 
 ## 15. Development
 

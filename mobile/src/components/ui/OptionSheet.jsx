@@ -1,6 +1,7 @@
 import { FlatList, Modal, Pressable, View } from 'react-native'
 import Feather from '@expo/vector-icons/Feather'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useReduceMotion } from '../../hooks/useReduceMotion'
 import { colors, minTouch, radius, spacing } from '../../theme'
 import AppText from './AppText'
 
@@ -10,15 +11,16 @@ import AppText from './AppText'
  * button, closes it without choosing.
  */
 export default function OptionSheet({ visible, title, options, selected, onSelect, onClose, emptyText = 'Nothing to choose from.' }) {
+  const reduceMotion = useReduceMotion()
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <Pressable onPress={onClose} accessibilityLabel="Close" style={{ flex: 1, backgroundColor: 'rgba(2,6,23,0.45)' }} />
+    <Modal visible={visible} transparent animationType={reduceMotion ? 'none' : 'slide'} onRequestClose={onClose} statusBarTranslucent>
+      <Pressable onPress={onClose} accessibilityLabel="Close" style={{ flex: 1, backgroundColor: 'rgba(21,20,15,0.45)' }} />
       <SafeAreaView
         edges={['bottom']}
         style={{
           backgroundColor: colors.surface,
-          borderTopLeftRadius: radius.lg * 1.5,
-          borderTopRightRadius: radius.lg * 1.5,
+          borderTopLeftRadius: radius.panel,
+          borderTopRightRadius: radius.panel,
           maxHeight: '70%',
         }}
       >

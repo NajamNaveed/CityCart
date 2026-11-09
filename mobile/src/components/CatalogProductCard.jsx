@@ -76,6 +76,7 @@ export default function CatalogProductCard({ item, onOpenProduct }) {
         onPress={() => setOpen((v) => !v)}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
+        hitSlop={4}
         style={{ minHeight: 40, justifyContent: 'center', marginTop: spacing.sm }}
       >
         <AppText variant="label" style={{ color: colors.clay }}>

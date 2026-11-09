@@ -4,12 +4,12 @@ import { colors, radius, spacing } from '../../theme'
 import AppText from './AppText'
 
 // A pill that opens a choice (Sort, Brand) or shows one that is active.
-export default function Chip({ label, selected = false, icon, onPress, onClear, accessibilityHint }) {
+export default function Chip({ label, selected = false, icon, onPress, onClear, accessibilityHint, role = 'button' }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
       <Pressable
         onPress={onPress}
-        accessibilityRole="button"
+        accessibilityRole={role}
         accessibilityState={{ selected }}
         accessibilityHint={accessibilityHint}
         hitSlop={{ top: 4, bottom: 4 }}

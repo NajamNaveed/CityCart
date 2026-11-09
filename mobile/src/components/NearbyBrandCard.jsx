@@ -105,7 +105,7 @@ export default function NearbyBrandCard({ brand, onOpenProduct, onSeeAll }) {
           </View>
         ))}
         {others.length > 0 ? (
-          <Pressable onPress={() => setShowAll((v) => !v)} accessibilityRole="button" style={{ minHeight: 40, justifyContent: 'center', borderTopWidth: 1, borderTopColor: colors.line }}>
+          <Pressable onPress={() => setShowAll((v) => !v)} accessibilityRole="button" hitSlop={4} style={{ minHeight: 40, justifyContent: 'center', borderTopWidth: 1, borderTopColor: colors.line }}>
             <AppText variant="label" style={{ color: colors.ink }}>
               {showAll ? 'Hide other branches' : `Show ${others.length} more ${others.length === 1 ? 'branch' : 'branches'}`}
             </AppText>
