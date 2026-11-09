@@ -815,6 +815,11 @@ Phase 4 progress (customer web):
 * Customer navigation is **Home · Stores · Services**. The separate Brands tab
   is retired; a brand is reached through its storefront, and the public brand
   and storefront APIs are unchanged.
+* The customer footer carries a call to action, a trust strip and four link
+  columns: marketplace, your account, sell with us (both application forms and
+  both portal logins) and support. The account column swaps for visitors and
+  signed-in shoppers; the support email and phone come from the public admin
+  settings, and the bottom bar keeps the legal links and Back to top.
 * v3 surfaces end on the footer directly — no strip of page background between
   the page and the footer.
 * Help and legal pages ship as draft shells: Help and Contact use the platform

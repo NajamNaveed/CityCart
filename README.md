@@ -792,8 +792,10 @@ The `docs/` directory contains the complete CityCart source of truth.
 | 21       | Next Features Plan        |
 | 22       | Marketplace v2 Plan       |
 | 23       | Delivery App              |
+| 24       | Marketplace v3 Plan       |
+| 25       | Device Test Checklist     |
 
-Release plans, runbooks, and per-phase status live in the plan documents (21–23). `docs/17-deployment.md` §30 holds the v2 release runbook.
+Release plans, runbooks, and per-phase status live in the plan documents (21–25). `docs/17-deployment.md` §30 holds the v2 release runbook.
 
 When implementation conflicts with documented business rules, the conflict should be identified and resolved before changing the architecture.
 

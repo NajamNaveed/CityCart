@@ -1,15 +1,39 @@
 import { useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, ArrowUp, ArrowUpRight, HandCoins, MapPin, ShieldCheck, Star } from 'lucide-react'
+import { ArrowRight, ArrowUp, ArrowUpRight, HandCoins, Mail, MapPin, Phone, ShieldCheck, Star, Truck } from 'lucide-react'
+import { useAuth } from '../../hooks/useAuth'
 import { useCity } from '../../hooks/useCity'
+import { usePublicSettings } from '../../hooks/usePublicSettings'
 import { wrap } from '../../ui'
 import { btn, iconBtnLight } from '../../design'
 
 const TRUST = [
-  { icon: ShieldCheck, text: 'Verified sellers & pros' },
-  { icon: Star, text: 'Reviews from real orders' },
-  { icon: HandCoins, text: 'Cash at the door' },
+  { icon: ShieldCheck, title: 'Verified sellers & pros', text: 'Every store and provider is checked before listing' },
+  { icon: Star, title: 'Reviews from real orders', text: 'Only people who bought or booked can review' },
+  { icon: HandCoins, title: 'Cash at the door', text: 'Pay when your order or booking arrives' },
+  { icon: Truck, title: 'Delivery within 1.5 km', text: 'Local stores, so it reaches you fast' },
 ]
+
+const linkClass =
+  'inline-block text-[13px] text-white/65 transition-[color,transform] duration-200 hover:translate-x-0.5 hover:text-white'
+
+function FooterColumn({ title, links }) {
+  return (
+    <nav aria-label={title}>
+      <h3 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">{title}</h3>
+      <ul className="mt-5 space-y-3">
+        {links.map(({ to, label, external }) => (
+          <li key={to + label}>
+            <Link to={to} className={`${linkClass} ${external ? 'inline-flex items-center gap-1.5' : ''}`}>
+              {label}
+              {external && <ArrowUpRight className="h-3 w-3" aria-hidden="true" />}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  )
+}
 
 function InstagramIcon(props) {
   return (
@@ -81,12 +105,55 @@ function FooterWordmark() {
 // "Sell on CityCart" lives here by design — the navbar stays shopper-focused.
 export default function StoreFooter({ flush = false }) {
   const { cities, setCityId } = useCity()
+  const { user } = useAuth()
+  const { settings } = usePublicSettings()
   const navigate = useNavigate()
+
+  const supportEmail = settings?.supportEmail
+  const supportPhone = settings?.supportPhone
+  const signedIn = Boolean(user)
 
   function pickCity(cityId) {
     setCityId(cityId)
     navigate('/nearby')
   }
+
+  const marketplace = [
+    { to: '/nearby', label: 'Stores near you' },
+    { to: '/brands', label: 'All brands' },
+    { to: '/services', label: 'Services & pros' },
+    { to: '/cart', label: 'Cart' },
+  ]
+
+  const account = signedIn
+    ? [
+        { to: '/orders', label: 'My orders' },
+        { to: '/bookings', label: 'My bookings' },
+        { to: '/addresses', label: 'Saved addresses' },
+        { to: '/chat', label: 'Messages' },
+      ]
+    : [
+        { to: '/login', label: 'Sign in' },
+        { to: '/register', label: 'Create an account' },
+        { to: '/orders', label: 'Track an order' },
+        { to: '/bookings', label: 'My bookings' },
+      ]
+
+  const sell = [
+    { to: '/sell', label: 'Sell on CityCart', external: true },
+    { to: '/sell/apply', label: 'Open a store' },
+    { to: '/provider/apply', label: 'Offer your services' },
+    { to: '/sell/login', label: 'Seller sign in' },
+    { to: '/sell/service/login', label: 'Provider sign in' },
+  ]
+
+  const support = [
+    { to: '/help', label: 'Help centre' },
+    { to: '/contact', label: 'Contact us' },
+    { to: '/refund-policy', label: 'Refunds & returns' },
+    { to: '/seller-agreement', label: 'Seller agreement' },
+    { to: '/provider-agreement', label: 'Provider agreement' },
+  ]
 
   return (
     <footer className={`${flush ? 'mt-0' : 'mt-20'} relative overflow-hidden bg-noir text-white`}>
@@ -101,50 +168,86 @@ export default function StoreFooter({ flush = false }) {
 
       <div className="relative">
         <div className={wrap}>
-          <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-7 border-b border-white/10 pb-12 pt-14 sm:pb-14 sm:pt-16">
+          {/* 1. Call to action */}
+          <div className="flex flex-col gap-8 border-b border-white/10 pb-12 pt-14 sm:pb-14 sm:pt-16 md:flex-row md:items-end md:justify-between">
             <div>
-              <p className="text-[10.5px] font-semibold uppercase tracking-[0.22em] text-white/40">
-                Start on your street
-              </p>
-              <h2 className="font-display mt-3 text-[34px] font-normal leading-[1.03] tracking-[-0.03em] sm:text-[46px]">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/40">Start on your street</p>
+              <h2 className="font-display mt-3 text-[34px] font-normal leading-[1.05] tracking-[-0.03em] sm:text-[46px]">
                 Good things,
                 <br />
                 <em className="font-normal italic text-clay">close to home.</em>
               </h2>
             </div>
-            <div className="flex flex-wrap gap-2.5">
-              <Link
-                to="/nearby"
-                className={btn('cream')}
-              >
+            <div className="flex flex-wrap gap-3">
+              <Link to="/nearby" className={btn('cream', 'lg')}>
                 Shop your block
                 <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
               </Link>
-              <Link
-                to="/sell"
-                className={btn('outlineLight')}
-              >
+              <Link to="/sell" className={btn('outlineLight', 'lg')}>
                 Sell with us
               </Link>
             </div>
           </div>
 
-          <div className="grid gap-10 py-12 md:grid-cols-2 lg:grid-cols-[1.6fr_0.7fr_0.8fr_0.8fr] lg:gap-8">
-            <div className="max-w-[340px]">
+          {/* 2. Trust strip */}
+          <ul className="grid gap-px overflow-hidden border-b border-white/10 sm:grid-cols-2 lg:grid-cols-4">
+            {TRUST.map(({ icon: Icon, title, text }) => (
+              <li key={title} className="flex items-start gap-3.5 py-7 sm:pr-6">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-tile border border-white/10 bg-white/[0.03]">
+                  <Icon className="h-4 w-4 text-clay" aria-hidden="true" />
+                </span>
+                <div>
+                  <p className="text-[13px] font-medium text-white/90">{title}</p>
+                  <p className="mt-1 text-[12px] leading-relaxed text-white/45">{text}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          {/* 3. Brand + link columns */}
+          <div className="grid gap-12 py-14 sm:grid-cols-2 lg:grid-cols-[1.6fr_repeat(4,1fr)] lg:gap-10">
+            <div className="sm:col-span-2 lg:col-span-1 lg:max-w-[320px]">
               <Link
                 to="/"
                 className="group inline-flex items-baseline font-display text-[28px] font-semibold tracking-[-0.02em] text-white"
                 aria-label="CityCart home"
               >
                 <span className="transition-transform duration-300 ease-out group-hover:-translate-y-0.5">CityCart</span>
-                <span className="text-clay transition-transform duration-300 ease-out group-hover:-translate-y-1 group-hover:scale-125 group-hover:drop-shadow-[0_0_7px_rgba(184,71,42,0.55)]">
+                <span className="text-clay transition-transform duration-300 ease-out group-hover:-translate-y-1 group-hover:scale-125">
                   .
                 </span>
               </Link>
               <p className="mt-4 text-[13px] leading-relaxed text-white/55">
-                The marketplace for your block. Local stores, verified pros, and cash at the door — all within 1.5
-                km.
+                The marketplace for your block. Local stores, verified pros and cash at the door, all within 1.5 km.
               </p>
+
+              {(supportEmail || supportPhone) && (
+                <ul className="mt-6 space-y-2.5 text-[13px] text-white/65">
+                  {supportEmail && (
+                    <li>
+                      <a
+                        href={`mailto:${supportEmail}`}
+                        className="inline-flex items-center gap-2.5 break-all transition hover:text-white"
+                      >
+                        <Mail className="h-3.5 w-3.5 shrink-0 text-clay" aria-hidden="true" />
+                        {supportEmail}
+                      </a>
+                    </li>
+                  )}
+                  {supportPhone && (
+                    <li>
+                      <a
+                        href={`tel:${supportPhone.replace(/\s+/g, '')}`}
+                        className="inline-flex items-center gap-2.5 transition hover:text-white"
+                      >
+                        <Phone className="h-3.5 w-3.5 shrink-0 text-clay" aria-hidden="true" />
+                        {supportPhone}
+                      </a>
+                    </li>
+                  )}
+                </ul>
+              )}
+
               <div className="mt-6 flex items-center gap-2">
                 {SOCIAL_LINKS.map(({ id, label, href, Icon }) => (
                   <a
@@ -159,9 +262,10 @@ export default function StoreFooter({ flush = false }) {
                   </a>
                 ))}
               </div>
+
               {cities.length > 0 && (
-                <div className="mt-6">
-                  <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-white/40">Now serving</p>
+                <div className="mt-7">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">Now serving</p>
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {cities.slice(0, 6).map((c) => (
                       <button
@@ -179,144 +283,39 @@ export default function StoreFooter({ flush = false }) {
               )}
             </div>
 
-            <nav aria-label="Shop">
-              <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-white/40">Shop</p>
-              <ul className="mt-4 space-y-2 text-[13px]">
-                <li>
-                  <Link
-                    to="/nearby"
-                    className="inline-block text-white/70 transition-[color,padding] duration-200 hover:pl-1 hover:text-white"
-                  >
-                    Stores near you
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    to="/cart"
-                    className="inline-block text-white/70 transition-[color,padding] duration-200 hover:pl-1 hover:text-white"
-                  >
-                    Cart
-                  </Link>
-                </li>
-              </ul>
-            </nav>
-
-            <nav aria-label="Account">
-              <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-white/40">Account</p>
-              <ul className="mt-4 space-y-2 text-[13px]">
-                <li>
-                  <Link
-                    to="/login"
-                    className="inline-block text-white/70 transition-[color,padding] duration-200 hover:pl-1 hover:text-white"
-                  >
-                    Sign in
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    to="/register"
-                    className="inline-block text-white/70 transition-[color,padding] duration-200 hover:pl-1 hover:text-white"
-                  >
-                    Create an account
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    to="/orders"
-                    className="inline-block text-white/70 transition-[color,padding] duration-200 hover:pl-1 hover:text-white"
-                  >
-                    My orders
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    to="/bookings"
-                    className="inline-block text-white/70 transition-[color,padding] duration-200 hover:pl-1 hover:text-white"
-                  >
-                    My bookings
-                  </Link>
-                </li>
-              </ul>
-            </nav>
-
-            <nav aria-label="Explore">
-              <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-white/40">Explore</p>
-              <ul className="mt-4 space-y-2 text-[13px]">
-                <li>
-                  <Link
-                    to="/services"
-                    className="inline-block text-white/70 transition-[color,padding] duration-200 hover:pl-1 hover:text-white"
-                  >
-                    Services & pros
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    to="/chat"
-                    className="inline-block text-white/70 transition-[color,padding] duration-200 hover:pl-1 hover:text-white"
-                  >
-                    Messages
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    to="/sell"
-                    className="inline-flex items-center gap-1.5 text-white/70 transition-[color,padding] duration-200 hover:pl-1 hover:text-white"
-                  >
-                    Sell on CityCart
-                    <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
-                  </Link>
-                </li>
-              </ul>
-            </nav>
+            <FooterColumn title="Marketplace" links={marketplace} />
+            <FooterColumn title="Your account" links={account} />
+            <FooterColumn title="Sell with us" links={sell} />
+            <FooterColumn title="Support" links={support} />
           </div>
         </div>
 
         <FooterWordmark />
 
+        {/* 4. Bottom bar */}
         <div className={wrap}>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-white/10 py-5 text-[11px] text-white/45">
-            {TRUST.map(({ icon: Icon, text }, index) => (
-              <div key={text} className="flex items-center gap-4">
-                {index > 0 && <span aria-hidden="true" className="h-3 w-px bg-white/15" />}
-                <span className="inline-flex items-center gap-1.5">
-                  <Icon className="h-3.5 w-3.5 text-clay" aria-hidden="true" />
-                  {text}
-                </span>
-              </div>
-            ))}
-            <span className="w-full sm:ml-auto sm:w-auto">
-              Built for your block <span className="text-white/75">· one street at a time</span>
-            </span>
-          </div>
+          <div className="flex flex-col gap-4 border-t border-white/10 py-6 text-[12px] text-white/45 md:flex-row md:items-center md:justify-between">
+            <p>&copy; {new Date().getFullYear()} CityCart. All rights reserved.</p>
 
-          <nav
-            aria-label="Help and legal"
-            className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/10 py-5 text-[11.5px] text-white/50"
-          >
-            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">Help & legal</span>
-            {[
-              ['/help', 'Help'],
-              ['/contact', 'Contact'],
-              ['/privacy', 'Privacy'],
-              ['/terms', 'Terms'],
-              ['/refund-policy', 'Refund & returns'],
-              ['/seller-agreement', 'Seller agreement'],
-              ['/provider-agreement', 'Provider agreement'],
-            ].map(([to, label]) => (
-              <Link key={to} to={to} className="transition hover:text-white">
-                {label}
+            <nav aria-label="Legal" className="flex flex-wrap items-center gap-x-6 gap-y-2">
+              <Link to="/privacy" className="transition hover:text-white">
+                Privacy
               </Link>
-            ))}
-          </nav>
+              <Link to="/terms" className="transition hover:text-white">
+                Terms
+              </Link>
+              <Link to="/refund-policy" className="transition hover:text-white">
+                Returns
+              </Link>
+              <Link to="/help" className="transition hover:text-white">
+                Help
+              </Link>
+            </nav>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 py-7 text-[11px] text-white/40">
-            <p>© {new Date().getFullYear()} CityCart. All rights reserved.</p>
-            <p className="hidden sm:block">Cash on delivery on every order</p>
             <button
               type="button"
               onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1.5 text-[10.5px] font-medium text-white/60 transition hover:border-white/40 hover:text-white"
+              className="inline-flex w-fit items-center gap-1.5 rounded-full border border-white/15 px-3.5 py-1.5 text-[11px] font-medium text-white/60 transition hover:border-white/40 hover:text-white"
             >
               Back to top
               <ArrowUp className="h-3 w-3" aria-hidden="true" />

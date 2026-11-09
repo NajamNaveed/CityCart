@@ -548,6 +548,10 @@ label is carried into the map HTML).
 
 ### Device-test checklist
 
+The combined pass for all three apps — builds, push, camera, location and the
+one golden path — is `25-device-test-checklist.md`. This list stays the
+shopper's own detail.
+
 Automated tests cover logic against a fake server; these checks need a real
 phone (Expo Go while developing, a preview APK for release behaviour):
 

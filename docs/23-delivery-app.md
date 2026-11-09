@@ -22,7 +22,9 @@ the server sections it points to.
 | Tests | 160 tests in 9 suites, all mocked; lint clean |
 
 The app has **not** been run on a physical device in this environment: the
-camera upload and push need a real phone, and a real Cloudinary account.
+camera upload and push need a real phone, and a real Cloudinary account. The
+combined phone pass for this app and the other two is
+`25-device-test-checklist.md`.
 
 ## 1. Why this exists
 

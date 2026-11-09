@@ -29,9 +29,13 @@ Server test suite: 1,657 unit tests in 66 suites, plus the real-MongoDB
 integration suite (`npm run test:integration`, which needs a MongoDB binary).
 The programme grew it from 940 to 1,503 by Phase 6; the v3 phases since then
 added the rest. The Staff app (`partner/`) has 191 tests in 17 suites, the
-Delivery app (`delivery/`) 156 in 9, and the shopper app (`mobile/`) 497 in 48.
+Delivery app (`delivery/`) 160 in 9, and the shopper app (`mobile/`) 507 in 48.
 All pass; the Staff app's lint is clean. `test:apps` in the root package runs
 the staff and delivery suites.
+
+The physical-device pass these mocked suites cannot replace — push delivery,
+the camera against Cloudinary, location sharing, map tiles in a release build —
+is written once for all three apps in `25-device-test-checklist.md`.
 
 ## 1. Why this exists
 
