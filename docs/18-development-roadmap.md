@@ -1035,8 +1035,8 @@ Phase 7  Flutter Delivery app
 Phase 8  Flutter Service Provider app (brand admin may follow later)
 Phase 9  Security audit, penetration test and release hardening    INTERNAL AUDIT DONE
          ASVS L2 map, router-walking authorization matrix, CSRF and
-         public-field fixes (docs/26). Device pass, external pen test,
-         backup/load drills and release remain.
+         public-field fixes, local abuse checks (docs/26). Device pass,
+         external pen test, backup/load drills and release remain.
 ```
 
 Rules for this programme:

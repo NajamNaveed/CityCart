@@ -197,6 +197,35 @@ Specific later-phase risks required by docs/24 §8.2:
 
 ## 6. Load and abuse testing
 
+### 6.1 Local abuse verification (executed 2026-11-09)
+
+The API was started with `NODE_ENV=production` against a scratch Mongo instance
+on loopback, with a local `CLIENT_URL` so the real origin allow-list applied. No
+production data, host or network was touched. Requests were driven with curl:
+
+| Check | Request | Result |
+|---|---|---|
+| Cross-site origin | `POST /api/v1/auth/logout`, `Origin: https://evil.example` | 403, `CSRF_ORIGIN` |
+| Opaque origin | same, `Origin: null` | 403, `CSRF_ORIGIN` |
+| Allowed origin | same, `Origin: http://127.0.0.1:5099` | 200 |
+| Body limit | 120 kb JSON to `POST /api/v1/auth/login` | 413 |
+| Auth limiter | 11 logins with an unknown email | 401 ×10, then 429 |
+| Limiter headers | 11th response | `RateLimit: limit=10, remaining=0, reset=899`, `Retry-After: 899` |
+| Token rejection | `GET /api/v1/auth/me`, `Bearer not-a-real-token` | 401 |
+
+The 429 body is the generic "Too many attempts. Please try again later." and the
+401s never distinguish unknown address from wrong password.
+
+**Observation — IP-keyed auth lockout.** The auth limiter counts per IP, so one
+hostile address — or a shared NAT egress such as a university, office or carrier
+grade NAT — locks every login from that address for 15 minutes. That is the
+intended trade-off: it is the cheapest defence against credential stuffing and
+it fails closed. If legitimate lock-outs are reported after launch, the correct
+fix is a second per-account bucket alongside the IP bucket, not a higher IP
+limit. That is a business-rule change and needs owner approval.
+
+### 6.2 Throughput (not executed)
+
 **Not executed.** There is no staging environment in this repository and the
 audit must not point load at production. Unit CI exercises the limiter logic with
 limits disabled (`NODE_ENV=test`), not throughput.
@@ -287,7 +316,7 @@ record accepted risk here.
 | 4 | CSRF guard trusts Origin/Referer when present | Standard browser behaviour; native apps send neither | If a supported browser drops `Origin` on writes |
 | 5 | No external penetration test | Owner decision; this internal audit is the substitute required by docs/24 §8.2 | Before major public launch |
 | 6 | Backup restore drill not yet run | No authorised database access | Before launch |
-| 7 | Load/abuse test not yet run | No staging environment | Before launch |
+| 7 | Throughput/load test not yet run | No staging environment; abuse paths are verified locally (§6.1), but latency and memory under traffic are not | Before launch |
 | 8 | Cloudinary upload has no signed `max_file_size` | Formats are restricted and the account quota bounds abuse; adding a limit needs a product decision on photo size | After the device pass |
 | 9 | No 2FA on privileged web accounts | Planned as email OTP (docs/24 D22); rate limits and generic errors are the interim control | When OTP is scheduled |
 
@@ -319,6 +348,21 @@ npm run lint
 npx jest
 npx expo export --platform android --output-dir <temporary directory>
 npm audit --omit=dev
+```
+
+```bash
+# Local abuse checks (§6.1) — production mode, scratch DB, loopback only
+NODE_ENV=production PORT=5099 MONGODB_URI=<scratch-db> CLIENT_URL=http://127.0.0.1:5099 node src/server.js
+
+curl -si -X POST localhost:5099/api/v1/auth/logout -H 'Origin: https://evil.example'   # 403 CSRF_ORIGIN
+curl -si -X POST localhost:5099/api/v1/auth/logout -H 'Origin: null'                   # 403 CSRF_ORIGIN
+curl -s -o /dev/null -w '%{http_code}\n' -X POST localhost:5099/api/v1/auth/logout \
+  -H 'Origin: http://127.0.0.1:5099'                                                   # 200
+
+for i in $(seq 1 11); do curl -s -o /dev/null -w '%{http_code}\n' \
+  -X POST localhost:5099/api/v1/auth/login -H 'Origin: http://127.0.0.1:5099' \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"nobody@example.com","password":"WrongPass123!"}'; done                 # 401 ×10, then 429
 ```
 
 The device pass is separate: `docs/25-device-test-checklist.md`.

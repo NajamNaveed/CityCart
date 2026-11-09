@@ -1076,9 +1076,12 @@ commission manipulation, service media access and ranking manipulation.
 41 public) with a router-walking authorization suite, and fixed two findings:
 the cross-site write gap created by `SameSite=None` cookies, and internal brand
 fields exposed to anonymous callers. Server and website production dependencies
-are clean. Open items are the app dependency advisory (`decode-uri-component`,
-requires Expo SDK 58), the external pen test (owner decision), and the
-backup/restore and load drills (owner actions, no staging access).
+are clean. Abuse paths were then verified against a local production-mode API —
+cross-site writes, opaque origins, the 100 kb body cap, the 10-per-15-minute auth
+limiter and malformed tokens all refuse correctly. Open items are the app
+dependency advisory (`decode-uri-component`, requires Expo SDK 58), the external
+pen test (owner decision), and the backup/restore and throughput drills (owner
+actions, no staging access).
 
 ---
 
