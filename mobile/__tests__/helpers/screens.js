@@ -1,6 +1,6 @@
 // Small helpers shared by the screen tests (no mocks in here: those live in each test file).
 import React from 'react'
-import { Text } from 'react-native'
+import { FlatList, Text } from 'react-native'
 import TestRenderer, { act } from 'react-test-renderer'
 import { AuthContext, CartContext, ChatContext, CityContext, NearbyContext, NotificationContext } from '../../src/context/contexts'
 
@@ -104,4 +104,16 @@ export async function type(renderer, label, value) {
   const input = renderer.root.findAll((n) => n.props.accessibilityLabel === label && typeof n.props.onChangeText === 'function')[0]
   if (!input) throw new Error(`no input labelled "${label}"`)
   await act(async () => input.props.onChangeText(value))
+}
+
+export async function pullToRefresh(renderer) {
+  const list = renderer.root.findByType(FlatList)
+  await act(async () => list.props.onRefresh())
+  await tick()
+}
+
+export async function scrollToEnd(renderer) {
+  const list = renderer.root.findByType(FlatList)
+  await act(async () => list.props.onEndReached())
+  await tick()
 }

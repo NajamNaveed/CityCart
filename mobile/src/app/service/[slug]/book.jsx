@@ -212,6 +212,10 @@ function BookingForm({ provider, slug }) {
 
   async function submit() {
     if (placing.current) return
+    if (!offering) {
+      setBanner('This provider has no services to book right now.')
+      return
+    }
     setBanner('')
     const next = {}
 
@@ -298,6 +302,19 @@ function BookingForm({ provider, slug }) {
         <Button title="View my bookings" variant="outline" onPress={() => router.replace('/bookings')} />
         <Button title="Browse more services" variant="outline" onPress={() => router.navigate('/services')} />
       </ScrollView>
+    )
+  }
+
+  if (offerings.length === 0) {
+    return (
+      <View style={{ padding: spacing.lg }}>
+        <EmptyState
+          icon="tool"
+          title="No services to book yet"
+          message={`${provider.displayName} has not listed a service yet. Check back later, or message them about the job.`}
+          action={<Button title={`Back to ${provider.displayName}`} onPress={() => router.replace(`/service/${slug}`)} />}
+        />
+      </View>
     )
   }
 

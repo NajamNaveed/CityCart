@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { FlatList, Pressable, View } from 'react-native'
+import { FlatList, Pressable, ScrollView, View } from 'react-native'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import AppText from '../../components/ui/AppText'
@@ -9,6 +9,7 @@ import Skeleton from '../../components/ui/Skeleton'
 import TextField from '../../components/ui/TextField'
 import UnreadPill from '../../components/ui/UnreadPill'
 import BackButton from '../../components/BackButton'
+import ListFooter from '../../components/ListFooter'
 import RequireCustomer from '../../components/RequireCustomer'
 import { BrandLogo } from '../../components/BrandCard'
 import ProductImage from '../../components/ProductImage'
@@ -84,7 +85,12 @@ function ConversationsList({ userId }) {
 
   return (
     <View style={{ flex: 1 }}>
-      <View style={{ flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm }}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={{ flexGrow: 0, flexShrink: 0 }}
+        contentContainerStyle={{ flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm }}
+      >
         {FILTERS.map((filter) => {
           const selected = filter.value === scope
           return (
@@ -112,7 +118,7 @@ function ConversationsList({ userId }) {
             </Pressable>
           )
         })}
-      </View>
+      </ScrollView>
 
       <FlatList
         data={items}
@@ -189,7 +195,9 @@ function ConversationsList({ userId }) {
           )
         }}
         ListFooterComponent={
-          list.loadingMore ? null : list.hasMore ? (
+          list.moreError || list.refreshError || list.loadingMore ? (
+            <ListFooter list={list} />
+          ) : list.hasMore ? (
             <Pressable onPress={list.loadMore} accessibilityRole="button" style={{ alignItems: 'center', padding: spacing.lg }}>
               <AppText variant="label" style={{ color: colors.clay }}>
                 Show more conversations

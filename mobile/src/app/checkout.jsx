@@ -33,8 +33,14 @@ function SavedAddress({ address, selected, onPress }) {
         <Feather name={selected ? 'check-circle' : 'circle'} size={20} color={selected ? colors.ink : colors.muted} style={{ marginTop: 2 }} />
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-            <AppText variant="strong">{address.label}</AppText>
-            {address.isDefault ? <AppText variant="small">Default</AppText> : null}
+            <AppText variant="strong" numberOfLines={1} style={{ flex: 1 }}>
+              {address.label}
+            </AppText>
+            {address.isDefault ? (
+              <AppText variant="small" style={{ flexShrink: 0 }}>
+                Default
+              </AppText>
+            ) : null}
           </View>
           <AppText variant="small" style={{ color: colors.ink }}>
             {address.fullName} · {address.phone}
@@ -43,8 +49,8 @@ function SavedAddress({ address, selected, onPress }) {
             {address.addressLine}, {address.city}
           </AppText>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.xs }}>
-            <Feather name="map-pin" size={12} color={colors.clay} />
-            <AppText variant="small" style={{ color: colors.clay }}>
+            <Feather name="map-pin" size={12} color={colors.clay} style={{ marginTop: 2 }} />
+            <AppText variant="small" style={{ color: colors.clay, flex: 1 }}>
               {address.blocks?.length ? address.blocks.map((b) => b.name).join(' + ') : 'No longer inside a delivery area'}
             </AppText>
           </View>

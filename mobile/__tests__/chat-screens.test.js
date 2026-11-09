@@ -37,7 +37,7 @@ import api from '../src/services/api'
 import ChatScreen from '../src/app/chat/index'
 import ChatThread from '../src/app/chat/[id]'
 import ProductScreen from '../src/app/product/[id]'
-import { CUSTOMER, cleanup, chatValue, press, pressByLabel, screenText, show, signedIn, signedOut, textOf, tick, type, tree } from './helpers/screens'
+import { CUSTOMER, cleanup, chatValue, press, pressByLabel, pullToRefresh, screenText, scrollToEnd, show, signedIn, signedOut, textOf, tick, type, tree } from './helpers/screens'
 
 const ID = (n) => `64b7f0c2a1b2c3d4e5f6070${n}`
 const TODAY = new Date().toISOString()
@@ -167,6 +167,30 @@ describe('conversation list', () => {
     expect(screenText(screen)).toContain('Sign in to see your messages')
     expect(api.get).not.toHaveBeenCalled()
   })
+
+  it('says when a refresh failed, and keeps the conversations', async () => {
+    mockInbox({ store: CONVERSATIONS })
+    const screen = await show(<ChatScreen />, { auth: signedIn() })
+    api.get.mockRejectedValue(httpError(500, 'Server error'))
+    await pullToRefresh(screen)
+
+    const text = screenText(screen)
+    expect(text).toContain("Couldn't refresh. Server error")
+    expect(text).toContain('Loom & Co.')
+  })
+
+  it('says when the next page failed, and retries it', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/services/direct-chats') return Promise.resolve({ data: { conversations: [], pagination: { page: 1, pages: 1 } } })
+      return Promise.resolve({ data: { conversations: CONVERSATIONS, pagination: { page: 1, pages: 2, total: 3 } } })
+    })
+    const screen = await show(<ChatScreen />, { auth: signedIn() })
+    api.get.mockRejectedValueOnce(httpError(500, 'Server error'))
+    await scrollToEnd(screen)
+
+    expect(screenText(screen)).toContain("Couldn't load more. Server error")
+    expect(screenText(screen)).toContain('Loom & Co.')
+  })
 })
 
 describe('thread', () => {
@@ -254,6 +278,24 @@ describe('thread', () => {
     await press(screen, 'Load earlier messages')
     expect(api.get).toHaveBeenLastCalledWith(`/chats/${ID(1)}/messages`, { params: { limit: 30, before: ID(3) } })
     expect(screenText(screen)).toContain('Welcome to Loom & Co.')
+  })
+
+  it('says when earlier messages could not be loaded, and tries again', async () => {
+    api.get.mockResolvedValueOnce({ data: { messages: MESSAGES, hasMore: true } })
+    api.get.mockRejectedValueOnce(httpError(500, 'Server error'))
+    api.post.mockResolvedValue({ data: { success: true } })
+    const screen = await show(<ChatThread />, { auth: signedIn() })
+    await press(screen, 'Load earlier messages')
+
+    const text = screenText(screen)
+    expect(text).toContain('Server error')
+    // The history stays, and the same control can ask again.
+    expect(text).toContain('Yes, ships tomorrow.')
+
+    api.get.mockResolvedValueOnce({ data: { messages: [{ _id: ID(5), conversationId: ID(1), senderRole: 'BRAND', mine: false, body: 'Welcome to Loom & Co.', createdAt: YESTERDAY, product: null }], hasMore: false } })
+    await press(screen, 'Try again')
+    expect(screenText(screen)).toContain('Welcome to Loom & Co.')
+    expect(screenText(screen)).not.toContain('Server error')
   })
 })
 

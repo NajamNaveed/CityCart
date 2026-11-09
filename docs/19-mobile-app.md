@@ -472,8 +472,9 @@ missing-address fallback and the Account entry points).
   phase audited all fifteen screens against that checklist and found no gaps.
 * **Offline.** `@react-native-community/netinfo` (installed with
   `npx expo install`, so it matches the SDK). `OfflineBanner` sits in the root
-  layout and overlays every screen only while the OS reports the device as
-  disconnected; the unknown state at launch is treated as online so it never
+  layout above the navigator and takes its own row (under the status-bar inset)
+  only while the OS reports the device as disconnected, so no screen title is
+  covered; the unknown state at launch is treated as online so it never
   flashes. It reads `isConnected` only — `isInternetReachable` needs a probe
   request and is unreliable on some networks — so a connected-but-broken
   network still surfaces as the per-screen "Cannot reach the server" errors,
@@ -524,6 +525,21 @@ missing-address fallback and the Account entry points).
 * **Tap targets.** Small rows that were 40 points tall — the list/map toggle,
   the location buttons, the address actions — are 44 or use `hitSlop`, so they
   meet the 44×44 guideline without changing how dense screens look.
+* **2026-11 Shopper app audit:** the offline banner now takes its own space at
+  the top of the layout instead of covering screen titles; every paged list
+  (Nearby, Services, orders, bookings, chat, notifications) tells a failed
+  refresh apart from a failed next page and offers the matching retry (the map
+  views say so under "Load more"), instead of silently dropping the failure;
+  chat says when earlier messages could not be loaded and retries from the same
+  control; marking all notifications read or deleting one reports a failure in
+  a banner instead of pretending it worked; the chat filter pills scroll
+  sideways so "Service providers" cannot clip at 360 px or with large text; a
+  store card's distance chip moved to the bottom of the photo and truncates to
+  one line, section headers shrink their title around the action link, and the
+  saved-address and cart-subtotal rows can no longer push their values out of
+  the card (tab labels stopped scaling too); and a provider with no services
+  gets an explanation instead of a form that cannot be sent. Tests: 507 in 48
+  suites; lint clean.
 
 Tests: `__tests__/theme.test.js` (tokens, contrast pairs, radii, touch size),
 `__tests__/reduce-motion.test.js` (setting read, live change, listener cleanup,

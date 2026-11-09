@@ -1,4 +1,4 @@
-import { ActivityIndicator, FlatList, Pressable, View } from 'react-native'
+import { FlatList, Pressable, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import AppText from '../../components/ui/AppText'
@@ -6,6 +6,7 @@ import Button from '../../components/ui/Button'
 import EmptyState from '../../components/ui/EmptyState'
 import Skeleton from '../../components/ui/Skeleton'
 import BackButton from '../../components/BackButton'
+import ListFooter from '../../components/ListFooter'
 import RequireCustomer from '../../components/RequireCustomer'
 import StatusPill from '../../components/StatusPill'
 import { useAuth } from '../../hooks/useAuth'
@@ -65,17 +66,7 @@ function OrdersList({ userId }) {
           </Pressable>
         )
       }}
-      ListFooterComponent={
-        list.loadingMore ? (
-          <ActivityIndicator color={colors.clay} style={{ marginVertical: spacing.lg }} />
-        ) : list.moreError ? (
-          <Pressable onPress={list.loadMore} accessibilityRole="button" style={{ alignItems: 'center', padding: spacing.lg }}>
-            <AppText variant="small" style={{ color: colors.danger }}>
-              {list.moreError} Tap to try again.
-            </AppText>
-          </Pressable>
-        ) : null
-      }
+      ListFooterComponent={<ListFooter list={list} />}
     />
   )
 }

@@ -83,4 +83,14 @@ describe('pull to refresh', () => {
     expect(done).toMatchObject({ refreshing: false, page: 1 })
     expect(done.items.map((i) => i._id)).toEqual([7, 8])
   })
+
+  it('keeps the list and reports a refresh failure apart from a failed next page', () => {
+    const shown = run({ type: 'first', key: 'a', items: [item(1)], pagination: { page: 1, pages: 3, total: 30 } })
+    const failed = run({ type: 'first', key: 'a', items: [item(1)], pagination: { page: 1, pages: 3, total: 30 } }, { type: 'refreshStart', key: 'a' }, { type: 'refreshFailed', key: 'a', error: 'Cannot reach the server.' })
+    expect(shown.refreshError).toBe('')
+    expect(failed).toMatchObject({ refreshing: false, refreshError: 'Cannot reach the server.', moreError: '' })
+    expect(failed.items).toHaveLength(1)
+    // trying again clears the message
+    expect(pagingReducer(failed, { type: 'refreshStart', key: 'a' }).refreshError).toBe('')
+  })
 })

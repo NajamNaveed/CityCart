@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, FlatList, Pressable, View } from 'react-native'
+import { FlatList, Pressable, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import AppText from '../../components/ui/AppText'
@@ -10,6 +10,7 @@ import Skeleton from '../../components/ui/Skeleton'
 import MapLayers from '../../components/MapLayers'
 import NearbyBrandCard from '../../components/NearbyBrandCard'
 import NearbyMap from '../../components/NearbyMap'
+import ListFooter from '../../components/ListFooter'
 import RangeBar from '../../components/RangeBar'
 import ViewToggle from '../../components/ViewToggle'
 import { useCity } from '../../hooks/useCity'
@@ -189,7 +190,14 @@ export default function Nearby() {
         </AppText>
       ) : null}
       {view === 'map' && storeLayer !== 'all' && shops.hasMore ? (
-        <Button title="Load more shops" variant="outline" onPress={shops.loadMore} loading={shops.loadingMore} />
+        <View style={{ gap: spacing.sm }}>
+          <Button title="Load more shops" variant="outline" onPress={shops.loadMore} loading={shops.loadingMore} />
+          {shops.moreError ? (
+            <AppText variant="small" accessibilityRole="alert" style={{ color: colors.danger }}>
+              Couldn&apos;t load more shops. {shops.moreError}
+            </AppText>
+          ) : null}
+        </View>
       ) : null}
     </View>
   )
@@ -249,17 +257,7 @@ export default function Nearby() {
         renderItem={({ item }) => (
           <NearbyBrandCard brand={item} onOpenProduct={(product) => router.push(`/product/${product._id}`)} onSeeAll={() => openBrand(item)} />
         )}
-        ListFooterComponent={
-          view === 'map' ? null : shops.loadingMore ? (
-            <ActivityIndicator color={colors.clay} style={{ marginVertical: spacing.lg }} />
-          ) : shops.moreError ? (
-            <Pressable onPress={shops.loadMore} accessibilityRole="button" style={{ alignItems: 'center', padding: spacing.lg }}>
-              <AppText variant="small" style={{ color: colors.danger }}>
-                {shops.moreError} Tap to try again.
-              </AppText>
-            </Pressable>
-          ) : null
-        }
+        ListFooterComponent={view === 'map' ? null : <ListFooter list={shops} />}
       />
     </SafeAreaView>
   )

@@ -34,10 +34,11 @@ jest.mock('../src/services/api', () => ({
 
 import api from '../src/services/api'
 import NotificationsScreen from '../src/app/notifications'
-import { cleanup, notificationsValue, press, pressByLabel, screenText, show, signedIn, signedOut, tick } from './helpers/screens'
+import { cleanup, notificationsValue, press, pressByLabel, pullToRefresh, screenText, scrollToEnd, show, signedIn, signedOut, tick } from './helpers/screens'
 
 const ID = (n) => `64b7f0c2a1b2c3d4e5f6070${n}`
 const NOW = new Date().toISOString()
+const httpError = (status, message) => Object.assign(new Error(message), { response: { status, data: { message } } })
 
 const NOTIFICATIONS = [
   { _id: ID(1), type: 'ORDER_SHIPPED', title: 'Order shipped', message: 'Order CC-7 is on its way.', data: { orderId: ID(5), orderNumber: 'CC-7' }, isRead: false, readAt: null, createdAt: NOW },
@@ -158,5 +159,52 @@ describe('notifications inbox', () => {
     const screen = await openInbox(notificationsValue(), SERVICE_NOTIFICATIONS)
     await pressByLabel(screen, 'Provider replied. Ali Plumbing replied to your review.')
     expect(mockRouter.push).toHaveBeenCalledWith('/services')
+  })
+
+  it('says when a refresh failed, and keeps what was already shown', async () => {
+    const screen = await openInbox()
+    api.get.mockRejectedValueOnce(httpError(500, 'Server error'))
+    await pullToRefresh(screen)
+
+    const text = screenText(screen)
+    expect(text).toContain("Couldn't refresh. Server error")
+    expect(text).toContain('Order shipped')
+
+    api.get.mockResolvedValueOnce({ data: { notifications: [NOTIFICATIONS[1]], pagination: { page: 1, pages: 1, total: 1 }, unreadCount: 0 } })
+    await press(screen, 'Try again')
+    expect(screenText(screen)).toContain('Order confirmed')
+  })
+
+  it('says when the next page failed, and retries it', async () => {
+    api.get.mockResolvedValueOnce({ data: { notifications: [NOTIFICATIONS[0]], pagination: { page: 1, pages: 2, total: 2 }, unreadCount: 1 } })
+    const screen = await show(<NotificationsScreen />, { auth: signedIn() })
+    api.get.mockRejectedValueOnce(httpError(500, 'Server error'))
+    await scrollToEnd(screen)
+
+    expect(screenText(screen)).toContain("Couldn't load more. Server error")
+    expect(screenText(screen)).toContain('Order shipped')
+
+    api.get.mockResolvedValueOnce({ data: { notifications: [NOTIFICATIONS[1]], pagination: { page: 2, pages: 2, total: 2 }, unreadCount: 0 } })
+    await press(screen, 'Try again')
+    expect(screenText(screen)).toContain('Order confirmed')
+  })
+
+  it('says when marking everything read failed', async () => {
+    const notifications = notificationsValue({ markAllRead: jest.fn().mockRejectedValue(httpError(500, 'Server error')) })
+    const screen = await openInbox(notifications)
+    await press(screen, 'Mark all read')
+    const text = screenText(screen)
+    expect(text).toContain("Couldn't mark everything as read. Server error")
+    // Nothing pretends to be read.
+    expect(text).toContain('Unread (1)')
+  })
+
+  it('says when deleting failed, and keeps the row', async () => {
+    const notifications = notificationsValue({ remove: jest.fn().mockRejectedValue(httpError(500, 'Server error')) })
+    const screen = await openInbox(notifications)
+    await pressByLabel(screen, 'Delete Order shipped')
+    const text = screenText(screen)
+    expect(text).toContain("Couldn't delete that notification. Server error")
+    expect(text).toContain('Order shipped')
   })
 })

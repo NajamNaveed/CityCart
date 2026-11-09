@@ -214,9 +214,13 @@ export default function CartScreen() {
                     />
                   </View>
                 ))}
-                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm, padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.line }}>
-                  <AppText variant="small">{group.brand.name} subtotal</AppText>
-                  <AppText variant="strong">{formatPrice(group.subtotal)}</AppText>
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: spacing.sm, padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.line }}>
+                  <AppText variant="small" numberOfLines={1} style={{ flexShrink: 1 }}>
+                    {group.brand.name} subtotal
+                  </AppText>
+                  <AppText variant="strong" style={{ flexShrink: 0 }}>
+                    {formatPrice(group.subtotal)}
+                  </AppText>
                 </View>
               </View>
             ))}

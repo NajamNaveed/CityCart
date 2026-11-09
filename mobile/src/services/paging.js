@@ -13,6 +13,7 @@ export const initialPaging = {
   meta: null,
   error: '',
   moreError: '',
+  refreshError: '',
   loadingMore: false,
   refreshing: false,
 }
@@ -32,7 +33,7 @@ export function pagingReducer(state, action) {
     case 'firstFailed':
       return { ...initialPaging, key: action.key, error: action.error }
     case 'refreshStart':
-      return action.key === state.key ? { ...state, refreshing: true } : state
+      return action.key === state.key ? { ...state, refreshing: true, refreshError: '' } : state
     case 'moreStart':
       return action.key === state.key ? { ...state, loadingMore: true, moreError: '' } : state
     case 'more': {
@@ -51,7 +52,7 @@ export function pagingReducer(state, action) {
     case 'moreFailed':
       return action.key === state.key ? { ...state, loadingMore: false, moreError: action.error } : state
     case 'refreshFailed':
-      return action.key === state.key ? { ...state, refreshing: false, moreError: action.error } : state
+      return action.key === state.key ? { ...state, refreshing: false, refreshError: action.error } : state
     default:
       return state
   }

@@ -59,6 +59,7 @@ export function usePagedList(key, fetchPage) {
     loading: !current,
     error: current ? state.error : '',
     moreError: current ? state.moreError : '',
+    refreshError: current ? state.refreshError : '',
     total: current ? state.total : 0,
     meta: current ? state.meta : null,
     loadingMore: current && state.loadingMore,

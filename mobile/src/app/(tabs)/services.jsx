@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ActivityIndicator, FlatList, Pressable, View } from 'react-native'
+import { FlatList, Pressable, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import AppText from '../../components/ui/AppText'
@@ -9,6 +9,7 @@ import EmptyState from '../../components/ui/EmptyState'
 import OptionSheet from '../../components/ui/OptionSheet'
 import MapLayers from '../../components/MapLayers'
 import NearbyMap from '../../components/NearbyMap'
+import ListFooter from '../../components/ListFooter'
 import RangeBar from '../../components/RangeBar'
 import SearchBar from '../../components/ui/SearchBar'
 import Skeleton from '../../components/ui/Skeleton'
@@ -230,7 +231,14 @@ export default function Services() {
         </AppText>
       ) : null}
       {view === 'map' && providerLayer !== 'all' && providers.hasMore ? (
-        <Button title="Load more providers" variant="outline" onPress={providers.loadMore} loading={providers.loadingMore} />
+        <View style={{ gap: spacing.sm }}>
+          <Button title="Load more providers" variant="outline" onPress={providers.loadMore} loading={providers.loadingMore} />
+          {providers.moreError ? (
+            <AppText variant="small" accessibilityRole="alert" style={{ color: colors.danger }}>
+              Couldn&apos;t load more providers. {providers.moreError}
+            </AppText>
+          ) : null}
+        </View>
       ) : null}
     </View>
   )
@@ -315,17 +323,7 @@ export default function Services() {
         onEndReached={view === 'map' ? undefined : providers.loadMore}
         onEndReachedThreshold={0.6}
         renderItem={({ item }) => <ServiceProviderCard provider={item} onPress={() => openProvider(item)} />}
-        ListFooterComponent={
-          view === 'map' ? null : providers.loadingMore ? (
-            <ActivityIndicator color={colors.clay} style={{ marginVertical: spacing.lg }} />
-          ) : providers.moreError ? (
-            <Pressable onPress={providers.loadMore} accessibilityRole="button" style={{ alignItems: 'center', padding: spacing.lg }}>
-              <AppText variant="small" style={{ color: colors.danger }}>
-                {providers.moreError} Tap to try again.
-              </AppText>
-            </Pressable>
-          ) : null
-        }
+        ListFooterComponent={view === 'map' ? null : <ListFooter list={providers} />}
       />
 
       <OptionSheet

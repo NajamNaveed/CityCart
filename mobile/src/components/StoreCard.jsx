@@ -37,8 +37,8 @@ export default function StoreCard({ store, inBlock = false, width, onPress }) {
     >
       <View>
         <ProductImage src={cover} name={store.name} width={width} style={{ width, aspectRatio: 4 / 3 }} />
-        <View style={{ position: 'absolute', left: spacing.sm, top: spacing.sm, backgroundColor: 'rgba(253,245,237,0.92)', borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: 3 }}>
-          <AppText variant="small" style={{ color: colors.ink, fontSize: 11, lineHeight: 15 }}>
+        <View style={{ position: 'absolute', left: spacing.sm, bottom: spacing.sm, maxWidth: Math.max(0, width - spacing.sm * 2), backgroundColor: 'rgba(253,245,237,0.92)', borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: 3 }}>
+          <AppText variant="small" numberOfLines={1} style={{ color: colors.ink, fontSize: 11, lineHeight: 15 }}>
             {where}
           </AppText>
         </View>

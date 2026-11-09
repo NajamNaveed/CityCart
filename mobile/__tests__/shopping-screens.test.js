@@ -53,7 +53,7 @@ import OrderPlaced from '../src/app/order-placed'
 import Orders from '../src/app/orders/index'
 import OrderScreen from '../src/app/orders/[id]'
 import ProductScreen from '../src/app/product/[id]'
-import { CUSTOMER, cleanup, nearbyValue, press, pressByLabel, screenText, show, signedIn, signedOut, textOf, tick, type } from './helpers/screens'
+import { CUSTOMER, cleanup, nearbyValue, press, pressByLabel, pullToRefresh, screenText, show, signedIn, signedOut, textOf, tick, type } from './helpers/screens'
 
 const ID = (n) => `64b7f0c2a1b2c3d4e5f6070${n}`
 const LAWN = { productId: ID(2), name: 'Mehrunisa Printed Lawn', image: '', unitPrice: 3600, quantity: 2, lineTotal: 7200 }
@@ -489,6 +489,17 @@ describe('Orders list', () => {
     api.get.mockResolvedValue({ data: { orders: [], pagination: { page: 1, pages: 0, total: 0 } } })
     expect(screenText(await show(<Orders />, auth()))).toContain('No orders yet')
     expect(screenText(await show(<Orders />, { auth: signedOut() }))).toContain('Sign in to see your orders')
+  })
+
+  it('says when a refresh failed, and keeps the orders on screen', async () => {
+    api.get.mockResolvedValue({ data: { orders: [ORDER], pagination: { page: 1, pages: 1, total: 1 } } })
+    const renderer = await show(<Orders />, auth())
+    api.get.mockRejectedValueOnce(Object.assign(new Error('Server error'), { response: { status: 500, data: { message: 'Server error' } } }))
+    await pullToRefresh(renderer)
+
+    const text = screenText(renderer)
+    expect(text).toContain("Couldn't refresh. Server error")
+    expect(text).toContain('CC-20261004-0007')
   })
 })
 

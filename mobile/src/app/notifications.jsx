@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, FlatList, Pressable, View } from 'react-native'
+import { FlatList, Pressable, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import Feather from '@expo/vector-icons/Feather'
@@ -8,10 +8,12 @@ import Button from '../components/ui/Button'
 import EmptyState from '../components/ui/EmptyState'
 import Skeleton from '../components/ui/Skeleton'
 import BackButton from '../components/BackButton'
+import ListFooter from '../components/ListFooter'
 import RequireCustomer from '../components/RequireCustomer'
 import { useAuth } from '../hooks/useAuth'
 import { useNotifications } from '../hooks/useNotifications'
 import { usePagedList } from '../hooks/usePagedList'
+import { getErrorMessage } from '../services/api'
 import { fetchNotifications } from '../services/notifications'
 import { timeAgo } from '../utils/format'
 import { notificationTarget } from '../utils/notificationTarget'
@@ -73,6 +75,7 @@ function NotificationsInbox({ user }) {
   const list = usePagedList(`notifications:${user?.id}`, (page) => fetchNotifications(page))
   const [filter, setFilter] = useState('all')
   const [busyId, setBusyId] = useState(null)
+  const [actionError, setActionError] = useState('')
   // The paged list owns its rows; read/done state set from here overlays it
   // until the next fetch brings the server's own truth.
   const [readHere, setReadHere] = useState({})
@@ -134,12 +137,13 @@ function NotificationsInbox({ user }) {
         {unreadLoaded > 0 ? (
           <Pressable
             onPress={() => {
+              setActionError('')
               markAllRead()
                 .then(() => {
                   setCleared(true)
                   refreshRef.current()
                 })
-                .catch(() => {})
+                .catch((err) => setActionError(`Couldn't mark everything as read. ${getErrorMessage(err)}`))
             }}
             accessibilityRole="button"
             hitSlop={8}
@@ -151,6 +155,14 @@ function NotificationsInbox({ user }) {
           </Pressable>
         ) : null}
       </View>
+
+      {actionError ? (
+        <View accessibilityRole="alert" style={{ marginHorizontal: spacing.lg, marginBottom: spacing.md, backgroundColor: colors.dangerSoft, borderRadius: radius.md, padding: spacing.md }}>
+          <AppText variant="small" style={{ color: colors.danger }}>
+            {actionError}
+          </AppText>
+        </View>
+      ) : null}
 
       <FlatList
         data={items}
@@ -183,16 +195,15 @@ function NotificationsInbox({ user }) {
             onDelete={() => {
               if (busyId) return
               setBusyId(notification._id)
+              setActionError('')
               remove(notification._id, !notification.isRead)
                 .then(() => refreshRef.current())
-                .catch(() => {})
+                .catch((err) => setActionError(`Couldn't delete that notification. ${getErrorMessage(err)}`))
                 .finally(() => setBusyId(null))
             }}
           />
         )}
-        ListFooterComponent={
-          list.loadingMore ? <ActivityIndicator color={colors.clay} style={{ marginVertical: spacing.lg }} /> : null
-        }
+        ListFooterComponent={<ListFooter list={list} />}
       />
     </View>
   )

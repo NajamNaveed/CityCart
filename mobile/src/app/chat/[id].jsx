@@ -152,6 +152,7 @@ export default function ChatThread() {
 
   const [thread, setThread] = useState({ id, status: 'loading', messages: [], hasMore: false, error: '' })
   const [loadingEarlier, setLoadingEarlier] = useState(false)
+  const [earlierError, setEarlierError] = useState('')
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState('')
@@ -173,7 +174,12 @@ export default function ChatThread() {
   }, [id, loadMessages, markRead])
 
   useEffect(() => {
-    load()
+    let active = true
+    // One microtask later, so opening the screen does not set state inside the effect body.
+    Promise.resolve().then(() => active && load())
+    return () => {
+      active = false
+    }
   }, [load])
 
   const appendMessage = useCallback(
@@ -211,13 +217,14 @@ export default function ChatThread() {
     const oldest = thread.messages[0]
     if (!oldest || loadingEarlier || !thread.hasMore) return
     setLoadingEarlier(true)
+    setEarlierError('')
     try {
       const { messages, hasMore } = await loadMessages(id, { before: oldest._id })
       const fresh = messages.filter((m) => !seen.current.has(m._id))
       fresh.forEach((m) => seen.current.add(m._id))
       setThread((current) => ({ ...current, messages: [...fresh, ...current.messages], hasMore }))
     } catch (err) {
-      setThread((current) => ({ ...current, error: getErrorMessage(err, "Couldn't load earlier messages.") }))
+      setEarlierError(getErrorMessage(err, "Couldn't load earlier messages."))
     } finally {
       setLoadingEarlier(false)
     }
@@ -291,13 +298,20 @@ export default function ChatThread() {
               </View>
             }
             ListFooterComponent={
-              thread.hasMore ? (
-                <Pressable onPress={loadEarlier} disabled={loadingEarlier} accessibilityRole="button" style={{ alignItems: 'center', padding: spacing.md }}>
-                  <AppText variant="label" style={{ color: loadingEarlier ? colors.muted : colors.clay }}>
-                    {loadingEarlier ? 'Loading…' : 'Load earlier messages'}
+              <View style={{ gap: spacing.sm }}>
+                {earlierError ? (
+                  <AppText variant="small" accessibilityRole="alert" style={{ color: colors.danger, textAlign: 'center' }}>
+                    {earlierError}
                   </AppText>
-                </Pressable>
-              ) : null
+                ) : null}
+                {thread.hasMore ? (
+                  <Pressable onPress={loadEarlier} disabled={loadingEarlier} accessibilityRole="button" style={{ alignItems: 'center', padding: spacing.md }}>
+                    <AppText variant="label" style={{ color: loadingEarlier ? colors.muted : colors.clay }}>
+                      {loadingEarlier ? 'Loading…' : earlierError ? 'Try again' : 'Load earlier messages'}
+                    </AppText>
+                  </Pressable>
+                ) : null}
+              </View>
             }
           />
           {sendError ? (

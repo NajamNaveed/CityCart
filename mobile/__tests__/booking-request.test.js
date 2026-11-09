@@ -284,6 +284,15 @@ describe('booking request', () => {
     expect(screenText(renderer)).toContain('No open times in the next ten days.')
   })
 
+  it('explains when the provider has no service to book yet', async () => {
+    serve({ ...PROVIDER, offerings: [] })
+    const renderer = await show(<BookServiceScreen />, { auth: signedIn() })
+    const text = screenText(renderer)
+    expect(text).toContain('No services to book yet')
+    expect(text).not.toContain('Request this time')
+    expect(api.post).not.toHaveBeenCalled()
+  })
+
   it('asks a visitor to sign in first, then returns to this form', async () => {
     const renderer = await show(<BookServiceScreen />, { auth: signedOut() })
     expect(screenText(renderer)).toContain('Sign in to request a booking')
