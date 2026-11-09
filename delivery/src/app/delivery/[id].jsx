@@ -266,6 +266,7 @@ function DeliveryDetail({ id }) {
 
   // The code is checked first; then the rider counts what the customer kept.
   function startReview() {
+    if (busy) return
     setNotice(null)
     const next = acceptanceFrom(delivery)
     if (!next.length) {
@@ -422,13 +423,13 @@ function DeliveryDetail({ id }) {
             <AppText>{addressLine(delivery.address)}</AppText>
             {delivery.address.additionalInstructions ? <AppText variant="small">Note: {delivery.address.additionalInstructions}</AppText> : null}
             <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm }}>
-              {delivery.address.phone ? <Button title="Call" variant="outline" onPress={() => open(telUrl(delivery.address.phone))} style={{ flex: 1 }} /> : null}
+              {delivery.address.phone ? <Button title="Call" variant="outline" onPress={() => open(telUrl(delivery.address.phone))} style={{ flex: 1, paddingHorizontal: spacing.md }} /> : null}
               {pin || map ? (
                 <Button
                   title={pin ? (showMap ? 'Hide map' : 'Open in map') : 'Open in Maps'}
                   variant="outline"
                   onPress={() => (pin ? setShowMap((shown) => !shown) : open(map))}
-                  style={{ flex: 1 }}
+                  style={{ flex: 1, paddingHorizontal: spacing.md }}
                 />
               ) : null}
             </View>
@@ -542,7 +543,7 @@ function DeliveryDetail({ id }) {
                     onSubmitEditing={() => isValidCode(code) && startReview()}
                   />
                   <AppText variant="small">Ask the customer for the 6-digit code shown in their app.</AppText>
-                  <Button title="Continue" onPress={startReview} disabled={!isValidCode(code)} />
+                  <Button title="Continue" onPress={startReview} loading={busy && mode === 'code'} disabled={!isValidCode(code)} />
                   <Button title="Cancel" variant="outline" onPress={() => { setMode(null); setCode('') }} disabled={busy} />
                 </Card>
               ) : (
@@ -612,7 +613,7 @@ function DeliveryDetail({ id }) {
                             variant={pay.wallet === w.wallet ? 'pine' : 'outline'}
                             onPress={() => setPay((p) => ({ ...p, wallet: w.wallet }))}
                             disabled={busy || proofBusy}
-                            style={{ flex: 1 }}
+                            style={{ flex: 1, paddingHorizontal: spacing.md }}
                           />
                         ))}
                       </View>

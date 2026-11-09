@@ -19,7 +19,7 @@ the server sections it points to.
 | Location sharing | **Done, opt-in, foreground only** — last seen while an order is out for delivery |
 | Push notifications | **Built**; needs a real EAS build to try on a phone (Expo Go on Android cannot receive them) |
 | Returns at the door | **Done** — per-line accept/refuse, reason, optional photo, payment for accepted goods only |
-| Tests | 156 tests in 9 suites, all mocked; lint clean |
+| Tests | 160 tests in 9 suites, all mocked; lint clean |
 
 The app has **not** been run on a physical device in this environment: the
 camera upload and push need a real phone, and a real Cloudinary account.
@@ -78,9 +78,9 @@ Expo Router route groups under `delivery/src/app/`:
 |---|---|
 | `index.jsx` | Sends a signed-out user to `/login`, a rider to `/deliveries` |
 | `(auth)/login.jsx` | Email and password; explains which app this is |
-| `(rider)/deliveries.jsx` | The rider's deliveries, with filters and pull-to-refresh |
-| `(rider)/cash.jsx` | Cash collected and not yet settled |
-| `(rider)/alerts.jsx` | The rider's notifications |
+| `(rider)/deliveries.jsx` | The rider's deliveries, with filters, pull-to-refresh and endless scrolling; a failed page or refresh says so and can be retried |
+| `(rider)/cash.jsx` | Cash collected and not yet settled; reloads whenever its tab is opened |
+| `(rider)/alerts.jsx` | The rider's notifications, paged and refreshed like the deliveries list |
 | `(rider)/account.jsx` | Share-location switch, sign out |
 | `delivery/[id].jsx` | One delivery: call, the customer's pin on an internal map, status steps, code entry, door payment, failed attempt |
 
@@ -121,10 +121,12 @@ enforce them.
 
 * **Push.** The app registers its Expo push token with `PUT /devices/push-token`
   (the server accepts rider, picker and brand-team accounts). A tap opens the
-  delivery when `data.deliveryId` / `data.orderId` is present. Expo Go on
-  Android cannot receive push; the app skips registration there. A real build
-  needs `npx eas-cli init`, Firebase credentials in EAS, and `PUSH_ENABLED=true`
-  on the server (`12-notification-system.md` §31).
+  delivery when `data.deliveryId` is present. That is what rider notifications
+  carry: a new assignment, and a refused door payment (`data.paymentId`), which
+  opens the delivery where the payment is collected again. Expo Go on Android
+  cannot receive push; the app skips registration there. A real build needs
+  `npx eas-cli init`, Firebase credentials in EAS, and `PUSH_ENABLED=true` on the
+  server (`12-notification-system.md` §31).
 * **Location.** The Account switch is off by default. When on, the app sends the
   latest position while the app is open and an order is `OUT_FOR_DELIVERY`. The
   brand's records screen and that order's customer see "last seen" and an
@@ -180,7 +182,7 @@ npx expo lint
 npm test
 ```
 
-`npm test` runs **156 tests in 9 suites**:
+`npm test` runs **160 tests in 9 suites**:
 
 | Suite | Covers |
 |---|---|
@@ -240,3 +242,9 @@ Server: `routes/riderDelivery.routes.js`, `controllers/riderDelivery.controller.
   delivery out for delivery ("Payment waiting for verification") until the brand
   verifies it; a refusal re-opens the payment step to collect again, and cash still
   completes at once.
+* **2026-11 Delivery app audit:** the offline banner now takes its own space
+  instead of covering headers; deliveries and alerts say when a next page or a
+  refresh failed and offer a retry; cash reloads when its tab is opened; long
+  order numbers and cash lines can no longer push the status or time out of the
+  card; side-by-side buttons keep their labels inside the screen at 360 px; the
+  unused `RECORD_AUDIO` permission was removed.

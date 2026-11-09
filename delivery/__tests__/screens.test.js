@@ -65,7 +65,7 @@ import Cash from '../src/app/(rider)/cash'
 import Alerts from '../src/app/(rider)/alerts'
 import Account from '../src/app/(rider)/account'
 import DeliveryScreen from '../src/app/delivery/[id]'
-import { cleanup, EMPLOYEE, has, isDisabled, press, pressByLabel, RIDER, screenText, show, signedIn, signedOut, tick, type } from './helpers/screens'
+import { cleanup, EMPLOYEE, has, isDisabled, press, pressByLabel, pullToRefresh, RIDER, screenText, scrollToEnd, show, signedIn, signedOut, tick, type } from './helpers/screens'
 
 const NOW = new Date().toISOString()
 const ADDRESS = { name: 'Sana Iqbal', phone: '+92 300 1112223', address: 'House 5, Street 2', city: 'Faisalabad', postalCode: '38000', additionalInstructions: 'Blue gate' }
@@ -185,6 +185,35 @@ describe('the rider\'s deliveries', () => {
     api.get.mockResolvedValue(page([delivery()]))
     await press(screen, 'Try again')
     expect(screenText(screen)).toMatch(/CC-2026-000042/)
+  })
+
+  it('says when a refresh failed, keeps the list, and tries again', async () => {
+    api.get.mockResolvedValueOnce(page([delivery()]))
+    const screen = await show(<Deliveries />)
+    api.get.mockRejectedValueOnce(httpError(500, { message: 'Server error' }))
+
+    await pullToRefresh(screen)
+
+    expect(screenText(screen)).toMatch(/Couldn't refresh\. Server error/)
+    expect(screenText(screen)).toMatch(/CC-2026-000042/) // the list is still there
+
+    api.get.mockResolvedValueOnce(page([delivery({ status: 'DELIVERED' })]))
+    await press(screen, 'Try again')
+    expect(screenText(screen)).toMatch(/Delivered/)
+  })
+
+  it('says when the next page failed, and retries it', async () => {
+    api.get.mockResolvedValueOnce({ data: { deliveries: [delivery()], pagination: { page: 1, pages: 2, total: 2 } } })
+    const screen = await show(<Deliveries />)
+    api.get.mockRejectedValueOnce(httpError(500, { message: 'Server error' }))
+
+    await scrollToEnd(screen)
+
+    expect(screenText(screen)).toMatch(/Couldn't load more\. Server error/)
+
+    api.get.mockResolvedValueOnce(page([delivery({ _id: 'd2', orderNumber: 'CC-2026-000043' })]))
+    await press(screen, 'Try again')
+    expect(screenText(screen)).toMatch(/CC-2026-000043/)
   })
 
   it('switches to the finished ones, which no longer show the customer', async () => {
@@ -801,6 +830,17 @@ describe('alerts', () => {
   it('has an empty state', async () => {
     api.get.mockResolvedValue({ data: { notifications: [], pagination: { page: 1, pages: 1, total: 0 }, unreadCount: 0 } })
     expect(screenText(await show(<Alerts />))).toMatch(/No alerts/)
+  })
+
+  it('says when its refresh failed, and keeps the alerts shown', async () => {
+    api.get.mockResolvedValueOnce({ data: { notifications: [note()], pagination: { page: 1, pages: 1, total: 1 }, unreadCount: 1 } })
+    const screen = await show(<Alerts />)
+    api.get.mockRejectedValueOnce(httpError(500, { message: 'Server error' }))
+
+    await pullToRefresh(screen)
+
+    expect(screenText(screen)).toMatch(/Couldn't refresh\. Server error/)
+    expect(screenText(screen)).toMatch(/New delivery/)
   })
 })
 

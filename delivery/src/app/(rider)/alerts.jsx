@@ -6,6 +6,7 @@ import AppText from '../../components/ui/AppText'
 import Button from '../../components/ui/Button'
 import EmptyState from '../../components/ui/EmptyState'
 import Skeleton from '../../components/ui/Skeleton'
+import ListFooter from '../../components/ListFooter'
 import { usePagedList } from '../../hooks/usePagedList'
 import { fetchNotifications, markNotificationRead } from '../../services/notifications'
 import { timeAgo } from '../../utils/format'
@@ -75,6 +76,7 @@ export default function Alerts() {
             <EmptyState icon="bell" title="No alerts" message="You will see new deliveries here." />
           )
         }
+        ListFooterComponent={list.items.length > 0 ? <ListFooter list={list} /> : null}
         renderItem={({ item }) => {
           const unread = !item.isRead && !readHere[item._id]
           return (

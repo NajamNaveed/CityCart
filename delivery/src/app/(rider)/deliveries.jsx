@@ -7,6 +7,7 @@ import Button from '../../components/ui/Button'
 import EmptyState from '../../components/ui/EmptyState'
 import Skeleton from '../../components/ui/Skeleton'
 import DeliveryCard from '../../components/DeliveryCard'
+import ListFooter from '../../components/ListFooter'
 import { usePagedList } from '../../hooks/usePagedList'
 import { fetchDeliveries } from '../../services/deliveries'
 import { colors, radius, spacing, weights } from '../../theme'
@@ -97,6 +98,7 @@ export default function Deliveries() {
             <EmptyState icon="check-circle" title="No finished deliveries yet" message="Deliveries you complete are listed here." />
           )
         }
+        ListFooterComponent={list.items.length > 0 ? <ListFooter list={list} /> : null}
         renderItem={({ item }) => <DeliveryCard delivery={item} onPress={() => router.push(`/delivery/${item._id}`)} />}
       />
     </SafeAreaView>

@@ -1,4 +1,6 @@
+import { useCallback, useEffect, useRef } from 'react'
 import { View } from 'react-native'
+import { useFocusEffect } from 'expo-router'
 import AppText from '../../components/ui/AppText'
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
@@ -12,6 +14,24 @@ import { colors, spacing } from '../../theme'
 
 export default function Cash() {
   const cash = useRemote('cash', fetchCash)
+
+  // Coming back from a finished delivery shows the new total. The callback MUST be
+  // memoized (see deliveries.jsx); the first focus is skipped because the screen
+  // has just loaded itself.
+  const reloadRef = useRef(cash.reload)
+  useEffect(() => {
+    reloadRef.current = cash.reload
+  })
+  const firstFocus = useRef(true)
+  useFocusEffect(
+    useCallback(() => {
+      if (firstFocus.current) {
+        firstFocus.current = false
+        return
+      }
+      reloadRef.current()
+    }, []),
+  )
 
   return (
     <Screen title="Cash" subtitle="Money you collected on delivery." refreshing={cash.refreshing} onRefresh={cash.reload}>

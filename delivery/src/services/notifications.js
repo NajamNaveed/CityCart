@@ -1,7 +1,7 @@
 import api from './api'
 
 /**
- * The shopper's notification inbox (docs/12, /api/v1/notifications). The list
+ * The rider's notification inbox (docs/12, /api/v1/notifications). The list
  * answer carries `unreadCount`, so one request feeds both the screen and the
  * badge; there is no separate count endpoint.
  */

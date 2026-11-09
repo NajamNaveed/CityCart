@@ -24,6 +24,7 @@ export default function RiderTabs() {
           tabBarActiveTintColor: colors.pine,
           tabBarInactiveTintColor: colors.muted,
           tabBarLabelStyle: { fontWeight: weights.medium, fontSize: 11 },
+          tabBarAllowFontScaling: false,
           tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.line },
         }}
       >

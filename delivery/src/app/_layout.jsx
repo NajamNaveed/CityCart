@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { View } from 'react-native'
 import { Stack, useRouter } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as SplashScreen from 'expo-splash-screen'
@@ -49,12 +50,12 @@ function Shell() {
 
   if (!isReady) return null
   return (
-    <>
+    <View style={{ flex: 1, backgroundColor: colors.paper }}>
       <StatusBar style="dark" />
       <OfflineBanner />
       <PushSetup />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.paper } }} />
-    </>
+    </View>
   )
 }
 

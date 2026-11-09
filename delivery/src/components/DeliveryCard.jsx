@@ -17,7 +17,9 @@ export default function DeliveryCard({ delivery, onPress }) {
       style={({ pressed }) => ({ padding: spacing.lg, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: pressed ? colors.sand : colors.surface, gap: spacing.sm })}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm }}>
-        <AppText variant="strong">{delivery.orderNumber || 'Order'}</AppText>
+        <AppText variant="strong" numberOfLines={1} style={{ flex: 1 }}>
+          {delivery.orderNumber || 'Order'}
+        </AppText>
         <StatusPill value={delivery.status} />
       </View>
       {delivery.address ? (
@@ -30,17 +32,17 @@ export default function DeliveryCard({ delivery, onPress }) {
       ) : (
         <AppText variant="small">Delivery closed</AppText>
       )}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm }}>
         {cash.kind === 'collect' ? (
-          <AppText variant="strong" style={{ color: colors.pine }}>
+          <AppText variant="strong" numberOfLines={2} style={{ flex: 1, color: colors.pine }}>
             Collect {formatPrice(cash.amount)}
           </AppText>
         ) : cash.kind === 'rejected' ? (
-          <AppText variant="strong" style={{ color: colors.danger }}>
+          <AppText variant="strong" numberOfLines={2} style={{ flex: 1, color: colors.danger }}>
             {cash.amount > 0 ? `Collect ${formatPrice(cash.amount)} again` : 'Collect again'}
           </AppText>
         ) : (
-          <AppText variant="small">
+          <AppText variant="small" numberOfLines={2} style={{ flex: 1 }}>
             {cash.kind === 'collected'
               ? 'Cash collected'
               : cash.kind === 'proof'
@@ -50,7 +52,7 @@ export default function DeliveryCard({ delivery, onPress }) {
                   : 'Paid online'}
           </AppText>
         )}
-        <AppText variant="small">{timeAgo(delivery.assignedAt || delivery.updatedAt)}</AppText>
+        <AppText variant="small" style={{ flexShrink: 0 }}>{timeAgo(delivery.assignedAt || delivery.updatedAt)}</AppText>
       </View>
     </Pressable>
   )
