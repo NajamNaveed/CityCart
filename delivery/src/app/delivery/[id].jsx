@@ -613,7 +613,7 @@ function DeliveryDetail({ id }) {
                             variant={pay.wallet === w.wallet ? 'pine' : 'outline'}
                             onPress={() => setPay((p) => ({ ...p, wallet: w.wallet }))}
                             disabled={busy || proofBusy}
-                            style={{ flex: 1, paddingHorizontal: spacing.md }}
+                            style={{ flex: 1, paddingHorizontal: spacing.xs }}
                           />
                         ))}
                       </View>
