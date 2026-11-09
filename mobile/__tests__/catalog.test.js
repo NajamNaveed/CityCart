@@ -1,7 +1,7 @@
 jest.mock('../src/services/api', () => ({ __esModule: true, default: { get: jest.fn() } }))
 
 import api from '../src/services/api'
-import { fetchBrands, fetchCatalogOffers, fetchProduct, fetchRatings, fetchReviews } from '../src/services/catalog'
+import { fetchBrands, fetchCatalogOffers, fetchProduct, fetchRatings, fetchReviews, fetchStorefront } from '../src/services/catalog'
 
 beforeEach(() => jest.clearAllMocks())
 
@@ -48,6 +48,22 @@ describe('fetchers', () => {
     const result = await fetchReviews('p1', 2)
     expect(api.get).toHaveBeenCalledWith('/products/p1/reviews', { params: { limit: 5, page: 2 } })
     expect(result.reviews).toHaveLength(1)
+  })
+})
+
+describe('storefront', () => {
+  it('loads the brand, store, categories and newest products together', async () => {
+    api.get.mockResolvedValue({ data: { brand: { _id: 'b1' }, store: { name: 'Loom & Co.' }, categories: [{ _id: 'c1' }], featuredProducts: [{ _id: 'p1' }] } })
+    const page = await fetchStorefront('b1')
+    expect(api.get).toHaveBeenCalledWith('/brands/b1/storefront')
+    expect(page.store.name).toBe('Loom & Co.')
+    expect(page.categories).toHaveLength(1)
+    expect(page.featuredProducts).toHaveLength(1)
+  })
+
+  it('reads a missing section as empty rather than crashing', async () => {
+    api.get.mockResolvedValue({ data: { brand: { _id: 'b1' } } })
+    expect(await fetchStorefront('b1')).toEqual({ brand: { _id: 'b1' }, store: null, categories: [], featuredProducts: [] })
   })
 })
 

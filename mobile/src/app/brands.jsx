@@ -13,7 +13,6 @@ import CityChip from '../components/CityChip'
 import { useCity } from '../hooks/useCity'
 import { useRemote } from '../hooks/useRemote'
 import { fetchBrands } from '../services/catalog'
-import { nearbyHref } from '../utils/nav'
 import { colors, spacing } from '../theme'
 
 export default function Brands() {
@@ -32,12 +31,12 @@ export default function Brands() {
         <CityChip />
       </View>
       <AppText variant="title" accessibilityRole="header">
-        {city ? `Brands in ${city.name}` : 'All brands'}
+        {city ? `Stores in ${city.name}` : 'All stores'}
       </AppText>
       <AppText variant="small" style={{ marginTop: spacing.xs, marginBottom: spacing.lg }}>
-        {brands.status === 'ready' ? `${shown.length} ${shown.length === 1 ? 'brand' : 'brands'} on CityCart` : 'Loading brands…'}
+        {brands.status === 'ready' ? `${shown.length} ${shown.length === 1 ? 'store' : 'stores'} on CityCart` : 'Loading stores…'}
       </AppText>
-      <SearchBar value={query} onChangeText={setQuery} placeholder="Search brands…" label="Search brands" />
+      <SearchBar value={query} onChangeText={setQuery} placeholder="Search stores…" label="Search stores" />
     </View>
   )
 
@@ -52,7 +51,7 @@ export default function Brands() {
         ListHeaderComponent={header}
         refreshing={brands.refreshing}
         onRefresh={brands.reload}
-        renderItem={({ item }) => <BrandCard brand={item} onPress={() => router.navigate(nearbyHref({ q: item.name }))} />}
+        renderItem={({ item }) => <BrandCard brand={item} onPress={() => router.push(`/store/${item._id}`)} />}
         ListEmptyComponent={
           brands.status === 'loading' ? (
             <View style={{ gap: spacing.md }}>
@@ -61,11 +60,11 @@ export default function Brands() {
               ))}
             </View>
           ) : brands.status === 'error' ? (
-            <EmptyState icon="wifi-off" tone="error" title="Couldn't load brands" message={brands.error} action={<Button title="Try again" onPress={brands.reload} />} />
+            <EmptyState icon="wifi-off" tone="error" title="Couldn't load stores" message={brands.error} action={<Button title="Try again" onPress={brands.reload} />} />
           ) : (
             <EmptyState
               icon={query ? 'search' : 'shopping-bag'}
-              title={query ? `No brands match “${query}”` : 'No brands are selling here yet'}
+              title={query ? `No stores match “${query}”` : 'No stores are selling here yet'}
               message={query ? 'Try a shorter or different search.' : 'Check back soon, or switch to another city.'}
             />
           )

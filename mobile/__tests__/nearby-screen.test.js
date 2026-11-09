@@ -236,11 +236,11 @@ describe('a remembered area', () => {
     expect(discoverCalls().at(-1)).toMatchObject({ scope: 'area', radiusKm: '5' })
   })
 
-  it('opens a search for the brand instead of a separate shop screen', async () => {
+  it('opens the shop page from "See all products"', async () => {
     await AsyncStorage.setItem('citycart.nearbyAsked', 'true')
     const renderer = await open()
     await press(renderer, 'See all products')
-    expect(mockRouter.navigate).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/nearby', params: expect.objectContaining({ q: BRAND.name }) }))
+    expect(mockRouter.push).toHaveBeenCalledWith(`/store/${BRAND._id}`)
   })
 
   it('shows the shops on a map, with a radius for a radius search', async () => {
@@ -259,9 +259,9 @@ describe('a remembered area', () => {
     map = mockMaps.views.at(-1)
     expect(map.radiusKm).toBe(10)
 
-    // tapping a shop pin's "See products" goes to that brand's search
+    // tapping a shop pin's "See products" opens that shop's page
     map.onOpenBrand(BRAND)
-    expect(mockRouter.navigate).toHaveBeenCalled()
+    expect(mockRouter.push).toHaveBeenCalledWith(`/store/${BRAND._id}`)
   })
 
   it('changes the area from a pin dropped on the map', async () => {

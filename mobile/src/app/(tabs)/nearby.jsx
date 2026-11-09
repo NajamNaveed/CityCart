@@ -119,8 +119,8 @@ export default function Nearby() {
   const scopeLabel = range === 'block' && blockIds.length > 1 ? 'your blocks' : rangeLabel(range)
   const hasLocation = blockIds.length > 0 || Boolean(coords)
 
-  // No brand page any more: a brand's "see all" becomes a Nearby search for its name.
-  const openBrand = (brand) => router.navigate({ pathname: '/nearby', params: { q: brand.name, t: String(Date.now()) } })
+  // "See all products" opens the shop's own page, where its whole shelf lives.
+  const openBrand = (brand) => router.push(`/store/${brand._id}`)
   const openMapPicker = () => {
     setView('map')
     setPicking(true)

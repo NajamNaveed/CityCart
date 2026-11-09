@@ -53,10 +53,26 @@ const PRODUCT = {
 const REVIEW = { _id: ID(3), rating: 5, title: 'Lovely fabric', comment: 'Soft and the colours are true.', reviewerName: 'Sana I.', verifiedPurchase: true, createdAt: '2026-09-01T10:00:00Z' }
 const SUMMARY = { average: 4.5, count: 2, distribution: { 5: 1, 4: 1, 3: 0, 2: 0, 1: 0 } }
 
+const CITY = { _id: ID(9), name: 'Faisalabad' }
+// A shop as /discover answers: its branches and a few products, enough for the home feed.
+const STORE = {
+  _id: BRAND._id,
+  name: BRAND.name,
+  logo: '',
+  nearestKm: 0.4,
+  branchCount: 1,
+  branches: [{ _id: 'br1', blockName: 'Gulberg' }],
+  products: [{ _id: PRODUCT._id, name: PRODUCT.name, price: PRODUCT.price, image: '' }],
+}
+
 // A tiny fake of the CityCart API.
-function serve({ failBrands = false, emptyBrands = false } = {}) {
+function serve({ failBrands = false, emptyBrands = false, failDiscover = false, emptyDiscover = false } = {}) {
   api.get.mockImplementation(async (url) => {
-    if (url === '/cities') return { data: { cities: [{ _id: ID(9), name: 'Faisalabad' }] } }
+    if (url === '/cities') return { data: { cities: [CITY] } }
+    if (url === '/discover') {
+      if (failDiscover) throw new Error('Cannot reach the server. Check your connection.')
+      return { data: { items: emptyDiscover ? [] : [STORE] } }
+    }
     if (url === '/brands') {
       if (failBrands) throw new Error('Cannot reach the server. Check your connection.')
       return { data: { brands: emptyBrands ? [] : [BRAND] } }
@@ -93,6 +109,16 @@ const screenText = (renderer) =>
     .map((node) => [].concat(node.props.children).flat(Infinity).filter((c) => typeof c === 'string' || typeof c === 'number').join(''))
     .join(' | ')
 
+const textOf = (node) => [].concat(node.props.children).flat(Infinity).filter((c) => typeof c === 'string' || typeof c === 'number').join('')
+
+// Press the control whose label is `label`, then let the new request settle.
+async function press(renderer, label) {
+  const target = renderer.root.findAll((n) => typeof n.props.onPress === 'function' && n.findAllByType(Text).some((t) => textOf(t) === label))[0]
+  if (!target) throw new Error(`nothing to press labelled "${label}" in: ${screenText(renderer)}`)
+  await act(async () => target.props.onPress())
+  for (let i = 0; i < 6; i += 1) await act(async () => { await Promise.resolve() })
+}
+
 beforeEach(() => {
   jest.clearAllMocks()
   mockParams = {}
@@ -100,27 +126,36 @@ beforeEach(() => {
 })
 
 describe('Home', () => {
-  it('shows the brands and a way to search them', async () => {
-    const text = screenText(await show(<Home />))
+  it('asks for a city, then shows its stores and a way to search them', async () => {
+    const renderer = await show(<Home />)
+    let text = screenText(renderer)
     expect(text).toContain('CityCart')
+    expect(text).toContain('Where are you shopping?')
+    expect(text).toContain(CITY.name)
+
+    await press(renderer, CITY.name)
+    text = screenText(renderer)
+    expect(text).toContain('Shopping in Faisalabad')
+    expect(text).toContain('Stores on your street')
     expect(text).toContain('Loom & Co.')
-    expect(text).toContain('Brands')
+    expect(text).toContain('Mehrunisa Printed Lawn')
     expect(text).not.toContain('New arrivals')
   })
 
-  it('says so, with a way to retry, when the server cannot be reached', async () => {
-    api.get.mockImplementation(async (url) => {
-      if (url === '/cities') return { data: { cities: [] } }
-      throw new Error('Cannot reach the server. Check your connection.')
-    })
-    const text = screenText(await show(<Home />))
-    expect(text).toContain("Can't reach the server")
+  it('says so, with a way to retry, when the feed cannot be loaded', async () => {
+    serve({ failDiscover: true })
+    const renderer = await show(<Home />)
+    await press(renderer, CITY.name)
+    const text = screenText(renderer)
+    expect(text).toContain("Couldn't load your city")
     expect(text).toContain('Try again')
   })
 
-  it('says when no brand is selling yet', async () => {
-    serve({ emptyBrands: true })
-    expect(screenText(await show(<Home />))).toContain('No brands are selling here yet.')
+  it('says when no store is selling in the city yet', async () => {
+    serve({ emptyDiscover: true })
+    const renderer = await show(<Home />)
+    await press(renderer, CITY.name)
+    expect(screenText(renderer)).toContain('No stores in Faisalabad yet')
   })
 })
 
@@ -129,7 +164,7 @@ describe('Brands', () => {
     const text = screenText(await show(<Brands />))
     expect(text).toContain('Loom & Co.')
     expect(text).toContain('Handloom lawn and khaddar.')
-    expect(text).toContain('1 brand on CityCart')
+    expect(text).toContain('1 store on CityCart')
   })
 })
 

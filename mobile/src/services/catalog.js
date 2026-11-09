@@ -41,3 +41,15 @@ export async function fetchCatalogOffers(catalogProductId, area) {
   const res = await api.get(`/catalog/browse/${catalogProductId}`, { params: area })
   return res.data
 }
+
+// A store's public page: brand, store details, the categories it sells in and its
+// newest products. Everything is scoped to this one brand by the server.
+export async function fetchStorefront(brandId) {
+  const res = await api.get(`/brands/${brandId}/storefront`)
+  return {
+    brand: res.data.brand || null,
+    store: res.data.store || null,
+    categories: Array.isArray(res.data.categories) ? res.data.categories : [],
+    featuredProducts: Array.isArray(res.data.featuredProducts) ? res.data.featuredProducts : [],
+  }
+}
