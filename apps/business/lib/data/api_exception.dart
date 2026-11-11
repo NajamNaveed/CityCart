@@ -43,6 +43,16 @@ const _codeMessages = <String, String>{
   'BOOKING_NOT_FOUND': 'That booking could not be found.',
   'BOOKING_CHANGED': 'This booking changed. Pull down to reload it.',
   'INVALID_BOOKING_STATUS': 'This booking is no longer open for that step.',
+  'INVALID_STATUS': 'This booking moved on. Pull down to see its latest state.',
+  'PRICE_BELOW_STARTING':
+      'Your price cannot be below the starting price shown on your service.',
+  'SLOT_TAKEN': 'That time is already taken. Choose another slot.',
+  'PROPOSAL_EXPIRED':
+      'That proposal expired. Send a fresh one or accept the request.',
+  'NO_CUSTOMER_OFFER': 'This customer did not offer a price.',
+  'PROVIDER_UNAVAILABLE':
+      'You are not taking bookings right now. Check your profile and area.',
+  'OUTSIDE_SERVICE_BLOCK': 'That address is outside your service area.',
   'INVALID_PRICE': 'Enter a price greater than zero.',
   'SLOT_UNAVAILABLE': 'That time is not available. Choose another slot.',
   'OFFERING_NOT_FOUND': 'That service could not be found.',

@@ -15,34 +15,61 @@ class _Destination {
   final IconData selectedIcon;
 }
 
-/// Home and Account are the same for both kinds of owner, so the shell is
-/// shared. Wide windows get a settled sidebar; phones get a bottom bar with the
-/// same two destinations in the same order.
-const _destinations = [
-  _Destination(
-    'Home',
-    Icons.space_dashboard_outlined,
-    Icons.space_dashboard_rounded,
-  ),
-  _Destination('Account', Icons.person_outline_rounded, Icons.person_rounded),
-];
+/// Home and Account are shared by both kinds of owner. A service provider also
+/// gets Bookings. Wide windows get a settled sidebar; phones get a bottom bar
+/// with the same destinations in the same order.
+const _homeDestination = _Destination(
+  'Home',
+  Icons.space_dashboard_outlined,
+  Icons.space_dashboard_rounded,
+);
+const _bookingsDestination = _Destination(
+  'Bookings',
+  Icons.event_note_outlined,
+  Icons.event_note_rounded,
+);
+const _accountDestination = _Destination(
+  'Account',
+  Icons.person_outline_rounded,
+  Icons.person_rounded,
+);
+
+List<_Destination> _destinationsFor(AppUser? user) {
+  if (user?.isProvider ?? false) {
+    return const [_homeDestination, _bookingsDestination, _accountDestination];
+  }
+  return const [_homeDestination, _accountDestination];
+}
+
+/// The shell always has three branches in this order. A shop owner only sees
+/// two of them, so visible positions are mapped to branch positions.
+int _branchForVisible(AppUser? user, int visible) {
+  if (user?.isProvider ?? false) return visible;
+  return visible == 0 ? 0 : 2;
+}
+
+int _visibleForBranch(AppUser? user, int branch) {
+  if (user?.isProvider ?? false) return branch;
+  return branch == 2 ? 1 : 0;
+}
 
 class BusinessShell extends ConsumerWidget {
   const BusinessShell({super.key, required this.navigationShell});
 
   final StatefulNavigationShell navigationShell;
 
-  void _open(int index) {
+  void _openBranch(int branch) {
     navigationShell.goBranch(
-      index,
-      initialLocation: index == navigationShell.currentIndex,
+      branch,
+      initialLocation: branch == navigationShell.currentIndex,
     );
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(sessionProvider).user;
-    final index = navigationShell.currentIndex;
+    final destinations = _destinationsFor(user);
+    final selected = _visibleForBranch(user, navigationShell.currentIndex);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -51,7 +78,13 @@ class BusinessShell extends ConsumerWidget {
             body: SafeArea(
               child: Row(
                 children: [
-                  _Sidebar(user: user, index: index, onOpen: _open),
+                  _Sidebar(
+                    user: user,
+                    destinations: destinations,
+                    index: selected,
+                    onOpen: (visible) =>
+                        _openBranch(_branchForVisible(user, visible)),
+                  ),
                   const VerticalDivider(width: 1),
                   Expanded(child: navigationShell),
                 ],
@@ -67,10 +100,11 @@ class BusinessShell extends ConsumerWidget {
               border: Border(top: BorderSide(color: AppColors.line)),
             ),
             child: NavigationBar(
-              selectedIndex: index,
-              onDestinationSelected: _open,
+              selectedIndex: selected,
+              onDestinationSelected: (visible) =>
+                  _openBranch(_branchForVisible(user, visible)),
               destinations: [
-                for (final destination in _destinations)
+                for (final destination in destinations)
                   NavigationDestination(
                     icon: Icon(destination.icon),
                     selectedIcon: Icon(destination.selectedIcon),
@@ -88,11 +122,13 @@ class BusinessShell extends ConsumerWidget {
 class _Sidebar extends StatelessWidget {
   const _Sidebar({
     required this.user,
+    required this.destinations,
     required this.index,
     required this.onOpen,
   });
 
   final AppUser? user;
+  final List<_Destination> destinations;
   final int index;
   final ValueChanged<int> onOpen;
 
@@ -137,9 +173,9 @@ class _Sidebar extends StatelessWidget {
           ),
           const Divider(height: 1),
           const SizedBox(height: 10),
-          for (var i = 0; i < _destinations.length; i++)
+          for (var i = 0; i < destinations.length; i++)
             _SideDestination(
-              destination: _destinations[i],
+              destination: destinations[i],
               selected: i == index,
               onTap: () => onOpen(i),
             ),
@@ -147,7 +183,7 @@ class _Sidebar extends StatelessWidget {
           if (user != null) ...[
             const Divider(height: 1),
             InkWell(
-              onTap: () => onOpen(1),
+              onTap: () => onOpen(destinations.length - 1),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(

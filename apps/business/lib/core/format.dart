@@ -21,6 +21,24 @@ String compactMoney(int? paisa) {
   return money(paisa);
 }
 
+/// Reads a price typed in rupees and returns integer paisa, or null when the
+/// text is not a usable amount.
+int? paisaFromRupees(String raw) {
+  final cleaned = raw.replaceAll(',', '').replaceAll('Rs', '').trim();
+  if (cleaned.isEmpty) return null;
+  final value = double.tryParse(cleaned);
+  if (value == null || value < 0 || value > 10000000) return null;
+  return (value * 100).round();
+}
+
+/// A price for a text field: no symbol and no thousands separators.
+String rupeesField(int paisa) {
+  final value = paisa / 100;
+  return value == value.roundToDouble()
+      ? value.toStringAsFixed(0)
+      : value.toStringAsFixed(2);
+}
+
 String dayLabel(DateTime date) =>
     DateFormat('EEE d MMM').format(date.toLocal());
 

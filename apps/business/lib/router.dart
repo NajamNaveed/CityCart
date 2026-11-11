@@ -3,9 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'core/widgets.dart';
+import 'data/models.dart';
 import 'features/account/account_screen.dart';
 import 'features/auth/login_screen.dart';
 import 'features/auth/splash_screen.dart';
+import 'features/bookings/booking_detail_screen.dart';
+import 'features/bookings/bookings_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/shell/business_shell.dart';
 import 'providers.dart';
@@ -19,6 +22,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) => businessRedirect(
       status: session.status,
       location: state.matchedLocation,
+      role: session.user?.role,
     ),
     errorBuilder: (context, state) => const NotFoundScreen(),
     routes: [
@@ -42,12 +46,29 @@ final routerProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
+                path: '/bookings',
+                builder: (context, state) => const BookingsScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
                 path: '/account',
                 builder: (context, state) => const AccountScreen(),
               ),
             ],
           ),
         ],
+      ),
+      GoRoute(
+        path: '/bookings/:id',
+        builder: (context, state) => BookingDetailScreen(
+          bookingId: state.pathParameters['id']!,
+          initial: state.extra is BusinessBooking
+              ? state.extra as BusinessBooking
+              : null,
+        ),
       ),
     ],
   );
@@ -60,6 +81,7 @@ final routerProvider = Provider<GoRouter>((ref) {
 String? businessRedirect({
   required SessionStatus status,
   required String location,
+  String? role,
 }) {
   final atLogin = location == '/login';
   final atSplash = location == '/splash';
@@ -71,6 +93,7 @@ String? businessRedirect({
       return atLogin ? null : '/login';
     case SessionStatus.signedIn:
       if (atLogin || atSplash) return '/home';
+      if (role == brandRole && location.startsWith('/bookings')) return '/home';
       return null;
   }
 }

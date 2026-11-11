@@ -190,6 +190,356 @@ class ProviderProfile {
   }
 }
 
+/// The service as it was when the booking was placed. Later edits to the
+/// offering never rewrite an existing booking.
+class BookingOffering {
+  const BookingOffering({
+    required this.id,
+    required this.title,
+    this.durationMinutes = 0,
+    this.startingAtPricePaisa = 0,
+    this.image,
+  });
+
+  final String id;
+  final String title;
+  final int durationMinutes;
+  final int startingAtPricePaisa;
+  final String? image;
+
+  factory BookingOffering.fromJson(Map<String, dynamic> json) {
+    return BookingOffering(
+      id: _text(json['offeringId']),
+      title: _text(json['title'], 'Service'),
+      durationMinutes: _int(json['durationMinutes'], 0),
+      startingAtPricePaisa: _int(json['startingAtPrice'], 0),
+      image: _optionalText(json['image']),
+    );
+  }
+}
+
+class BookingCustomer {
+  const BookingCustomer({
+    required this.id,
+    required this.name,
+    this.phone = '',
+  });
+
+  final String id;
+  final String name;
+  final String phone;
+
+  factory BookingCustomer.fromJson(Map<String, dynamic> json) {
+    return BookingCustomer(
+      id: _text(json['_id']),
+      name: _text(json['name'], 'Customer'),
+      phone: _text(json['phone']),
+    );
+  }
+}
+
+class BookingAddress {
+  const BookingAddress({
+    required this.fullName,
+    required this.phone,
+    required this.addressLine,
+    this.city = '',
+    this.blockName = '',
+    this.latitude,
+    this.longitude,
+  });
+
+  final String fullName;
+  final String phone;
+  final String addressLine;
+  final String city;
+  final String blockName;
+  final double? latitude;
+  final double? longitude;
+
+  String get areaLabel =>
+      [blockName, city].where((value) => value.trim().isNotEmpty).join(', ');
+
+  factory BookingAddress.fromJson(Map<String, dynamic> json) {
+    final pin = _map(json['pin']);
+    return BookingAddress(
+      fullName: _text(json['fullName']),
+      phone: _text(json['phone']),
+      addressLine: _text(json['addressLine']),
+      city: _text(json['city']),
+      blockName: _text(json['blockName']),
+      latitude: _optionalDouble(pin['lat']),
+      longitude: _optionalDouble(pin['lng']),
+    );
+  }
+}
+
+/// One firm offer the provider sent. A counter-offer supersedes the earlier
+/// one; the customer accepts or declines the active proposal.
+class BookingProposal {
+  const BookingProposal({
+    required this.id,
+    this.pricePaisa = 0,
+    this.scope = '',
+    this.scheduledStart,
+    this.scheduledEnd,
+    this.expiresAt,
+    this.status = 'ACTIVE',
+    this.createdAt,
+  });
+
+  final String id;
+  final int pricePaisa;
+  final String scope;
+  final DateTime? scheduledStart;
+  final DateTime? scheduledEnd;
+  final DateTime? expiresAt;
+  final String status;
+  final DateTime? createdAt;
+
+  bool get isActive => status == 'ACTIVE';
+
+  factory BookingProposal.fromJson(Map<String, dynamic> json) {
+    return BookingProposal(
+      id: _text(json['_id']),
+      pricePaisa: _int(json['pricePaisa'], 0),
+      scope: _text(json['scope']),
+      scheduledStart: _date(json['scheduledStart']),
+      scheduledEnd: _date(json['scheduledEnd']),
+      expiresAt: _date(json['expiresAt']),
+      status: _text(json['status'], 'ACTIVE'),
+      createdAt: _date(json['createdAt']),
+    );
+  }
+}
+
+class BookingEvent {
+  const BookingEvent({
+    required this.type,
+    this.byRole = '',
+    this.at,
+    this.note,
+  });
+
+  final String type;
+  final String byRole;
+  final DateTime? at;
+  final String? note;
+
+  factory BookingEvent.fromJson(Map<String, dynamic> json) {
+    final meta = _map(json['meta']);
+    return BookingEvent(
+      type: _text(json['type']),
+      byRole: _text(json['byRole']),
+      at: _date(json['at']),
+      note: _optionalText(json['note']) ?? _optionalText(meta['note']),
+    );
+  }
+}
+
+class BookingCancellation {
+  const BookingCancellation({
+    this.by = '',
+    this.reason = '',
+    this.late = false,
+    this.at,
+  });
+
+  final String by;
+  final String reason;
+  final bool late;
+  final DateTime? at;
+
+  factory BookingCancellation.fromJson(Map<String, dynamic> json) {
+    return BookingCancellation(
+      by: _text(json['by']),
+      reason: _text(json['reason']),
+      late: json['late'] == true,
+      at: _date(json['at']),
+    );
+  }
+}
+
+class BookingDispute {
+  const BookingDispute({
+    this.reason = '',
+    this.at,
+    this.resolvedAt,
+    this.resolution = '',
+    this.resolutionNote,
+  });
+
+  final String reason;
+  final DateTime? at;
+  final DateTime? resolvedAt;
+  final String resolution;
+  final String? resolutionNote;
+
+  bool get isResolved => resolvedAt != null;
+
+  factory BookingDispute.fromJson(Map<String, dynamic> json) {
+    return BookingDispute(
+      reason: _text(json['reason']),
+      at: _date(json['at']),
+      resolvedAt: _date(json['resolvedAt']),
+      resolution: _text(json['resolution']),
+      resolutionNote: _optionalText(json['resolutionNote']),
+    );
+  }
+}
+
+/// A booking as the provider sees it: the customer and job address are
+/// included, and every lifecycle button is driven by [status].
+class BusinessBooking {
+  const BusinessBooking({
+    required this.id,
+    required this.bookingNumber,
+    required this.status,
+    required this.offering,
+    this.requestedStart,
+    this.scheduledStart,
+    this.scheduledEnd,
+    this.note,
+    this.customerOfferPaisa,
+    this.proposals = const <BookingProposal>[],
+    this.activeProposal,
+    this.agreedPricePaisa,
+    this.finalAmountPaisa,
+    this.completionNote,
+    this.acceptedAt,
+    this.startedAt,
+    this.completedAt,
+    this.confirmedAt,
+    this.autoConfirmAt,
+    this.confirmedBy = '',
+    this.cancellation,
+    this.dispute,
+    this.events = const <BookingEvent>[],
+    this.address,
+    this.customer,
+    this.conversationId,
+    this.canChat = false,
+    this.unread = 0,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  final String id;
+  final String bookingNumber;
+  final String status;
+  final BookingOffering offering;
+  final DateTime? requestedStart;
+  final DateTime? scheduledStart;
+  final DateTime? scheduledEnd;
+  final String? note;
+  final int? customerOfferPaisa;
+  final List<BookingProposal> proposals;
+  final BookingProposal? activeProposal;
+  final int? agreedPricePaisa;
+  final int? finalAmountPaisa;
+  final String? completionNote;
+  final DateTime? acceptedAt;
+  final DateTime? startedAt;
+  final DateTime? completedAt;
+  final DateTime? confirmedAt;
+  final DateTime? autoConfirmAt;
+  final String confirmedBy;
+  final BookingCancellation? cancellation;
+  final BookingDispute? dispute;
+  final List<BookingEvent> events;
+  final BookingAddress? address;
+  final BookingCustomer? customer;
+  final String? conversationId;
+  final bool canChat;
+  final int unread;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  String get customerName {
+    final name = customer?.name.trim() ?? '';
+    if (name.isNotEmpty) return name;
+    final fallback = address?.fullName.trim() ?? '';
+    return fallback.isEmpty ? 'Customer' : fallback;
+  }
+
+  String get customerPhone {
+    final phone = customer?.phone.trim() ?? '';
+    if (phone.isNotEmpty) return phone;
+    return address?.phone.trim() ?? '';
+  }
+
+  DateTime? get whenStart => scheduledStart ?? requestedStart;
+
+  int get headlinePricePaisa =>
+      finalAmountPaisa ?? agreedPricePaisa ?? offering.startingAtPricePaisa;
+
+  String get priceCaption {
+    if (finalAmountPaisa != null) return 'Final amount';
+    if (agreedPricePaisa != null) return 'Agreed price';
+    return 'Starting price';
+  }
+
+  bool get isNewRequest => status == 'REQUESTED';
+  bool get canAcceptCustomerOffer =>
+      isNewRequest && (customerOfferPaisa ?? 0) > 0;
+  bool get canPropose => status == 'REQUESTED' || status == 'PROPOSED';
+  bool get canStart => status == 'ACCEPTED';
+  bool get canComplete => status == 'IN_PROGRESS';
+  bool get canCancel =>
+      status == 'REQUESTED' ||
+      status == 'PROPOSED' ||
+      status == 'ACCEPTED' ||
+      status == 'IN_PROGRESS';
+  bool get isClosed =>
+      status == 'CONFIRMED' || status == 'DECLINED' || status == 'CANCELLED';
+
+  factory BusinessBooking.fromJson(Map<String, dynamic> json) {
+    final address = _map(json['address']);
+    final customer = _map(json['customer']);
+    final active = _map(json['activeProposal']);
+    final cancellation = _map(json['cancellation']);
+    final dispute = _map(json['dispute']);
+    return BusinessBooking(
+      id: _text(json['_id']),
+      bookingNumber: _text(json['bookingNumber']),
+      status: _text(json['status'], 'REQUESTED'),
+      offering: BookingOffering.fromJson(_map(json['offering'])),
+      requestedStart: _date(json['requestedStart']),
+      scheduledStart: _date(json['scheduledStart']),
+      scheduledEnd: _date(json['scheduledEnd']),
+      note: _optionalText(json['note']),
+      customerOfferPaisa: _optionalInt(json['customerOfferPaisa']),
+      proposals: _mapList(json['proposals'])
+          .map(BookingProposal.fromJson)
+          .toList(growable: false),
+      activeProposal: active.isEmpty ? null : BookingProposal.fromJson(active),
+      agreedPricePaisa: _optionalInt(json['agreedPricePaisa']),
+      finalAmountPaisa: _optionalInt(json['finalAmountPaisa']),
+      completionNote: _optionalText(json['completionNote']),
+      acceptedAt: _date(json['acceptedAt']),
+      startedAt: _date(json['startedAt']),
+      completedAt: _date(json['completedAt']),
+      confirmedAt: _date(json['confirmedAt']),
+      autoConfirmAt: _date(json['autoConfirmAt']),
+      confirmedBy: _text(json['confirmedBy']),
+      cancellation: cancellation.isEmpty
+          ? null
+          : BookingCancellation.fromJson(cancellation),
+      dispute: dispute.isEmpty ? null : BookingDispute.fromJson(dispute),
+      events: _mapList(json['events'])
+          .map(BookingEvent.fromJson)
+          .toList(growable: false),
+      address: address.isEmpty ? null : BookingAddress.fromJson(address),
+      customer: customer.isEmpty ? null : BookingCustomer.fromJson(customer),
+      conversationId: _optionalText(json['conversationId']),
+      canChat: json['canChat'] == true,
+      unread: _int(json['unread'], 0),
+      createdAt: _date(json['createdAt']),
+      updatedAt: _date(json['updatedAt']),
+    );
+  }
+}
+
 class Pagination {
   const Pagination({
     this.page = 1,
@@ -249,9 +599,51 @@ int _int(Object? value, int fallback) {
   return int.tryParse('$value') ?? fallback;
 }
 
+int? _optionalInt(Object? value) {
+  if (value == null) return null;
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse('$value');
+}
+
 double _double(Object? value) {
   if (value is num) return value.toDouble();
   return double.tryParse('$value') ?? 0;
+}
+
+double? _optionalDouble(Object? value) {
+  if (value == null) return null;
+  if (value is num) return value.toDouble();
+  return double.tryParse('$value');
+}
+
+String _text(Object? value, [String fallback = '']) {
+  if (value == null) return fallback;
+  final text = value.toString().trim();
+  return text.isEmpty ? fallback : text;
+}
+
+String? _optionalText(Object? value) {
+  if (value == null) return null;
+  final text = value.toString().trim();
+  return text.isEmpty ? null : text;
+}
+
+DateTime? _date(Object? value) {
+  if (value is! String || value.trim().isEmpty) return null;
+  return DateTime.tryParse(value);
+}
+
+Map<String, dynamic> _map(Object? value) {
+  return value is Map ? Map<String, dynamic>.from(value) : const {};
+}
+
+List<Map<String, dynamic>> _mapList(Object? value) {
+  if (value is! List) return const [];
+  return value
+      .whereType<Map>()
+      .map((item) => Map<String, dynamic>.from(item))
+      .toList(growable: false);
 }
 
 String roleName(String role) =>

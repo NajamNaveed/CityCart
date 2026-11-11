@@ -151,6 +151,14 @@ class _ProviderHome extends ConsumerWidget {
                   ),
                 ],
                 const SizedBox(height: 22),
+                const SectionTitle('Work'),
+                ActionTile(
+                  icon: Icons.event_note_outlined,
+                  title: 'Bookings',
+                  subtitle: 'Accept requests, run jobs and close them out',
+                  onTap: () => context.go('/bookings'),
+                ),
+                const SizedBox(height: 22),
                 const SectionTitle('Account'),
                 ActionTile(
                   icon: Icons.manage_accounts_outlined,

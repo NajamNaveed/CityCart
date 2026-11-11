@@ -81,6 +81,116 @@ class BusinessRepository {
         : 'If that email belongs to an account, a reset link is on its way.';
   }
 
+  // --- Provider bookings ---------------------------------------------------
+
+  Future<Page<BusinessBooking>> providerBookings({
+    String? status,
+    int page = 1,
+    int limit = 12,
+  }) async {
+    final body = await _api.get(
+      '/provider/bookings',
+      query: {'page': page, 'limit': limit, 'status': ?status},
+    );
+    return Page.fromJson(body, BusinessBooking.fromJson, 'bookings');
+  }
+
+  Future<BusinessBooking> providerBooking(String bookingId) async {
+    final body = await _api.get('/provider/bookings/$bookingId');
+    return _bookingFrom(body);
+  }
+
+  /// The provider binds the customer to a price at or above the published
+  /// starting price.
+  Future<BusinessBooking> acceptProviderBooking(
+    String bookingId, {
+    required int pricePaisa,
+  }) async {
+    final body = await _api.post(
+      '/provider/bookings/$bookingId/accept',
+      data: {'pricePaisa': pricePaisa},
+    );
+    return _bookingFrom(body);
+  }
+
+  /// Accepts the exact amount the customer offered, even below the published
+  /// price. The amount comes from the booking on the server.
+  Future<BusinessBooking> acceptProviderOffer(String bookingId) async {
+    final body = await _api.post('/provider/bookings/$bookingId/offer/accept');
+    return _bookingFrom(body);
+  }
+
+  Future<BusinessBooking> declineProviderBooking(
+    String bookingId, {
+    String? reason,
+  }) async {
+    final trimmed = reason?.trim();
+    final body = await _api.post(
+      '/provider/bookings/$bookingId/decline',
+      data: {if (trimmed != null && trimmed.isNotEmpty) 'reason': trimmed},
+    );
+    return _bookingFrom(body);
+  }
+
+  Future<BusinessBooking> proposeProviderBooking(
+    String bookingId, {
+    required int pricePaisa,
+    required String scope,
+    required DateTime scheduledStart,
+    int? expiresInHours,
+  }) async {
+    final body = await _api.post(
+      '/provider/bookings/$bookingId/propose',
+      data: {
+        'pricePaisa': pricePaisa,
+        'scope': scope.trim(),
+        'scheduledStart': scheduledStart.toUtc().toIso8601String(),
+        'expiresInHours': ?expiresInHours,
+      },
+    );
+    return _bookingFrom(body);
+  }
+
+  Future<BusinessBooking> startProviderBooking(String bookingId) async {
+    final body = await _api.post('/provider/bookings/$bookingId/start');
+    return _bookingFrom(body);
+  }
+
+  Future<BusinessBooking> completeProviderBooking(
+    String bookingId, {
+    required int finalAmountPaisa,
+    String? completionNote,
+  }) async {
+    final note = completionNote?.trim();
+    final body = await _api.post(
+      '/provider/bookings/$bookingId/complete',
+      data: {
+        'finalAmountPaisa': finalAmountPaisa,
+        if (note != null && note.isNotEmpty) 'completionNote': note,
+      },
+    );
+    return _bookingFrom(body);
+  }
+
+  Future<BusinessBooking> cancelProviderBooking(
+    String bookingId, {
+    required String reason,
+  }) async {
+    final body = await _api.post(
+      '/provider/bookings/$bookingId/cancel',
+      data: {'reason': reason.trim()},
+    );
+    return _bookingFrom(body);
+  }
+
+  BusinessBooking _bookingFrom(Map<String, dynamic> body) {
+    final booking = body['booking'];
+    if (booking is! Map) {
+      throw StateError('The server did not return the booking.');
+    }
+    return BusinessBooking.fromJson(Map<String, dynamic>.from(booking));
+  }
+
   AuthResult _authFrom(Map<String, dynamic> body) {
     final token = body['token'];
     final user = body['user'];
