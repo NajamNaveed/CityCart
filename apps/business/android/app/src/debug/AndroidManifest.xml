@@ -1,0 +1,6 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Local development servers are often plain http (10.0.2.2, a LAN IP).
+         This applies to debug builds only; release stays HTTPS-only. -->
+    <application android:usesCleartextTraffic="true"/>
+</manifest>
