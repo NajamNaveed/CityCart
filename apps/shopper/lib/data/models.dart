@@ -2125,3 +2125,477 @@ class DirectChatStart {
     );
   }
 }
+
+/// One firm offer a provider sent for a booking. The customer accepts or
+/// declines the active one; earlier offers stay in the list as history.
+class ServiceBookingProposal {
+  const ServiceBookingProposal({
+    required this.id,
+    this.pricePaisa = 0,
+    this.scope = '',
+    this.scheduledStart,
+    this.scheduledEnd,
+    this.expiresAt,
+    this.status = 'ACTIVE',
+    this.createdAt,
+  });
+
+  final String id;
+  final int pricePaisa;
+  final String scope;
+  final DateTime? scheduledStart;
+  final DateTime? scheduledEnd;
+  final DateTime? expiresAt;
+  final String status;
+  final DateTime? createdAt;
+
+  double get price => pricePaisa / 100;
+  bool get isActive => status == 'ACTIVE';
+
+  factory ServiceBookingProposal.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return ServiceBookingProposal(
+      id: text(map['_id']),
+      pricePaisa: asInt(map['pricePaisa']),
+      scope: text(map['scope']),
+      scheduledStart: asDate(map['scheduledStart']),
+      scheduledEnd: asDate(map['scheduledEnd']),
+      expiresAt: asDate(map['expiresAt']),
+      status: text(map['status'], 'ACTIVE'),
+      createdAt: asDate(map['createdAt']),
+    );
+  }
+}
+
+/// The service as it was when the booking was made. Prices and titles are a
+/// snapshot: later edits to the offering never rewrite a booking.
+class ServiceBookingOffering {
+  const ServiceBookingOffering({
+    required this.id,
+    required this.title,
+    this.slug = '',
+    this.durationMinutes = 0,
+    this.startingAtPricePaisa = 0,
+    this.image,
+  });
+
+  final String id;
+  final String title;
+  final String slug;
+  final int durationMinutes;
+  final int startingAtPricePaisa;
+  final String? image;
+
+  double get startingAtPrice => startingAtPricePaisa / 100;
+
+  factory ServiceBookingOffering.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return ServiceBookingOffering(
+      id: text(map['offeringId']),
+      title: text(map['title'], 'Service'),
+      slug: text(map['slug']),
+      durationMinutes: asInt(map['durationMinutes']),
+      startingAtPricePaisa: asInt(map['startingAtPrice']),
+      image: optionalText(map['image']),
+    );
+  }
+}
+
+class ServiceBookingProvider {
+  const ServiceBookingProvider({
+    required this.id,
+    required this.displayName,
+    this.slug = '',
+    this.avatar,
+    this.phone,
+  });
+
+  final String id;
+  final String displayName;
+  final String slug;
+  final String? avatar;
+  final String? phone;
+
+  factory ServiceBookingProvider.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return ServiceBookingProvider(
+      id: text(map['_id']),
+      displayName: text(map['displayName'], 'Service provider'),
+      slug: text(map['slug']),
+      avatar: optionalText(map['avatar']),
+      phone: optionalText(map['phone']),
+    );
+  }
+}
+
+class ServiceBookingAddress {
+  const ServiceBookingAddress({
+    required this.fullName,
+    required this.phone,
+    required this.addressLine,
+    this.city = '',
+    this.blockName = '',
+    this.latitude,
+    this.longitude,
+  });
+
+  final String fullName;
+  final String phone;
+  final String addressLine;
+  final String city;
+  final String blockName;
+  final double? latitude;
+  final double? longitude;
+
+  String get placeLine =>
+      [blockName, city].where((value) => value.isNotEmpty).join(', ');
+
+  factory ServiceBookingAddress.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    final pin = asMap(map['pin']);
+    return ServiceBookingAddress(
+      fullName: text(map['fullName']),
+      phone: text(map['phone']),
+      addressLine: text(map['addressLine']),
+      city: text(map['city']),
+      blockName: text(map['blockName']),
+      latitude: optionalDouble(pin['lat']),
+      longitude: optionalDouble(pin['lng']),
+    );
+  }
+}
+
+class ServiceBookingEvent {
+  const ServiceBookingEvent({
+    required this.type,
+    this.byRole = '',
+    this.at,
+    this.note,
+  });
+
+  final String type;
+  final String byRole;
+  final DateTime? at;
+  final String? note;
+
+  factory ServiceBookingEvent.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return ServiceBookingEvent(
+      type: text(map['type']),
+      byRole: text(map['byRole']),
+      at: asDate(map['at']),
+      note: optionalText(map['note']),
+    );
+  }
+}
+
+class ServiceBookingCancellation {
+  const ServiceBookingCancellation({
+    this.by = '',
+    this.reason = '',
+    this.late = false,
+    this.at,
+  });
+
+  final String by;
+  final String reason;
+  final bool late;
+  final DateTime? at;
+
+  factory ServiceBookingCancellation.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return ServiceBookingCancellation(
+      by: text(map['by']),
+      reason: text(map['reason']),
+      late: map['late'] == true,
+      at: asDate(map['at']),
+    );
+  }
+}
+
+class ServiceBookingDispute {
+  const ServiceBookingDispute({
+    this.reason = '',
+    this.at,
+    this.resolvedAt,
+    this.resolution = '',
+    this.resolutionNote,
+  });
+
+  final String reason;
+  final DateTime? at;
+  final DateTime? resolvedAt;
+  final String resolution;
+  final String? resolutionNote;
+
+  bool get isResolved => resolvedAt != null;
+
+  factory ServiceBookingDispute.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return ServiceBookingDispute(
+      reason: text(map['reason']),
+      at: asDate(map['at']),
+      resolvedAt: asDate(map['resolvedAt']),
+      resolution: text(map['resolution']),
+      resolutionNote: optionalText(map['resolutionNote']),
+    );
+  }
+}
+
+/// A service booking as the customer sees it. The list and the detail screen
+/// share this shape; only the detail carries the review.
+class ServiceBooking {
+  const ServiceBooking({
+    required this.id,
+    required this.bookingNumber,
+    required this.status,
+    required this.offering,
+    this.requestedStart,
+    this.scheduledStart,
+    this.scheduledEnd,
+    this.note,
+    this.customerOfferPaisa,
+    this.proposals = const <ServiceBookingProposal>[],
+    this.activeProposal,
+    this.agreedPricePaisa,
+    this.finalAmountPaisa,
+    this.completionNote,
+    this.acceptedAt,
+    this.startedAt,
+    this.completedAt,
+    this.confirmedAt,
+    this.autoConfirmAt,
+    this.confirmedBy = '',
+    this.cancellation,
+    this.dispute,
+    this.events = const <ServiceBookingEvent>[],
+    this.address,
+    this.provider,
+    this.conversationId,
+    this.canChat = false,
+    this.unread = 0,
+    this.review,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  final String id;
+  final String bookingNumber;
+  final String status;
+  final ServiceBookingOffering offering;
+  final DateTime? requestedStart;
+  final DateTime? scheduledStart;
+  final DateTime? scheduledEnd;
+  final String? note;
+  final int? customerOfferPaisa;
+  final List<ServiceBookingProposal> proposals;
+  final ServiceBookingProposal? activeProposal;
+  final int? agreedPricePaisa;
+  final int? finalAmountPaisa;
+  final String? completionNote;
+  final DateTime? acceptedAt;
+  final DateTime? startedAt;
+  final DateTime? completedAt;
+  final DateTime? confirmedAt;
+  final DateTime? autoConfirmAt;
+  final String confirmedBy;
+  final ServiceBookingCancellation? cancellation;
+  final ServiceBookingDispute? dispute;
+  final List<ServiceBookingEvent> events;
+  final ServiceBookingAddress? address;
+  final ServiceBookingProvider? provider;
+  final String? conversationId;
+  final bool canChat;
+  final int unread;
+  final ServiceReview? review;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  double? get agreedPrice =>
+      agreedPricePaisa == null ? null : agreedPricePaisa! / 100;
+  double? get finalAmount =>
+      finalAmountPaisa == null ? null : finalAmountPaisa! / 100;
+  double? get customerOffer =>
+      customerOfferPaisa == null ? null : customerOfferPaisa! / 100;
+  double get startingAtPrice => offering.startingAtPrice;
+
+  /// The amount to show first: what was finally charged, then the agreed
+  /// price, otherwise the service's starting price.
+  double get headlinePrice => finalAmount ?? agreedPrice ?? startingAtPrice;
+
+  DateTime? get whenStart => scheduledStart ?? requestedStart;
+
+  /// The customer still has to accept an offer or confirm a finished job.
+  bool get needsAnswer => status == 'PROPOSED' || status == 'COMPLETED';
+
+  /// The job is still expected to happen, or is waiting for the customer.
+  bool get isOpen => const {
+    'REQUESTED',
+    'PROPOSED',
+    'ACCEPTED',
+    'IN_PROGRESS',
+    'COMPLETED',
+    'DISPUTED',
+  }.contains(status);
+
+  bool get canCancel => const {
+    'REQUESTED',
+    'PROPOSED',
+    'ACCEPTED',
+    'IN_PROGRESS',
+  }.contains(status);
+
+  bool get canReview => status == 'CONFIRMED' && review == null;
+  bool get canMessage => canChat && (conversationId ?? '').isNotEmpty;
+
+  factory ServiceBooking.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    final provider = asMap(map['provider']);
+    final address = asMap(map['address']);
+    final review = asMap(map['review']);
+    final active = asMap(map['activeProposal']);
+    final cancellation = asMap(map['cancellation']);
+    final dispute = asMap(map['dispute']);
+    return ServiceBooking(
+      id: text(map['_id']),
+      bookingNumber: text(map['bookingNumber']),
+      status: text(map['status'], 'REQUESTED'),
+      offering: ServiceBookingOffering.fromJson(map['offering']),
+      requestedStart: asDate(map['requestedStart']),
+      scheduledStart: asDate(map['scheduledStart']),
+      scheduledEnd: asDate(map['scheduledEnd']),
+      note: optionalText(map['note']),
+      customerOfferPaisa: map['customerOfferPaisa'] == null
+          ? null
+          : asInt(map['customerOfferPaisa']),
+      proposals: asList(map['proposals'])
+          .map(ServiceBookingProposal.fromJson)
+          .toList(growable: false),
+      activeProposal: active.isEmpty
+          ? null
+          : ServiceBookingProposal.fromJson(active),
+      agreedPricePaisa: map['agreedPricePaisa'] == null
+          ? null
+          : asInt(map['agreedPricePaisa']),
+      finalAmountPaisa: map['finalAmountPaisa'] == null
+          ? null
+          : asInt(map['finalAmountPaisa']),
+      completionNote: optionalText(map['completionNote']),
+      acceptedAt: asDate(map['acceptedAt']),
+      startedAt: asDate(map['startedAt']),
+      completedAt: asDate(map['completedAt']),
+      confirmedAt: asDate(map['confirmedAt']),
+      autoConfirmAt: asDate(map['autoConfirmAt']),
+      confirmedBy: text(map['confirmedBy']),
+      cancellation: cancellation.isEmpty
+          ? null
+          : ServiceBookingCancellation.fromJson(cancellation),
+      dispute: dispute.isEmpty ? null : ServiceBookingDispute.fromJson(dispute),
+      events: asList(map['events'])
+          .map(ServiceBookingEvent.fromJson)
+          .toList(growable: false),
+      address: address.isEmpty ? null : ServiceBookingAddress.fromJson(address),
+      provider: provider.isEmpty
+          ? null
+          : ServiceBookingProvider.fromJson(provider),
+      conversationId: optionalText(map['conversationId']),
+      canChat: map['canChat'] == true,
+      unread: asInt(map['unread']),
+      review: review.isEmpty ? null : ServiceReview.fromJson(review),
+      createdAt: asDate(map['createdAt']),
+      updatedAt: asDate(map['updatedAt']),
+    );
+  }
+}
+
+/// One booking-chat thread in the inbox. The name is the provider for the
+/// customer; the service title and booking state give the message context.
+class ServiceChatConversation {
+  const ServiceChatConversation({
+    required this.id,
+    this.bookingId = '',
+    this.bookingNumber = '',
+    this.serviceTitle = '',
+    this.status = '',
+    this.withName = 'Service provider',
+    this.withImage,
+    this.withSlug,
+    this.lastMessageAt,
+    this.lastMessagePreview = '',
+    this.lastSenderRole = '',
+    this.unread = 0,
+  });
+
+  final String id;
+  final String bookingId;
+  final String bookingNumber;
+  final String serviceTitle;
+  final String status;
+  final String withName;
+  final String? withImage;
+  final String? withSlug;
+  final DateTime? lastMessageAt;
+  final String lastMessagePreview;
+  final String lastSenderRole;
+  final int unread;
+
+  factory ServiceChatConversation.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    final withMap = asMap(map['with']);
+    return ServiceChatConversation(
+      id: text(map['_id']),
+      bookingId: text(map['bookingId']),
+      bookingNumber: text(map['bookingNumber']),
+      serviceTitle: text(map['serviceTitle']),
+      status: text(map['status']),
+      withName: text(withMap['name'], 'Service provider'),
+      withImage: optionalText(withMap['image']),
+      withSlug: optionalText(withMap['slug']),
+      lastMessageAt: asDate(map['lastMessageAt']),
+      lastMessagePreview: text(map['lastMessagePreview']),
+      lastSenderRole: text(map['lastSenderRole']),
+      unread: asInt(map['unread']),
+    );
+  }
+}
+
+/// One direct customer ↔ provider thread in the inbox.
+class DirectChatConversation {
+  const DirectChatConversation({
+    required this.id,
+    this.providerId = '',
+    this.withName = 'Service provider',
+    this.withImage,
+    this.withSlug,
+    this.lastMessageAt,
+    this.lastMessagePreview = '',
+    this.lastSenderRole = '',
+    this.unread = 0,
+  });
+
+  final String id;
+  final String providerId;
+  final String withName;
+  final String? withImage;
+  final String? withSlug;
+  final DateTime? lastMessageAt;
+  final String lastMessagePreview;
+  final String lastSenderRole;
+  final int unread;
+
+  factory DirectChatConversation.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    final withMap = asMap(map['with']);
+    return DirectChatConversation(
+      id: text(map['_id']),
+      providerId: text(map['providerId']),
+      withName: text(withMap['name'], 'Service provider'),
+      withImage: optionalText(withMap['image']),
+      withSlug: optionalText(withMap['slug']),
+      lastMessageAt: asDate(map['lastMessageAt']),
+      lastMessagePreview: text(map['lastMessagePreview']),
+      lastSenderRole: text(map['lastSenderRole']),
+      unread: asInt(map['unread']),
+    );
+  }
+}

@@ -251,14 +251,18 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
             customerOfferPaisa: offerPaisa,
           );
       if (!mounted) return;
-      await _showSent(
+      final viewBooking = await _showSent(
         provider: provider,
         created: created,
         offering: offering,
         when: _whenLabel(day!, slot),
       );
       if (!mounted) return;
-      if (context.canPop()) context.pop();
+      final router = GoRouter.maybeOf(context);
+      if (router != null) {
+        router.pop();
+        if (viewBooking == true) router.push('/bookings/${created.id}');
+      }
     } on ApiException catch (error) {
       if (!mounted) return;
       setState(() {
@@ -279,13 +283,13 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
     }
   }
 
-  Future<void> _showSent({
+  Future<bool?> _showSent({
     required ServiceProvider provider,
     required ServiceBookingCreated created,
     required ServiceOffering offering,
     required String when,
   }) {
-    return showAppSheet<void>(
+    return showAppSheet<bool>(
       context,
       title: 'Request sent',
       subtitle: 'Your request is with ${provider.displayName}.',
@@ -309,8 +313,15 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
           ),
           const SizedBox(height: 18),
           AppButton(
+            label: 'View booking',
+            icon: Icons.event_available_rounded,
+            onPressed: () => Navigator.of(context).pop(true),
+          ),
+          const SizedBox(height: 8),
+          AppButton(
             label: 'Done',
-            onPressed: () => Navigator.of(context).pop(),
+            variant: AppButtonVariant.outline,
+            onPressed: () => Navigator.of(context).pop(false),
           ),
         ],
       ),

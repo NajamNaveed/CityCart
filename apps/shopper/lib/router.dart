@@ -7,12 +7,17 @@ import 'core/theme.dart';
 import 'core/widgets.dart';
 import 'features/account/account_screen.dart';
 import 'features/auth/login_screen.dart';
+import 'features/bookings/booking_detail_screen.dart';
+import 'features/bookings/bookings_screen.dart';
 import 'features/cart/cart_controller.dart';
 import 'features/cart/cart_screen.dart';
 import 'features/chat/chat_thread_screen.dart';
 import 'features/checkout/checkout_screen.dart';
 import 'features/explore/explore_screen.dart';
 import 'features/home/home_screen.dart';
+import 'features/messages/messages_screen.dart';
+import 'features/messages/service_chat_controller.dart';
+import 'features/messages/service_chat_screen.dart';
 import 'features/onboarding/area_screen.dart';
 import 'features/orders/order_detail_screen.dart';
 import 'features/orders/orders_screen.dart';
@@ -111,6 +116,37 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/orders/:orderId',
         builder: (context, state) =>
             OrderDetailScreen(orderId: state.pathParameters['orderId']!),
+      ),
+      GoRoute(
+        path: '/bookings',
+        builder: (context, state) => const BookingsScreen(),
+      ),
+      GoRoute(
+        path: '/bookings/:bookingId',
+        builder: (context, state) =>
+            BookingDetailScreen(bookingId: state.pathParameters['bookingId']!),
+      ),
+      GoRoute(
+        path: '/messages',
+        builder: (context, state) => const MessagesScreen(),
+      ),
+      GoRoute(
+        path: '/messages/job/:conversationId',
+        builder: (context, state) => ServiceChatScreen(
+          conversationId: state.pathParameters['conversationId']!,
+          kind: ServiceChatKind.job,
+          title: state.uri.queryParameters['name'],
+          subtitle: state.uri.queryParameters['subtitle'],
+        ),
+      ),
+      GoRoute(
+        path: '/messages/provider/:conversationId',
+        builder: (context, state) => ServiceChatScreen(
+          conversationId: state.pathParameters['conversationId']!,
+          kind: ServiceChatKind.direct,
+          title: state.uri.queryParameters['name'],
+          subtitle: state.uri.queryParameters['subtitle'],
+        ),
       ),
       GoRoute(
         path: '/services/provider/:slug',

@@ -186,6 +186,10 @@ class _ProviderPage extends StatelessWidget {
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+              child: _MessageProviderButton(provider: provider),
+            ),
             if (!provider.acceptingNewOrders)
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
@@ -622,6 +626,66 @@ class _ReviewCard extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// Opens (or reopens) the shopper's direct chat with this provider. The server
+/// owns the conversation id; the app only sends the provider id.
+class _MessageProviderButton extends ConsumerStatefulWidget {
+  const _MessageProviderButton({required this.provider});
+
+  final ServiceProvider provider;
+
+  @override
+  ConsumerState<_MessageProviderButton> createState() =>
+      _MessageProviderButtonState();
+}
+
+class _MessageProviderButtonState
+    extends ConsumerState<_MessageProviderButton> {
+  bool _busy = false;
+
+  Future<void> _start() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final result = await ref
+          .read(shopperRepositoryProvider)
+          .startDirectChat(widget.provider.id);
+      if (!mounted) return;
+      final uri = Uri(
+        path: '/messages/provider/${result.conversationId}',
+        queryParameters: {
+          'name': result.providerName,
+          'subtitle': 'Provider chat',
+        },
+      );
+      context.push(uri.toString());
+    } on ApiException catch (error) {
+      if (mounted) showAppSnack(context, error.message, error: true);
+    } catch (_) {
+      if (mounted) {
+        showAppSnack(
+          context,
+          'We could not open the chat. Try again.',
+          error: true,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppButton(
+      label: 'Message provider',
+      icon: Icons.chat_bubble_outline_rounded,
+      variant: AppButtonVariant.outline,
+      height: 48,
+      loading: _busy,
+      onPressed: _busy ? null : _start,
     );
   }
 }

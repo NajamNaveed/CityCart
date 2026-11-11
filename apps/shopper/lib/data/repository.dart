@@ -458,4 +458,186 @@ class ShopperRepository {
     );
     return DirectChatStart.fromJson(body);
   }
+
+  // --- Service bookings ----------------------------------------------------
+
+  Future<Page<ServiceBooking>> serviceBookings({
+    String? status,
+    int page = 1,
+    int limit = 10,
+  }) async {
+    final body = await _api.get(
+      '/services/bookings',
+      query: {'page': page, 'limit': limit, 'status': ?status},
+    );
+    return Page.fromJson(body, key: 'bookings', parse: ServiceBooking.fromJson);
+  }
+
+  /// The booking, its offers, the address and (once confirmed) the review.
+  Future<ServiceBooking> serviceBooking(String bookingId) async {
+    final body = await _api.get('/services/bookings/$bookingId');
+    return ServiceBooking.fromJson(body['booking']);
+  }
+
+  Future<ServiceBooking> acceptBookingProposal(String bookingId) async {
+    final body = await _api.post(
+      '/services/bookings/$bookingId/proposals/accept',
+    );
+    return ServiceBooking.fromJson(body['booking']);
+  }
+
+  Future<ServiceBooking> declineBookingProposal(String bookingId) async {
+    final body = await _api.post(
+      '/services/bookings/$bookingId/proposals/decline',
+    );
+    return ServiceBooking.fromJson(body['booking']);
+  }
+
+  Future<ServiceBooking> confirmServiceBooking(String bookingId) async {
+    final body = await _api.post('/services/bookings/$bookingId/confirm');
+    return ServiceBooking.fromJson(body['booking']);
+  }
+
+  Future<ServiceBooking> disputeServiceBooking(
+    String bookingId, {
+    required String reason,
+  }) async {
+    final body = await _api.post(
+      '/services/bookings/$bookingId/dispute',
+      data: {'reason': reason},
+    );
+    return ServiceBooking.fromJson(body['booking']);
+  }
+
+  /// Cancels a job that has not finished. The server records who cancelled,
+  /// why, and whether it was late; the client only sends the reason.
+  Future<ServiceBooking> cancelServiceBooking(
+    String bookingId, {
+    required String reason,
+  }) async {
+    final body = await _api.post(
+      '/services/bookings/$bookingId/cancel',
+      data: {'reason': reason},
+    );
+    return ServiceBooking.fromJson(body['booking']);
+  }
+
+  // --- Service chat --------------------------------------------------------
+
+  Future<Page<ServiceChatConversation>> bookingChats({
+    int page = 1,
+    int limit = 20,
+  }) async {
+    final body = await _api.get(
+      '/services/chats',
+      query: {'page': page, 'limit': limit},
+    );
+    return Page.fromJson(
+      body,
+      key: 'items',
+      parse: ServiceChatConversation.fromJson,
+    );
+  }
+
+  /// Booking chat routes are keyed by the booking id, not the conversation id.
+  Future<ChatMessagePage> bookingChatMessages(
+    String bookingId, {
+    String? before,
+    int limit = 30,
+  }) async {
+    final body = await _api.get(
+      '/services/chats/$bookingId/messages',
+      query: {'limit': limit, 'before': ?before},
+    );
+    return ChatMessagePage.fromJson(body);
+  }
+
+  Future<ChatMessage> sendBookingChatMessage(
+    String bookingId,
+    String body,
+  ) async {
+    final response = await _api.post(
+      '/services/chats/$bookingId/messages',
+      data: {'body': body},
+    );
+    return ChatMessage.fromJson(response['message']);
+  }
+
+  Future<void> markBookingChatRead(String bookingId) async {
+    await _api.post('/services/chats/$bookingId/read');
+  }
+
+  Future<int> bookingChatUnread() async {
+    final body = await _api.get('/services/chats/unread');
+    return asInt(body['unread']);
+  }
+
+  Future<Page<DirectChatConversation>> directChats({
+    int page = 1,
+    int limit = 20,
+  }) async {
+    final body = await _api.get(
+      '/services/direct-chats',
+      query: {'page': page, 'limit': limit},
+    );
+    return Page.fromJson(
+      body,
+      key: 'conversations',
+      parse: DirectChatConversation.fromJson,
+    );
+  }
+
+  Future<ChatMessagePage> directChatMessages(
+    String conversationId, {
+    String? before,
+    int limit = 30,
+  }) async {
+    final body = await _api.get(
+      '/services/direct-chats/$conversationId/messages',
+      query: {'limit': limit, 'before': ?before},
+    );
+    return ChatMessagePage.fromJson(body);
+  }
+
+  Future<ChatMessage> sendDirectChatMessage(
+    String conversationId,
+    String body,
+  ) async {
+    final response = await _api.post(
+      '/services/direct-chats/$conversationId/messages',
+      data: {'body': body},
+    );
+    return ChatMessage.fromJson(response['message']);
+  }
+
+  Future<void> markDirectChatRead(String conversationId) async {
+    await _api.post('/services/direct-chats/$conversationId/read');
+  }
+
+  Future<int> directChatUnread() async {
+    final body = await _api.get('/services/direct-chats/unread');
+    return asInt(body['unread']);
+  }
+
+  // --- Service reviews -----------------------------------------------------
+
+  /// Null until the shopper reviews this confirmed booking.
+  Future<ServiceReview?> bookingReview(String bookingId) async {
+    final body = await _api.get('/services/bookings/$bookingId/review');
+    final review = body['review'];
+    return review is Map ? ServiceReview.fromJson(review) : null;
+  }
+
+  Future<ServiceReview> createBookingReview(
+    String bookingId, {
+    required int rating,
+    String? comment,
+  }) async {
+    final trimmed = (comment ?? '').trim();
+    final body = await _api.post(
+      '/services/bookings/$bookingId/review',
+      data: {'rating': rating, if (trimmed.isNotEmpty) 'comment': trimmed},
+    );
+    return ServiceReview.fromJson(body['review']);
+  }
 }

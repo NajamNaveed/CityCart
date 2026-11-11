@@ -74,12 +74,33 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
                     style: Theme.of(context).textTheme.headlineMedium,
                   ),
                   const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: LocationPill(
-                      label: area,
-                      onTap: () => context.push('/area'),
-                    ),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: LocationPill(
+                          label: area,
+                          onTap: () => context.push('/area'),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      TextButton.icon(
+                        onPressed: () => context.push('/bookings'),
+                        icon: const Icon(
+                          Icons.event_available_outlined,
+                          size: 18,
+                        ),
+                        label: const Text('Bookings'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.forest,
+                          textStyle: const TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          minimumSize: const Size(0, 40),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

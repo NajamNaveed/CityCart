@@ -161,6 +161,20 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                           ),
                           const Divider(),
                           _MenuRow(
+                            icon: Icons.event_available_outlined,
+                            title: 'Your bookings',
+                            subtitle: 'Service visits, offers and reviews',
+                            onTap: () => context.push('/bookings'),
+                          ),
+                          const Divider(),
+                          _MenuRow(
+                            icon: Icons.forum_outlined,
+                            title: 'Messages',
+                            subtitle: 'Chats with service providers',
+                            onTap: () => context.push('/messages'),
+                          ),
+                          const Divider(),
+                          _MenuRow(
                             icon: Icons.place_outlined,
                             title: 'Delivery area',
                             subtitle: area?.label ?? 'Choose your area',

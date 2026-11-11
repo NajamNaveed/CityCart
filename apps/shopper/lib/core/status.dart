@@ -138,6 +138,62 @@ String? cartIssueLabel(String? issue, {int? availableQuantity}) {
   };
 }
 
+const _serviceBookingTones = <String, StatusTone>{
+  'REQUESTED': StatusTone.amber,
+  'PROPOSED': StatusTone.amber,
+  'ACCEPTED': StatusTone.info,
+  'IN_PROGRESS': StatusTone.clay,
+  'COMPLETED': StatusTone.amber,
+  'CONFIRMED': StatusTone.sage,
+  'DECLINED': StatusTone.muted,
+  'CANCELLED': StatusTone.muted,
+  'DISPUTED': StatusTone.danger,
+};
+
+StatusTone toneForServiceBooking(String status) =>
+    _serviceBookingTones[status] ?? StatusTone.muted;
+
+/// What the booking state means for the shopper, in one short line.
+String friendlyServiceBooking(String status) => switch (status) {
+  'REQUESTED' => 'Waiting for reply',
+  'PROPOSED' => 'Offer to answer',
+  'ACCEPTED' => 'Scheduled',
+  'IN_PROGRESS' => 'In progress',
+  'COMPLETED' => 'Please confirm',
+  'CONFIRMED' => 'Completed',
+  'DECLINED' => 'Declined',
+  'CANCELLED' => 'Cancelled',
+  'DISPUTED' => 'Under review',
+  _ => _titleCase(status),
+};
+
+String friendlyServiceEvent(String type) => switch (type) {
+  'REQUESTED' => 'Request sent',
+  'PROPOSED' => 'Provider sent an offer',
+  'PROPOSAL_ACCEPTED' => 'You accepted the offer',
+  'PROPOSAL_DECLINED' => 'You declined the offer',
+  'PROPOSAL_EXPIRED' => 'The offer expired',
+  'OFFER_ACCEPTED' => 'Provider accepted your offer',
+  'OFFER_DECLINED' => 'Provider declined your offer',
+  'ACCEPTED' => 'Booking accepted',
+  'STARTED' => 'The provider started the job',
+  'COMPLETED' => 'The provider marked it complete',
+  'CONFIRMED' => 'You confirmed completion',
+  'AUTO_CONFIRMED' => 'Confirmed automatically',
+  'CANCELLED' => 'Booking cancelled',
+  'DISPUTED' => 'You reported a problem',
+  'DISPUTE_RESOLVED' => 'CityCart resolved the report',
+  _ => _titleCase(type),
+};
+
+String friendlyCancelledBy(String by) => switch (by) {
+  'CUSTOMER' => 'You',
+  'PROVIDER' => 'The provider',
+  'ADMIN' => 'CityCart',
+  '' => 'The other side',
+  _ => _titleCase(by),
+};
+
 String _titleCase(String raw) {
   final value = raw.replaceAll('_', ' ').toLowerCase().trim();
   if (value.isEmpty) return '';
