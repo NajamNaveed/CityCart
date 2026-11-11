@@ -84,6 +84,28 @@ final providerAvailabilityProvider =
       return ref.watch(businessRepositoryProvider).providerAvailability();
     });
 
+/// The provider's merged inbox: job chats and direct customer questions.
+final providerChatInboxProvider =
+    FutureProvider.autoDispose<List<ProviderChatThread>>((ref) async {
+      final user = ref.watch(sessionProvider).user;
+      if (user == null || !user.isProvider) {
+        throw ApiException('Sign in with a service account to see this.');
+      }
+      return ref.watch(businessRepositoryProvider).providerChatInbox();
+    });
+
+/// Reviews left for the provider, optionally narrowed to one star rating.
+final providerReviewsProvider = FutureProvider.autoDispose
+    .family<ProviderReviewPage, int?>((ref, rating) async {
+      final user = ref.watch(sessionProvider).user;
+      if (user == null || !user.isProvider) {
+        throw ApiException('Sign in with a service account to see this.');
+      }
+      return ref
+          .watch(businessRepositoryProvider)
+          .providerReviews(rating: rating, limit: 30);
+    });
+
 /// The server address: baked into a release build, or chosen on the sign-in
 /// screen while developing.
 class ServerSettings {

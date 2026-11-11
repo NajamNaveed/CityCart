@@ -11,8 +11,11 @@ import 'features/availability/availability_screen.dart';
 import 'features/bookings/booking_detail_screen.dart';
 import 'features/bookings/bookings_screen.dart';
 import 'features/home/home_screen.dart';
+import 'features/messages/chat_thread_screen.dart';
+import 'features/messages/messages_screen.dart';
 import 'features/offerings/offerings_screen.dart';
 import 'features/profile/provider_profile_screen.dart';
+import 'features/reviews/reviews_screen.dart';
 import 'features/shell/business_shell.dart';
 import 'providers.dart';
 
@@ -85,6 +88,34 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/profile',
         builder: (context, state) => const ProviderProfileScreen(),
       ),
+      GoRoute(
+        path: '/messages',
+        builder: (context, state) => const MessagesScreen(),
+      ),
+      GoRoute(
+        path: '/messages/job/:id',
+        builder: (context, state) => ProviderChatScreen(
+          kind: ProviderChatKind.job,
+          routeId: state.pathParameters['id']!,
+          initial: state.extra is ProviderChatThread
+              ? state.extra as ProviderChatThread
+              : null,
+        ),
+      ),
+      GoRoute(
+        path: '/messages/question/:id',
+        builder: (context, state) => ProviderChatScreen(
+          kind: ProviderChatKind.question,
+          routeId: state.pathParameters['id']!,
+          initial: state.extra is ProviderChatThread
+              ? state.extra as ProviderChatThread
+              : null,
+        ),
+      ),
+      GoRoute(
+        path: '/reviews',
+        builder: (context, state) => const ReviewsScreen(),
+      ),
     ],
   );
   ref.onDispose(router.dispose);
@@ -98,6 +129,8 @@ const _providerOnlyPaths = <String>[
   '/offerings',
   '/availability',
   '/profile',
+  '/messages',
+  '/reviews',
 ];
 
 bool _isProviderOnly(String location) {

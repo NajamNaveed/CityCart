@@ -600,6 +600,33 @@ class NoticeBanner extends StatelessWidget {
   }
 }
 
+/// Five stars for a rating, with a half star when the average is in between.
+class StarRating extends StatelessWidget {
+  const StarRating({super.key, required this.rating, this.size = 16});
+
+  final double rating;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var index = 0; index < 5; index += 1)
+          Icon(
+            rating >= index + 0.75
+                ? Icons.star_rounded
+                : rating >= index + 0.25
+                ? Icons.star_half_rounded
+                : Icons.star_outline_rounded,
+            size: size,
+            color: AppColors.amber,
+          ),
+      ],
+    );
+  }
+}
+
 class AvatarBadge extends StatelessWidget {
   const AvatarBadge({super.key, required this.name, this.size = 46});
 

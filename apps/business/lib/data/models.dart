@@ -790,6 +790,229 @@ class Page<T> {
   }
 }
 
+/// Which server route a provider conversation lives behind. Job chats are
+/// keyed by the booking id; customer questions by the conversation id.
+enum ProviderChatKind { job, question }
+
+/// One row in the provider's Messages inbox. Both booking chats and direct
+/// customer questions become the same simple shape.
+class ProviderChatThread {
+  const ProviderChatThread({
+    required this.kind,
+    required this.routeId,
+    required this.name,
+    this.contextLabel = '',
+    this.preview = '',
+    this.lastMessageAt,
+    this.lastSenderRole = '',
+    this.unread = 0,
+  });
+
+  final ProviderChatKind kind;
+  final String routeId;
+  final String name;
+  final String contextLabel;
+  final String preview;
+  final DateTime? lastMessageAt;
+  final String lastSenderRole;
+  final int unread;
+
+  bool get isJob => kind == ProviderChatKind.job;
+  bool get lastFromMe => lastSenderRole == 'PROVIDER';
+  String get kindLabel => isJob ? 'Job chat' : 'Question';
+
+  factory ProviderChatThread.fromBookingJson(Map<String, dynamic> json) {
+    final withMap = _map(json['with']);
+    final service = _text(json['serviceTitle']);
+    final number = _text(json['bookingNumber']);
+    final details = [
+      service,
+      number,
+    ].where((value) => value.isNotEmpty).join(' · ');
+    return ProviderChatThread(
+      kind: ProviderChatKind.job,
+      routeId: _text(json['bookingId']),
+      name: _text(withMap['name'], 'Customer'),
+      contextLabel: details.isEmpty ? 'Job chat' : 'Job · $details',
+      preview: _text(json['lastMessagePreview']),
+      lastMessageAt: _date(json['lastMessageAt']),
+      lastSenderRole: _text(json['lastSenderRole']),
+      unread: _int(json['unread'], 0),
+    );
+  }
+
+  factory ProviderChatThread.fromDirectJson(Map<String, dynamic> json) {
+    final withMap = _map(json['with']);
+    return ProviderChatThread(
+      kind: ProviderChatKind.question,
+      routeId: _text(json['_id']),
+      name: _text(withMap['name'], 'Customer'),
+      contextLabel: 'Question about your service',
+      preview: _text(json['lastMessagePreview']),
+      lastMessageAt: _date(json['lastMessageAt']),
+      lastSenderRole: _text(json['lastSenderRole']),
+      unread: _int(json['unread'], 0),
+    );
+  }
+}
+
+class ChatMessage {
+  const ChatMessage({
+    required this.id,
+    required this.body,
+    this.conversationId,
+    this.senderRole = 'CUSTOMER',
+    this.mine = false,
+    this.createdAt,
+  });
+
+  final String id;
+  final String body;
+  final String? conversationId;
+  final String senderRole;
+  final bool mine;
+  final DateTime? createdAt;
+
+  bool get isSystem => senderRole == 'SYSTEM';
+
+  factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    return ChatMessage(
+      id: _text(json['_id']),
+      body: _text(json['body']),
+      conversationId: _optionalText(json['conversationId']),
+      senderRole: _text(json['senderRole'], 'CUSTOMER'),
+      mine: json['mine'] == true,
+      createdAt: _date(json['createdAt']),
+    );
+  }
+}
+
+class ChatMessagePage {
+  const ChatMessagePage({
+    this.messages = const <ChatMessage>[],
+    this.hasMore = false,
+  });
+
+  final List<ChatMessage> messages;
+  final bool hasMore;
+
+  String? get oldestId => messages.isEmpty ? null : messages.first.id;
+
+  factory ChatMessagePage.fromJson(Map<String, dynamic> json) {
+    return ChatMessagePage(
+      messages: _mapList(json['messages'])
+          .map(ChatMessage.fromJson)
+          .toList(growable: false),
+      hasMore: json['hasMore'] == true,
+    );
+  }
+}
+
+class ReviewReply {
+  const ReviewReply({this.body = '', this.at});
+
+  final String body;
+  final DateTime? at;
+
+  factory ReviewReply.fromJson(Map<String, dynamic> json) {
+    return ReviewReply(body: _text(json['body']), at: _date(json['at']));
+  }
+}
+
+/// A customer review as the provider sees it. The customer's name is the short
+/// label the server shares; the full order history stays private.
+class ServiceReview {
+  const ServiceReview({
+    required this.id,
+    required this.rating,
+    this.bookingId = '',
+    this.comment = '',
+    this.providerReply,
+    this.isApproved = true,
+    this.reviewerName = 'Customer',
+    this.serviceTitle = 'Service',
+    this.createdAt,
+  });
+
+  final String id;
+  final int rating;
+  final String bookingId;
+  final String comment;
+  final ReviewReply? providerReply;
+  final bool isApproved;
+  final String reviewerName;
+  final String serviceTitle;
+  final DateTime? createdAt;
+
+  bool get hasReply => providerReply != null;
+
+  factory ServiceReview.fromJson(Map<String, dynamic> json) {
+    final reply = _map(json['providerReply']);
+    return ServiceReview(
+      id: _text(json['_id']),
+      rating: _int(json['rating'], 0),
+      bookingId: _text(json['bookingId']),
+      comment: _text(json['comment']),
+      providerReply: reply.isEmpty ? null : ReviewReply.fromJson(reply),
+      isApproved: json['isApproved'] != false,
+      reviewerName: _text(json['reviewerName'], 'Customer'),
+      serviceTitle: _text(json['serviceTitle'], 'Service'),
+      createdAt: _date(json['createdAt']),
+    );
+  }
+}
+
+class ReviewSummary {
+  const ReviewSummary({
+    this.average = 0,
+    this.count = 0,
+    this.distribution = const <int, int>{},
+  });
+
+  final double average;
+  final int count;
+  final Map<int, int> distribution;
+
+  int countFor(int stars) => distribution[stars] ?? 0;
+
+  double shareFor(int stars) => count == 0 ? 0 : countFor(stars) / count;
+
+  factory ReviewSummary.fromJson(Map<String, dynamic> json) {
+    final raw = _map(json['distribution']);
+    final distribution = <int, int>{};
+    for (var stars = 1; stars <= 5; stars += 1) {
+      distribution[stars] = _int(raw['$stars'], 0);
+    }
+    return ReviewSummary(
+      average: _double(json['average']),
+      count: _int(json['count'], 0),
+      distribution: distribution,
+    );
+  }
+}
+
+class ProviderReviewPage {
+  const ProviderReviewPage({
+    this.reviews = const <ServiceReview>[],
+    this.summary = const ReviewSummary(),
+    this.pagination = const Pagination(),
+  });
+
+  final List<ServiceReview> reviews;
+  final ReviewSummary summary;
+  final Pagination pagination;
+
+  factory ProviderReviewPage.fromJson(Map<String, dynamic> json) {
+    return ProviderReviewPage(
+      reviews: _mapList(json['reviews'])
+          .map(ServiceReview.fromJson)
+          .toList(growable: false),
+      summary: ReviewSummary.fromJson(_map(json['summary'])),
+      pagination: Pagination.fromJson(_map(json['pagination'])),
+    );
+  }
+}
+
 int _int(Object? value, int fallback) {
   if (value is int) return value;
   if (value is num) return value.toInt();

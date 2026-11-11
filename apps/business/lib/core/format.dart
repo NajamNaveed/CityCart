@@ -70,6 +70,22 @@ String timeLabel(DateTime date) => DateFormat.jm().format(date.toLocal());
 String dateTimeLabel(DateTime date) =>
     DateFormat('d MMM, h:mm a').format(date.toLocal());
 
+/// The time under a chat message.
+String chatTime(DateTime date) => DateFormat.jm().format(date.toLocal());
+
+/// The time on an inbox row: the clock for today, "Yesterday", then a date.
+String inboxTime(DateTime date, {DateTime? now}) {
+  final current = now ?? DateTime.now();
+  if (sameDay(date, current)) return chatTime(date);
+  if (sameDay(date, current.subtract(const Duration(days: 1)))) {
+    return 'Yesterday';
+  }
+  final local = date.toLocal();
+  return local.year == current.year
+      ? DateFormat('d MMM').format(local)
+      : DateFormat('d MMM yyyy').format(local);
+}
+
 String shortDate(DateTime date) => DateFormat('d MMM').format(date.toLocal());
 
 String firstNameOf(String name) {

@@ -111,6 +111,30 @@ class AccountScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
+                const SizedBox(height: 22),
+                const SectionTitle('Customers'),
+                SurfacePanel(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Column(
+                    children: [
+                      InfoRow(
+                        key: const Key('account_messages'),
+                        icon: Icons.forum_outlined,
+                        label: 'Messages',
+                        value: 'Job chats and customer questions',
+                        onTap: () => context.push('/messages'),
+                      ),
+                      const Divider(indent: 66),
+                      InfoRow(
+                        key: const Key('account_reviews'),
+                        icon: Icons.star_outline_rounded,
+                        label: 'Reviews',
+                        value: 'Read reviews and reply once',
+                        onTap: () => context.push('/reviews'),
+                      ),
+                    ],
+                  ),
+                ),
               ] else
                 const _BrandBusinessCard(),
               const SizedBox(height: 22),

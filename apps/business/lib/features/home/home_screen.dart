@@ -42,6 +42,10 @@ class _ProviderHome extends ConsumerWidget {
     final asyncProfile = ref.watch(providerProfileProvider);
     final profile = asyncProfile.asData?.value;
     final status = profile?.status ?? user.provider?.status;
+    final inbox =
+        ref.watch(providerChatInboxProvider).asData?.value ??
+        const <ProviderChatThread>[];
+    final unread = inbox.fold(0, (total, thread) => total + thread.unread);
 
     return RefreshIndicator(
       onRefresh: () async => ref.invalidate(providerProfileProvider),
@@ -157,6 +161,30 @@ class _ProviderHome extends ConsumerWidget {
                   title: 'Bookings',
                   subtitle: 'Accept requests, run jobs and close them out',
                   onTap: () => context.go('/bookings'),
+                ),
+                const SizedBox(height: 22),
+                const SectionTitle('Customers'),
+                ActionTile(
+                  key: const Key('home_messages'),
+                  icon: Icons.forum_outlined,
+                  title: 'Messages',
+                  subtitle: unread > 0
+                      ? '$unread unread message${unread == 1 ? '' : 's'}'
+                      : 'Job chats and customer questions',
+                  tone: AppTone.blue,
+                  onTap: () => context.push('/messages'),
+                ),
+                const SizedBox(height: 10),
+                ActionTile(
+                  key: const Key('home_reviews'),
+                  icon: Icons.star_outline_rounded,
+                  title: 'Reviews',
+                  subtitle: profile == null || profile.ratingCount == 0
+                      ? 'Ratings from completed jobs'
+                      : '${profile.ratingAvg.toStringAsFixed(1)} from '
+                            '${profile.ratingCount} reviews',
+                  tone: AppTone.amber,
+                  onTap: () => context.push('/reviews'),
                 ),
                 const SizedBox(height: 22),
                 const SectionTitle('Your services'),

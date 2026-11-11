@@ -13,8 +13,11 @@ import 'package:citycart_business/features/availability/availability_screen.dart
 import 'package:citycart_business/features/bookings/booking_detail_screen.dart';
 import 'package:citycart_business/features/bookings/bookings_screen.dart';
 import 'package:citycart_business/features/home/home_screen.dart';
+import 'package:citycart_business/features/messages/chat_thread_screen.dart';
+import 'package:citycart_business/features/messages/messages_screen.dart';
 import 'package:citycart_business/features/offerings/offerings_screen.dart';
 import 'package:citycart_business/features/profile/provider_profile_screen.dart';
+import 'package:citycart_business/features/reviews/reviews_screen.dart';
 import 'package:citycart_business/providers.dart';
 import 'package:citycart_business/router.dart';
 import 'package:flutter/material.dart';
@@ -92,7 +95,14 @@ void main() {
     });
 
     test('shop owners cannot open provider service screens', () {
-      for (final path in ['/offerings', '/availability', '/profile']) {
+      for (final path in [
+        '/offerings',
+        '/availability',
+        '/profile',
+        '/messages',
+        '/messages/job/bk1',
+        '/reviews',
+      ]) {
         expect(
           businessRedirect(
             status: SessionStatus.signedIn,
@@ -142,6 +152,18 @@ void main() {
       expect(greetingFor(DateTime(2026, 1, 1, 8)), 'Good morning');
       expect(greetingFor(DateTime(2026, 1, 1, 14)), 'Good afternoon');
       expect(greetingFor(DateTime(2026, 1, 1, 20)), 'Good evening');
+    });
+
+    test('inbox times say today, yesterday and then a date', () {
+      final now = DateTime(2026, 11, 11, 12);
+      expect(chatTime(DateTime(2026, 11, 11, 9, 5)), startsWith('9:05'));
+      expect(
+        inboxTime(DateTime(2026, 11, 11, 9, 5), now: now),
+        startsWith('9:05'),
+      );
+      expect(inboxTime(DateTime(2026, 11, 10, 18), now: now), 'Yesterday');
+      expect(inboxTime(DateTime(2026, 11, 1, 18), now: now), '1 Nov');
+      expect(inboxTime(DateTime(2025, 11, 1, 18), now: now), '1 Nov 2025');
     });
   });
 
@@ -240,6 +262,94 @@ void main() {
       expect(availability.windowsFor(2), isEmpty);
       expect(availability.blackoutDates, ['2026-12-25']);
       expect(weekdayName(3), 'Wednesday');
+    });
+
+    test('a provider inbox reads job chats and direct questions', () {
+      final job = ProviderChatThread.fromBookingJson({
+        '_id': 'cv1',
+        'bookingId': 'bk1',
+        'bookingNumber': 'SB-2026-000001',
+        'serviceTitle': 'AC repair visit',
+        'with': {'name': 'Sana Malik'},
+        'lastMessagePreview': 'I am home now.',
+        'lastMessageAt': '2026-11-11T09:30:00.000Z',
+        'lastSenderRole': 'PROVIDER',
+        'unread': 2,
+      });
+      final question = ProviderChatThread.fromDirectJson({
+        '_id': 'cv2',
+        'with': {'name': 'Bilal Ahmed'},
+        'lastMessagePreview': 'Do you fix geysers?',
+        'lastSenderRole': 'CUSTOMER',
+      });
+
+      expect(job.kind, ProviderChatKind.job);
+      expect(job.routeId, 'bk1');
+      expect(job.contextLabel, 'Job · AC repair visit · SB-2026-000001');
+      expect(job.name, 'Sana Malik');
+      expect(job.unread, 2);
+      expect(job.lastFromMe, isTrue);
+      expect(question.kind, ProviderChatKind.question);
+      expect(question.routeId, 'cv2');
+      expect(question.contextLabel, 'Question about your service');
+      expect(question.lastFromMe, isFalse);
+    });
+
+    test('chat messages mark the owner’s own lines and system notes', () {
+      final page = ChatMessagePage.fromJson({
+        'messages': [
+          {
+            '_id': 'm1',
+            'body': 'I am on my way.',
+            'senderRole': 'PROVIDER',
+            'mine': true,
+            'createdAt': '2026-11-11T09:30:00.000Z',
+          },
+          {'_id': 'm2', 'body': 'Booking accepted.', 'senderRole': 'SYSTEM'},
+        ],
+        'hasMore': true,
+      });
+
+      expect(page.messages, hasLength(2));
+      expect(page.messages.first.mine, isTrue);
+      expect(page.messages.last.isSystem, isTrue);
+      expect(page.hasMore, isTrue);
+      expect(page.oldestId, 'm1');
+    });
+
+    test('reviews carry the summary, distribution and reply', () {
+      final page = ProviderReviewPage.fromJson({
+        'reviews': [
+          {
+            '_id': 'r1',
+            'bookingId': 'bk1',
+            'rating': 5,
+            'comment': 'Quick and tidy.',
+            'providerReply': {
+              'body': 'Thank you!',
+              'at': '2026-11-10T12:00:00.000Z',
+            },
+            'reviewerName': 'Sana Malik',
+            'serviceTitle': 'AC repair visit',
+          },
+        ],
+        'summary': {
+          'average': 4.6,
+          'count': 12,
+          'distribution': {'1': 0, '2': 1, '3': 1, '4': 3, '5': 7},
+        },
+        'pagination': {'page': 1, 'limit': 10, 'pages': 2, 'total': 12},
+      });
+
+      final review = page.reviews.single;
+      expect(review.rating, 5);
+      expect(review.hasReply, isTrue);
+      expect(review.providerReply?.body, 'Thank you!');
+      expect(page.summary.average, 4.6);
+      expect(page.summary.countFor(5), 7);
+      expect(page.summary.shareFor(5), closeTo(7 / 12, 0.0001));
+      expect(page.summary.shareFor(1), 0);
+      expect(page.pagination.hasMore, isTrue);
     });
 
     test('a booking reads the customer, schedule and prices', () {
@@ -349,6 +459,8 @@ void main() {
       expect(find.text('12 reviews'), findsOneWidget);
       expect(find.text('Appliance repair'), findsOneWidget);
       expect(find.text('Gulberg, Faisalabad'), findsOneWidget);
+      expect(find.text('Messages'), findsOneWidget);
+      expect(find.text('Reviews'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -857,6 +969,162 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('the inbox mixes job chats and questions', (tester) async {
+      final (container, _) = await _signedInWithFake(
+        user: _providerUser,
+        profile: _profile,
+        chats: _sampleChats(),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(const MessagesScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Sana Malik'), findsOneWidget);
+      expect(find.text('Bilal Ahmed'), findsOneWidget);
+      expect(find.text('2 new'), findsOneWidget);
+      expect(find.textContaining('Job · AC repair visit'), findsOneWidget);
+      expect(find.text('Do you fix geysers?'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('messages_filter_question')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Sana Malik'), findsNothing);
+      expect(find.text('Bilal Ahmed'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a job chat loads, marks read and sends a reply', (
+      tester,
+    ) async {
+      final (container, fake) = await _signedInWithFake(
+        user: _providerUser,
+        profile: _profile,
+        chatMessages: _sampleMessages(),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(
+            ProviderChatScreen(
+              kind: ProviderChatKind.job,
+              routeId: 'bk1',
+              initial: _sampleChats().first,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Sana Malik'), findsOneWidget);
+      expect(find.text('Salam, when will you arrive?'), findsOneWidget);
+      expect(find.text('I am on my way.'), findsOneWidget);
+      expect(find.text('Load earlier messages'), findsOneWidget);
+      expect(fake.markedReadId, 'bk1');
+
+      await tester.enterText(
+        find.byKey(const Key('chat_input')),
+        'See you in 10 minutes.',
+      );
+      await tester.tap(find.byKey(const Key('chat_send')));
+      await tester.pumpAndSettle();
+
+      expect(fake.sentChatRouteId, 'bk1');
+      expect(fake.sentChatBody, 'See you in 10 minutes.');
+      expect(find.text('See you in 10 minutes.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('reviews show the summary and accept one reply', (
+      tester,
+    ) async {
+      final (container, fake) = await _signedInWithFake(
+        user: _providerUser,
+        profile: _profile,
+        reviewPage: _sampleReviewPage(),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(const ReviewsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('4.6'), findsOneWidget);
+      expect(find.text('from 12 reviews'), findsOneWidget);
+      expect(find.text('Sana Malik'), findsOneWidget);
+      expect(find.text('Quick and tidy.'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('reviews_filter_5')));
+      await tester.pumpAndSettle();
+      expect(fake.lastReviewRating, 5);
+
+      final reply = find.byKey(const Key('review_reply_r1'));
+      await tester.ensureVisible(reply);
+      await tester.pumpAndSettle();
+      await tester.tap(reply);
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextFormField), 'Thank you, Sana!');
+      final submit = find.byKey(const Key('review_reply_submit'));
+      await tester.ensureVisible(submit);
+      await tester.pumpAndSettle();
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+
+      expect(fake.repliedReviewId, 'r1');
+      expect(fake.repliedReviewBody, 'Thank you, Sana!');
+      expect(find.text('Reply posted.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('home opens the inbox and a job chat', (tester) async {
+      final (container, _) = await _signedInWithFake(
+        user: _providerUser,
+        profile: _profile,
+        chats: _sampleChats(),
+        chatMessages: _sampleMessages(),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CityCartBusinessApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final messages = find.byKey(const Key('home_messages'));
+      await tester.ensureVisible(messages);
+      await tester.pumpAndSettle();
+      await tester.tap(messages);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Customer messages'), findsOneWidget);
+      expect(find.text('Bilal Ahmed'), findsOneWidget);
+
+      final job = find.byKey(const Key('chat_row_job_bk1'));
+      await tester.ensureVisible(job);
+      await tester.pumpAndSettle();
+      await tester.tap(job);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Salam, when will you arrive?'), findsOneWidget);
+      expect(find.text('Sana Malik'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('a shop owner never sees the bookings tab', (tester) async {
       final container = await _signedIn(
         user: _brandUser,
@@ -933,6 +1201,69 @@ ServiceOffering _sampleOffering() {
   );
 }
 
+List<ProviderChatThread> _sampleChats() {
+  final now = DateTime.now();
+  return [
+    ProviderChatThread(
+      kind: ProviderChatKind.job,
+      routeId: 'bk1',
+      name: 'Sana Malik',
+      contextLabel: 'Job · AC repair visit · SB-2026-000001',
+      preview: 'I am home now.',
+      lastMessageAt: now,
+      lastSenderRole: 'CUSTOMER',
+      unread: 2,
+    ),
+    ProviderChatThread(
+      kind: ProviderChatKind.question,
+      routeId: 'cv1',
+      name: 'Bilal Ahmed',
+      contextLabel: 'Question about your service',
+      preview: 'Do you fix geysers?',
+      lastMessageAt: now.subtract(const Duration(hours: 2)),
+      lastSenderRole: 'CUSTOMER',
+    ),
+  ];
+}
+
+ChatMessagePage _sampleMessages() {
+  return const ChatMessagePage(
+    messages: [
+      ChatMessage(
+        id: 'm1',
+        body: 'Salam, when will you arrive?',
+        senderRole: 'CUSTOMER',
+      ),
+      ChatMessage(
+        id: 'm2',
+        body: 'I am on my way.',
+        senderRole: 'PROVIDER',
+        mine: true,
+      ),
+    ],
+    hasMore: true,
+  );
+}
+
+ProviderReviewPage _sampleReviewPage() {
+  return const ProviderReviewPage(
+    reviews: [
+      ServiceReview(
+        id: 'r1',
+        rating: 5,
+        comment: 'Quick and tidy.',
+        reviewerName: 'Sana Malik',
+        serviceTitle: 'AC repair visit',
+      ),
+    ],
+    summary: ReviewSummary(
+      average: 4.6,
+      count: 12,
+      distribution: {1: 0, 2: 1, 3: 1, 4: 3, 5: 7},
+    ),
+  );
+}
+
 /// Builds a container whose session has already been restored, so the home
 /// providers see a signed-in owner before the first frame.
 Future<ProviderContainer> _signedIn({
@@ -944,6 +1275,9 @@ Future<ProviderContainer> _signedIn({
   List<ServiceOffering> offerings = const [],
   ServiceAvailability? availability,
   List<BlockOption> blocks = const [],
+  List<ProviderChatThread> chats = const [],
+  ChatMessagePage chatMessages = const ChatMessagePage(),
+  ProviderReviewPage reviewPage = const ProviderReviewPage(),
 }) async {
   final result = await _signedInWithFake(
     user: user,
@@ -954,6 +1288,9 @@ Future<ProviderContainer> _signedIn({
     offerings: offerings,
     availability: availability,
     blocks: blocks,
+    chats: chats,
+    chatMessages: chatMessages,
+    reviewPage: reviewPage,
   );
   return result.$1;
 }
@@ -967,6 +1304,9 @@ Future<(ProviderContainer, _FakeRepository)> _signedInWithFake({
   List<ServiceOffering> offerings = const [],
   ServiceAvailability? availability,
   List<BlockOption> blocks = const [],
+  List<ProviderChatThread> chats = const [],
+  ChatMessagePage chatMessages = const ChatMessagePage(),
+  ProviderReviewPage reviewPage = const ProviderReviewPage(),
 }) async {
   final prefs = await SharedPreferences.getInstance();
   final store = _FakeSessionStore('token', user);
@@ -980,6 +1320,9 @@ Future<(ProviderContainer, _FakeRepository)> _signedInWithFake({
     offerings: offerings,
     availability: availability,
     blocks: blocks,
+    chats: chats,
+    chatMessages: chatMessages,
+    reviewPage: reviewPage,
   );
   final container = ProviderContainer(
     overrides: [
@@ -1048,6 +1391,9 @@ class _FakeRepository extends BusinessRepository {
     this.offerings = const [],
     this.availability,
     this.blocks = const [],
+    this.chats = const [],
+    this.chatMessages = const ChatMessagePage(),
+    this.reviewPage = const ProviderReviewPage(),
   }) : super(ApiClient(store));
 
   final AppUser user;
@@ -1058,6 +1404,9 @@ class _FakeRepository extends BusinessRepository {
   final List<ServiceOffering> offerings;
   final ServiceAvailability? availability;
   final List<BlockOption> blocks;
+  final List<ProviderChatThread> chats;
+  final ChatMessagePage chatMessages;
+  final ProviderReviewPage reviewPage;
 
   String? lastBookingStatus;
   int? acceptedPricePaisa;
@@ -1076,6 +1425,13 @@ class _FakeRepository extends BusinessRepository {
   int? updatedPricePaisa;
   String? changedBlockId;
   double? changedLatitude;
+
+  String? sentChatRouteId;
+  String? sentChatBody;
+  String? markedReadId;
+  int? lastReviewRating;
+  String? repliedReviewId;
+  String? repliedReviewBody;
 
   @override
   Future<AppUser> me() async => user;
@@ -1267,6 +1623,106 @@ class _FakeRepository extends BusinessRepository {
     changedBlockId = blockId;
     changedLatitude = latitude;
     return profile!;
+  }
+
+  @override
+  Future<List<ProviderChatThread>> providerChatInbox({int limit = 30}) async {
+    return chats;
+  }
+
+  @override
+  Future<ChatMessagePage> bookingChatMessages(
+    String bookingId, {
+    String? before,
+    int limit = 30,
+  }) async {
+    return chatMessages;
+  }
+
+  @override
+  Future<ChatMessagePage> directChatMessages(
+    String conversationId, {
+    String? before,
+    int limit = 30,
+  }) async {
+    return chatMessages;
+  }
+
+  @override
+  Future<ChatMessage> sendBookingChatMessage(
+    String bookingId,
+    String body,
+  ) async {
+    sentChatRouteId = bookingId;
+    sentChatBody = body;
+    return ChatMessage(
+      id: 'sent',
+      body: body,
+      senderRole: 'PROVIDER',
+      mine: true,
+      createdAt: DateTime(2026, 11, 11, 12),
+    );
+  }
+
+  @override
+  Future<ChatMessage> sendDirectChatMessage(
+    String conversationId,
+    String body,
+  ) async {
+    sentChatRouteId = conversationId;
+    sentChatBody = body;
+    return ChatMessage(
+      id: 'sent',
+      body: body,
+      senderRole: 'PROVIDER',
+      mine: true,
+      createdAt: DateTime(2026, 11, 11, 12),
+    );
+  }
+
+  @override
+  Future<void> markBookingChatRead(String bookingId) async {
+    markedReadId = bookingId;
+  }
+
+  @override
+  Future<void> markDirectChatRead(String conversationId) async {
+    markedReadId = conversationId;
+  }
+
+  @override
+  Future<ProviderReviewPage> providerReviews({
+    int? rating,
+    int page = 1,
+    int limit = 10,
+  }) async {
+    lastReviewRating = rating;
+    return reviewPage;
+  }
+
+  @override
+  Future<ServiceReview> replyToProviderReview(
+    String reviewId, {
+    required String body,
+  }) async {
+    repliedReviewId = reviewId;
+    repliedReviewBody = body;
+    final review = reviewPage.reviews.isEmpty
+        ? const ServiceReview(id: 'r0', rating: 5)
+        : reviewPage.reviews.firstWhere(
+            (item) => item.id == reviewId,
+            orElse: () => reviewPage.reviews.first,
+          );
+    return ServiceReview(
+      id: review.id,
+      rating: review.rating,
+      bookingId: review.bookingId,
+      comment: review.comment,
+      providerReply: ReviewReply(body: body, at: DateTime(2026, 11, 11, 12)),
+      reviewerName: review.reviewerName,
+      serviceTitle: review.serviceTitle,
+      createdAt: review.createdAt,
+    );
   }
 }
 

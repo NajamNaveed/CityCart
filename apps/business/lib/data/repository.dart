@@ -355,6 +355,126 @@ class BusinessRepository {
     );
   }
 
+  // --- Provider chats ------------------------------------------------------
+
+  /// One inbox for both kinds of conversation: threads attached to a booking
+  /// and direct questions about the business. Both server lists are already
+  /// scoped to the signed-in provider.
+  Future<List<ProviderChatThread>> providerChatInbox({int limit = 30}) async {
+    final responses = await Future.wait([
+      _api.get('/services/chats', query: {'page': 1, 'limit': limit}),
+      _api.get('/services/direct-chats', query: {'page': 1, 'limit': limit}),
+    ]);
+    final threads = <ProviderChatThread>[
+      for (final row in _rows(responses[0]['items']))
+        ProviderChatThread.fromBookingJson(row),
+      for (final row in _rows(responses[1]['conversations']))
+        ProviderChatThread.fromDirectJson(row),
+    ];
+    threads.sort((left, right) {
+      final a = left.lastMessageAt;
+      final b = right.lastMessageAt;
+      if (a != null && b != null && a != b) return b.compareTo(a);
+      if (a == null && b != null) return 1;
+      if (a != null && b == null) return -1;
+      return left.name.compareTo(right.name);
+    });
+    return List.unmodifiable(threads);
+  }
+
+  Future<ChatMessagePage> bookingChatMessages(
+    String bookingId, {
+    String? before,
+    int limit = 30,
+  }) async {
+    final body = await _api.get(
+      '/services/chats/$bookingId/messages',
+      query: {'limit': limit, 'before': ?before},
+    );
+    return ChatMessagePage.fromJson(body);
+  }
+
+  Future<ChatMessagePage> directChatMessages(
+    String conversationId, {
+    String? before,
+    int limit = 30,
+  }) async {
+    final body = await _api.get(
+      '/services/direct-chats/$conversationId/messages',
+      query: {'limit': limit, 'before': ?before},
+    );
+    return ChatMessagePage.fromJson(body);
+  }
+
+  Future<ChatMessage> sendBookingChatMessage(
+    String bookingId,
+    String body,
+  ) async {
+    final response = await _api.post(
+      '/services/chats/$bookingId/messages',
+      data: {'body': body.trim()},
+    );
+    return _messageFrom(response);
+  }
+
+  Future<ChatMessage> sendDirectChatMessage(
+    String conversationId,
+    String body,
+  ) async {
+    final response = await _api.post(
+      '/services/direct-chats/$conversationId/messages',
+      data: {'body': body.trim()},
+    );
+    return _messageFrom(response);
+  }
+
+  Future<void> markBookingChatRead(String bookingId) async {
+    await _api.post('/services/chats/$bookingId/read');
+  }
+
+  Future<void> markDirectChatRead(String conversationId) async {
+    await _api.post('/services/direct-chats/$conversationId/read');
+  }
+
+  ChatMessage _messageFrom(Map<String, dynamic> body) {
+    final message = body['message'];
+    if (message is! Map) {
+      throw StateError('The server did not return the message.');
+    }
+    return ChatMessage.fromJson(Map<String, dynamic>.from(message));
+  }
+
+  // --- Provider reviews ----------------------------------------------------
+
+  Future<ProviderReviewPage> providerReviews({
+    int? rating,
+    int page = 1,
+    int limit = 10,
+  }) async {
+    final body = await _api.get(
+      '/provider/reviews',
+      query: {'page': page, 'limit': limit, 'rating': ?rating},
+    );
+    return ProviderReviewPage.fromJson(body);
+  }
+
+  /// Each review accepts exactly one reply. The server answers 409
+  /// `ALREADY_REPLIED` if a reply already exists.
+  Future<ServiceReview> replyToProviderReview(
+    String reviewId, {
+    required String body,
+  }) async {
+    final response = await _api.post(
+      '/provider/reviews/$reviewId/reply',
+      data: {'body': body.trim()},
+    );
+    final review = response['review'];
+    if (review is! Map) {
+      throw StateError('The server did not return the review.');
+    }
+    return ServiceReview.fromJson(Map<String, dynamic>.from(review));
+  }
+
   AuthResult _authFrom(Map<String, dynamic> body) {
     final token = body['token'];
     final user = body['user'];
@@ -366,4 +486,12 @@ class BusinessRepository {
       user: AppUser.fromJson(Map<String, dynamic>.from(user)),
     );
   }
+}
+
+List<Map<String, dynamic>> _rows(Object? value) {
+  if (value is! List) return const [];
+  return value
+      .whereType<Map>()
+      .map((row) => Map<String, dynamic>.from(row))
+      .toList(growable: false);
 }
