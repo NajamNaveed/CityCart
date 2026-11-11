@@ -154,6 +154,13 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                       _MenuCard(
                         children: [
                           _MenuRow(
+                            icon: Icons.receipt_long_outlined,
+                            title: 'Your orders',
+                            subtitle: 'Track, review and buy again',
+                            onTap: () => context.push('/orders'),
+                          ),
+                          const Divider(),
+                          _MenuRow(
                             icon: Icons.place_outlined,
                             title: 'Delivery area',
                             subtitle: area?.label ?? 'Choose your area',

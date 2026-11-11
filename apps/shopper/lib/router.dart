@@ -14,6 +14,8 @@ import 'features/checkout/checkout_screen.dart';
 import 'features/explore/explore_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/onboarding/area_screen.dart';
+import 'features/orders/order_detail_screen.dart';
+import 'features/orders/orders_screen.dart';
 import 'features/product/product_screen.dart';
 import 'features/storefront/storefront_screen.dart';
 import 'providers.dart';
@@ -89,6 +91,15 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/product/:productId',
         builder: (context, state) =>
             ProductScreen(productId: state.pathParameters['productId']!),
+      ),
+      GoRoute(
+        path: '/orders',
+        builder: (context, state) => const OrdersScreen(),
+      ),
+      GoRoute(
+        path: '/orders/:orderId',
+        builder: (context, state) =>
+            OrderDetailScreen(orderId: state.pathParameters['orderId']!),
       ),
       GoRoute(
         path: '/chat/:conversationId',

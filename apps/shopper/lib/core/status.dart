@@ -102,6 +102,15 @@ String friendlyAvailability(String status) => switch (status) {
   _ => _titleCase(status),
 };
 
+String friendlyReturnReason(String? reason) => switch ((reason ?? '').trim()) {
+  'DAMAGED' => 'Damaged',
+  'WRONG_ITEM' => 'Wrong item',
+  'MISSING' => 'Missing',
+  'NOT_WANTED' => 'Not wanted',
+  '' => 'No reason given',
+  _ => _titleCase(reason!),
+};
+
 String friendlyPaymentMethod(String? method) {
   final value = (method ?? '').trim();
   return switch (value) {

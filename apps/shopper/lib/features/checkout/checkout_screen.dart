@@ -1067,8 +1067,15 @@ class _Confirmation extends StatelessWidget {
                   ),
                   const SizedBox(height: 20),
                   AppButton(
+                    label: 'View your orders',
+                    icon: Icons.receipt_long_rounded,
+                    onPressed: () => context.go('/orders'),
+                  ),
+                  const SizedBox(height: 8),
+                  AppButton(
                     label: 'Keep shopping',
                     icon: Icons.storefront_outlined,
+                    variant: AppButtonVariant.outline,
                     onPressed: () => context.go('/home'),
                   ),
                 ],
@@ -1090,6 +1097,9 @@ class _PlacedOrderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return SurfaceCard(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      onTap: order.id.isEmpty
+          ? null
+          : () => context.push('/orders/${order.id}'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1116,6 +1126,11 @@ class _PlacedOrderCard extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Tap to follow this order',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 10),
           for (final item in order.items)

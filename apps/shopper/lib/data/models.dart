@@ -1048,3 +1048,654 @@ class PlacedOrderItem {
     );
   }
 }
+
+// --- Customer orders -------------------------------------------------------
+
+class CustomerOrder {
+  const CustomerOrder({
+    required this.id,
+    required this.orderNumber,
+    this.brandId = '',
+    this.brandName,
+    this.items = const <CustomerOrderItem>[],
+    this.shippingAddress = const OrderAddress(),
+    this.subtotal = 0,
+    this.deliveryFee = 0,
+    this.discount = 0,
+    this.tax = 0,
+    this.total = 0,
+    this.netTotal,
+    this.returnedAmount = 0,
+    this.feeRefunded = false,
+    this.currency = 'PKR',
+    this.orderStatus = 'PENDING',
+    this.paymentStatus = 'PENDING',
+    this.paymentMethod = 'COD',
+    this.fulfilment,
+    this.statusHistory = const <OrderStatusEvent>[],
+    this.createdAt,
+  });
+
+  final String id;
+  final String orderNumber;
+  final String brandId;
+  final String? brandName;
+  final List<CustomerOrderItem> items;
+  final OrderAddress shippingAddress;
+  final double subtotal;
+  final double deliveryFee;
+  final double discount;
+  final double tax;
+  final double total;
+  final double? netTotal;
+  final double returnedAmount;
+  final bool feeRefunded;
+  final String currency;
+  final String orderStatus;
+  final String paymentStatus;
+  final String paymentMethod;
+  final String? fulfilment;
+  final List<OrderStatusEvent> statusHistory;
+  final DateTime? createdAt;
+
+  /// What the shopper actually owes after anything refused at the door.
+  double get payableTotal => netTotal ?? total;
+
+  int get itemCount => items.fold(0, (sum, item) => sum + item.quantity);
+
+  /// The server only lets a customer cancel an unpaid order that the shop has
+  /// not started (docs/08 §21).
+  bool get canCancel => orderStatus == 'PENDING' && paymentStatus != 'PAID';
+
+  bool get isProblem =>
+      orderStatus == 'CANCELLED' ||
+      orderStatus == 'REJECTED' ||
+      orderStatus == 'RETURN_REQUESTED' ||
+      orderStatus == 'RETURNED' ||
+      orderStatus == 'REFUNDED';
+
+  factory CustomerOrder.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return CustomerOrder(
+      id: text(map['_id']),
+      orderNumber: text(map['orderNumber']),
+      brandId: text(map['brandId']),
+      brandName: optionalText(map['brandName']),
+      items: asList(map['items'])
+          .map(CustomerOrderItem.fromJson)
+          .toList(growable: false),
+      shippingAddress: OrderAddress.fromJson(map['shippingAddress']),
+      subtotal: asDouble(map['subtotal']),
+      deliveryFee: asDouble(map['deliveryFee']),
+      discount: asDouble(map['discount']),
+      tax: asDouble(map['tax']),
+      total: asDouble(map['total']),
+      netTotal: optionalDouble(map['netTotal']),
+      returnedAmount: asDouble(map['returnedAmount']),
+      feeRefunded: map['feeRefunded'] == true,
+      currency: text(map['currency'], 'PKR'),
+      orderStatus: text(map['orderStatus'], 'PENDING'),
+      paymentStatus: text(map['paymentStatus'], 'PENDING'),
+      paymentMethod: text(map['paymentMethod'], 'COD'),
+      fulfilment: optionalText(map['fulfilment']),
+      statusHistory: asList(map['statusHistory'])
+          .map(OrderStatusEvent.fromJson)
+          .toList(growable: false),
+      createdAt: asDate(map['createdAt']),
+    );
+  }
+}
+
+class CustomerOrderItem {
+  const CustomerOrderItem({
+    required this.id,
+    required this.productId,
+    required this.productName,
+    this.quantity = 1,
+    this.unitPrice = 0,
+    this.totalPrice = 0,
+    this.image,
+  });
+
+  final String id;
+  final String productId;
+  final String productName;
+  final int quantity;
+  final double unitPrice;
+  final double totalPrice;
+  final String? image;
+
+  factory CustomerOrderItem.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return CustomerOrderItem(
+      id: text(map['_id']),
+      productId: text(map['productId']),
+      productName: text(map['productName'], 'Item'),
+      quantity: asInt(map['quantity'], 1),
+      unitPrice: asDouble(map['unitPrice']),
+      totalPrice: asDouble(map['totalPrice']),
+      image: optionalText(map['image']),
+    );
+  }
+}
+
+class OrderAddress {
+  const OrderAddress({
+    this.name = '',
+    this.phone = '',
+    this.address = '',
+    this.city,
+    this.state,
+    this.postalCode,
+    this.country,
+    this.additionalInstructions,
+  });
+
+  final String name;
+  final String phone;
+  final String address;
+  final String? city;
+  final String? state;
+  final String? postalCode;
+  final String? country;
+  final String? additionalInstructions;
+
+  /// "Lahore, Punjab" without empty commas.
+  String get placeLine => [
+    city,
+    state,
+    postalCode,
+  ].where((part) => (part ?? '').trim().isNotEmpty).join(', ');
+
+  factory OrderAddress.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return OrderAddress(
+      name: text(map['name']),
+      phone: text(map['phone']),
+      address: text(map['address']),
+      city: optionalText(map['city']),
+      state: optionalText(map['state']),
+      postalCode: optionalText(map['postalCode']),
+      country: optionalText(map['country']),
+      additionalInstructions: optionalText(map['additionalInstructions']),
+    );
+  }
+}
+
+class OrderStatusEvent {
+  const OrderStatusEvent({required this.status, this.at});
+
+  final String status;
+  final DateTime? at;
+
+  factory OrderStatusEvent.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return OrderStatusEvent(status: text(map['status']), at: asDate(map['at']));
+  }
+}
+
+// --- Order payments, deliveries and changes --------------------------------
+
+class OrderPayment {
+  const OrderPayment({
+    this.id = '',
+    this.status = 'PENDING',
+    this.method = 'COD',
+    this.amount = 0,
+    this.currency = 'PKR',
+    this.paidAt,
+    this.collectionMethod,
+    this.collectionWallet,
+  });
+
+  final String id;
+  final String status;
+  final String method;
+  final double amount;
+  final String currency;
+  final DateTime? paidAt;
+  final String? collectionMethod;
+  final String? collectionWallet;
+
+  factory OrderPayment.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    final collection = asMap(map['collection']);
+    return OrderPayment(
+      id: text(map['_id']),
+      status: text(map['status'], 'PENDING'),
+      method: text(map['method'], 'COD'),
+      amount: asDouble(map['amount']),
+      currency: text(map['currency'], 'PKR'),
+      paidAt: asDate(map['paidAt']),
+      collectionMethod: optionalText(collection['method']),
+      collectionWallet: optionalText(collection['wallet']),
+    );
+  }
+}
+
+class OrderDelivery {
+  const OrderDelivery({
+    this.id = '',
+    this.status = 'PENDING',
+    this.trackingReference,
+    this.assignedAgent,
+    this.failureReason,
+    this.paymentPending = false,
+  });
+
+  final String id;
+  final String status;
+  final String? trackingReference;
+  final String? assignedAgent;
+  final String? failureReason;
+  final bool paymentPending;
+
+  /// Statuses in which the server gives the shopper the door code (docs/11 §19).
+  bool get codeVisible => const {
+    'PICKED_UP',
+    'IN_TRANSIT',
+    'OUT_FOR_DELIVERY',
+    'FAILED',
+  }.contains(status);
+
+  bool get hasTracking =>
+      (trackingReference ?? '').isNotEmpty ||
+      (assignedAgent ?? '').isNotEmpty ||
+      status == 'FAILED';
+
+  factory OrderDelivery.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return OrderDelivery(
+      id: text(map['_id']),
+      status: text(map['status'], 'PENDING'),
+      trackingReference: optionalText(map['trackingReference']),
+      assignedAgent: optionalText(map['assignedAgent']),
+      failureReason: optionalText(map['failureReason']),
+      paymentPending: map['paymentPending'] == true,
+    );
+  }
+}
+
+class AdjustmentTotals {
+  const AdjustmentTotals({
+    this.subtotal = 0,
+    this.deliveryFee = 0,
+    this.discount = 0,
+    this.tax = 0,
+    this.total = 0,
+  });
+
+  final double subtotal;
+  final double deliveryFee;
+  final double discount;
+  final double tax;
+  final double total;
+
+  factory AdjustmentTotals.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return AdjustmentTotals(
+      subtotal: asDouble(map['subtotal']),
+      deliveryFee: asDouble(map['deliveryFee']),
+      discount: asDouble(map['discount']),
+      tax: asDouble(map['tax']),
+      total: asDouble(map['total']),
+    );
+  }
+}
+
+class AdjustmentSubstitute {
+  const AdjustmentSubstitute({
+    required this.productName,
+    this.quantity = 1,
+    this.unitPrice = 0,
+  });
+
+  final String productName;
+  final int quantity;
+  final double unitPrice;
+
+  factory AdjustmentSubstitute.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return AdjustmentSubstitute(
+      productName: text(map['productName'], 'Another item'),
+      quantity: asInt(map['quantity'], 1),
+      unitPrice: asDouble(map['unitPrice']),
+    );
+  }
+}
+
+class AdjustmentLine {
+  const AdjustmentLine({
+    required this.productName,
+    required this.orderedQuantity,
+    required this.supplyQuantity,
+    this.unitPrice = 0,
+    this.substitute,
+  });
+
+  final String productName;
+  final int orderedQuantity;
+  final int supplyQuantity;
+  final double unitPrice;
+  final AdjustmentSubstitute? substitute;
+
+  factory AdjustmentLine.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    final substitute = map['substitute'];
+    return AdjustmentLine(
+      productName: text(map['productName'], 'Item'),
+      orderedQuantity: asInt(map['orderedQuantity'], 1),
+      supplyQuantity: asInt(map['supplyQuantity']),
+      unitPrice: asDouble(map['unitPrice']),
+      substitute: substitute == null
+          ? null
+          : AdjustmentSubstitute.fromJson(substitute),
+    );
+  }
+}
+
+/// A shop's proposal to change an order it cannot fully supply (docs/21 §H).
+class OrderAdjustment {
+  const OrderAdjustment({
+    required this.id,
+    this.status = 'PROPOSED',
+    this.note = '',
+    this.lines = const <AdjustmentLine>[],
+    this.totalsBefore = const AdjustmentTotals(),
+    this.totalsAfter = const AdjustmentTotals(),
+    this.totalsAfterRemoval = const AdjustmentTotals(),
+    this.expiresAt,
+    this.proposedByRole,
+  });
+
+  final String id;
+  final String status;
+  final String note;
+  final List<AdjustmentLine> lines;
+  final AdjustmentTotals totalsBefore;
+  final AdjustmentTotals totalsAfter;
+  final AdjustmentTotals totalsAfterRemoval;
+  final DateTime? expiresAt;
+  final String? proposedByRole;
+
+  bool get isProposed => status == 'PROPOSED';
+
+  /// "a picker" / "the shop" — who sent the proposal.
+  String get proposedByLabel => switch (proposedByRole) {
+    'PICKER' => 'a picker',
+    'BRAND_EMPLOYEE' || 'BRAND_ADMIN' => 'the shop',
+    _ => 'the shop',
+  };
+
+  factory OrderAdjustment.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return OrderAdjustment(
+      id: text(map['_id']),
+      status: text(map['status'], 'PROPOSED'),
+      note: text(map['note']),
+      lines: asList(map['lines'])
+          .map(AdjustmentLine.fromJson)
+          .toList(growable: false),
+      totalsBefore: AdjustmentTotals.fromJson(map['totalsBefore']),
+      totalsAfter: AdjustmentTotals.fromJson(map['totalsAfter']),
+      totalsAfterRemoval: AdjustmentTotals.fromJson(map['totalsAfterRemoval']),
+      expiresAt: asDate(map['expiresAt']),
+      proposedByRole: optionalText(map['proposedByRole']),
+    );
+  }
+}
+
+// --- Door returns ----------------------------------------------------------
+
+class OrderReturnLine {
+  const OrderReturnLine({
+    required this.orderItemId,
+    required this.productName,
+    this.quantity = 0,
+    this.unitPrice = 0,
+    this.reason,
+  });
+
+  final String orderItemId;
+  final String productName;
+  final int quantity;
+  final double unitPrice;
+  final String? reason;
+
+  factory OrderReturnLine.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return OrderReturnLine(
+      orderItemId: text(map['orderItemId']),
+      productName: text(map['productName'], 'Item'),
+      quantity: asInt(map['quantity']),
+      unitPrice: asDouble(map['unitPrice']),
+      reason: optionalText(map['reason']),
+    );
+  }
+}
+
+class OrderReturn {
+  const OrderReturn({
+    required this.id,
+    this.status = '',
+    this.lines = const <OrderReturnLine>[],
+    this.returnedSubtotal = 0,
+    this.feeRefunded = false,
+    this.refundAmount = 0,
+    this.currency = 'PKR',
+    this.receivedAt,
+    this.createdAt,
+  });
+
+  final String id;
+  final String status;
+  final List<OrderReturnLine> lines;
+  final double returnedSubtotal;
+  final bool feeRefunded;
+  final double refundAmount;
+  final String currency;
+  final DateTime? receivedAt;
+  final DateTime? createdAt;
+
+  Map<String, OrderReturnLine> byItem() => {
+    for (final line in lines) line.orderItemId: line,
+  };
+
+  factory OrderReturn.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return OrderReturn(
+      id: text(map['_id']),
+      status: text(map['status']),
+      lines: asList(map['lines'])
+          .map(OrderReturnLine.fromJson)
+          .toList(growable: false),
+      returnedSubtotal: asDouble(map['returnedSubtotal']),
+      feeRefunded: map['feeRefunded'] == true,
+      refundAmount: asDouble(map['refundAmount']),
+      currency: text(map['currency'], 'PKR'),
+      receivedAt: asDate(map['receivedAt']),
+      createdAt: asDate(map['createdAt']),
+    );
+  }
+}
+
+/// Everything the order screen shows: the order and the records attached to it.
+class OrderDetail {
+  const OrderDetail({
+    required this.order,
+    this.payment,
+    this.delivery,
+    this.adjustments = const <OrderAdjustment>[],
+    this.adjustment,
+    this.returnDoc,
+  });
+
+  final CustomerOrder order;
+  final OrderPayment? payment;
+  final OrderDelivery? delivery;
+  final List<OrderAdjustment> adjustments;
+  final OrderAdjustment? adjustment;
+  final OrderReturn? returnDoc;
+
+  factory OrderDetail.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    final adjustment = map['adjustment'];
+    final payment = map['payment'];
+    final delivery = map['delivery'];
+    final returnDoc = map['return'];
+    return OrderDetail(
+      order: CustomerOrder.fromJson(map['order']),
+      payment: payment == null ? null : OrderPayment.fromJson(payment),
+      delivery: delivery == null ? null : OrderDelivery.fromJson(delivery),
+      adjustments: asList(map['adjustments'])
+          .map(OrderAdjustment.fromJson)
+          .toList(growable: false),
+      adjustment: adjustment == null
+          ? null
+          : OrderAdjustment.fromJson(adjustment),
+      returnDoc: returnDoc == null ? null : OrderReturn.fromJson(returnDoc),
+    );
+  }
+}
+
+/// The customer's answer to a shop's change proposal.
+class AdjustmentOutcome {
+  const AdjustmentOutcome({this.adjustment, this.order, this.refundAmount = 0});
+
+  final OrderAdjustment? adjustment;
+  final CustomerOrder? order;
+  final double refundAmount;
+
+  factory AdjustmentOutcome.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    final adjustment = map['adjustment'];
+    final order = map['order'];
+    return AdjustmentOutcome(
+      adjustment: adjustment == null
+          ? null
+          : OrderAdjustment.fromJson(adjustment),
+      order: order == null ? null : CustomerOrder.fromJson(order),
+      refundAmount: asDouble(map['refundAmount']),
+    );
+  }
+}
+
+// --- Receipts --------------------------------------------------------------
+
+class ReceiptItem {
+  const ReceiptItem({
+    required this.productName,
+    this.quantity = 1,
+    this.unitPrice = 0,
+    this.totalPrice = 0,
+  });
+
+  final String productName;
+  final int quantity;
+  final double unitPrice;
+  final double totalPrice;
+
+  factory ReceiptItem.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return ReceiptItem(
+      productName: text(map['productName'], 'Item'),
+      quantity: asInt(map['quantity'], 1),
+      unitPrice: asDouble(map['unitPrice']),
+      totalPrice: asDouble(map['totalPrice']),
+    );
+  }
+}
+
+class OrderReceipt {
+  const OrderReceipt({
+    required this.id,
+    required this.receiptNumber,
+    this.orderNumber = '',
+    this.brandName = '',
+    this.method = 'COD',
+    this.collectionMethod,
+    this.collectionWallet,
+    this.amount = 0,
+    this.currency = 'PKR',
+    this.items = const <ReceiptItem>[],
+    this.subtotal = 0,
+    this.deliveryFee = 0,
+    this.discount = 0,
+    this.tax = 0,
+    this.issuedAt,
+  });
+
+  final String id;
+  final String receiptNumber;
+  final String orderNumber;
+  final String brandName;
+  final String method;
+  final String? collectionMethod;
+  final String? collectionWallet;
+  final double amount;
+  final String currency;
+  final List<ReceiptItem> items;
+  final double subtotal;
+  final double deliveryFee;
+  final double discount;
+  final double tax;
+  final DateTime? issuedAt;
+
+  factory OrderReceipt.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return OrderReceipt(
+      id: text(map['_id']),
+      receiptNumber: text(map['receiptNumber']),
+      orderNumber: text(map['orderNumber']),
+      brandName: text(map['brandName']),
+      method: text(map['method'], 'COD'),
+      collectionMethod: optionalText(map['collectionMethod']),
+      collectionWallet: optionalText(map['collectionWallet']),
+      amount: asDouble(map['amount']),
+      currency: text(map['currency'], 'PKR'),
+      items: asList(map['items'])
+          .map(ReceiptItem.fromJson)
+          .toList(growable: false),
+      subtotal: asDouble(map['subtotal']),
+      deliveryFee: asDouble(map['deliveryFee']),
+      discount: asDouble(map['discount']),
+      tax: asDouble(map['tax']),
+      issuedAt: asDate(map['issuedAt']),
+    );
+  }
+}
+
+// --- My reviews ------------------------------------------------------------
+
+class MyReview {
+  const MyReview({
+    required this.id,
+    required this.productId,
+    required this.orderId,
+    this.rating = 0,
+    this.title,
+    this.comment,
+    this.createdAt,
+  });
+
+  final String id;
+  final String productId;
+  final String orderId;
+  final int rating;
+  final String? title;
+  final String? comment;
+  final DateTime? createdAt;
+
+  factory MyReview.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return MyReview(
+      id: text(map['_id']),
+      productId: text(map['productId']),
+      orderId: text(map['orderId']),
+      rating: asInt(map['rating']),
+      title: optionalText(map['title']),
+      comment: optionalText(map['comment']),
+      createdAt: asDate(map['createdAt']),
+    );
+  }
+}

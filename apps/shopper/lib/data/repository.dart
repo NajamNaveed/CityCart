@@ -280,4 +280,97 @@ class ShopperRepository {
         .map(PlacedOrder.fromJson)
         .toList(growable: false);
   }
+
+  // --- Orders --------------------------------------------------------------
+
+  Future<Page<CustomerOrder>> myOrders({int page = 1, int limit = 10}) async {
+    final body = await _api.get(
+      '/orders/my',
+      query: {'page': page, 'limit': limit},
+    );
+    return Page.fromJson(body, key: 'orders', parse: CustomerOrder.fromJson);
+  }
+
+  /// The order plus its payment, delivery, open change proposal and door return.
+  Future<OrderDetail> order(String orderId) async {
+    final body = await _api.get('/orders/$orderId');
+    return OrderDetail.fromJson(body);
+  }
+
+  Future<CustomerOrder> cancelOrder(String orderId) async {
+    final body = await _api.patch('/orders/$orderId/cancel');
+    return CustomerOrder.fromJson(body['order']);
+  }
+
+  /// [action] is one of ACCEPT, REMOVE (send only what is available) or
+  /// CANCEL_ORDER. The server rewrites the order and returns the refund.
+  Future<AdjustmentOutcome> respondToAdjustment(
+    String orderId,
+    String adjustmentId,
+    String action,
+  ) async {
+    final body = await _api.post(
+      '/orders/$orderId/adjustments/$adjustmentId/respond',
+      data: {'action': action},
+    );
+    return AdjustmentOutcome.fromJson(body);
+  }
+
+  /// The six-digit code the shopper reads to the rider. The server only gives
+  /// it while the delivery is on its way, and only to the order's customer.
+  Future<String> deliveryCode(String deliveryId) async {
+    final body = await _api.get('/deliveries/$deliveryId/code');
+    return text(body['code']);
+  }
+
+  Future<OrderReceipt> receiptForOrder(String orderId) async {
+    final body = await _api.get('/receipts/order/$orderId');
+    return OrderReceipt.fromJson(body['receipt']);
+  }
+
+  // --- Reviews -------------------------------------------------------------
+
+  Future<List<MyReview>> myReviews({String? orderId}) async {
+    final body = await _api.get('/reviews/mine', query: {'orderId': ?orderId});
+    return asList(body['reviews'])
+        .map(MyReview.fromJson)
+        .toList(growable: false);
+  }
+
+  Future<MyReview> createReview({
+    required String orderId,
+    required String productId,
+    required int rating,
+    String? title,
+    String? comment,
+  }) async {
+    final body = await _api.post(
+      '/reviews',
+      data: {
+        'orderId': orderId,
+        'productId': productId,
+        'rating': rating,
+        'title': ?title,
+        'comment': ?comment,
+      },
+    );
+    return MyReview.fromJson(body['review']);
+  }
+
+  Future<MyReview> updateReview(
+    String reviewId, {
+    required int rating,
+    String? title,
+    String? comment,
+  }) async {
+    final body = await _api.patch(
+      '/reviews/$reviewId',
+      data: {
+        'rating': rating,
+        'title': (title ?? '').trim(),
+        'comment': (comment ?? '').trim(),
+      },
+    );
+    return MyReview.fromJson(body['review']);
+  }
 }
