@@ -97,6 +97,99 @@ String bookingStatusDetail(String status) {
   };
 }
 
+/// The order lifecycle in a shop owner's words.
+String brandOrderStatusLabel(String status) {
+  return switch (status) {
+    'PENDING' => 'New order',
+    'CONFIRMED' => 'Confirmed',
+    'PROCESSING' => 'Preparing',
+    'READY_FOR_SHIPMENT' => 'Ready to ship',
+    'SHIPPED' => 'On the way',
+    'OUT_FOR_DELIVERY' => 'Out for delivery',
+    'DELIVERED' => 'Delivered',
+    'RETURNED' => 'Returned',
+    'REJECTED' => 'Rejected',
+    'CANCELLED' => 'Cancelled',
+    _ => 'Unknown',
+  };
+}
+
+AppTone brandOrderStatusTone(String status) {
+  return switch (status) {
+    'PENDING' => AppTone.amber,
+    'CONFIRMED' || 'PROCESSING' => AppTone.blue,
+    'READY_FOR_SHIPMENT' || 'DELIVERED' => AppTone.green,
+    'SHIPPED' || 'OUT_FOR_DELIVERY' => AppTone.blue,
+    'RETURNED' || 'REJECTED' || 'CANCELLED' => AppTone.red,
+    _ => AppTone.neutral,
+  };
+}
+
+/// What the shop should do next, in one plain sentence.
+String brandOrderStatusDetail(String status) {
+  return switch (status) {
+    'PENDING' =>
+      'Confirm this order to keep the stock reserved, or reject it and return '
+          'the items to your inventory.',
+    'CONFIRMED' =>
+      'The stock is reserved. Start preparing the items when you are ready.',
+    'PROCESSING' =>
+      'Pack the order, then mark it ready so the delivery team can collect it.',
+    'READY_FOR_SHIPMENT' =>
+      'The delivery team will collect this from your shop. Nothing else is '
+          'needed from you.',
+    'SHIPPED' || 'OUT_FOR_DELIVERY' => 'This order is with the delivery team.',
+    'DELIVERED' => 'This order was delivered and is closed.',
+    'RETURNED' => 'This order came back to the shop.',
+    'REJECTED' =>
+      'You rejected this order. The stock was returned and the payment was '
+          'cancelled.',
+    'CANCELLED' => 'The customer cancelled this order.',
+    _ => 'The state of this order could not be read.',
+  };
+}
+
+/// Payment wording. Payment is separate from the order state, so it is always
+/// shown on its own.
+String paymentStatusLabel(String status) {
+  return switch (status) {
+    'PENDING' => 'Unpaid',
+    'PAID' => 'Paid',
+    'FAILED' => 'Payment failed',
+    'REFUNDED' => 'Refunded',
+    'PARTIALLY_REFUNDED' => 'Partly refunded',
+    'CANCELLED' => 'Payment cancelled',
+    _ => 'Unknown',
+  };
+}
+
+String paymentMethodLabel(String method) {
+  return switch (method) {
+    'COD' => 'Cash on delivery',
+    'CARD' => 'Card',
+    'BANK_TRANSFER' => 'Bank transfer',
+    'WALLET' => 'Mobile wallet',
+    _ => 'Payment',
+  };
+}
+
+/// The delivery leg, after the shop hands the order over.
+String brandDeliveryStatusLabel(String status) {
+  return switch (status) {
+    'PENDING' => 'Waiting for a rider',
+    'PREPARING' => 'Being prepared',
+    'READY_FOR_PICKUP' => 'Ready for pickup',
+    'PICKED_UP' => 'Picked up',
+    'IN_TRANSIT' => 'On the way',
+    'OUT_FOR_DELIVERY' => 'Out for delivery',
+    'DELIVERED' => 'Delivered',
+    'FAILED' => 'Delivery failed',
+    'CANCELLED' => 'Delivery cancelled',
+    'RETURNED' => 'Returned to the shop',
+    _ => 'Unknown',
+  };
+}
+
 /// One line for an entry in the booking history.
 String bookingEventLabel(String type) {
   return switch (type) {

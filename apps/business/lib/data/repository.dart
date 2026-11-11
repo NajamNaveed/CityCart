@@ -475,6 +475,54 @@ class BusinessRepository {
     return ServiceReview.fromJson(Map<String, dynamic>.from(review));
   }
 
+  // --- Brand orders --------------------------------------------------------
+
+  /// The signed-in shop's orders, newest first. The server takes the shop from
+  /// the session, never from this request.
+  Future<Page<BrandOrder>> brandOrders({
+    String? status,
+    int page = 1,
+    int limit = 12,
+  }) async {
+    final body = await _api.get(
+      '/brand/orders',
+      query: {'page': page, 'limit': limit, 'status': ?status},
+    );
+    return Page.fromJson(body, BrandOrder.fromJson, 'orders');
+  }
+
+  Future<BrandOrderDetail> brandOrder(String orderId) async {
+    final body = await _api.get('/brand/orders/$orderId');
+    return BrandOrderDetail.fromJson(body);
+  }
+
+  /// Moves an order to one of the four statuses a shop may set. The server
+  /// re-checks the move and the shop's ownership atomically.
+  Future<BrandOrder> updateBrandOrderStatus(
+    String orderId,
+    String status,
+  ) async {
+    final body = await _api.patch(
+      '/brand/orders/$orderId/status',
+      data: {'status': status},
+    );
+    final order = body['order'];
+    if (order is! Map) {
+      throw StateError('The server did not return the order.');
+    }
+    return BrandOrder.fromJson(Map<String, dynamic>.from(order));
+  }
+
+  /// Ends a waiting change proposal so the order can move on to shipment.
+  Future<void> withdrawBrandAdjustment(
+    String orderId,
+    String adjustmentId,
+  ) async {
+    await _api.post(
+      '/brand/orders/$orderId/adjustments/$adjustmentId/withdraw',
+    );
+  }
+
   AuthResult _authFrom(Map<String, dynamic> body) {
     final token = body['token'];
     final user = body['user'];

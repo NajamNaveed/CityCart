@@ -12,6 +12,8 @@ import 'package:citycart_business/features/auth/login_screen.dart';
 import 'package:citycart_business/features/availability/availability_screen.dart';
 import 'package:citycart_business/features/bookings/booking_detail_screen.dart';
 import 'package:citycart_business/features/bookings/bookings_screen.dart';
+import 'package:citycart_business/features/brand_orders/brand_order_detail_screen.dart';
+import 'package:citycart_business/features/brand_orders/brand_orders_screen.dart';
 import 'package:citycart_business/features/home/home_screen.dart';
 import 'package:citycart_business/features/messages/chat_thread_screen.dart';
 import 'package:citycart_business/features/messages/messages_screen.dart';
@@ -117,6 +119,28 @@ void main() {
             status: SessionStatus.signedIn,
             location: path,
             role: providerRole,
+          ),
+          isNull,
+        );
+      }
+    });
+
+    test('providers cannot open shop order screens', () {
+      for (final path in ['/brand-orders', '/brand-orders/o1']) {
+        expect(
+          businessRedirect(
+            status: SessionStatus.signedIn,
+            location: path,
+            role: providerRole,
+          ),
+          '/home',
+          reason: 'provider accounts must not reach $path',
+        );
+        expect(
+          businessRedirect(
+            status: SessionStatus.signedIn,
+            location: path,
+            role: brandRole,
           ),
           isNull,
         );
@@ -393,6 +417,75 @@ void main() {
       expect(bookingStatusLabel('CONFIRMED'), 'Done');
       expect(bookingEventLabel('STARTED'), 'You started the job');
       expect(bookingStatusDetail('COMPLETED'), contains('3 days'));
+    });
+
+    test('a brand order reads its items, totals, address and proposal', () {
+      final detail = BrandOrderDetail.fromJson({
+        'order': {
+          '_id': 'o1',
+          'orderNumber': 'CC-2026-000001',
+          'orderStatus': 'PENDING',
+          'paymentStatus': 'PENDING',
+          'paymentMethod': 'COD',
+          'subtotal': 500000,
+          'deliveryFee': 15000,
+          'discount': 5000,
+          'total': 510000,
+          'createdAt': '2026-11-11T09:30:00.000Z',
+          'items': [
+            {
+              'productId': 'p1',
+              'productName': 'Cotton kurta',
+              'sku': 'K-1',
+              'quantity': 2,
+              'unitPrice': 250000,
+              'totalPrice': 500000,
+            },
+          ],
+          'shippingAddress': {
+            'name': 'Sana Malik',
+            'phone': '03001234567',
+            'address': 'House 12, Street 4',
+            'city': 'Faisalabad',
+            'state': 'Punjab',
+            'postalCode': '38000',
+            'additionalInstructions': 'Call on arrival.',
+          },
+          'statusHistory': [
+            {'status': 'PENDING', 'at': '2026-11-11T09:30:00.000Z'},
+          ],
+        },
+        'payment': {'status': 'PENDING', 'method': 'COD', 'amount': 510000},
+        'delivery': {
+          '_id': 'd1',
+          'status': 'PENDING',
+          'assignedAgent': 'Bilal Ahmed',
+        },
+        'adjustment': {
+          '_id': 'a1',
+          'status': 'PROPOSED',
+          'note': 'Only 1 kurta is left.',
+        },
+        'adjustments': [
+          {'_id': 'a1', 'status': 'PROPOSED', 'note': 'Only 1 kurta is left.'},
+        ],
+      });
+
+      final order = detail.order;
+      expect(order.orderNumber, 'CC-2026-000001');
+      expect(order.itemCount, 2);
+      expect(order.totalPaisa, 510000);
+      expect(order.isAwaitingAnswer, isTrue);
+      expect(order.shippingAddress?.cityLine, 'Faisalabad, Punjab, 38000');
+      expect(order.shippingAddress?.additionalInstructions, 'Call on arrival.');
+      expect(detail.payment?.amountPaisa, 510000);
+      expect(detail.delivery?.assignedAgent, 'Bilal Ahmed');
+      expect(detail.pendingAdjustment?.id, 'a1');
+      expect(detail.adjustments, hasLength(1));
+      expect(brandOrderStatusLabel('READY_FOR_SHIPMENT'), 'Ready to ship');
+      expect(brandOrderStatusDetail('PENDING'), contains('Confirm'));
+      expect(paymentStatusLabel('PENDING'), 'Unpaid');
+      expect(paymentMethodLabel('COD'), 'Cash on delivery');
     });
   });
 
@@ -1149,6 +1242,215 @@ void main() {
       expect(find.text('Account'), findsWidgets);
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('a shop home shows orders and opens the latest one', (
+      tester,
+    ) async {
+      final orders = _sampleBrandOrders();
+      final (container, _) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        orders: orders,
+        orderDetail: BrandOrderDetail(order: orders.first),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CityCartBusinessApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('2'), findsOneWidget);
+      expect(find.text('orders to confirm'), findsOneWidget);
+      expect(find.text('orders in total'), findsOneWidget);
+      expect(find.text('CC-2026-000001'), findsWidgets);
+
+      final openOrders = find.byKey(const Key('home_orders'));
+      await tester.ensureVisible(openOrders);
+      await tester.pumpAndSettle();
+      await tester.tap(openOrders);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Customer orders'), findsOneWidget);
+      expect(find.byKey(const Key('brand_order_card_o1')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('brand_order_card_o1')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Order details'), findsOneWidget);
+      expect(find.text('Confirm order'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('shop orders filter by state', (tester) async {
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        orders: _sampleBrandOrders(),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(const BrandOrdersScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('CC-2026-000001'), findsOneWidget);
+      expect(find.text('CC-2026-000002'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('brand_order_filter_confirmed')));
+      await tester.pumpAndSettle();
+
+      expect(fake.lastOrderStatus, 'CONFIRMED');
+      expect(find.text('CC-2026-000002'), findsOneWidget);
+      expect(find.text('CC-2026-000001'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a new order is confirmed after a plain approval', (
+      tester,
+    ) async {
+      final order = _sampleBrandOrder();
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        orders: [order],
+        orderDetail: BrandOrderDetail(order: order),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(BrandOrderDetailScreen(orderId: 'o1', initial: order)),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Confirm order'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('order_confirm')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(
+        find.text('The stock stays reserved for this customer.'),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.text('Confirm order'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(fake.updatedOrderId, 'o1');
+      expect(fake.updatedOrderStatus, 'CONFIRMED');
+      expect(find.text('Order confirmed.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('rejecting an order warns before returning stock', (
+      tester,
+    ) async {
+      final order = _sampleBrandOrder();
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        orders: [order],
+        orderDetail: BrandOrderDetail(order: order),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(BrandOrderDetailScreen(orderId: 'o1', initial: order)),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('order_reject')));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('goes back into stock'), findsOneWidget);
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.text('Reject order'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(fake.updatedOrderStatus, 'REJECTED');
+      expect(find.text('Order rejected and stock returned.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a waiting change proposal blocks shipping until withdrawn', (
+      tester,
+    ) async {
+      final order = _sampleBrandOrder(
+        id: 'o3',
+        number: 'CC-2026-000003',
+        status: 'PROCESSING',
+      );
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        orders: [order],
+        orderDetail: BrandOrderDetail(
+          order: order,
+          pendingAdjustment: const BrandOrderAdjustment(
+            id: 'a1',
+            note: 'Only 2 left.',
+          ),
+        ),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(BrandOrderDetailScreen(orderId: 'o3', initial: order)),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('order_adjustment_notice')), findsOneWidget);
+      final readyButton = tester.widget<ElevatedButton>(
+        find.descendant(
+          of: find.byKey(const Key('order_ready')),
+          matching: find.byType(ElevatedButton),
+        ),
+      );
+      expect(readyButton.onPressed, isNull);
+
+      await tester.tap(find.byKey(const Key('order_withdraw_adjustment')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Withdraw the change proposal?'), findsOneWidget);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.text('Withdraw'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(fake.withdrawnOrderId, 'o3');
+      expect(fake.withdrawnAdjustmentId, 'a1');
+      expect(find.text('Proposal withdrawn.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   });
 }
 
@@ -1171,6 +1473,13 @@ const _brandUser = AppUser(
   email: 'hina@example.com',
   role: brandRole,
   brandId: 'b1',
+);
+
+const _activeBrand = BrandSummary(
+  id: 'b1',
+  name: 'Loom & Co.',
+  slug: 'loom-co',
+  status: 'ACTIVE',
 );
 
 const _profile = ProviderProfile(
@@ -1264,6 +1573,68 @@ ProviderReviewPage _sampleReviewPage() {
   );
 }
 
+BrandOrder _sampleBrandOrder({
+  String id = 'o1',
+  String number = 'CC-2026-000001',
+  String status = 'PENDING',
+  int totalPaisa = 510000,
+}) {
+  final placed = DateTime.now().subtract(const Duration(hours: 3));
+  return BrandOrder(
+    id: id,
+    orderNumber: number,
+    orderStatus: status,
+    paymentStatus: status == 'REJECTED' ? 'CANCELLED' : 'PENDING',
+    paymentMethod: 'COD',
+    subtotalPaisa: totalPaisa - 20000,
+    deliveryFeePaisa: 20000,
+    totalPaisa: totalPaisa,
+    items: [
+      BrandOrderItem(
+        productId: 'pr1',
+        productName: 'Cotton kurta',
+        sku: 'LK-KURTA-01',
+        quantity: 2,
+        unitPricePaisa: 245000,
+        totalPricePaisa: 490000,
+      ),
+    ],
+    shippingAddress: const BrandShippingAddress(
+      name: 'Sana Malik',
+      phone: '03001234567',
+      address: 'House 12, Street 4, Gulberg',
+      city: 'Faisalabad',
+      state: 'Punjab',
+      postalCode: '38000',
+      additionalInstructions: 'Call before arriving.',
+    ),
+    statusHistory: [
+      BrandOrderEvent(status: 'PENDING', at: placed),
+      if (status != 'PENDING') BrandOrderEvent(status: status, at: placed),
+    ],
+    createdAt: placed,
+  );
+}
+
+List<BrandOrder> _sampleBrandOrders() {
+  return [
+    _sampleBrandOrder(),
+    _sampleBrandOrder(
+      id: 'o2',
+      number: 'CC-2026-000002',
+      status: 'CONFIRMED',
+      totalPaisa: 480000,
+    ),
+    _sampleBrandOrder(
+      id: 'o3',
+      number: 'CC-2026-000003',
+      status: 'PROCESSING',
+      totalPaisa: 355000,
+    ),
+    _sampleBrandOrder(id: 'o4', number: 'CC-2026-000004', totalPaisa: 260000),
+  ];
+}
+
 /// Builds a container whose session has already been restored, so the home
 /// providers see a signed-in owner before the first frame.
 Future<ProviderContainer> _signedIn({
@@ -1278,6 +1649,8 @@ Future<ProviderContainer> _signedIn({
   List<ProviderChatThread> chats = const [],
   ChatMessagePage chatMessages = const ChatMessagePage(),
   ProviderReviewPage reviewPage = const ProviderReviewPage(),
+  List<BrandOrder> orders = const [],
+  BrandOrderDetail? orderDetail,
 }) async {
   final result = await _signedInWithFake(
     user: user,
@@ -1291,6 +1664,8 @@ Future<ProviderContainer> _signedIn({
     chats: chats,
     chatMessages: chatMessages,
     reviewPage: reviewPage,
+    orders: orders,
+    orderDetail: orderDetail,
   );
   return result.$1;
 }
@@ -1307,6 +1682,8 @@ Future<(ProviderContainer, _FakeRepository)> _signedInWithFake({
   List<ProviderChatThread> chats = const [],
   ChatMessagePage chatMessages = const ChatMessagePage(),
   ProviderReviewPage reviewPage = const ProviderReviewPage(),
+  List<BrandOrder> orders = const [],
+  BrandOrderDetail? orderDetail,
 }) async {
   final prefs = await SharedPreferences.getInstance();
   final store = _FakeSessionStore('token', user);
@@ -1323,6 +1700,8 @@ Future<(ProviderContainer, _FakeRepository)> _signedInWithFake({
     chats: chats,
     chatMessages: chatMessages,
     reviewPage: reviewPage,
+    orders: orders,
+    orderDetail: orderDetail,
   );
   final container = ProviderContainer(
     overrides: [
@@ -1394,6 +1773,8 @@ class _FakeRepository extends BusinessRepository {
     this.chats = const [],
     this.chatMessages = const ChatMessagePage(),
     this.reviewPage = const ProviderReviewPage(),
+    this.orders = const [],
+    this.orderDetail,
   }) : super(ApiClient(store));
 
   final AppUser user;
@@ -1407,6 +1788,8 @@ class _FakeRepository extends BusinessRepository {
   final List<ProviderChatThread> chats;
   final ChatMessagePage chatMessages;
   final ProviderReviewPage reviewPage;
+  final List<BrandOrder> orders;
+  final BrandOrderDetail? orderDetail;
 
   String? lastBookingStatus;
   int? acceptedPricePaisa;
@@ -1414,6 +1797,12 @@ class _FakeRepository extends BusinessRepository {
   int? proposedPricePaisa;
   String? proposedScope;
   int? completedAmountPaisa;
+  String? lastOrderStatus;
+  int? lastOrderLimit;
+  String? updatedOrderId;
+  String? updatedOrderStatus;
+  String? withdrawnOrderId;
+  String? withdrawnAdjustmentId;
 
   String? createdOfferingTitle;
   int? createdOfferingPrice;
@@ -1698,6 +2087,80 @@ class _FakeRepository extends BusinessRepository {
   }) async {
     lastReviewRating = rating;
     return reviewPage;
+  }
+
+  @override
+  Future<data.Page<BrandOrder>> brandOrders({
+    String? status,
+    int page = 1,
+    int limit = 12,
+  }) async {
+    lastOrderStatus = status;
+    lastOrderLimit = limit;
+    final filtered = status == null
+        ? orders
+        : orders
+              .where((order) => order.orderStatus == status)
+              .toList(growable: false);
+    return data.Page(
+      items: filtered,
+      pagination: Pagination(
+        page: 1,
+        limit: limit,
+        pages: filtered.isEmpty ? 0 : 1,
+        total: filtered.length,
+      ),
+    );
+  }
+
+  @override
+  Future<BrandOrderDetail> brandOrder(String orderId) async {
+    var detail = orderDetail;
+    if (detail == null) {
+      final matches = orders.where((order) => order.id == orderId);
+      detail = BrandOrderDetail(
+        order: matches.isEmpty ? _sampleBrandOrder() : matches.first,
+      );
+    }
+    var order = detail.order;
+    if (updatedOrderId == orderId && updatedOrderStatus != null) {
+      order = order.copyWith(orderStatus: updatedOrderStatus);
+    }
+    var pending = detail.pendingAdjustment;
+    if (pending != null && withdrawnAdjustmentId == pending.id) pending = null;
+    return BrandOrderDetail(
+      order: order,
+      payment: detail.payment,
+      delivery: detail.delivery,
+      adjustments: detail.adjustments,
+      pendingAdjustment: pending,
+    );
+  }
+
+  @override
+  Future<BrandOrder> updateBrandOrderStatus(
+    String orderId,
+    String status,
+  ) async {
+    updatedOrderId = orderId;
+    updatedOrderStatus = status;
+    final matches = orders.where((order) => order.id == orderId);
+    final current =
+        orderDetail?.order ??
+        (matches.isEmpty ? _sampleBrandOrder() : matches.first);
+    return current.copyWith(
+      orderStatus: status,
+      paymentStatus: status == 'REJECTED' ? 'CANCELLED' : current.paymentStatus,
+    );
+  }
+
+  @override
+  Future<void> withdrawBrandAdjustment(
+    String orderId,
+    String adjustmentId,
+  ) async {
+    withdrawnOrderId = orderId;
+    withdrawnAdjustmentId = adjustmentId;
   }
 
   @override

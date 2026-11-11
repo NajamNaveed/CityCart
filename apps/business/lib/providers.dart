@@ -106,6 +106,39 @@ final providerReviewsProvider = FutureProvider.autoDispose
           .providerReviews(rating: rating, limit: 30);
     });
 
+/// The numbers a shop owner needs on opening the app. Two small requests give
+/// the queue size and the latest orders without loading every order.
+class BrandOverview {
+  const BrandOverview({
+    this.pendingOrders = 0,
+    this.totalOrders = 0,
+    this.recentOrders = const <BrandOrder>[],
+  });
+
+  final int pendingOrders;
+  final int totalOrders;
+  final List<BrandOrder> recentOrders;
+}
+
+final brandOverviewProvider = FutureProvider.autoDispose<BrandOverview>((
+  ref,
+) async {
+  final user = ref.watch(sessionProvider).user;
+  if (user == null || !user.isBrand) {
+    throw ApiException('Sign in with a shop account to see this.');
+  }
+  final repository = ref.watch(businessRepositoryProvider);
+  final results = await Future.wait([
+    repository.brandOrders(status: 'PENDING', limit: 1),
+    repository.brandOrders(limit: 5),
+  ]);
+  return BrandOverview(
+    pendingOrders: results[0].pagination.total,
+    totalOrders: results[1].pagination.total,
+    recentOrders: results[1].items,
+  );
+});
+
 /// The server address: baked into a release build, or chosen on the sign-in
 /// screen while developing.
 class ServerSettings {

@@ -10,6 +10,8 @@ import 'features/auth/splash_screen.dart';
 import 'features/availability/availability_screen.dart';
 import 'features/bookings/booking_detail_screen.dart';
 import 'features/bookings/bookings_screen.dart';
+import 'features/brand_orders/brand_order_detail_screen.dart';
+import 'features/brand_orders/brand_orders_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/messages/chat_thread_screen.dart';
 import 'features/messages/messages_screen.dart';
@@ -77,6 +79,19 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
+        path: '/brand-orders',
+        builder: (context, state) => BrandOrdersScreen(
+          initialStatus: state.uri.queryParameters['status'],
+        ),
+      ),
+      GoRoute(
+        path: '/brand-orders/:id',
+        builder: (context, state) => BrandOrderDetailScreen(
+          orderId: state.pathParameters['id']!,
+          initial: state.extra is BrandOrder ? state.extra as BrandOrder : null,
+        ),
+      ),
+      GoRoute(
         path: '/offerings',
         builder: (context, state) => const OfferingsScreen(),
       ),
@@ -139,6 +154,15 @@ bool _isProviderOnly(String location) {
   );
 }
 
+/// Areas only a shop owner has.
+const _brandOnlyPaths = <String>['/brand-orders'];
+
+bool _isBrandOnly(String location) {
+  return _brandOnlyPaths.any(
+    (path) => location == path || location.startsWith('$path/'),
+  );
+}
+
 /// The one place that decides which screen may open. The server still enforces
 /// every rule; this only keeps the app from showing a dead end.
 String? businessRedirect({
@@ -157,6 +181,7 @@ String? businessRedirect({
     case SessionStatus.signedIn:
       if (atLogin || atSplash) return '/home';
       if (role == brandRole && _isProviderOnly(location)) return '/home';
+      if (role == providerRole && _isBrandOnly(location)) return '/home';
       return null;
   }
 }

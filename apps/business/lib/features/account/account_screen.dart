@@ -135,8 +135,20 @@ class AccountScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
-              ] else
+              ] else ...[
                 const _BrandBusinessCard(),
+                const SizedBox(height: 10),
+                SurfacePanel(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: InfoRow(
+                    key: const Key('account_orders'),
+                    icon: Icons.receipt_long_outlined,
+                    label: 'Orders',
+                    value: 'Confirm and prepare customer orders',
+                    onTap: () => context.push('/brand-orders'),
+                  ),
+                ),
+              ],
               const SizedBox(height: 22),
               const SectionTitle('Security'),
               SurfacePanel(

@@ -1013,6 +1013,297 @@ class ProviderReviewPage {
   }
 }
 
+/// One line of a shop order. Prices are snapshots taken when the order was
+/// placed, so editing a product later never changes an existing order.
+class BrandOrderItem {
+  const BrandOrderItem({
+    required this.productId,
+    required this.productName,
+    this.sku = '',
+    this.quantity = 1,
+    this.unitPricePaisa = 0,
+    this.totalPricePaisa = 0,
+    this.image,
+    this.pickStatus = '',
+  });
+
+  final String productId;
+  final String productName;
+  final String sku;
+  final int quantity;
+  final int unitPricePaisa;
+  final int totalPricePaisa;
+  final String? image;
+  final String pickStatus;
+
+  factory BrandOrderItem.fromJson(Map<String, dynamic> json) {
+    return BrandOrderItem(
+      productId: _text(json['productId']),
+      productName: _text(json['productName'], 'Product'),
+      sku: _text(json['sku']),
+      quantity: _int(json['quantity'], 1),
+      unitPricePaisa: _int(json['unitPrice'], 0),
+      totalPricePaisa: _int(json['totalPrice'], 0),
+      image: _optionalText(json['image']),
+      pickStatus: _text(json['pickStatus']),
+    );
+  }
+}
+
+class BrandShippingAddress {
+  const BrandShippingAddress({
+    required this.name,
+    required this.phone,
+    required this.address,
+    this.city = '',
+    this.state = '',
+    this.postalCode = '',
+    this.additionalInstructions = '',
+  });
+
+  final String name;
+  final String phone;
+  final String address;
+  final String city;
+  final String state;
+  final String postalCode;
+  final String additionalInstructions;
+
+  String get cityLine => [
+    city,
+    state,
+    postalCode,
+  ].where((value) => value.trim().isNotEmpty).join(', ');
+
+  factory BrandShippingAddress.fromJson(Map<String, dynamic> json) {
+    return BrandShippingAddress(
+      name: _text(json['name'], 'Customer'),
+      phone: _text(json['phone']),
+      address: _text(json['address']),
+      city: _text(json['city']),
+      state: _text(json['state']),
+      postalCode: _text(json['postalCode']),
+      additionalInstructions: _text(json['additionalInstructions']),
+    );
+  }
+}
+
+class BrandOrderEvent {
+  const BrandOrderEvent({required this.status, this.at});
+
+  final String status;
+  final DateTime? at;
+
+  factory BrandOrderEvent.fromJson(Map<String, dynamic> json) {
+    return BrandOrderEvent(
+      status: _text(json['status']),
+      at: _date(json['at']),
+    );
+  }
+}
+
+class BrandPayment {
+  const BrandPayment({
+    this.status = 'PENDING',
+    this.method = 'COD',
+    this.amountPaisa = 0,
+  });
+
+  final String status;
+  final String method;
+  final int amountPaisa;
+
+  factory BrandPayment.fromJson(Map<String, dynamic> json) {
+    return BrandPayment(
+      status: _text(json['status'], 'PENDING'),
+      method: _text(json['method'], 'COD'),
+      amountPaisa: _int(json['amount'], 0),
+    );
+  }
+}
+
+class BrandDeliverySummary {
+  const BrandDeliverySummary({
+    required this.id,
+    this.status = 'PENDING',
+    this.assignedAgent = '',
+    this.trackingReference = '',
+  });
+
+  final String id;
+  final String status;
+  final String assignedAgent;
+  final String trackingReference;
+
+  factory BrandDeliverySummary.fromJson(Map<String, dynamic> json) {
+    return BrandDeliverySummary(
+      id: _text(json['_id'] ?? json['id']),
+      status: _text(json['status'], 'PENDING'),
+      assignedAgent: _text(json['assignedAgent']),
+      trackingReference: _text(json['trackingReference']),
+    );
+  }
+}
+
+/// A change proposal the shop sent because it cannot supply the full order.
+/// While one is PROPOSED the order cannot move on to shipment.
+class BrandOrderAdjustment {
+  const BrandOrderAdjustment({
+    required this.id,
+    this.status = 'PROPOSED',
+    this.note = '',
+    this.createdAt,
+  });
+
+  final String id;
+  final String status;
+  final String note;
+  final DateTime? createdAt;
+
+  bool get isPending => status == 'PROPOSED';
+
+  factory BrandOrderAdjustment.fromJson(Map<String, dynamic> json) {
+    return BrandOrderAdjustment(
+      id: _text(json['_id'] ?? json['id']),
+      status: _text(json['status'], 'PROPOSED'),
+      note: _text(json['note']),
+      createdAt: _date(json['createdAt']),
+    );
+  }
+}
+
+/// A customer order as the shop sees it. Every order belongs to exactly one
+/// shop, and the server scopes the list to the signed-in owner's shop.
+class BrandOrder {
+  const BrandOrder({
+    required this.id,
+    required this.orderNumber,
+    required this.orderStatus,
+    this.paymentStatus = 'PENDING',
+    this.paymentMethod = 'COD',
+    this.subtotalPaisa = 0,
+    this.deliveryFeePaisa = 0,
+    this.discountPaisa = 0,
+    this.taxPaisa = 0,
+    this.totalPaisa = 0,
+    this.items = const <BrandOrderItem>[],
+    this.shippingAddress,
+    this.statusHistory = const <BrandOrderEvent>[],
+    this.createdAt,
+  });
+
+  final String id;
+  final String orderNumber;
+  final String orderStatus;
+  final String paymentStatus;
+  final String paymentMethod;
+  final int subtotalPaisa;
+  final int deliveryFeePaisa;
+  final int discountPaisa;
+  final int taxPaisa;
+  final int totalPaisa;
+  final List<BrandOrderItem> items;
+  final BrandShippingAddress? shippingAddress;
+  final List<BrandOrderEvent> statusHistory;
+  final DateTime? createdAt;
+
+  int get itemCount => items.fold(0, (total, item) => total + item.quantity);
+
+  bool get isAwaitingAnswer => orderStatus == 'PENDING';
+  bool get isClosed => const [
+    'DELIVERED',
+    'CANCELLED',
+    'REJECTED',
+    'RETURNED',
+  ].contains(orderStatus);
+
+  BrandOrder copyWith({String? orderStatus, String? paymentStatus}) {
+    return BrandOrder(
+      id: id,
+      orderNumber: orderNumber,
+      orderStatus: orderStatus ?? this.orderStatus,
+      paymentStatus: paymentStatus ?? this.paymentStatus,
+      paymentMethod: paymentMethod,
+      subtotalPaisa: subtotalPaisa,
+      deliveryFeePaisa: deliveryFeePaisa,
+      discountPaisa: discountPaisa,
+      taxPaisa: taxPaisa,
+      totalPaisa: totalPaisa,
+      items: items,
+      shippingAddress: shippingAddress,
+      statusHistory: statusHistory,
+      createdAt: createdAt,
+    );
+  }
+
+  factory BrandOrder.fromJson(Map<String, dynamic> json) {
+    final address = _map(json['shippingAddress']);
+    return BrandOrder(
+      id: _text(json['_id'] ?? json['id']),
+      orderNumber: _text(json['orderNumber'], 'Order'),
+      orderStatus: _text(json['orderStatus'], 'PENDING'),
+      paymentStatus: _text(json['paymentStatus'], 'PENDING'),
+      paymentMethod: _text(json['paymentMethod'], 'COD'),
+      subtotalPaisa: _int(json['subtotal'], 0),
+      deliveryFeePaisa: _int(json['deliveryFee'], 0),
+      discountPaisa: _int(json['discount'], 0),
+      taxPaisa: _int(json['tax'], 0),
+      totalPaisa: _int(json['total'], 0),
+      items: _mapList(json['items'])
+          .map(BrandOrderItem.fromJson)
+          .toList(growable: false),
+      shippingAddress: address.isEmpty
+          ? null
+          : BrandShippingAddress.fromJson(address),
+      statusHistory: _mapList(json['statusHistory'])
+          .map(BrandOrderEvent.fromJson)
+          .toList(growable: false),
+      createdAt: _date(json['createdAt']),
+    );
+  }
+}
+
+/// The detail response: the order plus its payment, delivery and any change
+/// proposals. [pendingAdjustment] is the one waiting for the customer, if any.
+class BrandOrderDetail {
+  const BrandOrderDetail({
+    required this.order,
+    this.payment,
+    this.delivery,
+    this.adjustments = const <BrandOrderAdjustment>[],
+    this.pendingAdjustment,
+  });
+
+  final BrandOrder order;
+  final BrandPayment? payment;
+  final BrandDeliverySummary? delivery;
+  final List<BrandOrderAdjustment> adjustments;
+  final BrandOrderAdjustment? pendingAdjustment;
+
+  factory BrandOrderDetail.fromJson(Map<String, dynamic> json) {
+    final orderRaw = json['order'];
+    final payment = _map(json['payment']);
+    final delivery = _map(json['delivery']);
+    final adjustment = _map(json['adjustment']);
+    final pending = adjustment.isEmpty
+        ? null
+        : BrandOrderAdjustment.fromJson(adjustment);
+    return BrandOrderDetail(
+      order: BrandOrder.fromJson(
+        orderRaw is Map ? Map<String, dynamic>.from(orderRaw) : const {},
+      ),
+      payment: payment.isEmpty ? null : BrandPayment.fromJson(payment),
+      delivery: delivery.isEmpty
+          ? null
+          : BrandDeliverySummary.fromJson(delivery),
+      adjustments: _mapList(json['adjustments'])
+          .map(BrandOrderAdjustment.fromJson)
+          .toList(growable: false),
+      pendingAdjustment: pending != null && pending.isPending ? pending : null,
+    );
+  }
+}
+
 int _int(Object? value, int fallback) {
   if (value is int) return value;
   if (value is num) return value.toInt();

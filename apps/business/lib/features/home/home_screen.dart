@@ -234,6 +234,68 @@ class _ProviderHome extends ConsumerWidget {
   }
 }
 
+/// A compact order line on the shop home. The full list lives on its own
+/// screen, so this only carries the number, size, total and state.
+class _BrandOrderRow extends StatelessWidget {
+  const _BrandOrderRow({super.key, required this.order, required this.onTap});
+
+  final BrandOrder order;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final items = order.itemCount == 1 ? '1 item' : '${order.itemCount} items';
+    final placed = order.createdAt == null
+        ? 'No date'
+        : dateTimeLabel(order.createdAt!);
+    return SurfacePanel(
+      onTap: onTap,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  order.orderNumber,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.titleSmall,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '$items · $placed',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                money(order.totalPaisa),
+                maxLines: 1,
+                style: text.titleSmall?.copyWith(fontSize: 15),
+              ),
+              const SizedBox(height: 5),
+              StatusTag(
+                label: brandOrderStatusLabel(order.orderStatus),
+                tone: brandOrderStatusTone(order.orderStatus),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _BrandHome extends ConsumerWidget {
   const _BrandHome({required this.user});
 
@@ -244,9 +306,18 @@ class _BrandHome extends ConsumerWidget {
     final asyncBrand = ref.watch(brandSummaryProvider);
     final brand = asyncBrand.asData?.value;
     final status = brand?.status ?? 'PENDING';
+    final asyncOverview = ref.watch(brandOverviewProvider);
+    final overview = asyncOverview.asData?.value;
+    final pendingOrders = overview?.pendingOrders ?? 0;
+    final pendingLine = pendingOrders == 1
+        ? '1 order waiting for your answer'
+        : '$pendingOrders orders waiting for your answer';
 
     return RefreshIndicator(
-      onRefresh: () async => ref.invalidate(brandSummaryProvider),
+      onRefresh: () async {
+        ref.invalidate(brandSummaryProvider);
+        ref.invalidate(brandOverviewProvider);
+      },
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(bottom: 30),
@@ -318,6 +389,80 @@ class _BrandHome extends ConsumerWidget {
                       ],
                     ),
                   ),
+                ],
+                const SizedBox(height: 22),
+                if (overview != null)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: MetricTile(
+                          key: const Key('home_pending_orders'),
+                          value: '$pendingOrders',
+                          label: pendingOrders == 1
+                              ? 'order to confirm'
+                              : 'orders to confirm',
+                          tone: pendingOrders > 0
+                              ? AppTone.amber
+                              : AppTone.green,
+                          icon: Icons.pending_actions_rounded,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: MetricTile(
+                          value: '${overview.totalOrders}',
+                          label: overview.totalOrders == 1
+                              ? 'order in total'
+                              : 'orders in total',
+                          tone: AppTone.blue,
+                          icon: Icons.receipt_long_rounded,
+                        ),
+                      ),
+                    ],
+                  )
+                else if (asyncOverview.isLoading)
+                  const LoadingView(label: 'Loading orders')
+                else
+                  ErrorPanel(
+                    message: _friendlyError(asyncOverview.error),
+                    onRetry: () => ref.invalidate(brandOverviewProvider),
+                  ),
+                const SizedBox(height: 22),
+                const SectionTitle('Orders'),
+                ActionTile(
+                  key: const Key('home_orders'),
+                  icon: Icons.receipt_long_outlined,
+                  title: 'Customer orders',
+                  subtitle: overview == null
+                      ? 'Confirm, prepare and hand to delivery'
+                      : pendingOrders > 0
+                      ? pendingLine
+                      : 'Nothing waiting for you right now',
+                  tone: pendingOrders > 0 ? AppTone.amber : AppTone.green,
+                  onTap: () => context.push('/brand-orders'),
+                ),
+                if (overview != null && overview.recentOrders.isNotEmpty) ...[
+                  const SizedBox(height: 22),
+                  SectionTitle(
+                    'Latest orders',
+                    trailing: TextButton(
+                      key: const Key('home_all_orders'),
+                      onPressed: () => context.push('/brand-orders'),
+                      child: const Text('See all'),
+                    ),
+                  ),
+                  for (final order in overview.recentOrders.take(3))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _BrandOrderRow(
+                        key: Key('home_order_${order.id}'),
+                        order: order,
+                        onTap: () => context.push(
+                          '/brand-orders/${order.id}',
+                          extra: order,
+                        ),
+                      ),
+                    ),
                 ],
                 const SizedBox(height: 22),
                 const SectionTitle('Account'),
