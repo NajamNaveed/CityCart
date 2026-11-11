@@ -7,6 +7,7 @@ import '../../core/format.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../providers.dart';
+import '../cart/cart_controller.dart';
 
 /// The shopper's account. Phase 1 keeps it to the essentials — who you are,
 /// where you shop, which server the app talks to — and later phases add saved
@@ -33,6 +34,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
     if (!confirmed) return;
     setState(() => _signingOut = true);
     await ref.read(sessionProvider).signOut();
+    ref.invalidate(cartProvider);
     if (mounted) setState(() => _signingOut = false);
   }
 

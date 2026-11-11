@@ -748,3 +748,303 @@ class Storefront {
     );
   }
 }
+
+// --- Cart ------------------------------------------------------------------
+
+/// One line in the cart. Prices come from the server; [issue] marks a line that
+/// can no longer be bought (the server still returns it so the shopper can fix
+/// or remove it). [availableQuantity] is only present when stock is too low.
+class CartItem {
+  const CartItem({
+    required this.productId,
+    this.name,
+    this.slug,
+    this.image,
+    this.unitPrice,
+    this.quantity = 1,
+    this.lineTotal = 0,
+    this.issue,
+    this.availableQuantity,
+  });
+
+  final String productId;
+  final String? name;
+  final String? slug;
+  final String? image;
+  final double? unitPrice;
+  final int quantity;
+  final double lineTotal;
+  final String? issue;
+  final int? availableQuantity;
+
+  bool get hasIssue => issue != null;
+
+  factory CartItem.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return CartItem(
+      productId: text(map['productId']),
+      name: optionalText(map['name']),
+      slug: optionalText(map['slug']),
+      image: optionalText(map['image']),
+      unitPrice: optionalDouble(map['unitPrice']),
+      quantity: asInt(map['quantity'], 1),
+      lineTotal: asDouble(map['lineTotal']),
+      issue: optionalText(map['issue']),
+      availableQuantity: map['availableQuantity'] == null
+          ? null
+          : asInt(map['availableQuantity']),
+    );
+  }
+}
+
+/// The cart lines of one shop. Checkout turns each group into its own order.
+class CartGroup {
+  const CartGroup({
+    required this.brandId,
+    this.brandName,
+    this.brandSlug,
+    this.brandLogo,
+    this.items = const <CartItem>[],
+    this.subtotal = 0,
+  });
+
+  final String brandId;
+  final String? brandName;
+  final String? brandSlug;
+  final String? brandLogo;
+  final List<CartItem> items;
+  final double subtotal;
+
+  factory CartGroup.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    final brand = asMap(map['brand']);
+    return CartGroup(
+      brandId: text(brand['_id']),
+      brandName: optionalText(brand['name']),
+      brandSlug: optionalText(brand['slug']),
+      brandLogo: optionalText(brand['logo']),
+      items: asList(map['items'])
+          .map(CartItem.fromJson)
+          .toList(growable: false),
+      subtotal: asDouble(map['subtotal']),
+    );
+  }
+}
+
+class CartView {
+  const CartView({
+    this.groups = const <CartGroup>[],
+    this.subtotal = 0,
+    this.itemCount = 0,
+    this.hasIssues = false,
+  });
+
+  final List<CartGroup> groups;
+  final double subtotal;
+  final int itemCount;
+  final bool hasIssues;
+
+  bool get isEmpty => groups.isEmpty;
+
+  factory CartView.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return CartView(
+      groups: asList(map['groups'])
+          .map(CartGroup.fromJson)
+          .toList(growable: false),
+      subtotal: asDouble(map['subtotal']),
+      itemCount: asInt(map['itemCount']),
+      hasIssues: map['hasIssues'] == true,
+    );
+  }
+}
+
+/// A cart line the shop area cannot deliver, used when the shopper changes
+/// block with a non-empty cart.
+class CartUndeliverable {
+  const CartUndeliverable({required this.productId, this.name, this.brandName});
+
+  final String productId;
+  final String? name;
+  final String? brandName;
+
+  factory CartUndeliverable.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return CartUndeliverable(
+      productId: text(map['productId']),
+      name: optionalText(map['name']),
+      brandName: optionalText(map['brandName']),
+    );
+  }
+}
+
+class CartAreaCheck {
+  const CartAreaCheck({
+    this.deliverable = const <String>[],
+    this.undeliverable = const <CartUndeliverable>[],
+  });
+
+  final List<String> deliverable;
+  final List<CartUndeliverable> undeliverable;
+
+  factory CartAreaCheck.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return CartAreaCheck(
+      deliverable: asStringList(map['deliverable']),
+      undeliverable: asList(map['undeliverable'])
+          .map(CartUndeliverable.fromJson)
+          .toList(growable: false),
+    );
+  }
+}
+
+// --- Addresses -------------------------------------------------------------
+
+class SavedAddress {
+  const SavedAddress({
+    required this.id,
+    required this.label,
+    required this.fullName,
+    required this.phone,
+    required this.addressLine,
+    required this.city,
+    this.state,
+    this.postalCode,
+    this.country,
+    this.additionalInstructions,
+    this.latitude,
+    this.longitude,
+    this.isDefault = false,
+    this.blocks = const <AddressBlock>[],
+  });
+
+  final String id;
+  final String label;
+  final String fullName;
+  final String phone;
+  final String addressLine;
+  final String city;
+  final String? state;
+  final String? postalCode;
+  final String? country;
+  final String? additionalInstructions;
+  final double? latitude;
+  final double? longitude;
+  final bool isDefault;
+  final List<AddressBlock> blocks;
+
+  bool get canDeliver => latitude != null && longitude != null;
+
+  /// One line for a picker: street, then city.
+  String get summary =>
+      [addressLine, city].where((value) => value.isNotEmpty).join(', ');
+
+  factory SavedAddress.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return SavedAddress(
+      id: text(map['_id']),
+      label: text(map['label'], 'Address'),
+      fullName: text(map['fullName']),
+      phone: text(map['phone']),
+      addressLine: text(map['addressLine']),
+      city: text(map['city']),
+      state: optionalText(map['state']),
+      postalCode: optionalText(map['postalCode']),
+      country: optionalText(map['country']),
+      additionalInstructions: optionalText(map['additionalInstructions']),
+      latitude: optionalDouble(map['latitude']),
+      longitude: optionalDouble(map['longitude']),
+      isDefault: map['isDefault'] == true,
+      blocks: asList(map['blocks'])
+          .map(AddressBlock.fromJson)
+          .toList(growable: false),
+    );
+  }
+}
+
+class AddressBlock {
+  const AddressBlock({required this.id, required this.name});
+
+  final String id;
+  final String name;
+
+  factory AddressBlock.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return AddressBlock(id: text(map['_id']), name: text(map['name'], 'Area'));
+  }
+}
+
+// --- Placed orders ---------------------------------------------------------
+
+/// The part of a created order the confirmation needs. The server returns one
+/// order per shop in the cart.
+class PlacedOrder {
+  const PlacedOrder({
+    required this.id,
+    required this.orderNumber,
+    required this.brandId,
+    this.items = const <PlacedOrderItem>[],
+    this.total = 0,
+    this.currency = 'PKR',
+    this.orderStatus = 'PENDING',
+    this.paymentStatus = 'PENDING',
+    this.createdAt,
+  });
+
+  final String id;
+  final String orderNumber;
+  final String brandId;
+  final List<PlacedOrderItem> items;
+  final double total;
+  final String currency;
+  final String orderStatus;
+  final String paymentStatus;
+  final DateTime? createdAt;
+
+  factory PlacedOrder.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return PlacedOrder(
+      id: text(map['_id']),
+      orderNumber: text(map['orderNumber']),
+      brandId: text(map['brandId']),
+      items: asList(map['items'])
+          .map(PlacedOrderItem.fromJson)
+          .toList(growable: false),
+      total: asDouble(map['total']),
+      currency: text(map['currency'], 'PKR'),
+      orderStatus: text(map['orderStatus'], 'PENDING'),
+      paymentStatus: text(map['paymentStatus'], 'PENDING'),
+      createdAt: asDate(map['createdAt']),
+    );
+  }
+}
+
+class PlacedOrderItem {
+  const PlacedOrderItem({
+    required this.productId,
+    required this.productName,
+    this.quantity = 1,
+    this.unitPrice = 0,
+    this.totalPrice = 0,
+    this.image,
+  });
+
+  final String productId;
+  final String productName;
+  final int quantity;
+  final double unitPrice;
+  final double totalPrice;
+  final String? image;
+
+  factory PlacedOrderItem.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return PlacedOrderItem(
+      productId: text(map['productId']),
+      productName: text(map['productName'], 'Item'),
+      quantity: asInt(map['quantity'], 1),
+      unitPrice: asDouble(map['unitPrice']),
+      totalPrice: asDouble(map['totalPrice']),
+      image: optionalText(map['image']),
+    );
+  }
+}

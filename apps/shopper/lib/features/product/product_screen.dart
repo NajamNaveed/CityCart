@@ -9,18 +9,49 @@ import '../../core/widgets.dart';
 import '../../data/api_exception.dart';
 import '../../data/models.dart';
 import '../../providers.dart';
+import '../cart/cart_controller.dart';
 import '../chat/chat_compose.dart';
 
 /// A product page: photos, price, availability, details, ratings and a direct
 /// line to the shop. Reviews are public and paged; nothing is invented locally.
-class ProductScreen extends ConsumerWidget {
+class ProductScreen extends ConsumerStatefulWidget {
   const ProductScreen({super.key, required this.productId});
 
   final String productId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final product = ref.watch(productProvider(productId));
+  ConsumerState<ProductScreen> createState() => _ProductScreenState();
+}
+
+class _ProductScreenState extends ConsumerState<ProductScreen> {
+  int _quantity = 1;
+  bool _adding = false;
+
+  Future<void> _addToBasket(Product product) async {
+    if (_adding) return;
+    setState(() => _adding = true);
+    final error = await ref
+        .read(cartProvider)
+        .add(product.id, quantity: _quantity);
+    if (!mounted) return;
+    setState(() => _adding = false);
+    if (error != null) {
+      showAppSnack(context, error, error: true);
+      return;
+    }
+    showAppSnack(
+      context,
+      _quantity == 1
+          ? 'Added to your basket.'
+          : '$_quantity added to your basket.',
+      actionLabel: 'View basket',
+      onAction: () => context.go('/cart'),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final product = ref.watch(productProvider(widget.productId));
     final loaded = product.asData?.value;
     final brand = loaded == null || loaded.brandId.isEmpty
         ? null
@@ -56,35 +87,53 @@ class ProductScreen extends ConsumerWidget {
                     message: error is ApiException
                         ? error.message
                         : 'We could not open this item. Check your connection.',
-                    onRetry: () => ref.invalidate(productProvider(productId)),
+                    onRetry: () =>
+                        ref.invalidate(productProvider(widget.productId)),
                   ),
                 ),
-                data: (data) => _ProductBody(product: data),
+                data: (data) => _ProductBody(
+                  product: data,
+                  brandName: brandName ?? 'the shop',
+                ),
               ),
             ),
             if (loaded != null)
               BottomActionBar(
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(
-                      child: AppButton(
-                        label: 'Visit shop',
-                        variant: AppButtonVariant.outline,
-                        onPressed: () =>
-                            context.push('/store/${loaded.brandId}'),
+                    if (loaded.inStock)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'How many?',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                          ),
+                          QuantityStepper(
+                            value: _quantity,
+                            busy: _adding,
+                            onChanged: (value) =>
+                                setState(() => _quantity = value),
+                          ),
+                        ],
+                      )
+                    else
+                      Text(
+                        'This item is out of stock at the shop.',
+                        style: Theme.of(context).textTheme.bodyMedium,
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: AppButton(
-                        label: 'Ask about it',
-                        onPressed: () => openProductChat(
-                          context,
-                          productId: loaded.id,
-                          productName: loaded.name,
-                          brandName: brandName ?? 'the shop',
-                        ),
-                      ),
+                    const SizedBox(height: 10),
+                    AppButton(
+                      label: loaded.inStock ? 'Add to basket' : 'Out of stock',
+                      icon: loaded.inStock
+                          ? Icons.add_shopping_cart_rounded
+                          : Icons.remove_shopping_cart_outlined,
+                      loading: _adding,
+                      onPressed: loaded.inStock && !_adding
+                          ? () => _addToBasket(loaded)
+                          : null,
                     ),
                   ],
                 ),
@@ -97,9 +146,10 @@ class ProductScreen extends ConsumerWidget {
 }
 
 class _ProductBody extends StatelessWidget {
-  const _ProductBody({required this.product});
+  const _ProductBody({required this.product, required this.brandName});
 
   final Product product;
+  final String brandName;
 
   @override
   Widget build(BuildContext context) {
@@ -177,6 +227,49 @@ class _ProductBody extends StatelessWidget {
             ),
           ),
         ],
+        const SizedBox(height: 24),
+        SurfaceCard(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.chat_bubble_outline_rounded,
+                    size: 20,
+                    color: AppColors.inkSoft,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'A question about this item?',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Message $brandName and they will reply here in the app.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              AppButton(
+                label: 'Ask the shop',
+                icon: Icons.send_outlined,
+                variant: AppButtonVariant.outline,
+                height: 48,
+                onPressed: () => openProductChat(
+                  context,
+                  productId: product.id,
+                  productName: product.name,
+                  brandName: brandName,
+                ),
+              ),
+            ],
+          ),
+        ),
         const SizedBox(height: 26),
         _ReviewsSection(productId: product.id),
       ],

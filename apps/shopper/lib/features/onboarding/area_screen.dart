@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart' hide Block;
 
+import '../../core/format.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/api_exception.dart';
 import '../../data/models.dart';
 import '../../providers.dart';
+import '../cart/cart_controller.dart';
 import '../explore/explore_controller.dart';
 
 /// Chooses the city and, optionally, the block the shopper wants to browse.
@@ -28,6 +30,35 @@ class _AreaScreenState extends ConsumerState<AreaScreen> {
   Future<void> _choose(AreaSelection selection) async {
     if (_busy) return;
     setState(() => _busy = true);
+
+    // Switching to a narrower block can strand part of the basket. The server
+    // says which lines still reach the new block; the shopper decides whether
+    // to remove the rest. Nothing is removed without that answer.
+    final cart = ref.read(cartProvider);
+    if (selection.hasBlock && cart.itemCount > 0) {
+      final check = await cart.checkArea([selection.blockId!]);
+      if (!mounted) return;
+      if (check != null && check.undeliverable.isNotEmpty) {
+        final remove = await _confirmUndeliverable(
+          check.undeliverable,
+          selection.blockName ?? selection.cityName,
+        );
+        if (!mounted) return;
+        if (!remove) {
+          setState(() => _busy = false);
+          return;
+        }
+        for (final item in check.undeliverable) {
+          await cart.remove(item.productId);
+        }
+        if (!mounted) return;
+        showAppSnack(
+          context,
+          '${plural(check.undeliverable.length, 'item')} removed from your basket.',
+        );
+      }
+    }
+
     await ref.read(areaProvider).choose(selection);
     ref.invalidate(homeFeedProvider);
     ref.invalidate(exploreProvider);
@@ -37,6 +68,77 @@ class _AreaScreenState extends ConsumerState<AreaScreen> {
     } else {
       context.go('/home');
     }
+  }
+
+  Future<bool> _confirmUndeliverable(
+    List<CartUndeliverable> items,
+    String place,
+  ) async {
+    final result = await showAppSheet<bool>(
+      context,
+      title: 'Some items cannot go there',
+      subtitle:
+          'These items from your basket are not delivered to $place. Remove '
+          'them to switch, or keep shopping where you are.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final item in items)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: SurfaceCard(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.remove_shopping_cart_outlined,
+                      size: 20,
+                      color: AppColors.danger,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.name ?? 'Item',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                          if ((item.brandName ?? '').isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              item.brandName!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          const SizedBox(height: 6),
+          AppButton(
+            label: 'Remove them and switch',
+            icon: Icons.check_rounded,
+            onPressed: () => Navigator.of(context).pop(true),
+          ),
+          const SizedBox(height: 8),
+          AppButton(
+            label: 'Keep my basket',
+            variant: AppButtonVariant.text,
+            onPressed: () => Navigator.of(context).pop(false),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
   }
 
   @override

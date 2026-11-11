@@ -1210,7 +1210,13 @@ class BottomActionBar extends StatelessWidget {
   }
 }
 
-void showAppSnack(BuildContext context, String message, {bool error = false}) {
+void showAppSnack(
+  BuildContext context,
+  String message, {
+  bool error = false,
+  String? actionLabel,
+  VoidCallback? onAction,
+}) {
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
     ..showSnackBar(
@@ -1228,6 +1234,13 @@ void showAppSnack(BuildContext context, String message, {bool error = false}) {
             Expanded(child: Text(message)),
           ],
         ),
+        action: actionLabel == null
+            ? null
+            : SnackBarAction(
+                label: actionLabel,
+                textColor: AppColors.sage,
+                onPressed: onAction ?? () {},
+              ),
       ),
     );
 }
@@ -1308,4 +1321,115 @@ Future<T?> showAppSheet<T>(
       );
     },
   );
+}
+
+/// Minus / count / plus in one pill. The buttons stay at a comfortable touch
+/// size even though the whole control is compact.
+class QuantityStepper extends StatelessWidget {
+  const QuantityStepper({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    this.min = 1,
+    this.max = 99,
+    this.busy = false,
+    this.label = 'Quantity',
+  });
+
+  final int value;
+  final ValueChanged<int> onChanged;
+  final int min;
+  final int max;
+  final bool busy;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: label,
+      value: '$value',
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          border: Border.all(color: AppColors.line),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _StepButton(
+              icon: Icons.remove_rounded,
+              tooltip: 'One less',
+              onTap: busy || value <= min ? null : () => onChanged(value - 1),
+            ),
+            SizedBox(
+              width: 34,
+              child: busy
+                  ? const Center(
+                      child: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.forest,
+                        ),
+                      ),
+                    )
+                  : FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        '$value',
+                        maxLines: 1,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.ink,
+                        ),
+                      ),
+                    ),
+            ),
+            _StepButton(
+              icon: Icons.add_rounded,
+              tooltip: 'One more',
+              onTap: busy || value >= max ? null : () => onChanged(value + 1),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StepButton extends StatelessWidget {
+  const _StepButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    return Tooltip(
+      message: tooltip,
+      child: InkResponse(
+        onTap: onTap,
+        radius: 22,
+        containedInkWell: false,
+        child: SizedBox(
+          width: 42,
+          height: 42,
+          child: Icon(
+            icon,
+            size: 19,
+            color: enabled ? AppColors.forest : AppColors.lineStrong,
+          ),
+        ),
+      ),
+    );
+  }
 }

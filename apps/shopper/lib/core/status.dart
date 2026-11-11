@@ -114,6 +114,21 @@ String friendlyPaymentMethod(String? method) {
   };
 }
 
+/// Why a cart line cannot be bought, in shopper words. Null means it can.
+String? cartIssueLabel(String? issue, {int? availableQuantity}) {
+  return switch ((issue ?? '').trim()) {
+    '' => null,
+    'OUT_OF_STOCK' => 'Out of stock',
+    'INSUFFICIENT_STOCK' =>
+      availableQuantity != null && availableQuantity > 0
+          ? 'Only $availableQuantity left'
+          : 'Not enough stock',
+    'PRODUCT_UNAVAILABLE' => 'No longer sold',
+    'BRAND_UNAVAILABLE' => 'Shop is closed',
+    _ => _titleCase(issue!),
+  };
+}
+
 String _titleCase(String raw) {
   final value = raw.replaceAll('_', ' ').toLowerCase().trim();
   if (value.isEmpty) return '';

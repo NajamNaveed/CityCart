@@ -6,6 +6,7 @@ import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/api_exception.dart';
 import '../../providers.dart';
+import '../cart/cart_controller.dart';
 
 enum _AuthMode { signIn, register }
 
@@ -61,6 +62,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         await ref
             .read(sessionProvider)
             .signIn(email: _email.text.trim(), password: _password.text);
+        ref.invalidate(cartProvider);
       } else {
         final user = await ref
             .read(sessionProvider)

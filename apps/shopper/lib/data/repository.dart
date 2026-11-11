@@ -153,4 +153,131 @@ class ShopperRepository {
   Future<void> markChatRead(String conversationId) async {
     await _api.post('/chats/$conversationId/read');
   }
+
+  // --- Cart ----------------------------------------------------------------
+
+  Future<CartView> cart() async {
+    final body = await _api.get('/cart');
+    return CartView.fromJson(body['cart']);
+  }
+
+  Future<CartView> addToCart(String productId, {int quantity = 1}) async {
+    final body = await _api.post(
+      '/cart/items',
+      data: {'productId': productId, 'quantity': quantity},
+    );
+    return CartView.fromJson(body['cart']);
+  }
+
+  Future<CartView> updateCartItem(String productId, int quantity) async {
+    final body = await _api.patch(
+      '/cart/items/$productId',
+      data: {'quantity': quantity},
+    );
+    return CartView.fromJson(body['cart']);
+  }
+
+  Future<CartView> removeCartItem(String productId) async {
+    final body = await _api.delete('/cart/items/$productId');
+    return CartView.fromJson(body['cart']);
+  }
+
+  Future<CartView> clearCart() async {
+    final body = await _api.delete('/cart');
+    return CartView.fromJson(body['cart']);
+  }
+
+  /// Which lines can still be delivered in the given blocks. Read-only: the
+  /// shopper confirms any removal explicitly.
+  Future<CartAreaCheck> checkCartArea(List<String> blockIds) async {
+    final body = await _api.post(
+      '/cart/area-check',
+      data: {'blockIds': blockIds},
+    );
+    return CartAreaCheck.fromJson(body);
+  }
+
+  // --- Addresses -----------------------------------------------------------
+
+  Future<List<SavedAddress>> addresses() async {
+    final body = await _api.get('/addresses');
+    return asList(body['addresses'])
+        .map(SavedAddress.fromJson)
+        .toList(growable: false);
+  }
+
+  Future<SavedAddress> createAddress({
+    required String label,
+    required String fullName,
+    required String phone,
+    required String addressLine,
+    required String city,
+    required double latitude,
+    required double longitude,
+    String? state,
+    String? postalCode,
+    String? country,
+    String? additionalInstructions,
+  }) async {
+    final body = await _api.post(
+      '/addresses',
+      data: {
+        'label': label,
+        'fullName': fullName,
+        'phone': phone,
+        'addressLine': addressLine,
+        'city': city,
+        'latitude': latitude,
+        'longitude': longitude,
+        'state': ?state,
+        'postalCode': ?postalCode,
+        'country': ?country,
+        'additionalInstructions': ?additionalInstructions,
+      },
+    );
+    return SavedAddress.fromJson(body['address']);
+  }
+
+  // --- Checkout ------------------------------------------------------------
+
+  /// Places the cart as one order per shop. Totals, stock and the split are
+  /// decided by the server; the client only sends the address payload.
+  Future<List<PlacedOrder>> placeOrder({
+    required String fullName,
+    required String phone,
+    required String addressLine,
+    required String city,
+    required String deliveryNotes,
+    required double latitude,
+    required double longitude,
+    String? state,
+    String? postalCode,
+    String? country,
+    String? addressId,
+    String? saveAsLabel,
+    String paymentMethod = 'COD',
+  }) async {
+    final body = await _api.post(
+      '/orders',
+      data: {
+        'shippingAddress': {
+          'fullName': fullName,
+          'phone': phone,
+          'addressLine': addressLine,
+          'city': city,
+          'additionalInstructions': deliveryNotes,
+          'state': ?state,
+          'postalCode': ?postalCode,
+          'country': ?country,
+        },
+        'deliveryLocation': {'latitude': latitude, 'longitude': longitude},
+        'paymentMethod': paymentMethod,
+        'addressId': ?addressId,
+        if (saveAsLabel != null) 'saveAddress': {'label': saveAsLabel},
+      },
+    );
+    return asList(body['orders'])
+        .map(PlacedOrder.fromJson)
+        .toList(growable: false);
+  }
 }

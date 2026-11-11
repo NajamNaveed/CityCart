@@ -215,6 +215,7 @@ void main() {
 
       await tester.scrollUntilVisible(find.text('Soft washed linen.'), 200);
       expect(find.text('Soft washed linen.'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('Fabric'), 200);
       expect(find.text('Fabric'), findsOneWidget);
 
       await tester.scrollUntilVisible(find.text('Ayesha K.'), 200);
