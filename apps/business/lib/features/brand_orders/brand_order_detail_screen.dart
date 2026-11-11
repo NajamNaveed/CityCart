@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/format.dart';
 import '../../core/status.dart';
@@ -218,6 +219,7 @@ class _BrandOrderDetailScreenState
 
     final detail = _detail;
     final pending = detail?.pendingAdjustment;
+    final delivery = detail?.delivery;
     final paymentStatus = detail?.payment?.status ?? order.paymentStatus;
     final paymentMethod = detail?.payment?.method ?? order.paymentMethod;
 
@@ -333,10 +335,14 @@ class _BrandOrderDetailScreenState
                   address: order.shippingAddress,
                   onCopy: _copyPhone,
                 ),
-                if (detail?.delivery != null) ...[
+                if (delivery != null) ...[
                   const SizedBox(height: 22),
                   const SectionTitle('Delivery'),
-                  _DeliveryPanel(delivery: detail!.delivery!),
+                  _DeliveryPanel(
+                    delivery: delivery,
+                    onTap: () =>
+                        context.push('/brand-deliveries/${delivery.id}'),
+                  ),
                 ],
                 if (order.statusHistory.isNotEmpty) ...[
                   const SizedBox(height: 22),
@@ -683,15 +689,17 @@ class _DeliveryAddressPanel extends StatelessWidget {
 }
 
 class _DeliveryPanel extends StatelessWidget {
-  const _DeliveryPanel({required this.delivery});
+  const _DeliveryPanel({required this.delivery, required this.onTap});
 
   final BrandDeliverySummary delivery;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final rider = delivery.assignedAgent.trim();
     return SurfacePanel(
       padding: const EdgeInsets.symmetric(vertical: 4),
+      onTap: onTap,
       child: Column(
         children: [
           InfoRow(

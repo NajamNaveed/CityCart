@@ -191,6 +191,115 @@ String brandDeliveryStatusLabel(String status) {
   };
 }
 
+AppTone brandDeliveryStatusTone(String status) {
+  return switch (status) {
+    'PENDING' || 'PREPARING' || 'READY_FOR_PICKUP' => AppTone.amber,
+    'PICKED_UP' || 'IN_TRANSIT' || 'OUT_FOR_DELIVERY' => AppTone.blue,
+    'DELIVERED' => AppTone.green,
+    'FAILED' || 'CANCELLED' || 'RETURNED' => AppTone.red,
+    _ => AppTone.neutral,
+  };
+}
+
+/// What the shop should do next with this delivery, in one plain sentence.
+String brandDeliveryStatusDetail(String status) {
+  return switch (status) {
+    'PENDING' =>
+      'The delivery team is arranging a rider. Nothing is needed from you.',
+    'PREPARING' =>
+      'Your order is being prepared for pickup. Nothing is needed from you.',
+    'READY_FOR_PICKUP' =>
+      'The parcel is waiting for a rider. Mark it picked up once it leaves '
+          'your shop.',
+    'PICKED_UP' =>
+      'The rider has the parcel. Mark it on the way when the ride starts.',
+    'IN_TRANSIT' =>
+      'The parcel is on its way. Mark it out for delivery when the rider is '
+          'near the customer.',
+    'OUT_FOR_DELIVERY' =>
+      'The customer is getting the parcel now. Mark it delivered when they '
+          'have it, or record a failed attempt.',
+    'DELIVERED' => 'The customer has this order. This delivery is closed.',
+    'FAILED' =>
+      'The last attempt failed. Send it out again when the customer is ready.',
+    'CANCELLED' => 'This delivery was cancelled.',
+    'RETURNED' =>
+      'Every item was refused at the door and came back to your shop.',
+    _ => 'The delivery state could not be read.',
+  };
+}
+
+/// The moves a shop may make from here. The server checks the same steps and
+/// remains the authority; an empty list means the shop has nothing to do.
+List<String> brandDeliveryNextStatuses(String status) {
+  return switch (status) {
+    'READY_FOR_PICKUP' => const ['PICKED_UP'],
+    'PICKED_UP' => const ['IN_TRANSIT'],
+    'IN_TRANSIT' => const ['OUT_FOR_DELIVERY'],
+    'OUT_FOR_DELIVERY' => const ['DELIVERED', 'FAILED'],
+    'FAILED' => const ['OUT_FOR_DELIVERY'],
+    _ => const [],
+  };
+}
+
+String brandDeliveryActionLabel(String status) {
+  return switch (status) {
+    'PICKED_UP' => 'Mark picked up',
+    'IN_TRANSIT' => 'Mark on the way',
+    'OUT_FOR_DELIVERY' => 'Mark out for delivery',
+    'DELIVERED' => 'Mark delivered',
+    'FAILED' => 'Record failed attempt',
+    _ => 'Update delivery',
+  };
+}
+
+/// A returned parcel, in the shop's words.
+String returnStatusLabel(String status) {
+  return switch (status) {
+    'IN_TRANSIT' => 'On the way back',
+    'RECEIVED' => 'Received',
+    _ => 'Unknown',
+  };
+}
+
+AppTone returnStatusTone(String status) {
+  return switch (status) {
+    'IN_TRANSIT' => AppTone.amber,
+    'RECEIVED' => AppTone.green,
+    _ => AppTone.neutral,
+  };
+}
+
+String returnStatusDetail(String status) {
+  return switch (status) {
+    'IN_TRANSIT' =>
+      'The refused items are coming back to your shop. Receive them when they '
+          'arrive and choose what goes back into stock.',
+    'RECEIVED' =>
+      'These goods have been received. Restocked lines are back in your '
+          'inventory; the rest were written off.',
+    _ => 'The state of this return could not be read.',
+  };
+}
+
+String returnReasonLabel(String reason) {
+  return switch (reason) {
+    'DAMAGED' => 'Damaged',
+    'WRONG_ITEM' => 'Wrong item',
+    'NOT_WANTED' => 'Not wanted',
+    'MISSING' => 'Missing',
+    _ => 'Refused',
+  };
+}
+
+AppTone returnReasonTone(String reason) {
+  return switch (reason) {
+    'DAMAGED' || 'MISSING' => AppTone.red,
+    'WRONG_ITEM' || 'NOT_WANTED' => AppTone.amber,
+    _ => AppTone.neutral,
+  };
+}
+
 String productStatusLabel(String status) {
   return switch (status) {
     'ACTIVE' => 'Live',

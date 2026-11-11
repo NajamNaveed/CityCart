@@ -1475,6 +1475,218 @@ class CatalogItem {
   }
 }
 
+/// One delivery leg as the shop sees it. The server owns the status; the app
+/// only shows the next move the shop is allowed to make.
+class BrandDelivery {
+  const BrandDelivery({
+    required this.id,
+    this.orderId = '',
+    this.orderNumber = '',
+    this.status = 'PENDING',
+    this.deliveryFeePaisa = 0,
+    this.trackingReference = '',
+    this.assignedAgent = '',
+    this.riderId,
+    this.failureReason = '',
+    this.address,
+    this.createdAt,
+  });
+
+  final String id;
+  final String orderId;
+  final String orderNumber;
+  final String status;
+  final int deliveryFeePaisa;
+  final String trackingReference;
+  final String assignedAgent;
+  final String? riderId;
+  final String failureReason;
+  final BrandShippingAddress? address;
+  final DateTime? createdAt;
+
+  bool get hasRider => (riderId ?? '').isNotEmpty;
+  bool get isFinal =>
+      const ['DELIVERED', 'CANCELLED', 'RETURNED'].contains(status);
+  bool get isMoving =>
+      const ['PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY'].contains(status);
+
+  factory BrandDelivery.fromJson(Map<String, dynamic> json) {
+    final address = _map(json['address']);
+    return BrandDelivery(
+      id: _text(json['_id'] ?? json['id']),
+      orderId: _text(json['orderId']),
+      orderNumber: _text(json['orderNumber']),
+      status: _text(json['status'], 'PENDING'),
+      deliveryFeePaisa: rupeesToPaisa(json['deliveryFee']),
+      trackingReference: _text(json['trackingReference']),
+      assignedAgent: _text(json['assignedAgent']),
+      riderId: _optionalText(json['riderId']),
+      failureReason: _text(json['failureReason']),
+      address: address.isEmpty ? null : BrandShippingAddress.fromJson(address),
+      createdAt: _date(json['createdAt']),
+    );
+  }
+}
+
+/// A person who delivers this shop's orders. The shop sets the password; the
+/// rider signs in to the rider app with it.
+class BrandRider {
+  const BrandRider({
+    required this.id,
+    required this.name,
+    this.email = '',
+    this.phone = '',
+    this.isActive = true,
+    this.createdAt,
+  });
+
+  final String id;
+  final String name;
+  final String email;
+  final String phone;
+  final bool isActive;
+  final DateTime? createdAt;
+
+  factory BrandRider.fromJson(Map<String, dynamic> json) {
+    return BrandRider(
+      id: _text(json['_id'] ?? json['id']),
+      name: _text(json['name'], 'Rider'),
+      email: _text(json['email']),
+      phone: _text(json['phone']),
+      isActive: json['isActive'] != false,
+      createdAt: _date(json['createdAt']),
+    );
+  }
+}
+
+/// One refused line in a door return, with the shop's restock decision.
+class BrandReturnLine {
+  const BrandReturnLine({
+    required this.productName,
+    this.orderItemId = '',
+    this.productId = '',
+    this.quantity = 1,
+    this.unitPricePaisa = 0,
+    this.reason = '',
+    this.restock = false,
+    this.restockedAt,
+    this.hasPhoto = false,
+  });
+
+  final String orderItemId;
+  final String productId;
+  final String productName;
+  final int quantity;
+  final int unitPricePaisa;
+  final String reason;
+  final bool restock;
+  final DateTime? restockedAt;
+  final bool hasPhoto;
+
+  int get lineTotalPaisa => quantity * unitPricePaisa;
+
+  factory BrandReturnLine.fromJson(Map<String, dynamic> json) {
+    return BrandReturnLine(
+      orderItemId: _text(json['orderItemId']),
+      productId: _text(json['productId']),
+      productName: _text(json['productName'], 'Item'),
+      quantity: _int(json['quantity'], 1),
+      unitPricePaisa: rupeesToPaisa(json['unitPrice']),
+      reason: _text(json['reason']),
+      restock: json['restock'] == true,
+      restockedAt: _date(json['restockedAt']),
+      hasPhoto: json['hasPhoto'] == true,
+    );
+  }
+}
+
+/// Goods a customer refused at the door. The shop receives them and decides
+/// line by line whether they go back into stock.
+class BrandReturn {
+  const BrandReturn({
+    required this.id,
+    this.orderId = '',
+    this.orderNumber = '',
+    this.deliveryId = '',
+    this.status = 'IN_TRANSIT',
+    this.source = 'DOOR',
+    this.lines = const <BrandReturnLine>[],
+    this.returnedSubtotalPaisa = 0,
+    this.feeRefunded = false,
+    this.refundAmountPaisa = 0,
+    this.receivedAt,
+    this.createdAt,
+  });
+
+  final String id;
+  final String orderId;
+  final String orderNumber;
+  final String deliveryId;
+  final String status;
+  final String source;
+  final List<BrandReturnLine> lines;
+  final int returnedSubtotalPaisa;
+  final bool feeRefunded;
+  final int refundAmountPaisa;
+  final DateTime? receivedAt;
+  final DateTime? createdAt;
+
+  bool get isReceived => status == 'RECEIVED';
+
+  int get totalUnits => lines.fold(0, (total, line) => total + line.quantity);
+
+  factory BrandReturn.fromJson(Map<String, dynamic> json) {
+    return BrandReturn(
+      id: _text(json['_id'] ?? json['id']),
+      orderId: _text(json['orderId']),
+      orderNumber: _text(json['orderNumber']),
+      deliveryId: _text(json['deliveryId']),
+      status: _text(json['status'], 'IN_TRANSIT'),
+      source: _text(json['source'], 'DOOR'),
+      lines: _mapList(json['lines'])
+          .map(BrandReturnLine.fromJson)
+          .toList(growable: false),
+      returnedSubtotalPaisa: rupeesToPaisa(json['returnedSubtotal']),
+      feeRefunded: json['feeRefunded'] == true,
+      refundAmountPaisa: rupeesToPaisa(json['refundAmount']),
+      receivedAt: _date(json['receivedAt']),
+      createdAt: _date(json['createdAt']),
+    );
+  }
+}
+
+/// Totals for the returned-goods screen, counted by the server.
+class BrandReturnSummary {
+  const BrandReturnSummary({
+    this.inTransitCount = 0,
+    this.inTransitSubtotalPaisa = 0,
+    this.receivedCount = 0,
+    this.receivedSubtotalPaisa = 0,
+    this.returnedSubtotalPaisa = 0,
+    this.refundAmountPaisa = 0,
+  });
+
+  final int inTransitCount;
+  final int inTransitSubtotalPaisa;
+  final int receivedCount;
+  final int receivedSubtotalPaisa;
+  final int returnedSubtotalPaisa;
+  final int refundAmountPaisa;
+
+  factory BrandReturnSummary.fromJson(Map<String, dynamic> json) {
+    final transit = _map(json['IN_TRANSIT']);
+    final received = _map(json['RECEIVED']);
+    return BrandReturnSummary(
+      inTransitCount: _int(transit['count'], 0),
+      inTransitSubtotalPaisa: rupeesToPaisa(transit['returnedSubtotal']),
+      receivedCount: _int(received['count'], 0),
+      receivedSubtotalPaisa: rupeesToPaisa(received['returnedSubtotal']),
+      returnedSubtotalPaisa: rupeesToPaisa(json['returnedSubtotal']),
+      refundAmountPaisa: rupeesToPaisa(json['refundAmount']),
+    );
+  }
+}
+
 /// Shop prices and order totals cross the API in decimal rupees ("64.97"),
 /// not paisa. Screens use the same integer-paisa money format everywhere.
 int rupeesToPaisa(Object? value) {

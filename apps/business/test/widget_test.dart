@@ -12,11 +12,16 @@ import 'package:citycart_business/features/auth/login_screen.dart';
 import 'package:citycart_business/features/availability/availability_screen.dart';
 import 'package:citycart_business/features/bookings/booking_detail_screen.dart';
 import 'package:citycart_business/features/bookings/bookings_screen.dart';
+import 'package:citycart_business/features/brand_deliveries/brand_deliveries_screen.dart';
+import 'package:citycart_business/features/brand_deliveries/brand_delivery_detail_screen.dart';
 import 'package:citycart_business/features/brand_orders/brand_order_detail_screen.dart';
 import 'package:citycart_business/features/brand_orders/brand_orders_screen.dart';
 import 'package:citycart_business/features/brand_products/add_product_screen.dart';
 import 'package:citycart_business/features/brand_products/brand_product_detail_screen.dart';
 import 'package:citycart_business/features/brand_products/brand_products_screen.dart';
+import 'package:citycart_business/features/brand_returns/brand_return_detail_screen.dart';
+import 'package:citycart_business/features/brand_returns/brand_returns_screen.dart';
+import 'package:citycart_business/features/brand_riders/brand_riders_screen.dart';
 import 'package:citycart_business/features/home/home_screen.dart';
 import 'package:citycart_business/features/messages/chat_thread_screen.dart';
 import 'package:citycart_business/features/messages/messages_screen.dart';
@@ -130,6 +135,34 @@ void main() {
 
     test('providers cannot open shop order screens', () {
       for (final path in ['/brand-orders', '/brand-orders/o1']) {
+        expect(
+          businessRedirect(
+            status: SessionStatus.signedIn,
+            location: path,
+            role: providerRole,
+          ),
+          '/home',
+          reason: 'provider accounts must not reach $path',
+        );
+        expect(
+          businessRedirect(
+            status: SessionStatus.signedIn,
+            location: path,
+            role: brandRole,
+          ),
+          isNull,
+        );
+      }
+    });
+
+    test('providers cannot open shop delivery screens', () {
+      for (final path in [
+        '/brand-deliveries',
+        '/brand-deliveries/d1',
+        '/brand-returns',
+        '/brand-returns/r1',
+        '/brand-riders',
+      ]) {
         expect(
           businessRedirect(
             status: SessionStatus.signedIn,
@@ -556,6 +589,87 @@ void main() {
       });
       expect(item.manufacturer, 'Dalda');
       expect(item.sizeLabel, '1 kg');
+    });
+
+    test('deliveries, riders and returns read rupee amounts', () {
+      final delivery = BrandDelivery.fromJson({
+        '_id': 'd1',
+        'orderId': 'o1',
+        'orderNumber': 'CC-2026-000001',
+        'status': 'OUT_FOR_DELIVERY',
+        'deliveryFee': 64.97,
+        'riderId': 'r1',
+        'assignedAgent': 'Bilal Ahmed',
+        'address': {
+          'name': 'Sana Malik',
+          'phone': '03001234567',
+          'address': 'House 12, Street 4',
+          'city': 'Faisalabad',
+          'state': 'Punjab',
+        },
+      });
+      expect(delivery.deliveryFeePaisa, 6497);
+      expect(delivery.hasRider, isTrue);
+      expect(delivery.isFinal, isFalse);
+      expect(delivery.address?.name, 'Sana Malik');
+      expect(brandDeliveryStatusLabel('OUT_FOR_DELIVERY'), 'Out for delivery');
+      expect(brandDeliveryNextStatuses('OUT_FOR_DELIVERY'), [
+        'DELIVERED',
+        'FAILED',
+      ]);
+      expect(brandDeliveryNextStatuses('DELIVERED'), isEmpty);
+
+      final entry = BrandReturn.fromJson({
+        '_id': 'r1',
+        'orderId': 'o1',
+        'orderNumber': 'CC-2026-000001',
+        'status': 'IN_TRANSIT',
+        'source': 'DOOR',
+        'returnedSubtotal': 241,
+        'refundAmount': 12.5,
+        'feeRefunded': true,
+        'lines': [
+          {
+            'orderItemId': 'i1',
+            'productName': 'Cotton kurta',
+            'quantity': 2,
+            'unitPrice': 120.5,
+            'reason': 'DAMAGED',
+            'restock': false,
+            'hasPhoto': true,
+          },
+        ],
+      });
+      expect(entry.totalUnits, 2);
+      expect(entry.lines.first.unitPricePaisa, 12050);
+      expect(entry.lines.first.lineTotalPaisa, 24100);
+      expect(entry.returnedSubtotalPaisa, 24100);
+      expect(entry.refundAmountPaisa, 1250);
+      expect(entry.lines.first.hasPhoto, isTrue);
+      expect(returnStatusLabel('IN_TRANSIT'), 'On the way back');
+      expect(returnReasonLabel('WRONG_ITEM'), 'Wrong item');
+
+      final summary = BrandReturnSummary.fromJson({
+        'IN_TRANSIT': {'count': 2, 'returnedSubtotal': 300.25},
+        'RECEIVED': {'count': 1, 'returnedSubtotal': 100},
+        'returnedSubtotal': 400.25,
+        'refundAmount': 50.5,
+      });
+      expect(summary.inTransitCount, 2);
+      expect(summary.inTransitSubtotalPaisa, 30025);
+      expect(summary.receivedCount, 1);
+      expect(summary.returnedSubtotalPaisa, 40025);
+      expect(summary.refundAmountPaisa, 5050);
+
+      final rider = BrandRider.fromJson({
+        '_id': 'r1',
+        'name': 'Bilal Ahmed',
+        'email': 'bilal@example.com',
+        'phone': '03001234567',
+        'isActive': false,
+      });
+      expect(rider.isActive, isFalse);
+      expect(rider.phone, '03001234567');
     });
   });
 
@@ -1709,6 +1823,366 @@ void main() {
       expect(fake.addedStatus, 'ACTIVE');
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('deliveries show the parcel, the rider and the stage', (
+      tester,
+    ) async {
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        deliveries: _sampleDeliveries(),
+        riders: _sampleRiders,
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(const BrandDeliveriesScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('CC-2026-000001'), findsOneWidget);
+      expect(find.text('Out for delivery'), findsOneWidget);
+      expect(find.text('Bilal Ahmed'), findsWidgets);
+      expect(find.text('No rider yet'), findsOneWidget);
+
+      await tester.dragUntilVisible(
+        find.byKey(const Key('delivery_filter_failed')),
+        find.byKey(const Key('delivery_filters')),
+        const Offset(-140, 0),
+      );
+      await tester.tap(find.byKey(const Key('delivery_filter_failed')));
+      await tester.pumpAndSettle();
+
+      expect(fake.lastDeliveryStatus, 'FAILED');
+      expect(find.text('CC-2026-000003'), findsOneWidget);
+      expect(find.text('CC-2026-000001'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a delivery is completed after the shop confirms', (
+      tester,
+    ) async {
+      final delivery = _sampleDelivery();
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        deliveries: [delivery],
+        riders: _sampleRiders,
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(
+            BrandDeliveryDetailScreen(deliveryId: 'd1', initial: delivery),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('delivery_move_delivered')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Mark delivered?'), findsOneWidget);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.text('Mark delivered'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(fake.updatedDeliveryId, 'd1');
+      expect(fake.updatedDeliveryStatus, 'DELIVERED');
+      expect(find.text('Delivery completed.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a failed attempt keeps the reason with the delivery', (
+      tester,
+    ) async {
+      final delivery = _sampleDelivery();
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        deliveries: [delivery],
+        riders: _sampleRiders,
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(
+            BrandDeliveryDetailScreen(deliveryId: 'd1', initial: delivery),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('delivery_fail')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const Key('delivery_failure_reason')),
+        'Nobody home',
+      );
+      await tester.pumpAndSettle();
+      final save = find.byKey(const Key('delivery_failure_save'));
+      await tester.ensureVisible(save);
+      await tester.pumpAndSettle();
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+
+      expect(fake.updatedDeliveryStatus, 'FAILED');
+      expect(fake.updatedDeliveryFailure, 'Nobody home');
+      expect(find.text('Failed attempt recorded.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a rider is assigned from the delivery screen', (tester) async {
+      final delivery = _sampleDelivery(
+        status: 'PICKED_UP',
+        riderId: '',
+        assignedAgent: '',
+      );
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        deliveries: [delivery],
+        riders: _sampleRiders,
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(
+            BrandDeliveryDetailScreen(deliveryId: 'd1', initial: delivery),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final assign = find.byKey(const Key('delivery_assign_rider'));
+      await tester.ensureVisible(assign);
+      await tester.pumpAndSettle();
+      await tester.tap(assign);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Who will deliver?'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('rider_choice_r1')));
+      await tester.pumpAndSettle();
+
+      expect(fake.assignedDeliveryId, 'd1');
+      expect(fake.assignedRiderId, 'r1');
+      expect(find.text('Rider assigned.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('riders are filtered and turned off with a warning', (
+      tester,
+    ) async {
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        riders: _sampleRiders,
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(const BrandRidersScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Bilal Ahmed'), findsOneWidget);
+      expect(find.text('Nadia Iqbal'), findsNothing);
+
+      await tester.tap(find.byKey(const Key('rider_filter_off')));
+      await tester.pumpAndSettle();
+      expect(fake.lastRiderActive, isFalse);
+      expect(find.text('Nadia Iqbal'), findsOneWidget);
+      expect(find.text('Bilal Ahmed'), findsNothing);
+
+      await tester.tap(find.byKey(const Key('rider_actions_r2')));
+      await tester.pumpAndSettle();
+      expect(find.text('Turn rider on'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('rider_action_toggle')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Turn Nadia Iqbal on?'), findsOneWidget);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.text('Turn on'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(fake.updatedRiderId, 'r2');
+      expect(fake.updatedRiderActive, isTrue);
+      expect(find.text('Nadia Iqbal can deliver again.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a rider is added with a sign-in the shop sets', (
+      tester,
+    ) async {
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        riders: _sampleRiders,
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(const BrandRidersScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('add_rider')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const Key('rider_name')),
+        'Ayesha Noor',
+      );
+      await tester.enterText(
+        find.byKey(const Key('rider_phone')),
+        '03211234567',
+      );
+      await tester.enterText(
+        find.byKey(const Key('rider_email')),
+        'ayesha@example.com',
+      );
+      await tester.enterText(
+        find.byKey(const Key('rider_password')),
+        'secret123',
+      );
+      await tester.pumpAndSettle();
+      final save = find.byKey(const Key('rider_save'));
+      await tester.ensureVisible(save);
+      await tester.pumpAndSettle();
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+
+      expect(fake.createdRiderName, 'Ayesha Noor');
+      expect(fake.createdRiderEmail, 'ayesha@example.com');
+      expect(fake.createdRiderPhone, '03211234567');
+      expect(fake.createdRiderPassword, 'secret123');
+      expect(find.text('Ayesha Noor can now sign in.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('returns show totals and filter by stage', (tester) async {
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        returns: _sampleReturns(),
+        returnSummary: _returnSummary,
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(const BrandReturnsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('parcel coming back'), findsOneWidget);
+      expect(find.text('return received'), findsOneWidget);
+      expect(find.text('Value of returned goods'), findsOneWidget);
+      expect(find.text('Refunded to customers'), findsOneWidget);
+      expect(find.text('Rs 662'), findsNWidgets(2));
+      expect(find.byKey(const Key('return_card_rt1')), findsOneWidget);
+      expect(find.byKey(const Key('return_card_rt2')), findsOneWidget);
+
+      await tester.dragUntilVisible(
+        find.byKey(const Key('return_filter_received')),
+        find.byKey(const Key('return_filters')),
+        const Offset(-140, 0),
+      );
+      await tester.ensureVisible(
+        find.byKey(const Key('return_filter_received')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('return_filter_received')));
+      await tester.pumpAndSettle();
+
+      expect(fake.lastReturnStatus, 'RECEIVED');
+      expect(find.byKey(const Key('return_card_rt2')), findsOneWidget);
+      expect(find.byKey(const Key('return_card_rt1')), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('receiving a return restocks only the chosen lines', (
+      tester,
+    ) async {
+      final entry = _sampleReturn();
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        returns: [entry],
+        returnSummary: _returnSummary,
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(
+            BrandReturnDetailScreen(returnId: 'rt1', initial: entry),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Cotton kurta'), findsOneWidget);
+      expect(find.text('Silk scarf'), findsOneWidget);
+      expect(find.text('Damaged'), findsOneWidget);
+      expect(find.text('Photo attached'), findsOneWidget);
+
+      final restock = find.byKey(const Key('return_restock_1'));
+      await tester.ensureVisible(restock);
+      await tester.pumpAndSettle();
+      await tester.tap(restock);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('return_receive')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Receive these goods?'), findsOneWidget);
+      expect(
+        find.textContaining('1 line goes back into stock'),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.text('Receive goods'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(fake.receivedReturnId, 'rt1');
+      expect(fake.receivedRestock, {0: false, 1: true});
+      expect(find.text('Goods received.'), findsOneWidget);
+      expect(find.byKey(const Key('return_received_notice')), findsOneWidget);
+      expect(find.text('Back in stock'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   });
 }
 
@@ -1976,6 +2450,123 @@ const _catalogItems = [
   ),
 ];
 
+BrandDelivery _sampleDelivery({
+  String id = 'd1',
+  String status = 'OUT_FOR_DELIVERY',
+  String orderNumber = 'CC-2026-000001',
+  String riderId = 'r1',
+  String assignedAgent = 'Bilal Ahmed',
+  String trackingReference = '',
+  String failureReason = '',
+}) {
+  return BrandDelivery(
+    id: id,
+    orderId: 'o1',
+    orderNumber: orderNumber,
+    status: status,
+    deliveryFeePaisa: 6497,
+    assignedAgent: assignedAgent,
+    riderId: riderId.isEmpty ? null : riderId,
+    trackingReference: trackingReference,
+    failureReason: failureReason,
+    address: const BrandShippingAddress(
+      name: 'Sana Malik',
+      phone: '03001234567',
+      address: 'House 12, Street 4',
+      city: 'Faisalabad',
+      state: 'Punjab',
+      additionalInstructions: 'Call on arrival.',
+    ),
+    createdAt: DateTime(2026, 11, 10, 15, 20),
+  );
+}
+
+List<BrandDelivery> _sampleDeliveries() {
+  return [
+    _sampleDelivery(),
+    _sampleDelivery(
+      id: 'd2',
+      status: 'READY_FOR_PICKUP',
+      orderNumber: 'CC-2026-000002',
+      riderId: '',
+      assignedAgent: '',
+    ),
+    _sampleDelivery(
+      id: 'd3',
+      status: 'FAILED',
+      orderNumber: 'CC-2026-000003',
+      failureReason: 'Nobody home',
+    ),
+  ];
+}
+
+const _sampleRiders = [
+  BrandRider(
+    id: 'r1',
+    name: 'Bilal Ahmed',
+    email: 'bilal@example.com',
+    phone: '03001234567',
+  ),
+  BrandRider(
+    id: 'r2',
+    name: 'Nadia Iqbal',
+    email: 'nadia@example.com',
+    phone: '03111222333',
+    isActive: false,
+  ),
+];
+
+BrandReturn _sampleReturn({
+  String id = 'rt1',
+  String status = 'IN_TRANSIT',
+  String orderNumber = 'CC-2026-000001',
+}) {
+  return BrandReturn(
+    id: id,
+    orderId: 'o1',
+    orderNumber: orderNumber,
+    deliveryId: 'd1',
+    status: status,
+    lines: const [
+      BrandReturnLine(
+        orderItemId: 'i1',
+        productName: 'Cotton kurta',
+        quantity: 2,
+        unitPricePaisa: 12050,
+        reason: 'DAMAGED',
+        hasPhoto: true,
+      ),
+      BrandReturnLine(
+        orderItemId: 'i2',
+        productName: 'Silk scarf',
+        quantity: 1,
+        unitPricePaisa: 9000,
+        reason: 'NOT_WANTED',
+      ),
+    ],
+    returnedSubtotalPaisa: 33100,
+    refundAmountPaisa: 33100,
+    createdAt: DateTime(2026, 11, 10, 16),
+    receivedAt: status == 'RECEIVED' ? DateTime(2026, 11, 11, 9) : null,
+  );
+}
+
+List<BrandReturn> _sampleReturns() {
+  return [
+    _sampleReturn(),
+    _sampleReturn(id: 'rt2', status: 'RECEIVED', orderNumber: 'CC-2026-000002'),
+  ];
+}
+
+const _returnSummary = BrandReturnSummary(
+  inTransitCount: 1,
+  inTransitSubtotalPaisa: 33100,
+  receivedCount: 1,
+  receivedSubtotalPaisa: 33100,
+  returnedSubtotalPaisa: 66200,
+  refundAmountPaisa: 66200,
+);
+
 /// Builds a container whose session has already been restored, so the home
 /// providers see a signed-in owner before the first frame.
 Future<ProviderContainer> _signedIn({
@@ -1994,6 +2585,10 @@ Future<ProviderContainer> _signedIn({
   BrandOrderDetail? orderDetail,
   List<BrandProduct> products = const [],
   List<CatalogItem> catalog = const [],
+  List<BrandDelivery> deliveries = const [],
+  List<BrandRider> riders = const [],
+  List<BrandReturn> returns = const [],
+  BrandReturnSummary returnSummary = const BrandReturnSummary(),
 }) async {
   final result = await _signedInWithFake(
     user: user,
@@ -2011,6 +2606,10 @@ Future<ProviderContainer> _signedIn({
     orderDetail: orderDetail,
     products: products,
     catalog: catalog,
+    deliveries: deliveries,
+    riders: riders,
+    returns: returns,
+    returnSummary: returnSummary,
   );
   return result.$1;
 }
@@ -2031,6 +2630,10 @@ Future<(ProviderContainer, _FakeRepository)> _signedInWithFake({
   BrandOrderDetail? orderDetail,
   List<BrandProduct> products = const [],
   List<CatalogItem> catalog = const [],
+  List<BrandDelivery> deliveries = const [],
+  List<BrandRider> riders = const [],
+  List<BrandReturn> returns = const [],
+  BrandReturnSummary returnSummary = const BrandReturnSummary(),
 }) async {
   final prefs = await SharedPreferences.getInstance();
   final store = _FakeSessionStore('token', user);
@@ -2051,6 +2654,10 @@ Future<(ProviderContainer, _FakeRepository)> _signedInWithFake({
     orderDetail: orderDetail,
     products: products,
     catalog: catalog,
+    deliveries: deliveries,
+    riders: riders,
+    returns: returns,
+    returnSummary: returnSummary,
   );
   final container = ProviderContainer(
     overrides: [
@@ -2152,6 +2759,10 @@ class _FakeRepository extends BusinessRepository {
     this.orderDetail,
     this.products = const [],
     this.catalog = const [],
+    this.deliveries = const [],
+    this.riders = const [],
+    this.returns = const [],
+    this.returnSummary = const BrandReturnSummary(),
   }) : super(ApiClient(store));
 
   final AppUser user;
@@ -2169,7 +2780,14 @@ class _FakeRepository extends BusinessRepository {
   final BrandOrderDetail? orderDetail;
   final List<BrandProduct> products;
   final List<CatalogItem> catalog;
+  final List<BrandDelivery> deliveries;
+  final List<BrandRider> riders;
+  final List<BrandReturn> returns;
+  final BrandReturnSummary returnSummary;
   final Map<String, BrandProduct> _editedProducts = {};
+  final Map<String, BrandRider> _editedRiders = {};
+  final Map<String, BrandDelivery> _editedDeliveries = {};
+  final Map<String, BrandReturn> _receivedReturns = {};
 
   String? lastBookingStatus;
   int? acceptedPricePaisa;
@@ -2183,6 +2801,28 @@ class _FakeRepository extends BusinessRepository {
   String? updatedOrderStatus;
   String? withdrawnOrderId;
   String? withdrawnAdjustmentId;
+
+  String? lastDeliveryStatus;
+  String? updatedDeliveryId;
+  String? updatedDeliveryStatus;
+  String? updatedDeliveryFailure;
+  bool? lastRiderActive;
+  String? assignedDeliveryId;
+  String? assignedRiderId;
+  var assignCalled = false;
+  String? savedDeliveryTracking;
+  String? savedDeliveryAgent;
+  String? createdRiderName;
+  String? createdRiderEmail;
+  String? createdRiderPhone;
+  String? createdRiderPassword;
+  String? updatedRiderId;
+  bool? updatedRiderActive;
+  String? resetRiderId;
+  String? resetRiderPasswordValue;
+  String? lastReturnStatus;
+  String? receivedReturnId;
+  Map<int, bool>? receivedRestock;
 
   String? lastProductStatus;
   String? lastProductSearch;
@@ -2749,6 +3389,300 @@ class _FakeRepository extends BusinessRepository {
         stockStatus: 'OUT_OF_STOCK',
       ),
     );
+  }
+
+  BrandDelivery _deliveryRecord(String deliveryId) {
+    final edited = _editedDeliveries[deliveryId];
+    if (edited != null) return edited;
+    for (final delivery in deliveries) {
+      if (delivery.id == deliveryId) return delivery;
+    }
+    return _sampleDelivery();
+  }
+
+  @override
+  Future<data.Page<BrandDelivery>> brandDeliveries({
+    String? status,
+    String? riderId,
+    int page = 1,
+    int limit = 12,
+  }) async {
+    lastDeliveryStatus = status;
+    final filtered = deliveries
+        .map((delivery) => _editedDeliveries[delivery.id] ?? delivery)
+        .where((delivery) => status == null || delivery.status == status)
+        .where((delivery) => riderId == null || delivery.riderId == riderId)
+        .toList(growable: false);
+    return data.Page(
+      items: filtered,
+      pagination: Pagination(
+        page: 1,
+        limit: limit,
+        pages: filtered.isEmpty ? 0 : 1,
+        total: filtered.length,
+      ),
+    );
+  }
+
+  @override
+  Future<BrandDelivery> brandDelivery(String deliveryId) async {
+    return _deliveryRecord(deliveryId);
+  }
+
+  @override
+  Future<BrandDelivery> updateBrandDeliveryStatus(
+    String deliveryId,
+    String status, {
+    String? failureReason,
+  }) async {
+    updatedDeliveryId = deliveryId;
+    updatedDeliveryStatus = status;
+    updatedDeliveryFailure = failureReason;
+    final current = _deliveryRecord(deliveryId);
+    final updated = BrandDelivery(
+      id: current.id,
+      orderId: current.orderId,
+      orderNumber: current.orderNumber,
+      status: status,
+      deliveryFeePaisa: current.deliveryFeePaisa,
+      trackingReference: current.trackingReference,
+      assignedAgent: current.assignedAgent,
+      riderId: current.riderId,
+      failureReason: failureReason ?? '',
+      address: current.address,
+      createdAt: current.createdAt,
+    );
+    _editedDeliveries[deliveryId] = updated;
+    return updated;
+  }
+
+  @override
+  Future<BrandDelivery> assignBrandDeliveryRider(
+    String deliveryId,
+    String? riderId,
+  ) async {
+    assignCalled = true;
+    assignedDeliveryId = deliveryId;
+    assignedRiderId = riderId;
+    final current = _deliveryRecord(deliveryId);
+    var agent = '';
+    if (riderId != null) {
+      for (final rider in riders) {
+        if (rider.id == riderId) {
+          agent = rider.name;
+          break;
+        }
+      }
+      if (agent.isEmpty) agent = 'Rider';
+    }
+    final updated = BrandDelivery(
+      id: current.id,
+      orderId: current.orderId,
+      orderNumber: current.orderNumber,
+      status: current.status,
+      deliveryFeePaisa: current.deliveryFeePaisa,
+      trackingReference: current.trackingReference,
+      assignedAgent: agent,
+      riderId: riderId,
+      failureReason: current.failureReason,
+      address: current.address,
+      createdAt: current.createdAt,
+    );
+    _editedDeliveries[deliveryId] = updated;
+    return updated;
+  }
+
+  @override
+  Future<BrandDelivery> updateBrandDeliveryDetails(
+    String deliveryId, {
+    String? trackingReference,
+    String? assignedAgent,
+  }) async {
+    savedDeliveryTracking = trackingReference;
+    savedDeliveryAgent = assignedAgent;
+    final current = _deliveryRecord(deliveryId);
+    final updated = BrandDelivery(
+      id: current.id,
+      orderId: current.orderId,
+      orderNumber: current.orderNumber,
+      status: current.status,
+      deliveryFeePaisa: current.deliveryFeePaisa,
+      trackingReference: (trackingReference ?? '').isEmpty
+          ? current.trackingReference
+          : trackingReference!,
+      assignedAgent: (assignedAgent ?? '').isEmpty
+          ? current.assignedAgent
+          : assignedAgent!,
+      riderId: current.riderId,
+      failureReason: current.failureReason,
+      address: current.address,
+      createdAt: current.createdAt,
+    );
+    _editedDeliveries[deliveryId] = updated;
+    return updated;
+  }
+
+  BrandRider _riderRecord(String riderId) {
+    final edited = _editedRiders[riderId];
+    if (edited != null) return edited;
+    for (final rider in riders) {
+      if (rider.id == riderId) return rider;
+    }
+    return _sampleRiders.first;
+  }
+
+  @override
+  Future<data.Page<BrandRider>> brandRiders({
+    bool? isActive,
+    int page = 1,
+    int limit = 20,
+  }) async {
+    lastRiderActive = isActive;
+    final filtered = riders
+        .map((rider) => _editedRiders[rider.id] ?? rider)
+        .where((rider) => isActive == null || rider.isActive == isActive)
+        .toList(growable: false);
+    return data.Page(
+      items: filtered,
+      pagination: Pagination(
+        page: 1,
+        limit: limit,
+        pages: filtered.isEmpty ? 0 : 1,
+        total: filtered.length,
+      ),
+    );
+  }
+
+  @override
+  Future<BrandRider> createBrandRider({
+    required String name,
+    required String email,
+    required String password,
+    String? phone,
+  }) async {
+    createdRiderName = name;
+    createdRiderEmail = email;
+    createdRiderPassword = password;
+    createdRiderPhone = phone;
+    final rider = BrandRider(
+      id: 'new',
+      name: name,
+      email: email,
+      phone: phone ?? '',
+    );
+    _editedRiders[rider.id] = rider;
+    return rider;
+  }
+
+  @override
+  Future<BrandRider> updateBrandRider(
+    String riderId, {
+    String? name,
+    String? phone,
+    bool? isActive,
+  }) async {
+    updatedRiderId = riderId;
+    updatedRiderActive = isActive;
+    final current = _riderRecord(riderId);
+    final updated = BrandRider(
+      id: current.id,
+      name: name ?? current.name,
+      email: current.email,
+      phone: phone ?? current.phone,
+      isActive: isActive ?? current.isActive,
+      createdAt: current.createdAt,
+    );
+    _editedRiders[riderId] = updated;
+    return updated;
+  }
+
+  @override
+  Future<void> resetBrandRiderPassword(
+    String riderId, {
+    required String password,
+  }) async {
+    resetRiderId = riderId;
+    resetRiderPasswordValue = password;
+  }
+
+  BrandReturn _returnRecord(String returnId) {
+    final received = _receivedReturns[returnId];
+    if (received != null) return received;
+    for (final entry in returns) {
+      if (entry.id == returnId) return entry;
+    }
+    return _sampleReturn();
+  }
+
+  @override
+  Future<data.Page<BrandReturn>> brandReturns({
+    String? status,
+    int page = 1,
+    int limit = 12,
+  }) async {
+    lastReturnStatus = status;
+    final filtered = returns
+        .map((entry) => _receivedReturns[entry.id] ?? entry)
+        .where((entry) => status == null || entry.status == status)
+        .toList(growable: false);
+    return data.Page(
+      items: filtered,
+      pagination: Pagination(
+        page: 1,
+        limit: limit,
+        pages: filtered.isEmpty ? 0 : 1,
+        total: filtered.length,
+      ),
+    );
+  }
+
+  @override
+  Future<BrandReturnSummary> brandReturnSummary() async => returnSummary;
+
+  @override
+  Future<BrandReturn> brandReturn(String returnId) async {
+    return _returnRecord(returnId);
+  }
+
+  @override
+  Future<BrandReturn> receiveBrandReturn(
+    String returnId, {
+    required Map<int, bool> restockByIndex,
+  }) async {
+    receivedReturnId = returnId;
+    receivedRestock = Map.of(restockByIndex);
+    final current = _returnRecord(returnId);
+    final received = BrandReturn(
+      id: current.id,
+      orderId: current.orderId,
+      orderNumber: current.orderNumber,
+      deliveryId: current.deliveryId,
+      status: 'RECEIVED',
+      source: current.source,
+      lines: [
+        for (var index = 0; index < current.lines.length; index++)
+          BrandReturnLine(
+            orderItemId: current.lines[index].orderItemId,
+            productId: current.lines[index].productId,
+            productName: current.lines[index].productName,
+            quantity: current.lines[index].quantity,
+            unitPricePaisa: current.lines[index].unitPricePaisa,
+            reason: current.lines[index].reason,
+            restock: restockByIndex[index] ?? false,
+            restockedAt: (restockByIndex[index] ?? false)
+                ? DateTime(2026, 11, 11, 12)
+                : null,
+            hasPhoto: current.lines[index].hasPhoto,
+          ),
+      ],
+      returnedSubtotalPaisa: current.returnedSubtotalPaisa,
+      feeRefunded: current.feeRefunded,
+      refundAmountPaisa: current.refundAmountPaisa,
+      receivedAt: DateTime(2026, 11, 11, 12),
+      createdAt: current.createdAt,
+    );
+    _receivedReturns[returnId] = received;
+    return received;
   }
 
   @override

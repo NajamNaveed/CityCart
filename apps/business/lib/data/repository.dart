@@ -657,6 +657,209 @@ class BusinessRepository {
     return BrandStock.fromJson(Map<String, dynamic>.from(inventory));
   }
 
+  // --- Brand deliveries ----------------------------------------------------
+
+  Future<Page<BrandDelivery>> brandDeliveries({
+    String? status,
+    String? riderId,
+    int page = 1,
+    int limit = 12,
+  }) async {
+    final body = await _api.get(
+      '/deliveries',
+      query: {
+        'page': page,
+        'limit': limit,
+        'status': ?status,
+        'riderId': ?riderId,
+      },
+    );
+    return Page.fromJson(body, BrandDelivery.fromJson, 'deliveries');
+  }
+
+  Future<BrandDelivery> brandDelivery(String deliveryId) async {
+    final body = await _api.get('/deliveries/$deliveryId');
+    return _deliveryFrom(body);
+  }
+
+  /// Moves a delivery along the shop's part of the lifecycle. The server
+  /// checks the step and the shop's ownership.
+  Future<BrandDelivery> updateBrandDeliveryStatus(
+    String deliveryId,
+    String status, {
+    String? failureReason,
+  }) async {
+    final body = await _api.patch(
+      '/deliveries/$deliveryId/status',
+      data: {
+        'status': status,
+        if (failureReason != null && failureReason.trim().isNotEmpty)
+          'failureReason': failureReason.trim(),
+      },
+    );
+    return _deliveryFrom(body);
+  }
+
+  /// Assigns a rider, or takes the rider off when [riderId] is null.
+  Future<BrandDelivery> assignBrandDeliveryRider(
+    String deliveryId,
+    String? riderId,
+  ) async {
+    final body = await _api.patch(
+      '/deliveries/$deliveryId/rider',
+      data: {'riderId': riderId},
+    );
+    return _deliveryFrom(body);
+  }
+
+  Future<BrandDelivery> updateBrandDeliveryDetails(
+    String deliveryId, {
+    String? trackingReference,
+    String? assignedAgent,
+  }) async {
+    final body = await _api.patch(
+      '/deliveries/$deliveryId',
+      data: {
+        if (trackingReference != null && trackingReference.trim().isNotEmpty)
+          'trackingReference': trackingReference.trim(),
+        if (assignedAgent != null && assignedAgent.trim().isNotEmpty)
+          'assignedAgent': assignedAgent.trim(),
+      },
+    );
+    return _deliveryFrom(body);
+  }
+
+  BrandDelivery _deliveryFrom(Map<String, dynamic> body) {
+    final delivery = body['delivery'];
+    if (delivery is! Map) {
+      throw StateError('The server did not return the delivery.');
+    }
+    return BrandDelivery.fromJson(Map<String, dynamic>.from(delivery));
+  }
+
+  // --- Brand riders --------------------------------------------------------
+
+  Future<Page<BrandRider>> brandRiders({
+    bool? isActive,
+    int page = 1,
+    int limit = 20,
+  }) async {
+    final body = await _api.get(
+      '/riders',
+      query: {
+        'page': page,
+        'limit': limit,
+        if (isActive != null) 'isActive': isActive ? 'true' : 'false',
+      },
+    );
+    return Page.fromJson(body, BrandRider.fromJson, 'riders');
+  }
+
+  Future<BrandRider> createBrandRider({
+    required String name,
+    required String email,
+    required String password,
+    String? phone,
+  }) async {
+    final body = await _api.post(
+      '/riders',
+      data: {
+        'name': name.trim(),
+        'email': email.trim(),
+        'password': password,
+        if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
+      },
+    );
+    return _riderFrom(body);
+  }
+
+  Future<BrandRider> updateBrandRider(
+    String riderId, {
+    String? name,
+    String? phone,
+    bool? isActive,
+  }) async {
+    final body = await _api.patch(
+      '/riders/$riderId',
+      data: {
+        if (name != null) 'name': name.trim(),
+        if (phone != null) 'phone': phone.trim(),
+        'isActive': ?isActive,
+      },
+    );
+    return _riderFrom(body);
+  }
+
+  Future<void> resetBrandRiderPassword(
+    String riderId, {
+    required String password,
+  }) async {
+    await _api.patch('/riders/$riderId/password', data: {'password': password});
+  }
+
+  BrandRider _riderFrom(Map<String, dynamic> body) {
+    final rider = body['rider'];
+    if (rider is! Map) {
+      throw StateError('The server did not return the rider.');
+    }
+    return BrandRider.fromJson(Map<String, dynamic>.from(rider));
+  }
+
+  // --- Brand returns -------------------------------------------------------
+
+  Future<Page<BrandReturn>> brandReturns({
+    String? status,
+    int page = 1,
+    int limit = 12,
+  }) async {
+    final body = await _api.get(
+      '/returns',
+      query: {'page': page, 'limit': limit, 'status': ?status},
+    );
+    return Page.fromJson(body, BrandReturn.fromJson, 'returns');
+  }
+
+  Future<BrandReturnSummary> brandReturnSummary() async {
+    final body = await _api.get('/returns/summary');
+    final summary = body['summary'];
+    if (summary is! Map) {
+      throw StateError('The server did not return the return totals.');
+    }
+    return BrandReturnSummary.fromJson(Map<String, dynamic>.from(summary));
+  }
+
+  Future<BrandReturn> brandReturn(String returnId) async {
+    final body = await _api.get('/returns/$returnId');
+    return _returnFrom(body);
+  }
+
+  /// Receives the goods. Each line the shop puts back into stock must say so;
+  /// every other line is written off by the server.
+  Future<BrandReturn> receiveBrandReturn(
+    String returnId, {
+    required Map<int, bool> restockByIndex,
+  }) async {
+    final indexes = restockByIndex.keys.toList()..sort();
+    final body = await _api.post(
+      '/returns/$returnId/receive',
+      data: {
+        'decisions': [
+          for (final index in indexes)
+            {'index': index, 'restock': restockByIndex[index]},
+        ],
+      },
+    );
+    return _returnFrom(body);
+  }
+
+  BrandReturn _returnFrom(Map<String, dynamic> body) {
+    final value = body['return'];
+    if (value is! Map) {
+      throw StateError('The server did not return the return.');
+    }
+    return BrandReturn.fromJson(Map<String, dynamic>.from(value));
+  }
+
   AuthResult _authFrom(Map<String, dynamic> body) {
     final token = body['token'];
     final user = body['user'];

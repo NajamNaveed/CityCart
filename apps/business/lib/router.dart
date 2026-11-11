@@ -10,11 +10,16 @@ import 'features/auth/splash_screen.dart';
 import 'features/availability/availability_screen.dart';
 import 'features/bookings/booking_detail_screen.dart';
 import 'features/bookings/bookings_screen.dart';
+import 'features/brand_deliveries/brand_deliveries_screen.dart';
+import 'features/brand_deliveries/brand_delivery_detail_screen.dart';
 import 'features/brand_orders/brand_order_detail_screen.dart';
 import 'features/brand_orders/brand_orders_screen.dart';
 import 'features/brand_products/add_product_screen.dart';
 import 'features/brand_products/brand_product_detail_screen.dart';
 import 'features/brand_products/brand_products_screen.dart';
+import 'features/brand_returns/brand_return_detail_screen.dart';
+import 'features/brand_returns/brand_returns_screen.dart';
+import 'features/brand_riders/brand_riders_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/messages/chat_thread_screen.dart';
 import 'features/messages/messages_screen.dart';
@@ -114,6 +119,40 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
+        path: '/brand-deliveries',
+        builder: (context, state) => BrandDeliveriesScreen(
+          initialStatus: state.uri.queryParameters['status'],
+        ),
+      ),
+      GoRoute(
+        path: '/brand-deliveries/:id',
+        builder: (context, state) => BrandDeliveryDetailScreen(
+          deliveryId: state.pathParameters['id']!,
+          initial: state.extra is BrandDelivery
+              ? state.extra as BrandDelivery
+              : null,
+        ),
+      ),
+      GoRoute(
+        path: '/brand-returns',
+        builder: (context, state) => BrandReturnsScreen(
+          initialStatus: state.uri.queryParameters['status'],
+        ),
+      ),
+      GoRoute(
+        path: '/brand-returns/:id',
+        builder: (context, state) => BrandReturnDetailScreen(
+          returnId: state.pathParameters['id']!,
+          initial: state.extra is BrandReturn
+              ? state.extra as BrandReturn
+              : null,
+        ),
+      ),
+      GoRoute(
+        path: '/brand-riders',
+        builder: (context, state) => const BrandRidersScreen(),
+      ),
+      GoRoute(
         path: '/offerings',
         builder: (context, state) => const OfferingsScreen(),
       ),
@@ -177,7 +216,13 @@ bool _isProviderOnly(String location) {
 }
 
 /// Areas only a shop owner has.
-const _brandOnlyPaths = <String>['/brand-orders', '/brand-products'];
+const _brandOnlyPaths = <String>[
+  '/brand-orders',
+  '/brand-products',
+  '/brand-deliveries',
+  '/brand-returns',
+  '/brand-riders',
+];
 
 bool _isBrandOnly(String location) {
   return _brandOnlyPaths.any(
