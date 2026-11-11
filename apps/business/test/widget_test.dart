@@ -427,10 +427,10 @@ void main() {
           'orderStatus': 'PENDING',
           'paymentStatus': 'PENDING',
           'paymentMethod': 'COD',
-          'subtotal': 500000,
-          'deliveryFee': 15000,
-          'discount': 5000,
-          'total': 510000,
+          'subtotal': 5000,
+          'deliveryFee': 150,
+          'discount': 50,
+          'total': 5100,
           'createdAt': '2026-11-11T09:30:00.000Z',
           'items': [
             {
@@ -438,8 +438,8 @@ void main() {
               'productName': 'Cotton kurta',
               'sku': 'K-1',
               'quantity': 2,
-              'unitPrice': 250000,
-              'totalPrice': 500000,
+              'unitPrice': 2500,
+              'totalPrice': 5000,
             },
           ],
           'shippingAddress': {
@@ -455,7 +455,7 @@ void main() {
             {'status': 'PENDING', 'at': '2026-11-11T09:30:00.000Z'},
           ],
         },
-        'payment': {'status': 'PENDING', 'method': 'COD', 'amount': 510000},
+        'payment': {'status': 'PENDING', 'method': 'COD', 'amount': 5100},
         'delivery': {
           '_id': 'd1',
           'status': 'PENDING',

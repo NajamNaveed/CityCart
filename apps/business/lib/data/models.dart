@@ -1042,8 +1042,8 @@ class BrandOrderItem {
       productName: _text(json['productName'], 'Product'),
       sku: _text(json['sku']),
       quantity: _int(json['quantity'], 1),
-      unitPricePaisa: _int(json['unitPrice'], 0),
-      totalPricePaisa: _int(json['totalPrice'], 0),
+      unitPricePaisa: rupeesToPaisa(json['unitPrice']),
+      totalPricePaisa: rupeesToPaisa(json['totalPrice']),
       image: _optionalText(json['image']),
       pickStatus: _text(json['pickStatus']),
     );
@@ -1117,7 +1117,7 @@ class BrandPayment {
     return BrandPayment(
       status: _text(json['status'], 'PENDING'),
       method: _text(json['method'], 'COD'),
-      amountPaisa: _int(json['amount'], 0),
+      amountPaisa: rupeesToPaisa(json['amount']),
     );
   }
 }
@@ -1244,11 +1244,11 @@ class BrandOrder {
       orderStatus: _text(json['orderStatus'], 'PENDING'),
       paymentStatus: _text(json['paymentStatus'], 'PENDING'),
       paymentMethod: _text(json['paymentMethod'], 'COD'),
-      subtotalPaisa: _int(json['subtotal'], 0),
-      deliveryFeePaisa: _int(json['deliveryFee'], 0),
-      discountPaisa: _int(json['discount'], 0),
-      taxPaisa: _int(json['tax'], 0),
-      totalPaisa: _int(json['total'], 0),
+      subtotalPaisa: rupeesToPaisa(json['subtotal']),
+      deliveryFeePaisa: rupeesToPaisa(json['deliveryFee']),
+      discountPaisa: rupeesToPaisa(json['discount']),
+      taxPaisa: rupeesToPaisa(json['tax']),
+      totalPaisa: rupeesToPaisa(json['total']),
       items: _mapList(json['items'])
           .map(BrandOrderItem.fromJson)
           .toList(growable: false),
@@ -1302,6 +1302,15 @@ class BrandOrderDetail {
       pendingAdjustment: pending != null && pending.isPending ? pending : null,
     );
   }
+}
+
+/// Shop prices and order totals cross the API in decimal rupees ("64.97"),
+/// not paisa. Screens use the same integer-paisa money format everywhere.
+int rupeesToPaisa(Object? value) {
+  if (value is num) return (value * 100).round();
+  if (value == null) return 0;
+  final parsed = double.tryParse('$value');
+  return parsed == null ? 0 : (parsed * 100).round();
 }
 
 int _int(Object? value, int fallback) {
