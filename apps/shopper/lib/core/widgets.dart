@@ -253,6 +253,7 @@ class AppButton extends StatelessWidget {
     );
     if (helper == null) return wrapped;
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         wrapped,

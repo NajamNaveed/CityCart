@@ -204,9 +204,10 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
 
+      expect(find.text('Home services'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('Shops near you'), 200);
       expect(find.text('Shops near you'), findsOneWidget);
-      await tester.drag(find.byType(ListView), const Offset(0, -320));
-      await tester.pump();
+      await tester.scrollUntilVisible(find.text('Loom & Co.'), 200);
       expect(find.text('Loom & Co.'), findsOneWidget);
       expect(find.text('Linen Kurta'), findsOneWidget);
       expect(find.text('Rs 2,450'), findsOneWidget);

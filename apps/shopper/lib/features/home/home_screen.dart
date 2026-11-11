@@ -79,6 +79,8 @@ class HomeScreen extends ConsumerWidget {
                       areaLabel: area?.label,
                       storeCount: result.pagination.total,
                     ),
+                    const SizedBox(height: 12),
+                    _ServicesTeaser(onTap: () => context.go('/services')),
                     const SizedBox(height: 24),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -179,6 +181,74 @@ class _HomeHeader extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ServicesTeaser extends StatelessWidget {
+  const _ServicesTeaser({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: SurfaceCard(
+        onTap: onTap,
+        padding: const EdgeInsets.all(16),
+        color: AppColors.claySoft,
+        borderColor: AppColors.claySoft,
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: const Icon(
+                Icons.home_repair_service_outlined,
+                size: 22,
+                color: AppColors.clay,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Home services',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: AppColors.clay,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Cleaning, repairs and more from people nearby',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.clay.withValues(alpha: 0.85),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            const Icon(
+              Icons.arrow_forward_rounded,
+              size: 19,
+              color: AppColors.clay,
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -17,6 +17,9 @@ import 'features/onboarding/area_screen.dart';
 import 'features/orders/order_detail_screen.dart';
 import 'features/orders/orders_screen.dart';
 import 'features/product/product_screen.dart';
+import 'features/services/service_booking_screen.dart';
+import 'features/services/service_provider_screen.dart';
+import 'features/services/services_screen.dart';
 import 'features/storefront/storefront_screen.dart';
 import 'providers.dart';
 
@@ -63,6 +66,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
+                path: '/services',
+                builder: (context, state) => const ServicesScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
                 path: '/cart',
                 builder: (context, state) => const CartScreen(),
               ),
@@ -100,6 +111,18 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/orders/:orderId',
         builder: (context, state) =>
             OrderDetailScreen(orderId: state.pathParameters['orderId']!),
+      ),
+      GoRoute(
+        path: '/services/provider/:slug',
+        builder: (context, state) =>
+            ServiceProviderScreen(slug: state.pathParameters['slug']!),
+      ),
+      GoRoute(
+        path: '/services/provider/:slug/book',
+        builder: (context, state) => ServiceBookingScreen(
+          slug: state.pathParameters['slug']!,
+          offeringId: state.uri.queryParameters['offering'],
+        ),
       ),
       GoRoute(
         path: '/chat/:conversationId',
@@ -199,12 +222,18 @@ class AppShell extends ConsumerWidget {
       _NavItemData(1, Icons.search_rounded, Icons.search_rounded, 'Explore'),
       _NavItemData(
         2,
+        Icons.home_repair_service_outlined,
+        Icons.home_repair_service_rounded,
+        'Services',
+      ),
+      _NavItemData(
+        3,
         Icons.shopping_bag_outlined,
         Icons.shopping_bag_rounded,
         'Basket',
       ),
       _NavItemData(
-        3,
+        4,
         Icons.person_outline_rounded,
         Icons.person_rounded,
         'You',
@@ -232,7 +261,7 @@ class AppShell extends ConsumerWidget {
                     _NavItem(
                       item: item,
                       active: index == item.branch,
-                      badge: item.branch == 2 ? cart.itemCount : 0,
+                      badge: item.branch == 3 ? cart.itemCount : 0,
                       onTap: () => navigationShell.goBranch(
                         item.branch,
                         initialLocation: index == item.branch,

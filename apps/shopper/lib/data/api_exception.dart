@@ -67,6 +67,19 @@ const _codeMessages = <String, String>{
       'The store is waiting for your answer about a change to this order.',
   'ORDER_CHANGED': 'This order changed. Pull down to reload it.',
   'PAYMENT_NOT_FOUND': 'This order has no payment record yet.',
+  'OUTSIDE_SERVICE_BLOCK':
+      'This address is outside the area this provider serves. Try an address '
+      'nearer their area, or choose another provider.',
+  'SLOT_UNAVAILABLE': 'That time is not offered. Pick another open time.',
+  'SLOT_TAKEN': 'Someone just booked that time. Pick another one.',
+  'SLOT_IN_PAST': 'That time has already passed. Pick a later time.',
+  'SLOT_TOO_FAR': 'You can book up to 60 days ahead.',
+  'OUTSIDE_AVAILABILITY': 'That time is outside the provider’s working hours.',
+  'BLACKOUT_DATE': 'The provider is not available on that day.',
+  'INVALID_SLOT': 'Choose a valid date and time.',
+  'PROVIDER_UNAVAILABLE': 'This provider is not taking requests right now.',
+  'PRICE_BELOW_STARTING': 'Your offer is below this provider’s starting price.',
+  'INVALID_STATUS': 'This booking changed. Reload it and try again.',
 };
 
 ApiException fromDio(DioException error) {

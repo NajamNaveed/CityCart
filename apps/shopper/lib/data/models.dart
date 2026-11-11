@@ -1699,3 +1699,429 @@ class MyReview {
     );
   }
 }
+
+// --- Services --------------------------------------------------------------
+
+/// A kind of work a provider can offer: cleaning, repairs, tutoring and so on.
+class ServiceCategory {
+  const ServiceCategory({
+    required this.id,
+    required this.name,
+    this.slug = '',
+    this.order = 0,
+    this.image,
+  });
+
+  final String id;
+  final String name;
+  final String slug;
+  final int order;
+  final String? image;
+
+  factory ServiceCategory.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return ServiceCategory(
+      id: text(map['_id']),
+      name: text(map['name'], 'Service'),
+      slug: text(map['slug']),
+      order: asInt(map['order']),
+      image: optionalText(map['image']),
+    );
+  }
+}
+
+/// One thing a provider sells, with its own price floor and length.
+class ServiceOffering {
+  const ServiceOffering({
+    required this.id,
+    required this.title,
+    this.slug = '',
+    this.description,
+    this.images = const <String>[],
+    this.startingAtPricePaisa = 0,
+    this.durationMinutes = 0,
+    this.attributes = const <String, dynamic>{},
+  });
+
+  final String id;
+  final String title;
+  final String slug;
+  final String? description;
+  final List<String> images;
+
+  /// Whole paisa, as the server stores it. Divide by 100 for rupees.
+  final int startingAtPricePaisa;
+  final int durationMinutes;
+  final Map<String, dynamic> attributes;
+
+  double get startingAtPrice => startingAtPricePaisa / 100;
+  String? get image => images.isEmpty ? null : images.first;
+
+  factory ServiceOffering.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return ServiceOffering(
+      id: text(map['_id']),
+      title: text(map['title'], 'Service'),
+      slug: text(map['slug']),
+      description: optionalText(map['description']),
+      images: asStringList(map['images']),
+      startingAtPricePaisa: asInt(map['startingAtPrice']),
+      durationMinutes: asInt(map['durationMinutes']),
+      attributes: asMap(map['attributes']),
+    );
+  }
+}
+
+/// One working window in Karachi wall-clock minutes. `start` and `end` are
+/// already formatted as `HH:MM` by the server.
+class ServiceWindow {
+  const ServiceWindow({
+    required this.weekday,
+    required this.weekdayName,
+    required this.startMinute,
+    required this.endMinute,
+    this.start = '',
+    this.end = '',
+    this.slotMinutes = 60,
+  });
+
+  final int weekday;
+  final String weekdayName;
+  final int startMinute;
+  final int endMinute;
+  final String start;
+  final String end;
+  final int slotMinutes;
+
+  factory ServiceWindow.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return ServiceWindow(
+      weekday: asInt(map['weekday']),
+      weekdayName: text(map['weekdayName'], 'Day'),
+      startMinute: asInt(map['startMinute']),
+      endMinute: asInt(map['endMinute']),
+      start: text(map['start']),
+      end: text(map['end']),
+      slotMinutes: asInt(map['slotMinutes'], 60),
+    );
+  }
+}
+
+class ServiceAvailability {
+  const ServiceAvailability({
+    this.windows = const <ServiceWindow>[],
+    this.blackoutDates = const <String>[],
+    this.updatedAt,
+    this.isPublished = false,
+  });
+
+  final List<ServiceWindow> windows;
+  final List<String> blackoutDates;
+  final DateTime? updatedAt;
+  final bool isPublished;
+
+  bool isBlackout(String dateKey) => blackoutDates.contains(dateKey);
+
+  factory ServiceAvailability.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return ServiceAvailability(
+      windows: asList(map['windows'])
+          .map(ServiceWindow.fromJson)
+          .toList(growable: false),
+      blackoutDates: asStringList(map['blackoutDates']),
+      updatedAt: asDate(map['updatedAt']),
+      isPublished: map['isPublished'] == true,
+    );
+  }
+}
+
+class ServiceReviewReply {
+  const ServiceReviewReply({required this.body, this.at});
+
+  final String body;
+  final DateTime? at;
+
+  factory ServiceReviewReply.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return ServiceReviewReply(body: text(map['body']), at: asDate(map['at']));
+  }
+}
+
+class ServiceReview {
+  const ServiceReview({
+    required this.id,
+    this.bookingId = '',
+    this.providerId = '',
+    this.rating = 0,
+    this.comment,
+    this.reply,
+    this.reviewerName,
+    this.serviceTitle,
+    this.createdAt,
+  });
+
+  final String id;
+  final String bookingId;
+  final String providerId;
+  final int rating;
+  final String? comment;
+  final ServiceReviewReply? reply;
+  final String? reviewerName;
+  final String? serviceTitle;
+  final DateTime? createdAt;
+
+  factory ServiceReview.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    final reply = asMap(map['providerReply']);
+    return ServiceReview(
+      id: text(map['_id']),
+      bookingId: text(map['bookingId']),
+      providerId: text(map['providerId']),
+      rating: asInt(map['rating']),
+      comment: optionalText(map['comment']),
+      reply: reply.isEmpty ? null : ServiceReviewReply.fromJson(reply),
+      reviewerName: optionalText(map['reviewerName']),
+      serviceTitle: optionalText(map['serviceTitle']),
+      createdAt: asDate(map['createdAt']),
+    );
+  }
+}
+
+/// The public, approximate block a provider works in. The pin itself is never
+/// sent to shoppers.
+class ServiceBlockRef {
+  const ServiceBlockRef({
+    required this.id,
+    required this.name,
+    this.latitude,
+    this.longitude,
+    this.area,
+  });
+
+  final String id;
+  final String name;
+  final double? latitude;
+  final double? longitude;
+  final String? area;
+
+  factory ServiceBlockRef.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    final center = asMap(map['center']);
+    return ServiceBlockRef(
+      id: text(map['_id']),
+      name: text(map['name'], 'Area'),
+      latitude: optionalDouble(center['lat']),
+      longitude: optionalDouble(center['lng']),
+      area: optionalText(map['area']),
+    );
+  }
+}
+
+class ServiceCategoryRef {
+  const ServiceCategoryRef({
+    required this.id,
+    required this.name,
+    this.slug = '',
+  });
+
+  final String id;
+  final String name;
+  final String slug;
+
+  factory ServiceCategoryRef.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return ServiceCategoryRef(
+      id: text(map['_id']),
+      name: text(map['name'], 'Service'),
+      slug: text(map['slug']),
+    );
+  }
+}
+
+class ServiceCityRef {
+  const ServiceCityRef({required this.id, required this.name});
+
+  final String id;
+  final String name;
+
+  factory ServiceCityRef.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return ServiceCityRef(
+      id: text(map['_id']),
+      name: text(map['name'], 'City'),
+    );
+  }
+}
+
+/// A service provider as shoppers may see it: discovery rows and the published
+/// provider page share one type. [offerings], [availability] and [reviews] are
+/// only filled on the provider page.
+class ServiceProvider {
+  const ServiceProvider({
+    required this.id,
+    required this.displayName,
+    required this.slug,
+    this.bio,
+    this.avatar,
+    this.coverImage,
+    this.startingAtPricePaisa = 0,
+    this.ratingAvg = 0,
+    this.ratingCount = 0,
+    this.completedBookings = 0,
+    this.isNew = true,
+    this.acceptingNewOrders = true,
+    this.category,
+    this.city,
+    this.block,
+    this.distanceKm,
+    this.offeringCount = 0,
+    this.topOfferings = const <ServiceOffering>[],
+    this.offerings = const <ServiceOffering>[],
+    this.availability = const ServiceAvailability(),
+    this.reviews = const <ServiceReview>[],
+  });
+
+  final String id;
+  final String displayName;
+  final String slug;
+  final String? bio;
+  final String? avatar;
+  final String? coverImage;
+  final int startingAtPricePaisa;
+  final double ratingAvg;
+  final int ratingCount;
+  final int completedBookings;
+  final bool isNew;
+  final bool acceptingNewOrders;
+  final ServiceCategoryRef? category;
+  final ServiceCityRef? city;
+  final ServiceBlockRef? block;
+  final double? distanceKm;
+  final int offeringCount;
+  final List<ServiceOffering> topOfferings;
+  final List<ServiceOffering> offerings;
+  final ServiceAvailability availability;
+  final List<ServiceReview> reviews;
+
+  double get startingAtPrice => startingAtPricePaisa / 100;
+  bool get hasRating => ratingCount > 0;
+  String get categoryName => category?.name ?? 'Service';
+  String get placeLabel => block?.name ?? city?.name ?? '';
+
+  /// The provider's public block centre, used as an approximate job pin when
+  /// the shopper's chosen area has no coordinates.
+  double? get blockLatitude => block?.latitude;
+  double? get blockLongitude => block?.longitude;
+
+  factory ServiceProvider.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    final category = asMap(map['category']);
+    final city = asMap(map['city']);
+    final block = asMap(map['block']);
+    return ServiceProvider(
+      id: text(map['_id']),
+      displayName: text(map['displayName'], 'Service provider'),
+      slug: text(map['slug']),
+      bio: optionalText(map['bio']),
+      avatar: optionalText(map['avatar']),
+      coverImage: optionalText(map['coverImage']),
+      startingAtPricePaisa: asInt(map['startingAtPrice']),
+      ratingAvg: asDouble(map['ratingAvg']),
+      ratingCount: asInt(map['ratingCount']),
+      completedBookings: asInt(map['completedBookings']),
+      isNew: map['isNew'] != false,
+      acceptingNewOrders: map['acceptingNewOrders'] != false,
+      category: category.isEmpty ? null : ServiceCategoryRef.fromJson(category),
+      city: city.isEmpty ? null : ServiceCityRef.fromJson(city),
+      block: block.isEmpty ? null : ServiceBlockRef.fromJson(block),
+      distanceKm: optionalDouble(map['distanceKm']),
+      offeringCount: asInt(map['offeringCount']),
+      topOfferings: asList(map['topOfferings'])
+          .map(ServiceOffering.fromJson)
+          .toList(growable: false),
+      offerings: asList(map['offerings'])
+          .map(ServiceOffering.fromJson)
+          .toList(growable: false),
+      availability: map['availability'] == null
+          ? const ServiceAvailability()
+          : ServiceAvailability.fromJson(map['availability']),
+      reviews: asList(map['reviews'])
+          .map(ServiceReview.fromJson)
+          .toList(growable: false),
+    );
+  }
+}
+
+class ServiceDiscoverResult {
+  const ServiceDiscoverResult({
+    this.items = const <ServiceProvider>[],
+    this.pagination = const Pagination(),
+    this.scope = 'city',
+  });
+
+  final List<ServiceProvider> items;
+  final Pagination pagination;
+  final String scope;
+
+  bool get hasMore => pagination.hasMore;
+
+  factory ServiceDiscoverResult.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    final meta = asMap(map['meta']);
+    return ServiceDiscoverResult(
+      items: asList(map['items'])
+          .map(ServiceProvider.fromJson)
+          .toList(growable: false),
+      pagination: Pagination.fromJson(map['pagination']),
+      scope: text(meta['scope'], 'city'),
+    );
+  }
+}
+
+/// The acknowledgement a booking request returns. The full booking belongs to
+/// the bookings screen; this is all the confirmation needs.
+class ServiceBookingCreated {
+  const ServiceBookingCreated({
+    required this.id,
+    required this.bookingNumber,
+    this.status = 'REQUESTED',
+  });
+
+  final String id;
+  final String bookingNumber;
+  final String status;
+
+  factory ServiceBookingCreated.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return ServiceBookingCreated(
+      id: text(map['_id']),
+      bookingNumber: text(map['bookingNumber']),
+      status: text(map['status'], 'REQUESTED'),
+    );
+  }
+}
+
+class DirectChatStart {
+  const DirectChatStart({
+    required this.conversationId,
+    required this.providerName,
+    this.providerImage,
+    this.providerSlug,
+  });
+
+  final String conversationId;
+  final String providerName;
+  final String? providerImage;
+  final String? providerSlug;
+
+  factory DirectChatStart.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    final provider = asMap(map['provider']);
+    return DirectChatStart(
+      conversationId: text(map['conversationId']),
+      providerName: text(provider['name'], 'Provider'),
+      providerImage: optionalText(provider['image']),
+      providerSlug: optionalText(provider['slug']),
+    );
+  }
+}

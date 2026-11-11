@@ -373,4 +373,89 @@ class ShopperRepository {
     );
     return MyReview.fromJson(body['review']);
   }
+
+  // --- Services ------------------------------------------------------------
+
+  Future<List<ServiceCategory>> serviceCategories() async {
+    final body = await _api.get('/services/categories');
+    return asList(body['categories'])
+        .map(ServiceCategory.fromJson)
+        .toList(growable: false);
+  }
+
+  /// Approved providers around the chosen area. The server decides the scope
+  /// from the area, and only ever returns published providers.
+  Future<ServiceDiscoverResult> discoverServices({
+    required AreaSelection area,
+    String categoryId = '',
+    String query = '',
+    String sort = 'rank',
+    int page = 1,
+    int limit = 12,
+  }) async {
+    final search = query.trim();
+    final body = await _api.get(
+      '/services/discover',
+      query: {
+        ...area.discoverQuery(),
+        'page': page,
+        'limit': limit,
+        'sort': sort,
+        if (categoryId.isNotEmpty) 'categoryId': categoryId,
+        if (search.isNotEmpty) 'q': search,
+      },
+    );
+    return ServiceDiscoverResult.fromJson(body);
+  }
+
+  Future<ServiceProvider> serviceProvider(String slug) async {
+    final body = await _api.get('/services/providers/$slug');
+    return ServiceProvider.fromJson(body['provider']);
+  }
+
+  /// Sends a booking request. The server decides the block, the price floor and
+  /// which provider may take the job; the client only names the offering, the
+  /// time and where the work happens.
+  Future<ServiceBookingCreated> requestServiceBooking({
+    required String providerId,
+    required String offeringId,
+    required DateTime scheduledStart,
+    required String fullName,
+    required String phone,
+    required String addressLine,
+    required String city,
+    required double latitude,
+    required double longitude,
+    String? note,
+    int? customerOfferPaisa,
+  }) async {
+    final trimmedNote = (note ?? '').trim();
+    final body = await _api.post(
+      '/services/bookings',
+      data: {
+        'providerId': providerId,
+        'offeringId': offeringId,
+        'scheduledStart': scheduledStart.toUtc().toIso8601String(),
+        'address': {
+          'fullName': fullName,
+          'phone': phone,
+          'addressLine': addressLine,
+          if (city.trim().isNotEmpty) 'city': city.trim(),
+        },
+        'location': {'lat': latitude, 'lng': longitude},
+        if (trimmedNote.isNotEmpty) 'note': trimmedNote,
+        'customerOfferPaisa': ?customerOfferPaisa,
+      },
+    );
+    return ServiceBookingCreated.fromJson(body['booking']);
+  }
+
+  /// Opens (or reopens) the shopper's direct conversation with one provider.
+  Future<DirectChatStart> startDirectChat(String providerId) async {
+    final body = await _api.post(
+      '/services/direct-chats/start',
+      data: {'providerId': providerId},
+    );
+    return DirectChatStart.fromJson(body);
+  }
 }

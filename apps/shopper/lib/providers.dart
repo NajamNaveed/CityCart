@@ -92,6 +92,25 @@ final productProvider = FutureProvider.autoDispose.family<Product, String>((
   return ref.watch(shopperRepositoryProvider).product(productId);
 });
 
+// --- Services --------------------------------------------------------------
+
+final serviceCategoriesProvider = FutureProvider<List<ServiceCategory>>((ref) {
+  return ref.watch(shopperRepositoryProvider).serviceCategories();
+});
+
+final serviceProviderProvider = FutureProvider.autoDispose
+    .family<ServiceProvider, String>((ref, slug) {
+      return ref.watch(shopperRepositoryProvider).serviceProvider(slug);
+    });
+
+/// Addresses the shopper saved on the website, offered as prefills when
+/// requesting a service.
+final savedAddressesProvider = FutureProvider.autoDispose<List<SavedAddress>>((
+  ref,
+) {
+  return ref.watch(shopperRepositoryProvider).addresses();
+});
+
 /// The server address: baked into a release build, or chosen on the sign-in
 /// screen while developing.
 class ServerSettings {

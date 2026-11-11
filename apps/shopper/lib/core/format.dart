@@ -63,6 +63,15 @@ String formatAge(DateTime? date) {
   return formatShortDate(local);
 }
 
+/// "45 min", "1 hr" or "1 hr 30 min" — the length of a service job.
+String formatDurationMinutes(int minutes) {
+  if (minutes < 60) return '$minutes min';
+  final hours = minutes ~/ 60;
+  final rest = minutes % 60;
+  final hourLabel = '$hours hr';
+  return rest == 0 ? hourLabel : '$hourLabel $rest min';
+}
+
 /// "1.2 km" or "450 m" — never a bare long decimal.
 String formatDistance(double? km) {
   if (km == null) return '';

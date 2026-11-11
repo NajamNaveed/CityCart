@@ -10,6 +10,7 @@ import '../../data/models.dart';
 import '../../providers.dart';
 import '../cart/cart_controller.dart';
 import '../explore/explore_controller.dart';
+import '../services/services_controller.dart';
 
 /// Chooses the city and, optionally, the block the shopper wants to browse.
 /// The block centre is enough for the server to sort shops by distance, so no
@@ -62,6 +63,7 @@ class _AreaScreenState extends ConsumerState<AreaScreen> {
     await ref.read(areaProvider).choose(selection);
     ref.invalidate(homeFeedProvider);
     ref.invalidate(exploreProvider);
+    ref.invalidate(servicesProvider);
     if (!mounted) return;
     if (context.canPop()) {
       context.pop();
