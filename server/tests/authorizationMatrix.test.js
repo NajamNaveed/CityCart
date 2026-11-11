@@ -27,6 +27,8 @@ const PUBLIC_ROUTES = [
   'POST /api/v1/auth/staff/login',
   'POST /api/v1/auth/delivery/login',
   'POST /api/v1/auth/service/login',
+  'POST /api/v1/auth/business/brand/login',
+  'POST /api/v1/auth/business/service/login',
   'POST /api/v1/auth/workspace',
   'POST /api/v1/auth/register',
   'POST /api/v1/auth/forgot-password',
@@ -235,7 +237,7 @@ describe('native-app token marks', () => {
     User.findById.mockResolvedValue(brandAdmin);
     const res = await request(app).get('/api/v1/cart').set('Authorization', `Bearer ${tokenFor(brandAdmin)}`);
     expect(res.status).toBe(403);
-    expect(res.body.code).toBe('WEB_ONLY');
+    expect(res.body.code).toBe('WRONG_APP');
   });
 
   it('refuses a Staff app token for a rider', async () => {
@@ -249,7 +251,16 @@ describe('native-app token marks', () => {
     User.findById.mockResolvedValue(brandAdmin);
     const res = await request(app).get('/api/v1/cart').set('Authorization', `Bearer ${tokenFor(brandAdmin, 'delivery')}`);
     expect(res.status).toBe(403);
-    expect(res.body.code).toBe('WEB_ONLY');
+    expect(res.body.code).toBe('WRONG_APP');
+  });
+
+  it('accepts a Business app token for a brand owner', async () => {
+    User.findById.mockResolvedValue(brandAdmin);
+    const res = await request(app)
+      .get('/api/v1/auth/me')
+      .set('Authorization', `Bearer ${tokenFor(brandAdmin, 'business')}`);
+    expect(res.status).toBe(200);
+    expect(res.body.user).toMatchObject({ role: ROLES.BRAND_ADMIN });
   });
 });
 

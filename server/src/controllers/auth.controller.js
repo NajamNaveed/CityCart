@@ -30,7 +30,7 @@ const { formatZodError } = require('../utils/formatZodError');
 const { changePasswordSchema } = require('../validators/password.validator');
 const { changePassword: changePasswordForUser, PasswordError } = require('../services/password.service');
 const { signToken } = require('../utils/jwt');
-const { isMobileClient, isStaffClient, isDeliveryClient } = require('../utils/clientType');
+const { isMobileClient, isStaffClient, isDeliveryClient, isBusinessClient } = require('../utils/clientType');
 const env = require('../config/env');
 
 // Staff sessions use the short-lived cookie (docs/06 §9); shoppers the
@@ -77,6 +77,17 @@ async function register(req, res, next) {
 // which roles may sign in; see PORTAL_ROLES in services/auth.service.js.
 const loginFor = (portal) =>
   async function login(req, res, next) {
+    // The business app has its own doors. A web door must never answer a
+    // caller that says it is that app, or it would hand out a cookie session
+    // an app has no way to use safely.
+    if (isBusinessClient(req)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Business owners sign in through the CityCart Business app.',
+        code: 'BUSINESS_APP_ONLY',
+      });
+    }
+
     // The app is for shoppers. Refused before credentials are even looked at,
     // so it cannot be used to probe seller or admin accounts.
     if (isMobileClient(req) && portal !== 'customer') {
@@ -118,11 +129,18 @@ const loginFor = (portal) =>
     }
   };
 
-// Sign-in for the native staff and delivery apps (docs/20, docs/23). Each app
-// sends its own `X-Client` header; the token comes back in the body (no
-// cookie), is marked with the app it belongs to, and lasts one staff session.
-// Only that app's roles can use it; a wrong-role account gets the same generic
-// error as a wrong password, so nobody can probe which accounts exist.
+// Sign-in for the native staff, delivery and business apps (docs/20,
+// docs/23). Each app sends its own `X-Client` header; the token comes back in
+// the body (no cookie), is marked with the app it belongs to, and lasts one
+// staff session. Only that app's roles can use it; a wrong-role account gets
+// the same generic error as a wrong password, so nobody can probe which
+// accounts exist.
+const BUSINESS_LOGIN = Object.freeze({
+  check: isBusinessClient,
+  code: 'BUSINESS_APP_ONLY',
+  message: 'This sign-in is for the CityCart Business app.',
+});
+
 const APP_LOGIN = Object.freeze({
   staff: {
     check: isStaffClient,
@@ -134,6 +152,8 @@ const APP_LOGIN = Object.freeze({
     code: 'DELIVERY_APP_ONLY',
     message: 'This sign-in is for the CityCart Delivery app.',
   },
+  businessBrand: BUSINESS_LOGIN,
+  businessService: BUSINESS_LOGIN,
 });
 
 const appLoginFor = (portal) => {
@@ -162,6 +182,10 @@ const appLoginFor = (portal) => {
 
 const staffLogin = appLoginFor('staff');
 const deliveryLogin = appLoginFor('delivery');
+// A brand owner and a provider owner share the one business app but keep
+// separate doors, so each sign-in only ever looks up its own account type.
+const businessBrandLogin = appLoginFor('businessBrand');
+const businessServiceLogin = appLoginFor('businessService');
 
 const login = loginFor('customer');
 const brandLogin = loginFor('brand');
@@ -178,6 +202,15 @@ const serviceLogin = loginFor('service');
  * same HTTP-only staff cookie as a normal login.
  */
 async function workspaceLogin(req, res, next) {
+  // Workspaces belong to team members on the web and in the staff app; the
+  // business app has no multi-brand flow.
+  if (isBusinessClient(req)) {
+    return res.status(403).json({
+      success: false,
+      message: 'This sign-in is for the CityCart Business app.',
+      code: 'BUSINESS_APP_ONLY',
+    });
+  }
   const parsed = workspaceTokenSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ success: false, message: 'Validation failed.', errors: formatZodError(parsed.error) });
@@ -294,9 +327,18 @@ async function changePassword(req, res, next) {
         brandId: req.user.brandId,
         passwordVersion: user.passwordVersion,
         ...(req.membership && { membershipId: req.membership._id }),
+        ...(req.provider && { providerId: req.provider._id }),
+        // Keep the app mark, so the replacement token stays usable in the
+        // business app and nowhere else.
+        ...(req.sessionClient === 'business' && { client: 'business' }),
       },
       { expiresIn: `${env.staffSessionHours}h` }
     );
+    // An app session has no cookie: it replaces the now-stale bearer token
+    // with the fresh one in the body.
+    if (req.sessionClient === 'business') {
+      return res.status(200).json({ success: true, message: 'Password changed successfully.', token });
+    }
     res.cookie(AUTH_COOKIE_NAME, token, staffAuthCookieOptions);
     return res.status(200).json({ success: true, message: 'Password changed successfully.' });
   } catch (err) {
@@ -398,6 +440,8 @@ module.exports = {
   serviceLogin,
   staffLogin,
   deliveryLogin,
+  businessBrandLogin,
+  businessServiceLogin,
   adminLogin,
   workspaceLogin,
   switchWorkspaceHandler,

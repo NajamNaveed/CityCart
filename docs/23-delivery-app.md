@@ -43,8 +43,9 @@ location, and should never see prices, totals or the brand's paperwork. A
 separate app keeps that surface small and lets the server refuse a rider token
 everywhere else.
 
-Brand owners (`BRAND_ADMIN`), admin partners and the super admin remain
-**web-only**. That is a deliberate security rule, not an omission.
+Brand owners (`BRAND_ADMIN`) use the web dashboard or the Business app
+(docs/20 §5.13); admin partners and the super admin remain **web-only**. That
+is a deliberate security rule, not an omission.
 
 ## 2. Sign-in and sessions
 
@@ -103,8 +104,9 @@ enforce them.
 3. A rider can **never** set `DELIVERED` directly. Only
    `POST /rider/deliveries/:id/complete` with the customer's six-digit code
    does; wrong tries are counted atomically (five, then `429 CODE_LOCKED`).
-4. The token must carry `client: "delivery"`. Any other mark, or a token for a
-   shopper or web-only account, is refused on every endpoint.
+4. The token must carry `client: "delivery"`. Any other mark, or a token for an
+   account that does not belong to the Delivery app, is refused on every
+   endpoint.
 5. **Proof photos stay private.** The upload folder is built by the server from
    the brand and delivery; the rider cannot choose a path. The rider sees only
    the proof's status, never a signed link.

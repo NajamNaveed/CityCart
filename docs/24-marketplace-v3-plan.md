@@ -81,11 +81,14 @@ the customer online-payment gateway described in `10-payment-system.md` §29.
 
 ### 1.5 Flutter
 
-* Target order: shopper app, Staff app, Delivery app, Service Provider app.
+* Target order: shopper app, Staff app, Delivery app, Business app (service
+  provider + brand admin).
 * **Android first.** iOS is built per app after that app's Android release is
   stable.
-* The Service Provider app is last. Brand admin may be attached to it later,
-  but only after the four primary apps are done.
+* The Business app is last. It was originally planned as a provider-only app;
+  on 11 November 2026 the owner approved adding the brand-admin portal to the
+  same install, with `BRAND_ADMIN` and `SERVICE_PROVIDER` signing in through
+  separate doors (`X-Client: business`).
 * The React Native apps stay in the repository and keep working until the
   matching Flutter app reaches parity.
 
@@ -114,7 +117,7 @@ starts before the previous phase's exit gate passes.
 | **5** | Flutter shopper app (Android) | 4 | P0 parity on real devices |
 | **6** | Flutter Staff app | 5 | P0 parity |
 | **7** | Flutter Delivery app | 5 | P0 parity |
-| **8** | Flutter Service Provider app (brand admin may follow) | 5, 2c | P0 parity |
+| **8** | Flutter Business app (service provider + brand admin, one install, two doors) | 5, 2c | P0 parity for both roles |
 | **9** | Independent security audit, penetration test, performance and release hardening | all | No critical/high findings; release checklist signed off |
 
 Phase 3 is complete: the ledger, invoices, freeze ladder, claims, help and both
@@ -1150,7 +1153,7 @@ explicit instruction.
 | D18 | Removing the last membership anonymizes the account and frees the email; financial history is never deleted. |
 | D19 | Web SEO uses server rendering for public pages; dashboards stay client-rendered. |
 | D20 | Accessibility target is WCAG 2.1 AA; English at launch, RTL-ready layouts. |
-| D21 | Flutter is Android-first; iOS follows per app; provider app is last. |
+| D21 | Flutter is Android-first; iOS follows per app; the Business app (provider + brand admin) is last. |
 | D22 | 2FA is email OTP for privileged web accounts first; TOTP can follow. |
 | D23 | Security baseline in Phase 1; independent audit and pen test in Phase 9. |
 

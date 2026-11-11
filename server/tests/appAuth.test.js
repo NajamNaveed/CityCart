@@ -234,13 +234,23 @@ describe('Bearer tokens on the API', () => {
     expect(res.body.code).toBe('WRONG_APP');
   });
 
-  it.each(['BRAND_ADMIN', 'SUPER_ADMIN'])('%s: even a staff or delivery token is refused, they stay on the web', async (role) => {
-    const user = fakeUser(role);
+  it('SUPER_ADMIN stays on the web: even a staff or delivery token is refused (WEB_ONLY)', async () => {
+    const user = fakeUser('SUPER_ADMIN');
     User.findById.mockResolvedValue(user);
     for (const client of ['staff', 'delivery']) {
       const res = await me(...bearer(tokenFor(user, { client })));
       expect(res.status).toBe(403);
       expect(res.body.code).toBe('WEB_ONLY');
+    }
+  });
+
+  it('BRAND_ADMIN is a business-app role, so a staff or delivery token is the wrong app', async () => {
+    const user = fakeUser('BRAND_ADMIN');
+    User.findById.mockResolvedValue(user);
+    for (const client of ['staff', 'delivery']) {
+      const res = await me(...bearer(tokenFor(user, { client })));
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('WRONG_APP');
     }
   });
 

@@ -7,6 +7,8 @@ const {
   serviceLogin,
   staffLogin,
   deliveryLogin,
+  businessBrandLogin,
+  businessServiceLogin,
   adminLogin,
   workspaceLogin,
   switchWorkspaceHandler,
@@ -31,6 +33,10 @@ router.post('/brand/login', authLimiter, brandLogin); // BRAND_ADMIN / BRAND_EMP
 router.post('/service/login', authLimiter, serviceLogin); // SERVICE_PROVIDER only
 router.post('/staff/login', authLimiter, staffLogin); // BRAND_EMPLOYEE / PICKER, staff app only
 router.post('/delivery/login', authLimiter, deliveryLogin); // RIDER, delivery app only
+// The business app has one app but two doors: a brand owner and a provider
+// owner never share a portal, so neither can probe the other's account type.
+router.post('/business/brand/login', authLimiter, businessBrandLogin); // BRAND_ADMIN, business app only
+router.post('/business/service/login', authLimiter, businessServiceLogin); // SERVICE_PROVIDER, business app only
 router.post('/admin/login', authLimiter, adminLogin); // SUPER_ADMIN / ADMIN_PARTNER only
 // Second step for a multi-brand employee whose login answered 409
 // WORKSPACE_REQUIRED (docs/05 §6, docs/24 §3.3).

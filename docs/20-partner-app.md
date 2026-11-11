@@ -59,8 +59,8 @@ proposed and then **approved by the owner**.
 |---|---|---|
 | 1 | **One** app for staff work in `partner/` next to `mobile/`; the account's role decides the screens. The rider screens were later split into a second installable app, *CityCart Delivery*, in `delivery/` (marketplace v2 Phase 5) | One backend, one login per app, one dependency set each. The shopper app stays separate (other audience, own store listing). The staff app keeps the records and picker screens; the delivery app is rider-only |
 | 2 | Riders belong to **one brand each** (brand-scoped `RIDER` role, created by the brand) | Reuses the existing multi-tenant model; no shared rider pool |
-| 3 | The Staff and Delivery apps use **short-lived bearer tokens** (one staff session, default 8 h, no sliding renewal), each marked with its own `client` claim | The apps cannot use the web cookie. This deliberately relaxes the old "staff stay on the web" rule, **only** for `BRAND_EMPLOYEE`, `PICKER` and `RIDER` |
-| 4 | Brand owners and the super admin stay on the **web** | Highest-privilege accounts should not hold a long-lived bearer token on a phone |
+| 3 | The Staff, Delivery and Business apps use **short-lived bearer tokens** (one staff session, default 8 h, no sliding renewal), each marked with its own `client` claim | The apps cannot use the web cookie. This deliberately relaxes the old "staff stay on the web" rule, **only** for `BRAND_EMPLOYEE`, `PICKER`, `RIDER`, `BRAND_ADMIN` and `SERVICE_PROVIDER` |
+| 4 | The super admin stays on the **web**; brand owners and provider owners may use **either** the web dashboard or the Business app | Platform-wide authority should not sit on a phone. Owners asked for a mobile way to run day-to-day work; the server still enforces the same role and tenant rules, and the app token expires after one staff session |
 | 5 | Proof of delivery is a **six-digit code** the customer reads out | Strong enough, needs no camera/signature library. Chosen over four digits for safety |
 | 6 | Dependencies are kept **minimal and justified**; installs consolidated | Owner preference (see §8) |
 | 7 | Card data is **never stored**; online payments were confirmed only by the gateway's signed webhook. **Superseded in v3:** there is no online payment any more; the "never store card data" rule still holds for legacy records | Security and PCI scope |
@@ -68,16 +68,16 @@ proposed and then **approved by the owner**.
 | 9 | **Payment gateway behind a small adapter** (create payment, verify webhook), so the provider can be swapped. **Superseded in v3:** the adapter and its test provider were removed with online payments; a real provider would need a new, approved design | Live use needs a registered business (NTN, bank account, KYC), which is a business step, not code |
 | 10 | **Prepaid orders:** stay pending with stock held for about 30 minutes; only the signed webhook marks them paid; otherwise the order cancels and stock is released. **Superseded in v3:** prepaid orders left with the gateway; legacy ones stay readable and read-only (docs/10 §29) | Never ship goods on an unconfirmed payment |
 | 11 | **Build order:** C, then D (without the returns tab), then D0 and the returns tab, then E, then F | C needs no decisions; E needs a sandbox account |
-| 12 | **Small defaults:** a rider with open deliveries cannot be deactivated; customers never receive the internal `riderId`; brand owners stay web-only | Done in Phase C (the first two) |
+| 12 | **Small defaults:** a rider with open deliveries cannot be deactivated; customers never receive the internal `riderId`; the super admin stays web-only | Done in Phase C (the first two); the third still holds |
 
 ## 3. Design
 
 ### 3.1 How the apps connect to the system
 
 ```text
- Shopper app   Staff app (Records | Picker)   Delivery app (Rider)   Web: brand dashboard / super admin
-        \               |                         |                  /
-         +--------  /api/v1  (Express)  ---------+-----------------+
+ Shopper app   Staff app   Delivery app   Business app   Web: brand / provider dashboard, super admin
+        \           |            |             |          /
+         +--------  /api/v1  (Express)  ------+-----------+-----------------+
                            |            \
                         MongoDB      Socket.io (live updates)
 ```
@@ -171,13 +171,17 @@ Behaviour:
   `riderId: null` removes the rider. Final deliveries cannot be reassigned. A
   typed `assignedAgent` is refused (`409 USE_RIDER_ASSIGNMENT`) while a rider is
   assigned. `GET /deliveries?riderId=` filters by rider.
-* **App sign-in (split in Phase 5).** The Staff app uses `POST /auth/staff/login`
+* **App sign-in (split in Phase 5; business app added November 2026).** The
+  Staff app uses `POST /auth/staff/login`
   with header `X-Client: staff` (only `BRAND_EMPLOYEE` and `PICKER`); the
   Delivery app uses `POST /auth/delivery/login` with `X-Client: delivery` (only
-  `RIDER`). Wrong role, wrong password and unknown email all give the same
-  `401`. The token comes in the body (no cookie), carries `client: "staff"` or
-  `client: "delivery"`, and lasts `STAFF_SESSION_HOURS`. Without the app's own
-  header: `403 STAFF_APP_ONLY` or `403 DELIVERY_APP_ONLY`.
+  `RIDER`); the Business app uses `POST /auth/business/brand/login` or
+  `POST /auth/business/service/login` with `X-Client: business` (only
+  `BRAND_ADMIN` and `SERVICE_PROVIDER`, respectively). Wrong role, wrong
+  password and unknown email all give the same `401`. The token comes in the
+  body (no cookie), carries the app's `client` mark, and lasts
+  `STAFF_SESSION_HOURS`. Without the app's own header: `403 STAFF_APP_ONLY`,
+  `403 DELIVERY_APP_ONLY` or `403 BUSINESS_APP_ONLY`.
 * **Rider endpoints** (`/api/v1/rider/deliveries`, role `RIDER` only): list
   (`?scope=active|history`), detail, status (`PICKED_UP`, `IN_TRANSIT`,
   `OUT_FOR_DELIVERY`, `FAILED` + reason), complete-with-code. The rider's view
@@ -249,6 +253,8 @@ Main files: `models/receipt.model.js`, `models/payment.model.js`,
 |---|---|---|
 | `POST /auth/staff/login` | Team member, picker | Header `X-Client: staff`; token in body |
 | `POST /auth/delivery/login` | Rider | Header `X-Client: delivery`; token in body |
+| `POST /auth/business/brand/login` | Brand owner | Header `X-Client: business`; token in body |
+| `POST /auth/business/service/login` | Provider owner | Header `X-Client: business`; token in body |
 | `GET /auth/me` | Any signed-in | Returns user and, for team members, `permissions` (use it to choose screens) |
 | `GET/POST /riders`, `PATCH /riders/:id`, `PATCH /riders/:id/password` | Brand: `riders.view/create/update` | Web dashboard today |
 | `PATCH /deliveries/:id/rider` | Brand: `delivery.manage` | Assign or remove (`riderId: null`) |
@@ -547,6 +553,38 @@ Built in November 2026:
   Not yet run on a phone; no push notifications; the launcher icon is still the
   Flutter default. See `apps/staff/README.md`.
 
+### 5.13 Flutter Business app (v3 Phase 9)
+
+`apps/business/` is the fourth app: one install for **brand owners** and
+**service-provider owners**, chosen by which door the person signs in through.
+It is read/write against the existing API; no endpoint outside the business
+doors was added.
+
+* **Sign-in:** two doors on one screen, `POST /auth/business/brand/login` and
+  `POST /auth/business/service/login`, both sending `X-Client: business`. The
+  token and user live in secure storage under `citycart.business.*` and are
+  deleted on sign-out. A `PENDING` provider signs in and sees the review state;
+  the server still refuses bookings and chats until it is `ACTIVE`.
+* **Role-aware shell:** `BRAND_ADMIN` gets Home, Orders, Shop and Account;
+  `SERVICE_PROVIDER` gets Home, Bookings, Services and Account. The router
+  refuses the other role's routes, and the server independently enforces the
+  role on every call.
+* **Provider side:** today's requests and next booking, booking detail with
+  accept / offer / decline / propose / start / complete / cancel, offerings
+  with prices and durations, weekly availability and blackout dates, public
+  profile and block change, booking and direct chats, and reviews with one
+  reply each.
+* **Brand side:** order list and detail with the allowed status moves, products
+  with Cloudinary image upload, inventory counts, deliveries with rider
+  assignment and status, riders, returns with receive decisions, employees and
+  permissions, branches, analytics, brand settings and the shop chat.
+* **UI:** the same paper/forest palette as the other CityCart apps, one primary
+  action per screen, plain-language status labels and bounded text at 320 px
+  with a 1.3 text scale.
+* **Tests:** offline widget tests cover both roles, the router guards, the
+  booking action rules and the narrow layout; the server rules are covered by
+  `server/tests/businessAppAuth.test.js`.
+
 ## 6. What is left
 
 ### 6.1 Phase D0: returns — done as door returns (marketplace v2 Phase 6)
@@ -703,7 +741,8 @@ in §4 has tests; add the same for new rules, in the same style.
 |---|---|---|
 | `STAFF_APP_ONLY` | 403 | Staff sign-in without `X-Client: staff` |
 | `DELIVERY_APP_ONLY` | 403 | Delivery sign-in without `X-Client: delivery` |
-| `WRONG_APP` | 403 | A bearer token marked for the other app, or a bearer token of a shopper / web-only account |
+| `BUSINESS_APP_ONLY` | 403 | Business sign-in without `X-Client: business`, or a web door called with that header |
+| `WRONG_APP` | 403 | A bearer token marked for the other app, or a bearer token of a shopper account |
 | `WEB_ONLY` | 403 | Bearer token not allowed for that account (existing code, widened rules) |
 | `USE_RIDER_ASSIGNMENT` | 409 | Typed agent name while a rider is assigned |
 | `DELIVERY_FINAL` | 409 | Delivery already finished |

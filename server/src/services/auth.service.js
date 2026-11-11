@@ -95,6 +95,10 @@ const PORTAL_ROLES = Object.freeze({
   // The seller portal's provider door (docs/24 §4.1). A provider session
   // never carries a brandId; it carries providerId instead.
   service: [ROLES.SERVICE_PROVIDER],
+  // The business app's two doors (docs/20 §3). Owners only: team members and
+  // pickers keep the staff app, and nothing else may use these at all.
+  businessBrand: [ROLES.BRAND_ADMIN],
+  businessService: [ROLES.SERVICE_PROVIDER],
 });
 
 const PORTAL_ACCOUNT_TYPES = Object.freeze({
@@ -104,6 +108,8 @@ const PORTAL_ACCOUNT_TYPES = Object.freeze({
   delivery: 'BRAND',
   admin: 'PLATFORM_ADMIN',
   service: 'SERVICE',
+  businessBrand: 'BRAND',
+  businessService: 'SERVICE',
 });
 
 // A workspace token only chooses a membership; it is never a session
@@ -141,6 +147,16 @@ function membershipSummary({ membership, brand }) {
   };
 }
 
+// Which app issued a token, named in its `client` claim. Web portals are absent
+// on purpose: a web session is a cookie and must never be usable as a bearer
+// token. The two business doors both belong to the one business app.
+const APP_CLIENT_BY_PORTAL = Object.freeze({
+  staff: 'staff',
+  delivery: 'delivery',
+  businessBrand: 'business',
+  businessService: 'business',
+});
+
 /**
  * Issues a session token. An employee session names the membership (the
  * tenant and the role) rather than the account's home brand, per docs/24 §3.3.
@@ -158,7 +174,7 @@ function issueSessionToken(user, { portal, membership, provider } = {}) {
       ...(membership && { membershipId: membership._id }),
       // Marks an app token with the app it was issued to, so each app can
       // only ever use its own token (see middleware/authenticate.js).
-      ...((portal === 'staff' || portal === 'delivery') && { client: portal }),
+      ...(APP_CLIENT_BY_PORTAL[portal] && { client: APP_CLIENT_BY_PORTAL[portal] }),
     },
     STAFF_ROLES.includes(role) ? { expiresIn: `${env.staffSessionHours}h` } : undefined,
   );

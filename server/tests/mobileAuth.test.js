@@ -149,8 +149,8 @@ describe('Authorization: Bearer on the API', () => {
   });
 
   it('is for shoppers only: an app or admin account is refused as a Bearer token but still works as the web cookie', async () => {
-    // Web-only roles never get a Bearer session.
-    for (const role of ['BRAND_ADMIN', 'SUPER_ADMIN', 'ADMIN_PARTNER']) {
+    // Platform admins never get a Bearer session.
+    for (const role of ['SUPER_ADMIN', 'ADMIN_PARTNER']) {
       const staff = fakeUser({ role, brandId: oid() });
       User.findById.mockResolvedValue(staff);
       const bearer = await me(`Bearer ${tokenFor(staff)}`);
@@ -158,7 +158,7 @@ describe('Authorization: Bearer on the API', () => {
       expect(bearer.body.code).toBe('WEB_ONLY');
     }
     // App roles need the mark of their own app; a shopper token has none.
-    for (const role of ['BRAND_EMPLOYEE', 'PICKER', 'RIDER']) {
+    for (const role of ['BRAND_ADMIN', 'BRAND_EMPLOYEE', 'PICKER', 'RIDER']) {
       const staff = fakeUser({ role, brandId: oid() });
       User.findById.mockResolvedValue(staff);
       const bearer = await me(`Bearer ${tokenFor(staff)}`);

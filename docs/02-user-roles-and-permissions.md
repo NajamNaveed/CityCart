@@ -101,7 +101,12 @@ instead of a cookie, lasting one staff session length: a `RIDER` signs in only
 on the Delivery app (`POST /auth/delivery/login`, `X-Client: delivery`), and a
 `BRAND_EMPLOYEE` or `PICKER` only on the Staff app (`POST /auth/staff/login`,
 `X-Client: staff`). Each token is marked for its app and refused by the other
-(`403 WRONG_APP`); owners and the super admin remain web-only.
+(`403 WRONG_APP`). A `BRAND_ADMIN` signs in on the Business app
+(`POST /auth/business/brand/login`, `X-Client: business`) and a
+`SERVICE_PROVIDER` on the same app's provider door
+(`POST /auth/business/service/login`); both tokens carry `client: "business"`.
+The super admin remains web-only, and every owner keeps the web dashboard as
+an option.
 
 ---
 

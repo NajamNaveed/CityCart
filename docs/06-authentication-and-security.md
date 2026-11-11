@@ -408,13 +408,14 @@ intact and keep the native door as narrow as possible:
   JWT with the same expiry, and it goes through exactly the same checks as the
   cookie on every request: signature and expiry, the user loaded fresh from the
   database, `isActive`, and the `passwordVersion` revocation check.
-* **Shoppers only.** `/auth/brand/login` and `/auth/admin/login` refuse
-  `X-Client: mobile` outright (before any credential lookup), and a Bearer
-  token belonging to a brand admin, brand employee or platform admin is
-  refused with `403 WEB_ONLY`. Staff sessions stay on the web, where they are
-  short-lived, renewed and bound to the tab.
-* **Staff and Delivery app exception (October 2026, split November 2026).**
-  The three native apps have three doors:
+* **Shoppers only, on the shopper door.** `/auth/brand/login` and
+  `/auth/admin/login` refuse `X-Client: mobile` outright (before any credential
+  lookup), and a markless Bearer token belonging to a brand admin, brand
+  employee or platform admin is refused (`403 WEB_ONLY` / `403 WRONG_APP`).
+  Staff sessions stay on the web, where they are short-lived, renewed and
+  bound to the tab, unless the account holds one of the app roles below.
+* **App roles (October 2026; business app added November 2026).** The four
+  native apps have their own doors:
   * the shopper app signs in at `POST /auth/login` with `X-Client: mobile`, and
     its token has no `client` mark;
   * the Staff app (docs/20) signs in at `POST /auth/staff/login` with
@@ -422,17 +423,24 @@ intact and keep the native door as narrow as possible:
     token carries `client: "staff"`;
   * the Delivery app (docs/23) signs in at `POST /auth/delivery/login` with
     `X-Client: delivery`; only `RIDER` accounts can, and the token carries
-    `client: "delivery"`.
+    `client: "delivery"`;
+  * the Business app (docs/20 §3) signs in at
+    `POST /auth/business/brand/login` or
+    `POST /auth/business/service/login` with `X-Client: business`; only
+    `BRAND_ADMIN` and `SERVICE_PROVIDER` accounts can, respectively, and the
+    token carries `client: "business"`.
 
   Every app token lasts one staff session and is renewed by signing in again
   (no sliding renewal). On every Bearer request the mark is checked against the
-  account's role: a staff token is refused for riders, a delivery token is
-  refused for staff, a markless token is refused for every non-shopper account,
-  and every app token is refused for brand owners, the super admin and shoppers
-  (`403 WRONG_APP`). Calling an app's sign-in endpoint without its own
-  `X-Client` header is refused before any credential lookup (`STAFF_APP_ONLY`,
-  `DELIVERY_APP_ONLY`). Brand owners and the super admin remain web-only. All
-  the checks above still apply on every request.
+  account's role: a staff token is refused for riders and owners, a delivery
+  token is refused for staff and owners, a business token is refused for
+  everyone except brand and provider owners, a markless token is refused for
+  every non-shopper account, and every app token is refused for the super admin
+  (`403 WEB_ONLY`) and shoppers (`403 WRONG_APP`). Calling an app's sign-in
+  endpoint without its own `X-Client` header is refused before any credential
+  lookup
+  (`STAFF_APP_ONLY`, `DELIVERY_APP_ONLY`, `BUSINESS_APP_ONLY`). Platform admins
+  remain web-only. All the checks above still apply on every request.
 * A `Bearer` header with no usable token is a `401`, never silently ignored.
   Other schemes (for example `Basic`, which some hosting adds) are not ours
   and are ignored so the cookie session keeps working.

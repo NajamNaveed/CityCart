@@ -3,7 +3,7 @@ const Employee = require('../models/employee.model');
 const ServiceProvider = require('../models/serviceProvider.model');
 const { signToken, verifyToken } = require('../utils/jwt');
 const { AUTH_COOKIE_NAME, staffAuthCookieOptions } = require('../config/cookie');
-const { ROLES, STAFF_ROLES, STAFF_APP_ROLES, DELIVERY_APP_ROLES } = require('../config/roles');
+const { ROLES, STAFF_ROLES, STAFF_APP_ROLES, DELIVERY_APP_ROLES, BUSINESS_APP_ROLES } = require('../config/roles');
 const { readBearerToken } = require('../utils/clientType');
 const { isAllowedWhenRestricted } = require('../config/restrictedAccess');
 
@@ -75,15 +75,28 @@ async function authenticate(req, res, next) {
     //  - the staff app's token (`client: 'staff'`, issued only by
     //    POST /auth/staff/login) works for brand team members and pickers;
     //  - the delivery app's token (`client: 'delivery'`, issued only by
-    //    POST /auth/delivery/login) works for riders.
-    // Brand owners and the admins stay on the web dashboard, and a token of
-    // one app never works as another app's, even for the same account.
+    //    POST /auth/delivery/login) works for riders;
+    //  - the business app's token (`client: 'business'`, issued only by the
+    //    business doors) works for brand owners and provider owners.
+    // Platform admins stay on the web dashboard, and a token of one app never
+    // works as another app's, even for the same account.
     if (viaBearer) {
       const client = payload.client;
-      const appRoles = client === 'staff' ? STAFF_APP_ROLES : client === 'delivery' ? DELIVERY_APP_ROLES : null;
+      const appRoles =
+        client === 'staff'
+          ? STAFF_APP_ROLES
+          : client === 'delivery'
+            ? DELIVERY_APP_ROLES
+            : client === 'business'
+              ? BUSINESS_APP_ROLES
+              : null;
       const allowed = client === undefined ? user.role === ROLES.CUSTOMER : Boolean(appRoles && appRoles.includes(user.role));
       if (!allowed) {
-        const usesAnApp = user.role === ROLES.CUSTOMER || STAFF_APP_ROLES.includes(user.role) || DELIVERY_APP_ROLES.includes(user.role);
+        const usesAnApp =
+          user.role === ROLES.CUSTOMER ||
+          STAFF_APP_ROLES.includes(user.role) ||
+          DELIVERY_APP_ROLES.includes(user.role) ||
+          BUSINESS_APP_ROLES.includes(user.role);
         return res.status(403).json({
           success: false,
           message: usesAnApp

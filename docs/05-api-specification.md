@@ -240,11 +240,37 @@ The web client does not send `X-Client` and never receives a token in a body.
 account must be verified first (see Activation above).
 See docs/06 (Native App Sessions).
 
+### Business app sign-in
+
+The Business app (`apps/business/`) serves brand owners and service-provider
+owners from one install but through two separate doors. Both send
+`X-Client: business`; the response contains the token (one staff session long)
+and sets no cookie.
+
+```text
+POST /api/v1/auth/business/brand/login     (header X-Client: business)
+POST /api/v1/auth/business/service/login   (header X-Client: business)
+```
+
+Body `{ "email", "password" }`.
+
+* **Brand door:** only `BRAND_ADMIN`. A `BRAND_EMPLOYEE` or `PICKER` uses the
+  Staff app; a provider uses the service door.
+* **Service door:** only `SERVICE_PROVIDER`. A `PENDING` provider may sign in
+  and sees the pending state; `SUSPENDED` and `TERMINATED` are refused.
+
+Either door without `X-Client: business` answers `403 BUSINESS_APP_ONLY` before
+any credential lookup. The token carries `client: "business"`, and that mark is
+checked on every Bearer request: it is refused for team members, pickers,
+riders and shoppers (`403 WRONG_APP`), and platform admins stay web-only
+(`403 WEB_ONLY`). The web doors refuse the business header as well.
+
 ### Staff and Delivery app sign-in
 
-There are three native app types: shopper (`mobile/`), staff (`partner/`) and
-delivery (`delivery/`). Each has its own sign-in endpoint, and the server refuses
-an app that sends the wrong header.
+There are four native app types: shopper (`mobile/`), staff (`partner/`),
+delivery (`delivery/`) and business (`apps/business/`, see above). Each has
+its own sign-in endpoint, and the server refuses an app that sends the wrong
+header.
 
 ```text
 POST /api/v1/auth/staff/login          (header X-Client: staff)
