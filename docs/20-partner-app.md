@@ -24,14 +24,16 @@ first, then the documents it points to.
 | P | Picker screens (marketplace v2 Phase 4): `PICKER` role, pick queue, claim, line marking, change proposal with substitutes, pack confirmation | **Done**; needs a phone run (see §5.9) |
 | S | Split the apps (marketplace v2 Phase 5): the new `delivery/` app takes the rider screens, push routing and location sharing; `partner/` becomes the Staff app; three app-type sign-ins | **Done** (see §5.10 and `23-delivery-app.md`) |
 | R | Returned-goods inbox (marketplace v2 Phase 6): list, detail with refused lines and photos, **Mark received** with per-line restock or write-off | **Done** (see §5.11) |
+| F2 | Flutter rebuild of the Staff app (v3 Phase 6): picker queue, records, returns and money in `apps/staff/` | **Done**; offline tests only, needs a phone run (see §5.12) |
 
 Server test suite: 1,657 unit tests in 66 suites, plus the real-MongoDB
 integration suite (`npm run test:integration`, which needs a MongoDB binary).
 The programme grew it from 940 to 1,503 by Phase 6; the v3 phases since then
 added the rest. The Staff app (`partner/`) has 191 tests in 17 suites, the
 Delivery app (`delivery/`) 160 in 9, and the shopper app (`mobile/`) 507 in 48.
-All pass; the Staff app's lint is clean. `test:apps` in the root package runs
-the staff and delivery suites.
+The Flutter Staff app (`apps/staff/`) adds 30 offline tests in 5 suites, and the
+Flutter Delivery app (`apps/delivery/`) 49. All pass; the Staff app's lint is
+clean. `test:apps` in the root package runs the staff and delivery suites.
 
 The physical-device pass these mocked suites cannot replace — push delivery,
 the camera against Cloudinary, location sharing, map tiles in a release build —
@@ -506,6 +508,45 @@ The Staff app side of door returns (docs/22 §F, docs/08 §41.10). The rider rec
 
 Main files: `partner/src/app/(records)/returns.jsx`, `partner/src/app/return/[id].jsx`, `partner/src/services/records.js`, `partner/src/utils/{permissions,delivery}.js`.
 
+### 5.12 Flutter Staff app (v3 Phase 6)
+
+The Flutter staff app lives in `apps/staff/` (docs/24 §7.1 names
+`apps/staff_flutter/`; this checkout kept `apps/staff/`, as the Delivery rebuild
+did with `apps/delivery/`). It calls the same server API and follows the same
+rules as the React Native app above; it is not a new backend surface.
+
+Built in November 2026:
+
+* **Sign-in** at `POST /auth/staff/login` with `X-Client: staff`; an employee
+  who works for several brands chooses one on the same screen. The token and
+  user live in secure storage under `citycart.staff.*`.
+* **Role-aware shell:** a `PICKER` gets the queue; a `BRAND_EMPLOYEE` gets Home,
+  Orders, Deliveries, Returns and Money, each gated by the server-supplied
+  permissions (`orders.view`; `delivery.view` for deliveries and returns;
+  `payments.view` for money). Tabs and detail routes that lack a permission are
+  closed by the router, and the server still refuses the call.
+* **Home:** orders, deliveries, goods coming back, proofs waiting and cash held
+  by riders in one day board, with plain shortcuts to the screen that needs
+  attention.
+* **Records:** orders and deliveries with filters, detail, money and rider
+  assignment (only where `delivery.manage` + `riders.view` allow it); returned
+  goods with reasons, signed photos, and **Receive goods** choosing restock or
+  write-off per line, defaulting to write-off.
+* **Money:** Receipts, To verify and Cash in one screen, so the bottom bar stays
+  short. Receipt detail prints the full receipt paper; a proof shows duplicate
+  and reference warnings and needs a written reason to reject; cash settlement
+  is all-or-nothing and read-only without `payments.manage`.
+* **Picker:** queue, claim, per-line Picked / Short / Unavailable, substitutes
+  and pack, with the same three plain-answer rows as the React Native screen.
+* **UI:** the same paper/forest palette as CityCart, one primary action per
+  screen, and bounded text everywhere (ellipsis, `FittedBox`, `Wrap`, flexible
+  pills). Layout tests render the shared pieces and sign-in at 320 px with a 1.3
+  text scale and assert no overflow.
+* **Tests:** 30 offline tests in 5 suites (models, permissions, redirect rules,
+  formatting, sign-in and shared-component layout); `flutter analyze` clean.
+  Not yet run on a phone; no push notifications; the launcher icon is still the
+  Flutter default. See `apps/staff/README.md`.
+
 ## 6. What is left
 
 ### 6.1 Phase D0: returns — done as door returns (marketplace v2 Phase 6)
@@ -630,6 +671,14 @@ picker" label, and the delivered/returned quantities with the final total. Root
 `npm run test:apps` runs the staff and delivery suites; `npm run test:staff` and
 `npm run test:delivery` run one each.
 
+Flutter Staff app (`apps/staff/`): `flutter test` runs **30 offline tests** in 5
+suites: `models_test` (pick orders and shortfall, returns and summary, proofs,
+receipts, cash, permissions), `access_test` (which permission opens which area,
+rider assignment), `redirect_test` (role landing and closed routes),
+`format_test` (money, dates, plain-words status labels), `widget_test` and
+`layout_test` (sign-in and the shared components at 320 px with a 1.3 text
+scale, asserting no overflow). `flutter analyze` is clean.
+
 Programme test files (`server/tests/`): `appAuth.test.js` (three-app sign-in and
 token rules; it was `partnerAuth.test.js`), `riders.test.js` (rider management
 and tenant isolation), `riderDeliveries.test.js` (rider endpoints, code logic,
@@ -711,3 +760,4 @@ in §4 has tests; add the same for new rules, in the same style.
 * **2026-11 Door payment waits for verification:** a non-cash door payment no longer marks itself `PAID`. The rider's answer is held on the delivery (`pendingCompletion`), the delivery stays out for delivery, and **verifying it in "To verify" completes the delivery** (payment `PAID`, return, receipt) in one transaction. A refusal keeps the delivery open, tells the rider to **collect again** (`POST /rider/deliveries/:id/payment`) and flags the owner; a refused attempt moves to `collectionHistory`. The customer sees "payment being checked". Server, Delivery app, Staff app states, demo data, tests and docs updated.
 * **2026-11 v3 Phase 1:** the Phase E online-payment test gateway was removed. Checkout is COD only; legacy `ONLINE_GATEWAY` orders and payments stay readable and read-only. The Phase E row and decisions 7, 9 and 10 in this file are marked superseded; §5.6 records what was removed.
 * **2026-11 Staff app audit and fixes:** every screen was checked for broken layout and against the v3 spec. Long values on the order, receipt and proof screens now wrap instead of pushing off the card (one shared `DetailRow`); the offline banner sits in the layout instead of covering the screen title; a failed pull-to-refresh says so and offers a retry instead of being reported as "load more"; overview counts stay visible when one count fails (a dash when a count is unknown); picker lines and substitute results show product photos; the multi-brand workspace chooser shows a spinner on the brand being opened, keeps the other buttons disabled and has screen-reader labels; tab labels no longer scale out of the bar; rider "last seen" reads as a sentence; and a push tap opens the payment proof or return when the payload and the person's permissions allow, otherwise the order. Tests: 191 in 17 suites; lint clean.
+* **2026-11 Flutter Staff rebuild (v3 Phase 6):** the staff journey is rebuilt in `apps/staff/` with a role-aware shell, a single Money screen (Receipts, To verify, Cash), the returned-goods inbox with receive decisions, the picker queue and pick screen, and the same server rules as `partner/`. 30 offline tests at narrow phone widths; `flutter analyze` clean. Device run, push notifications and the launcher icon are still open. See §5.12 and `apps/staff/README.md`.

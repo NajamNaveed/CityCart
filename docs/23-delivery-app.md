@@ -235,6 +235,35 @@ Server: `routes/riderDelivery.routes.js`, `controllers/riderDelivery.controller.
 `services/paymentProof.service.js`, `services/riderLocation.service.js`,
 `middleware/authenticate.js`, `config/roles.js`.
 
+### 9.1 Flutter rebuild (v3 Phase 7)
+
+The Flutter rider app lives in `apps/delivery/` (docs/24 §7.1 names the Flutter
+folders `apps/delivery_flutter/`; this checkout kept `apps/delivery/`). It calls
+the same server API and follows the same rules as the React Native app above; it
+is not a new backend surface.
+
+Built in November 2026:
+
+* Three tabs — Today (one next job, the rest of the route), Cash (amount held,
+  honest no-settlement guidance) and Account (rider, location sharing, server
+  address, sign-out).
+* Delivery detail with maps, dialler and trip controls; a four-step door flow
+  (code, per-line accept/refuse with reason and optional photo, payment method
+  and proof, review); day-grouped history.
+* Riverpod for dependency injection, go_router for navigation, secure storage
+  for the token, camera/library for proof photos, foreground location only.
+* Same rules enforced in the UI: no delivery without the customer's code, no
+  non-cash completion without a reference and photo, fee refund only when every
+  line is refused for a store-side reason, and no invented settlement action.
+* 49 offline unit and widget tests (the test bootstrap initialises the `intl`
+  date data, as `main()` does); `flutter analyze` clean; a web build compiles.
+  Launcher icons are generated from the in-app brand mark with
+  `flutter test tool/generate_icons.dart`.
+
+Still open: the physical-device pass (camera, Cloudinary, GPS prompts), push
+notifications (the Flutter app has none yet), and retiring the React Native app
+once parity is proven on a phone. See `apps/delivery/README.md`.
+
 ## 10. Change log
 
 * **2026-11 Phase 5 (marketplace v2):** app created from the rider half of the
@@ -250,3 +279,13 @@ Server: `routes/riderDelivery.routes.js`, `controllers/riderDelivery.controller.
   order numbers and cash lines can no longer push the status or time out of the
   card; side-by-side buttons keep their labels inside the screen at 360 px; the
   unused `RECORD_AUDIO` permission was removed.
+* **2026-11 Flutter rebuild (v3 Phase 7):** the rider journey is rebuilt in
+  `apps/delivery/` with a three-tab layout designed around one next job and one
+  primary action, plus the full door flow, day-grouped history and generated
+  launcher icons. Same server, same rules; device pass and push still open.
+* **2026-11 Release check fixes:** web builds now initialise the `intl` date
+  data before the first screen (without it the Today screen stayed blank); the
+  whole next-job card opens the job, the card chip names the stage instead of
+  repeating "Next job", door-flow steps start at the top of the page, and the
+  payment preview marks the delivery fee as included rather than adding it
+  again. 49 tests.

@@ -966,6 +966,12 @@ packages/citycart_ui/        design tokens, widgets, map components
 Shared code is real Dart packages, not copied folders. The RN apps are retired
 per role only after the Flutter app passes its P0 checklist on real devices.
 
+Implemented so far keeps shorter folder names than the sketch above: the
+Flutter Delivery app (v3 Phase 7) is `apps/delivery/` and the Flutter Staff app
+(v3 Phase 6) is `apps/staff/`. The shared `packages/citycart_core` and
+`packages/citycart_ui` are not extracted yet; each app currently carries its own
+API client, design tokens and widgets.
+
 ### 7.2 Stack
 
 ```text
