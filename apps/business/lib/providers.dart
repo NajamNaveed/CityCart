@@ -64,6 +64,26 @@ final providerProfileProvider = FutureProvider.autoDispose<ProviderProfile>((
   return ref.watch(businessRepositoryProvider).currentProvider();
 });
 
+/// The service catalog of the signed-in provider.
+final providerOfferingsProvider =
+    FutureProvider.autoDispose<List<ServiceOffering>>((ref) async {
+      final user = ref.watch(sessionProvider).user;
+      if (user == null || !user.isProvider) {
+        throw ApiException('Sign in with a service account to see this.');
+      }
+      return ref.watch(businessRepositoryProvider).providerOfferings();
+    });
+
+/// Weekly working hours and days off of the signed-in provider.
+final providerAvailabilityProvider =
+    FutureProvider.autoDispose<ServiceAvailability>((ref) async {
+      final user = ref.watch(sessionProvider).user;
+      if (user == null || !user.isProvider) {
+        throw ApiException('Sign in with a service account to see this.');
+      }
+      return ref.watch(businessRepositoryProvider).providerAvailability();
+    });
+
 /// The server address: baked into a release build, or chosen on the sign-in
 /// screen while developing.
 class ServerSettings {

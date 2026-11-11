@@ -7,9 +7,12 @@ import 'data/models.dart';
 import 'features/account/account_screen.dart';
 import 'features/auth/login_screen.dart';
 import 'features/auth/splash_screen.dart';
+import 'features/availability/availability_screen.dart';
 import 'features/bookings/booking_detail_screen.dart';
 import 'features/bookings/bookings_screen.dart';
 import 'features/home/home_screen.dart';
+import 'features/offerings/offerings_screen.dart';
+import 'features/profile/provider_profile_screen.dart';
 import 'features/shell/business_shell.dart';
 import 'providers.dart';
 
@@ -70,11 +73,38 @@ final routerProvider = Provider<GoRouter>((ref) {
               : null,
         ),
       ),
+      GoRoute(
+        path: '/offerings',
+        builder: (context, state) => const OfferingsScreen(),
+      ),
+      GoRoute(
+        path: '/availability',
+        builder: (context, state) => const AvailabilityScreen(),
+      ),
+      GoRoute(
+        path: '/profile',
+        builder: (context, state) => const ProviderProfileScreen(),
+      ),
     ],
   );
   ref.onDispose(router.dispose);
   return router;
 });
+
+/// Areas only a service provider has. The server refuses these endpoints for
+/// a brand session anyway; this keeps the app from opening a dead screen.
+const _providerOnlyPaths = <String>[
+  '/bookings',
+  '/offerings',
+  '/availability',
+  '/profile',
+];
+
+bool _isProviderOnly(String location) {
+  return _providerOnlyPaths.any(
+    (path) => location == path || location.startsWith('$path/'),
+  );
+}
 
 /// The one place that decides which screen may open. The server still enforces
 /// every rule; this only keeps the app from showing a dead end.
@@ -93,7 +123,7 @@ String? businessRedirect({
       return atLogin ? null : '/login';
     case SessionStatus.signedIn:
       if (atLogin || atSplash) return '/home';
-      if (role == brandRole && location.startsWith('/bookings')) return '/home';
+      if (role == brandRole && _isProviderOnly(location)) return '/home';
       return null;
   }
 }

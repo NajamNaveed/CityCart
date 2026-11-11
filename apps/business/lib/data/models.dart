@@ -132,11 +132,19 @@ class ProviderProfile {
     required this.id,
     required this.displayName,
     required this.status,
+    this.slug,
+    this.legalName,
+    this.categoryId,
     this.categoryName,
+    this.cityId,
     this.cityName,
+    this.blockId,
     this.blockName,
     this.addressLine,
     this.phone,
+    this.bio,
+    this.avatar,
+    this.coverImage,
     this.ratingAvg = 0,
     this.ratingCount = 0,
     this.completedBookings = 0,
@@ -146,11 +154,19 @@ class ProviderProfile {
   final String id;
   final String displayName;
   final String status;
+  final String? slug;
+  final String? legalName;
+  final String? categoryId;
   final String? categoryName;
+  final String? cityId;
   final String? cityName;
+  final String? blockId;
   final String? blockName;
   final String? addressLine;
   final String? phone;
+  final String? bio;
+  final String? avatar;
+  final String? coverImage;
   final double ratingAvg;
   final int ratingCount;
   final int completedBookings;
@@ -175,17 +191,198 @@ class ProviderProfile {
       id: (json['_id'] ?? json['id'] ?? '').toString(),
       displayName: (json['displayName'] ?? 'Your business').toString(),
       status: (json['status'] ?? 'PENDING').toString(),
+      slug: _optionalText(json['slug']),
+      legalName: _optionalText(json['legalName']),
+      categoryId: _optionalText(json['categoryId']),
       categoryName: category is Map ? category['name']?.toString() : null,
+      cityId: _optionalText(json['cityId']),
       cityName: city is Map ? city['name']?.toString() : null,
+      blockId: _optionalText(json['blockId']),
       blockName: block is Map ? block['name']?.toString() : null,
-      addressLine: json['addressLine']?.toString(),
-      phone: json['phone']?.toString(),
+      addressLine: _optionalText(json['addressLine']),
+      phone: _optionalText(json['phone']),
+      bio: _optionalText(json['bio']),
+      avatar: _optionalText(json['avatar']),
+      coverImage: _optionalText(json['coverImage']),
       ratingAvg: _double(json['ratingAvg']),
       ratingCount: _int(json['ratingCount'], 0),
       completedBookings: _int(json['completedBookings'], 0),
       startingAtPrice: json['startingAtPrice'] is num
           ? (json['startingAtPrice'] as num).toInt()
           : int.tryParse('${json['startingAtPrice']}'),
+    );
+  }
+}
+
+/// One service a provider sells. Customers pick one when they book.
+class ServiceOffering {
+  const ServiceOffering({
+    required this.id,
+    required this.title,
+    this.description = '',
+    this.images = const <String>[],
+    this.startingAtPricePaisa = 0,
+    this.durationMinutes = 0,
+    this.attributes = const <String, dynamic>{},
+    this.isActive = true,
+  });
+
+  final String id;
+  final String title;
+  final String description;
+  final List<String> images;
+  final int startingAtPricePaisa;
+  final int durationMinutes;
+  final Map<String, dynamic> attributes;
+  final bool isActive;
+
+  factory ServiceOffering.fromJson(Map<String, dynamic> json) {
+    final rawImages = json['images'];
+    final rawAttributes = json['attributes'];
+    return ServiceOffering(
+      id: _text(json['_id'] ?? json['id']),
+      title: _text(json['title'], 'Service'),
+      description: _text(json['description']),
+      images: rawImages is List
+          ? rawImages
+                .map((value) => value.toString().trim())
+                .where((value) => value.isNotEmpty)
+                .toList(growable: false)
+          : const <String>[],
+      startingAtPricePaisa: _int(json['startingAtPrice'], 0),
+      durationMinutes: _int(json['durationMinutes'], 0),
+      attributes: rawAttributes is Map
+          ? Map<String, dynamic>.from(rawAttributes)
+          : const <String, dynamic>{},
+      isActive: json['isActive'] != false,
+    );
+  }
+}
+
+/// The usual Karachi weekday names, indexed the way the server numbers them
+/// (0 = Sunday).
+const weekdayNames = <String>[
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+];
+
+String weekdayName(int weekday) {
+  if (weekday < 0 || weekday >= weekdayNames.length) return 'Unknown day';
+  return weekdayNames[weekday];
+}
+
+/// A weekly working window in Karachi wall-clock minutes.
+class AvailabilityWindow {
+  const AvailabilityWindow({
+    required this.weekday,
+    required this.startMinute,
+    required this.endMinute,
+    this.slotMinutes = 60,
+  });
+
+  final int weekday;
+  final int startMinute;
+  final int endMinute;
+  final int slotMinutes;
+
+  String get dayName => weekdayName(weekday);
+
+  factory AvailabilityWindow.fromJson(Map<String, dynamic> json) {
+    return AvailabilityWindow(
+      weekday: _int(json['weekday'], 0),
+      startMinute: _int(json['startMinute'], 0),
+      endMinute: _int(json['endMinute'], 0),
+      slotMinutes: _int(json['slotMinutes'], 60),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'weekday': weekday,
+    'startMinute': startMinute,
+    'endMinute': endMinute,
+    'slotMinutes': slotMinutes,
+  };
+}
+
+class ServiceAvailability {
+  const ServiceAvailability({
+    this.windows = const <AvailabilityWindow>[],
+    this.blackoutDates = const <String>[],
+    this.isPublished = false,
+    this.updatedAt,
+  });
+
+  final List<AvailabilityWindow> windows;
+  final List<String> blackoutDates;
+  final bool isPublished;
+  final DateTime? updatedAt;
+
+  bool get hasHours => windows.isNotEmpty;
+
+  List<AvailabilityWindow> windowsFor(int weekday) {
+    final list = windows
+        .where((window) => window.weekday == weekday)
+        .toList(growable: false);
+    return list;
+  }
+
+  ServiceAvailability copyWith({
+    List<AvailabilityWindow>? windows,
+    List<String>? blackoutDates,
+  }) {
+    return ServiceAvailability(
+      windows: windows ?? this.windows,
+      blackoutDates: blackoutDates ?? this.blackoutDates,
+      isPublished: (windows ?? this.windows).isNotEmpty,
+      updatedAt: updatedAt,
+    );
+  }
+
+  factory ServiceAvailability.fromJson(Map<String, dynamic> json) {
+    final rawBlackouts = json['blackoutDates'];
+    final windows = _mapList(json['windows'])
+        .map(AvailabilityWindow.fromJson)
+        .toList(growable: false);
+    return ServiceAvailability(
+      windows: windows,
+      blackoutDates: rawBlackouts is List
+          ? rawBlackouts
+                .map((value) => value.toString().trim())
+                .where((value) => value.isNotEmpty)
+                .toList(growable: false)
+          : const <String>[],
+      isPublished: json['isPublished'] == true || windows.isNotEmpty,
+      updatedAt: _date(json['updatedAt']),
+    );
+  }
+}
+
+/// An area a provider may work in, with its centre. The centre is used when an
+/// owner changes area, so the app never asks them to type coordinates.
+class BlockOption {
+  const BlockOption({
+    required this.id,
+    required this.name,
+    required this.latitude,
+    required this.longitude,
+  });
+
+  final String id;
+  final String name;
+  final double latitude;
+  final double longitude;
+
+  factory BlockOption.fromJson(Map<String, dynamic> json) {
+    return BlockOption(
+      id: _text(json['_id'] ?? json['id']),
+      name: _text(json['name'], 'Area'),
+      latitude: _double(json['latitude']),
+      longitude: _double(json['longitude']),
     );
   }
 }

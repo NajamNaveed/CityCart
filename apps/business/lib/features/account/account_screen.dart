@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/config.dart';
 import '../../core/status.dart';
@@ -74,12 +75,43 @@ class AccountScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 22),
               const SectionTitle('Business'),
-              if (user.isProvider)
+              if (user.isProvider) ...[
                 _BusinessCard(
                   name: user.provider?.displayName ?? user.businessName,
                   status: user.provider?.status,
-                )
-              else
+                ),
+                const SizedBox(height: 10),
+                SurfacePanel(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Column(
+                    children: [
+                      InfoRow(
+                        key: const Key('account_offerings'),
+                        icon: Icons.home_repair_service_outlined,
+                        label: 'Services and prices',
+                        value: 'Manage what customers can book',
+                        onTap: () => context.push('/offerings'),
+                      ),
+                      const Divider(indent: 66),
+                      InfoRow(
+                        key: const Key('account_availability'),
+                        icon: Icons.schedule_rounded,
+                        label: 'Working hours',
+                        value: 'Set the days and times you work',
+                        onTap: () => context.push('/availability'),
+                      ),
+                      const Divider(indent: 66),
+                      InfoRow(
+                        key: const Key('account_provider_profile'),
+                        icon: Icons.storefront_outlined,
+                        label: 'Business profile',
+                        value: 'Name, phone and service area',
+                        onTap: () => context.push('/profile'),
+                      ),
+                    ],
+                  ),
+                ),
+              ] else
                 const _BrandBusinessCard(),
               const SizedBox(height: 22),
               const SectionTitle('Security'),

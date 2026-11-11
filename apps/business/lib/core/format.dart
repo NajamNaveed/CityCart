@@ -42,6 +42,26 @@ String rupeesField(int paisa) {
 String dayLabel(DateTime date) =>
     DateFormat('EEE d MMM').format(date.toLocal());
 
+/// A duration in minutes as an owner reads it: "45 min", "1 hr", "1 hr 30 min".
+String durationLabel(int minutes) {
+  if (minutes <= 0) return '—';
+  final hours = minutes ~/ 60;
+  final rest = minutes % 60;
+  if (hours == 0) return '$rest min';
+  if (rest == 0) return '$hours hr';
+  return '$hours hr $rest min';
+}
+
+/// A wall-clock minute (0–1440) as "9:00 AM" / "5:30 PM".
+String minuteLabel(int minutes) {
+  final clamped = minutes.clamp(0, 1440);
+  final hour = (clamped ~/ 60) % 24;
+  final minute = clamped % 60;
+  final period = hour < 12 ? 'AM' : 'PM';
+  final displayHour = hour % 12 == 0 ? 12 : hour % 12;
+  return '$displayHour:${minute.toString().padLeft(2, '0')} $period';
+}
+
 String fullDay(DateTime date) =>
     DateFormat('EEEE d MMMM').format(date.toLocal());
 

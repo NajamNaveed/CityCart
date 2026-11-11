@@ -56,8 +56,10 @@ const _codeMessages = <String, String>{
   'INVALID_PRICE': 'Enter a price greater than zero.',
   'SLOT_UNAVAILABLE': 'That time is not available. Choose another slot.',
   'OFFERING_NOT_FOUND': 'That service could not be found.',
+  'OFFERING_EXISTS': 'You already offer a service with this title.',
   'AVAILABILITY_OVERLAP':
       'Two time ranges overlap. Adjust them and save again.',
+  'OVERLAPPING_WINDOWS': 'Two time ranges overlap. Adjust them and save again.',
   'REVIEW_ALREADY_REPLIED': 'You already replied to this review.',
   'RETURN_ALREADY_RECEIVED': 'This return was already taken in.',
   'ORDER_CHANGED': 'This order changed. Pull down to reload it.',

@@ -9,9 +9,12 @@ import 'package:citycart_business/data/repository.dart';
 import 'package:citycart_business/data/session_store.dart';
 import 'package:citycart_business/features/account/account_screen.dart';
 import 'package:citycart_business/features/auth/login_screen.dart';
+import 'package:citycart_business/features/availability/availability_screen.dart';
 import 'package:citycart_business/features/bookings/booking_detail_screen.dart';
 import 'package:citycart_business/features/bookings/bookings_screen.dart';
 import 'package:citycart_business/features/home/home_screen.dart';
+import 'package:citycart_business/features/offerings/offerings_screen.dart';
+import 'package:citycart_business/features/profile/provider_profile_screen.dart';
 import 'package:citycart_business/providers.dart';
 import 'package:citycart_business/router.dart';
 import 'package:flutter/material.dart';
@@ -87,6 +90,28 @@ void main() {
         isNull,
       );
     });
+
+    test('shop owners cannot open provider service screens', () {
+      for (final path in ['/offerings', '/availability', '/profile']) {
+        expect(
+          businessRedirect(
+            status: SessionStatus.signedIn,
+            location: path,
+            role: brandRole,
+          ),
+          '/home',
+          reason: 'brand owners must not reach $path',
+        );
+        expect(
+          businessRedirect(
+            status: SessionStatus.signedIn,
+            location: path,
+            role: providerRole,
+          ),
+          isNull,
+        );
+      }
+    });
   });
 
   group('formatting', () {
@@ -104,6 +129,15 @@ void main() {
       expect(firstNameOf(''), 'there');
     });
 
+    test('durations and clock minutes read naturally', () {
+      expect(durationLabel(45), '45 min');
+      expect(durationLabel(60), '1 hr');
+      expect(durationLabel(90), '1 hr 30 min');
+      expect(minuteLabel(540), '9:00 AM');
+      expect(minuteLabel(1020), '5:00 PM');
+      expect(minuteLabel(0), '12:00 AM');
+    });
+
     test('greeting follows the local clock', () {
       expect(greetingFor(DateTime(2026, 1, 1, 8)), 'Good morning');
       expect(greetingFor(DateTime(2026, 1, 1, 14)), 'Good afternoon');
@@ -118,9 +152,12 @@ void main() {
         'displayName': 'Rapid Repairs',
         'status': 'ACTIVE',
         'category': {'name': 'Appliance repair'},
+        'cityId': 'c1',
         'city': {'name': 'Faisalabad'},
+        'blockId': 'bl1',
         'block': {'name': 'Gulberg'},
         'phone': '03001234567',
+        'bio': 'We repair home appliances.',
         'ratingAvg': 4.8,
         'ratingCount': 12,
         'completedBookings': 30,
@@ -131,6 +168,9 @@ void main() {
       expect(profile.areaLabel, 'Gulberg, Faisalabad');
       expect(profile.isActive, isTrue);
       expect(profile.startingAtPrice, 150000);
+      expect(profile.cityId, 'c1');
+      expect(profile.blockId, 'bl1');
+      expect(profile.bio, 'We repair home appliances.');
       expect(money(profile.startingAtPrice), 'Rs 1,500');
     });
 
@@ -152,6 +192,54 @@ void main() {
       });
       expect(brand.name, 'Loom & Co.');
       expect(brand.isActive, isTrue);
+    });
+
+    test('a service offering reads its price, length and paused state', () {
+      final offering = ServiceOffering.fromJson({
+        '_id': 'o1',
+        'title': 'AC repair visit',
+        'description': 'Parts are extra.',
+        'startingAtPrice': 150000,
+        'durationMinutes': 60,
+        'isActive': false,
+        'images': ['https://example.com/ac.jpg'],
+        'attributes': {'warranty': '30 days'},
+      });
+
+      expect(offering.title, 'AC repair visit');
+      expect(offering.startingAtPricePaisa, 150000);
+      expect(offering.durationMinutes, 60);
+      expect(offering.isActive, isFalse);
+      expect(offering.images, hasLength(1));
+      expect(offering.attributes['warranty'], '30 days');
+    });
+
+    test('working hours group by day and count as published', () {
+      final availability = ServiceAvailability.fromJson({
+        'windows': [
+          {
+            'weekday': 1,
+            'startMinute': 540,
+            'endMinute': 1020,
+            'slotMinutes': 60,
+          },
+          {
+            'weekday': 3,
+            'startMinute': 600,
+            'endMinute': 900,
+            'slotMinutes': 30,
+          },
+        ],
+        'blackoutDates': ['2026-12-25'],
+        'isPublished': true,
+      });
+
+      expect(availability.hasHours, isTrue);
+      expect(availability.windowsFor(1), hasLength(1));
+      expect(availability.windowsFor(1).first.dayName, 'Monday');
+      expect(availability.windowsFor(2), isEmpty);
+      expect(availability.blackoutDates, ['2026-12-25']);
+      expect(weekdayName(3), 'Wednesday');
     });
 
     test('a booking reads the customer, schedule and prices', () {
@@ -542,6 +630,233 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('services show their price and a new one can be added', (
+      tester,
+    ) async {
+      final (container, fake) = await _signedInWithFake(
+        user: _providerUser,
+        profile: _profile,
+        offerings: [_sampleOffering()],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(const OfferingsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('AC repair visit'), findsOneWidget);
+      expect(find.text('From Rs 1,500 · 1 hr'), findsOneWidget);
+      expect(find.text('Live'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('offering_add')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const Key('offering_title')),
+        'Geyser repair',
+      );
+      await tester.enterText(find.byKey(const Key('offering_price')), '2200');
+      await tester.enterText(find.byKey(const Key('offering_duration')), '90');
+      final submit = find.byKey(const Key('offering_save'));
+      await tester.ensureVisible(submit);
+      await tester.pumpAndSettle();
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+
+      expect(fake.createdOfferingTitle, 'Geyser repair');
+      expect(fake.createdOfferingPrice, 220000);
+      expect(fake.createdOfferingDuration, 90);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a service can be paused after confirming', (tester) async {
+      final (container, fake) = await _signedInWithFake(
+        user: _providerUser,
+        profile: _profile,
+        offerings: [_sampleOffering()],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(const OfferingsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('offering_toggle_o1')));
+      await tester.pumpAndSettle();
+      expect(find.text('Pause this service?'), findsOneWidget);
+
+      await tester.tap(find.text('Pause service'));
+      await tester.pumpAndSettle();
+
+      expect(fake.deactivatedOfferingId, 'o1');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('working hours and days off are shown and saved', (
+      tester,
+    ) async {
+      final (container, fake) = await _signedInWithFake(
+        user: _providerUser,
+        profile: _profile,
+        availability: const ServiceAvailability(
+          windows: [
+            AvailabilityWindow(
+              weekday: 1,
+              startMinute: 540,
+              endMinute: 1020,
+              slotMinutes: 60,
+            ),
+          ],
+          blackoutDates: ['2026-12-25'],
+          isPublished: true,
+        ),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(const AvailabilityScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Monday'), findsOneWidget);
+      expect(find.text('9:00 AM – 5:00 PM'), findsOneWidget);
+      expect(find.text('1 hr slots'), findsOneWidget);
+      expect(find.text('Friday 25 December'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('availability_remove_1_540')));
+      await tester.pumpAndSettle();
+      expect(find.text('9:00 AM – 5:00 PM'), findsNothing);
+
+      final save = find.byKey(const Key('availability_save'));
+      await tester.ensureVisible(save);
+      await tester.pumpAndSettle();
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+
+      expect(fake.savedWindows, isEmpty);
+      expect(fake.savedBlackouts, ['2026-12-25']);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('hours can be added for a weekday and saved', (tester) async {
+      final (container, fake) = await _signedInWithFake(
+        user: _providerUser,
+        profile: _profile,
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(const AvailabilityScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('You have not set hours yet'), findsOneWidget);
+      final addHours = find.byKey(const Key('availability_add_empty'));
+      await tester.ensureVisible(addHours);
+      await tester.pumpAndSettle();
+      await tester.tap(addHours);
+      await tester.pumpAndSettle();
+
+      final submit = find.byKey(const Key('availability_add_submit'));
+      await tester.ensureVisible(submit);
+      await tester.pumpAndSettle();
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Monday'), findsOneWidget);
+      expect(find.text('9:00 AM – 5:00 PM'), findsOneWidget);
+
+      final save = find.byKey(const Key('availability_save'));
+      await tester.ensureVisible(save);
+      await tester.pumpAndSettle();
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+
+      expect(fake.savedWindows, hasLength(1));
+      expect(fake.savedWindows!.first.weekday, 1);
+      expect(fake.savedWindows!.first.slotMinutes, 60);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('profile details and the service area can be changed', (
+      tester,
+    ) async {
+      final (container, fake) = await _signedInWithFake(
+        user: _providerUser,
+        profile: _profile,
+        blocks: const [
+          BlockOption(
+            id: 'bl1',
+            name: 'Gulberg',
+            latitude: 31.5,
+            longitude: 73.1,
+          ),
+          BlockOption(
+            id: 'bl2',
+            name: 'Peoples Colony',
+            latitude: 31.4,
+            longitude: 73.0,
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(const ProviderProfileScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Rapid Repairs'), findsWidgets);
+      await tester.enterText(
+        find.byKey(const Key('profile_display_name')),
+        'Rapid Home Repairs',
+      );
+      await tester.enterText(find.byKey(const Key('profile_price')), '1800');
+      final save = find.byKey(const Key('profile_save'));
+      await tester.ensureVisible(save);
+      await tester.pumpAndSettle();
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+
+      expect(fake.updatedDisplayName, 'Rapid Home Repairs');
+      expect(fake.updatedPricePaisa, 180000);
+
+      final area = find.byKey(const Key('profile_change_area'));
+      await tester.ensureVisible(area);
+      await tester.pumpAndSettle();
+      await tester.tap(area);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('area_block_bl2')));
+      await tester.pumpAndSettle();
+      final apply = find.byKey(const Key('area_save'));
+      await tester.ensureVisible(apply);
+      await tester.pumpAndSettle();
+      await tester.tap(apply);
+      await tester.pumpAndSettle();
+
+      expect(fake.changedBlockId, 'bl2');
+      expect(fake.changedLatitude, 31.4);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('a shop owner never sees the bookings tab', (tester) async {
       final container = await _signedIn(
         user: _brandUser,
@@ -594,15 +909,29 @@ const _profile = ProviderProfile(
   id: 'p1',
   displayName: 'Rapid Repairs',
   status: 'ACTIVE',
+  slug: 'rapid-repairs',
   categoryName: 'Appliance repair',
+  cityId: 'c1',
   cityName: 'Faisalabad',
+  blockId: 'bl1',
   blockName: 'Gulberg',
   phone: '03001234567',
+  bio: 'We repair home appliances.',
   ratingAvg: 4.8,
   ratingCount: 12,
   completedBookings: 30,
   startingAtPrice: 150000,
 );
+
+ServiceOffering _sampleOffering() {
+  return const ServiceOffering(
+    id: 'o1',
+    title: 'AC repair visit',
+    description: 'Parts are extra.',
+    startingAtPricePaisa: 150000,
+    durationMinutes: 60,
+  );
+}
 
 /// Builds a container whose session has already been restored, so the home
 /// providers see a signed-in owner before the first frame.
@@ -612,6 +941,9 @@ Future<ProviderContainer> _signedIn({
   BrandSummary? brand,
   List<BusinessBooking> bookings = const [],
   BusinessBooking? detail,
+  List<ServiceOffering> offerings = const [],
+  ServiceAvailability? availability,
+  List<BlockOption> blocks = const [],
 }) async {
   final result = await _signedInWithFake(
     user: user,
@@ -619,6 +951,9 @@ Future<ProviderContainer> _signedIn({
     brand: brand,
     bookings: bookings,
     detail: detail,
+    offerings: offerings,
+    availability: availability,
+    blocks: blocks,
   );
   return result.$1;
 }
@@ -629,6 +964,9 @@ Future<(ProviderContainer, _FakeRepository)> _signedInWithFake({
   BrandSummary? brand,
   List<BusinessBooking> bookings = const [],
   BusinessBooking? detail,
+  List<ServiceOffering> offerings = const [],
+  ServiceAvailability? availability,
+  List<BlockOption> blocks = const [],
 }) async {
   final prefs = await SharedPreferences.getInstance();
   final store = _FakeSessionStore('token', user);
@@ -639,6 +977,9 @@ Future<(ProviderContainer, _FakeRepository)> _signedInWithFake({
     brand: brand,
     bookings: bookings,
     detail: detail,
+    offerings: offerings,
+    availability: availability,
+    blocks: blocks,
   );
   final container = ProviderContainer(
     overrides: [
@@ -704,6 +1045,9 @@ class _FakeRepository extends BusinessRepository {
     this.brand,
     this.bookings = const [],
     this.detail,
+    this.offerings = const [],
+    this.availability,
+    this.blocks = const [],
   }) : super(ApiClient(store));
 
   final AppUser user;
@@ -711,6 +1055,9 @@ class _FakeRepository extends BusinessRepository {
   final BrandSummary? brand;
   final List<BusinessBooking> bookings;
   final BusinessBooking? detail;
+  final List<ServiceOffering> offerings;
+  final ServiceAvailability? availability;
+  final List<BlockOption> blocks;
 
   String? lastBookingStatus;
   int? acceptedPricePaisa;
@@ -718,6 +1065,17 @@ class _FakeRepository extends BusinessRepository {
   int? proposedPricePaisa;
   String? proposedScope;
   int? completedAmountPaisa;
+
+  String? createdOfferingTitle;
+  int? createdOfferingPrice;
+  int? createdOfferingDuration;
+  String? deactivatedOfferingId;
+  List<AvailabilityWindow>? savedWindows;
+  List<String>? savedBlackouts;
+  String? updatedDisplayName;
+  int? updatedPricePaisa;
+  String? changedBlockId;
+  double? changedLatitude;
 
   @override
   Future<AppUser> me() async => user;
@@ -796,6 +1154,119 @@ class _FakeRepository extends BusinessRepository {
   }) async {
     completedAmountPaisa = finalAmountPaisa;
     return providerBooking(bookingId);
+  }
+
+  @override
+  Future<List<ServiceOffering>> providerOfferings() async => offerings;
+
+  @override
+  Future<ServiceOffering> createProviderOffering({
+    required String title,
+    required String description,
+    required int startingAtPricePaisa,
+    required int durationMinutes,
+  }) async {
+    createdOfferingTitle = title;
+    createdOfferingPrice = startingAtPricePaisa;
+    createdOfferingDuration = durationMinutes;
+    return ServiceOffering(
+      id: 'new',
+      title: title,
+      description: description,
+      startingAtPricePaisa: startingAtPricePaisa,
+      durationMinutes: durationMinutes,
+    );
+  }
+
+  @override
+  Future<ServiceOffering> updateProviderOffering(
+    String offeringId, {
+    String? title,
+    String? description,
+    int? startingAtPricePaisa,
+    int? durationMinutes,
+    bool? isActive,
+  }) async {
+    final current = offerings.isEmpty
+        ? _sampleOffering()
+        : offerings.firstWhere(
+            (offering) => offering.id == offeringId,
+            orElse: () => offerings.first,
+          );
+    return ServiceOffering(
+      id: current.id,
+      title: title ?? current.title,
+      description: description ?? current.description,
+      startingAtPricePaisa:
+          startingAtPricePaisa ?? current.startingAtPricePaisa,
+      durationMinutes: durationMinutes ?? current.durationMinutes,
+      isActive: isActive ?? current.isActive,
+    );
+  }
+
+  @override
+  Future<ServiceOffering> deactivateProviderOffering(String offeringId) async {
+    deactivatedOfferingId = offeringId;
+    final current = offerings.isEmpty
+        ? _sampleOffering()
+        : offerings.firstWhere(
+            (offering) => offering.id == offeringId,
+            orElse: () => offerings.first,
+          );
+    return ServiceOffering(
+      id: current.id,
+      title: current.title,
+      description: current.description,
+      startingAtPricePaisa: current.startingAtPricePaisa,
+      durationMinutes: current.durationMinutes,
+      isActive: false,
+    );
+  }
+
+  @override
+  Future<ServiceAvailability> providerAvailability() async {
+    return availability ?? const ServiceAvailability();
+  }
+
+  @override
+  Future<ServiceAvailability> saveProviderAvailability({
+    required List<AvailabilityWindow> windows,
+    required List<String> blackoutDates,
+  }) async {
+    savedWindows = [...windows];
+    savedBlackouts = [...blackoutDates];
+    return ServiceAvailability(
+      windows: windows,
+      blackoutDates: blackoutDates,
+      isPublished: windows.isNotEmpty,
+    );
+  }
+
+  @override
+  Future<ProviderProfile> updateProviderProfile({
+    required String displayName,
+    required String phone,
+    required String bio,
+    required String addressLine,
+    required int startingAtPricePaisa,
+  }) async {
+    updatedDisplayName = displayName;
+    updatedPricePaisa = startingAtPricePaisa;
+    return profile!;
+  }
+
+  @override
+  Future<List<BlockOption>> cityBlocks(String cityId) async => blocks;
+
+  @override
+  Future<ProviderProfile> changeProviderBlock({
+    required String blockId,
+    required double latitude,
+    required double longitude,
+  }) async {
+    changedBlockId = blockId;
+    changedLatitude = latitude;
+    return profile!;
   }
 }
 
