@@ -8,10 +8,10 @@ import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../providers.dart';
 import '../cart/cart_controller.dart';
+import '../notifications/notifications_controller.dart';
 
-/// The shopper's account. Phase 1 keeps it to the essentials — who you are,
-/// where you shop, which server the app talks to — and later phases add saved
-/// addresses, notifications and help.
+/// The shopper's account: who you are, where you shop, saved addresses, the
+/// notification inbox, and the support details published by the platform.
 class AccountScreen extends ConsumerStatefulWidget {
   const AccountScreen({super.key});
 
@@ -90,14 +90,20 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
     final session = ref.watch(sessionProvider);
     final areaController = ref.watch(areaProvider);
     final settings = ref.watch(serverSettingsProvider);
+    final notifications = ref.watch(notificationsProvider);
 
     return Scaffold(
       body: SafeArea(
         child: ListenableBuilder(
-          listenable: Listenable.merge([session, areaController]),
+          listenable: Listenable.merge([
+            session,
+            areaController,
+            notifications,
+          ]),
           builder: (context, _) {
             final user = session.user;
             final area = areaController.area;
+            final unread = notifications.unreadCount;
             return ListView(
               padding: const EdgeInsets.only(bottom: 30),
               children: [
@@ -170,8 +176,21 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                           _MenuRow(
                             icon: Icons.forum_outlined,
                             title: 'Messages',
-                            subtitle: 'Chats with service providers',
+                            subtitle: 'Chats with shops and providers',
                             onTap: () => context.push('/messages'),
+                          ),
+                          const Divider(),
+                          _MenuRow(
+                            icon: Icons.notifications_none_rounded,
+                            title: 'Notifications',
+                            subtitle: unread == 0
+                                ? 'Order, booking and payment updates'
+                                : '$unread unread '
+                                      '${unread == 1 ? 'update' : 'updates'}',
+                            trailing: unread == 0
+                                ? null
+                                : _UnreadCount(count: unread),
+                            onTap: () => context.push('/notifications'),
                           ),
                           const Divider(),
                           _MenuRow(
@@ -179,6 +198,13 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                             title: 'Delivery area',
                             subtitle: area?.label ?? 'Choose your area',
                             onTap: () => context.push('/area'),
+                          ),
+                          const Divider(),
+                          _MenuRow(
+                            icon: Icons.location_on_outlined,
+                            title: 'Saved addresses',
+                            subtitle: 'Used at checkout and for bookings',
+                            onTap: () => context.push('/addresses'),
                           ),
                           const Divider(),
                           _MenuRow(
@@ -201,6 +227,13 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                       const SizedBox(height: 14),
                       _MenuCard(
                         children: [
+                          _MenuRow(
+                            icon: Icons.help_outline_rounded,
+                            title: 'Help & support',
+                            subtitle: 'Answers and contact details',
+                            onTap: () => context.push('/help'),
+                          ),
+                          const Divider(),
                           _MenuRow(
                             icon: Icons.info_outline_rounded,
                             title: 'About CityCart',
@@ -309,6 +342,35 @@ class _MenuRow extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppRadius.card),
       child: content,
+    );
+  }
+}
+
+class _UnreadCount extends StatelessWidget {
+  const _UnreadCount({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.clay,
+        borderRadius: BorderRadius.circular(11),
+      ),
+      child: Text(
+        count > 9 ? '9+' : '$count',
+        maxLines: 1,
+        style: const TextStyle(
+          fontSize: 11,
+          height: 1.1,
+          fontWeight: FontWeight.w800,
+          color: AppColors.white,
+        ),
+      ),
     );
   }
 }

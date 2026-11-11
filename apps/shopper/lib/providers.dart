@@ -111,6 +111,14 @@ final savedAddressesProvider = FutureProvider.autoDispose<List<SavedAddress>>((
   return ref.watch(shopperRepositoryProvider).addresses();
 });
 
+/// Support contacts published by the platform. Public, so it works before a
+/// shopper signs in too.
+final publicSettingsProvider = FutureProvider.autoDispose<PublicSettings>((
+  ref,
+) {
+  return ref.watch(shopperRepositoryProvider).publicSettings();
+});
+
 /// The server address: baked into a release build, or chosen on the sign-in
 /// screen while developing.
 class ServerSettings {

@@ -41,6 +41,24 @@ class ShopperRepository {
     return AppUser.fromJson(body['user']);
   }
 
+  /// Sends the reset link. The server gives the same answer whether or not the
+  /// address exists, so the app never reveals which emails have accounts.
+  Future<String> requestPasswordReset(String email) async {
+    final body = await _api.post(
+      '/auth/forgot-password',
+      data: {'email': email.trim(), 'portal': 'customer'},
+    );
+    return text(body['message']);
+  }
+
+  Future<String> resendVerification(String email) async {
+    final body = await _api.post(
+      '/auth/verify-email/resend',
+      data: {'email': email.trim(), 'portal': 'customer'},
+    );
+    return text(body['message']);
+  }
+
   // --- Places --------------------------------------------------------------
 
   Future<List<City>> cities() async {
@@ -218,6 +236,7 @@ class ShopperRepository {
     String? postalCode,
     String? country,
     String? additionalInstructions,
+    bool isDefault = false,
   }) async {
     final body = await _api.post(
       '/addresses',
@@ -229,6 +248,7 @@ class ShopperRepository {
         'city': city,
         'latitude': latitude,
         'longitude': longitude,
+        'isDefault': isDefault,
         'state': ?state,
         'postalCode': ?postalCode,
         'country': ?country,
@@ -236,6 +256,53 @@ class ShopperRepository {
       },
     );
     return SavedAddress.fromJson(body['address']);
+  }
+
+  /// The pin always moves as a pair; the server rejects one without the other.
+  Future<SavedAddress> updateAddress(
+    String addressId, {
+    required String label,
+    required String fullName,
+    required String phone,
+    required String addressLine,
+    required String city,
+    required double latitude,
+    required double longitude,
+    String? state,
+    String? postalCode,
+    String? country,
+    String? additionalInstructions,
+  }) async {
+    final notes = (additionalInstructions ?? '').trim();
+    final stateValue = (state ?? '').trim();
+    final postalValue = (postalCode ?? '').trim();
+    final countryValue = (country ?? '').trim();
+    final body = await _api.patch(
+      '/addresses/$addressId',
+      data: {
+        'label': label,
+        'fullName': fullName,
+        'phone': phone,
+        'addressLine': addressLine,
+        'city': city,
+        'latitude': latitude,
+        'longitude': longitude,
+        'additionalInstructions': notes,
+        if (stateValue.isNotEmpty) 'state': stateValue,
+        if (postalValue.isNotEmpty) 'postalCode': postalValue,
+        if (countryValue.isNotEmpty) 'country': countryValue,
+      },
+    );
+    return SavedAddress.fromJson(body['address']);
+  }
+
+  Future<SavedAddress> setDefaultAddress(String addressId) async {
+    final body = await _api.post('/addresses/$addressId/default');
+    return SavedAddress.fromJson(body['address']);
+  }
+
+  Future<void> deleteAddress(String addressId) async {
+    await _api.delete('/addresses/$addressId');
   }
 
   // --- Checkout ------------------------------------------------------------
@@ -639,5 +706,59 @@ class ShopperRepository {
       data: {'rating': rating, if (trimmed.isNotEmpty) 'comment': trimmed},
     );
     return ServiceReview.fromJson(body['review']);
+  }
+
+  // --- Shop chats ----------------------------------------------------------
+
+  /// Product conversations with shops. The thread itself uses the shared
+  /// product-chat routes below.
+  Future<Page<StoreChatConversation>> storeChats({
+    int page = 1,
+    int limit = 20,
+  }) async {
+    final body = await _api.get(
+      '/chats',
+      query: {'page': page, 'limit': limit},
+    );
+    return Page.fromJson(
+      body,
+      key: 'conversations',
+      parse: StoreChatConversation.fromJson,
+    );
+  }
+
+  Future<int> storeChatUnread() async {
+    final body = await _api.get('/chats/unread-count');
+    return asInt(body['unread']);
+  }
+
+  // --- Notifications -------------------------------------------------------
+
+  Future<NotificationPage> notifications({int page = 1, int limit = 20}) async {
+    final body = await _api.get(
+      '/notifications',
+      query: {'page': page, 'limit': limit},
+    );
+    return NotificationPage.fromJson(body);
+  }
+
+  Future<void> markNotificationRead(String notificationId) async {
+    await _api.patch('/notifications/$notificationId/read');
+  }
+
+  Future<void> markAllNotificationsRead() async {
+    await _api.patch('/notifications/read-all');
+  }
+
+  Future<void> deleteNotification(String notificationId) async {
+    await _api.delete('/notifications/$notificationId');
+  }
+
+  // --- Public settings -----------------------------------------------------
+
+  /// Support contacts shown on the Help page. Public: no account required.
+  Future<PublicSettings> publicSettings() async {
+    final body = await _api.get('/settings/public');
+    return PublicSettings.fromJson(body);
   }
 }

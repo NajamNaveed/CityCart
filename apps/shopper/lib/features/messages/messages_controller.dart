@@ -6,11 +6,11 @@ import '../../data/models.dart';
 import '../../data/repository.dart';
 import '../../providers.dart';
 
-enum InboxKind { job, direct }
+enum InboxKind { job, direct, store }
 
-/// One row in the Messages inbox. [routeId] is the booking id for job chats
-/// and the conversation id for direct provider chats, matching the server
-/// routes behind each kind.
+/// One row in the Messages inbox. [routeId] is the booking id for job chats,
+/// and the conversation id for direct provider and shop chats, matching the
+/// server routes behind each kind.
 class InboxItem {
   const InboxItem({
     required this.kind,
@@ -35,9 +35,10 @@ class InboxItem {
   final int unread;
 }
 
-/// The shopper's service chats in one inbox: threads attached to a booking and
-/// direct threads with a provider. Both lists come from customer-scoped server
-/// endpoints, so nothing from another shopper can appear here.
+/// The shopper's conversations in one inbox: threads attached to a booking,
+/// direct threads with a provider, and product threads with a shop. Every list
+/// comes from a customer-scoped server endpoint, so nothing from another
+/// shopper can appear here.
 class MessagesController extends ChangeNotifier {
   MessagesController(this._repository);
 
@@ -56,6 +57,8 @@ class MessagesController extends ChangeNotifier {
   int get jobCount => _items.where((item) => item.kind == InboxKind.job).length;
   int get directCount =>
       _items.where((item) => item.kind == InboxKind.direct).length;
+  int get storeCount =>
+      _items.where((item) => item.kind == InboxKind.store).length;
 
   Future<void> loadInitial() => _load();
 
@@ -71,10 +74,12 @@ class MessagesController extends ChangeNotifier {
     try {
       final jobsFuture = _repository.bookingChats(limit: 30);
       final directFuture = _repository.directChats(limit: 30);
+      final storesFuture = _repository.storeChats(limit: 30);
       final jobs = await jobsFuture;
       final directs = await directFuture;
+      final stores = await storesFuture;
       if (_disposed) return;
-      _items = _combine(jobs.items, directs.items);
+      _items = _combine(jobs.items, directs.items, stores.items);
       _error = null;
     } on ApiException catch (error) {
       if (_disposed) return;
@@ -94,6 +99,7 @@ class MessagesController extends ChangeNotifier {
   List<InboxItem> _combine(
     List<ServiceChatConversation> jobs,
     List<DirectChatConversation> directs,
+    List<StoreChatConversation> stores,
   ) {
     final items = <InboxItem>[
       for (final job in jobs)
@@ -123,6 +129,19 @@ class MessagesController extends ChangeNotifier {
             lastMessageAt: direct.lastMessageAt,
             lastSenderRole: direct.lastSenderRole,
             unread: direct.unread,
+          ),
+      for (final store in stores)
+        if (store.id.isNotEmpty)
+          InboxItem(
+            kind: InboxKind.store,
+            routeId: store.id,
+            name: store.withName,
+            image: store.withImage,
+            contextLabel: 'About a product',
+            preview: store.lastMessagePreview,
+            lastMessageAt: store.lastMessageAt,
+            lastSenderRole: store.lastSenderRole,
+            unread: store.unread,
           ),
     ];
     items.sort((a, b) {

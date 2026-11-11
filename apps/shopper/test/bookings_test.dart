@@ -254,6 +254,17 @@ class _FakeRepository extends ShopperRepository {
   }
 
   @override
+  Future<Page<StoreChatConversation>> storeChats({
+    int page = 1,
+    int limit = 20,
+  }) async {
+    return Page(
+      items: const [],
+      pagination: Pagination(page: 1, limit: limit, pages: 1, total: 0),
+    );
+  }
+
+  @override
   Future<ChatMessagePage> bookingChatMessages(
     String bookingId, {
     String? before,

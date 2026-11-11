@@ -7,11 +7,11 @@ import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import 'messages_controller.dart';
 
-enum _InboxFilter { all, jobs, providers }
+enum _InboxFilter { all, stores, jobs, providers }
 
-/// One inbox for every conversation about a service: threads attached to a
-/// booking and direct threads with a provider. Unread counts come straight
-/// from the server, so the badges match the provider side.
+/// One inbox for every conversation: product threads with a shop, threads
+/// attached to a service booking, and direct threads with a provider. Unread
+/// counts come straight from the server, so the badges match the provider side.
 class MessagesScreen extends ConsumerStatefulWidget {
   const MessagesScreen({super.key});
 
@@ -24,22 +24,30 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
 
   List<InboxItem> _visible(List<InboxItem> items) => switch (_filter) {
     _InboxFilter.all => items,
+    _InboxFilter.stores =>
+      items.where((item) => item.kind == InboxKind.store).toList(),
     _InboxFilter.jobs =>
       items.where((item) => item.kind == InboxKind.job).toList(),
     _InboxFilter.providers =>
       items.where((item) => item.kind == InboxKind.direct).toList(),
   };
 
+  String _pathFor(InboxItem item) => switch (item.kind) {
+    InboxKind.job => '/messages/job/${item.routeId}',
+    InboxKind.direct => '/messages/provider/${item.routeId}',
+    InboxKind.store => '/chat/${item.routeId}',
+  };
+
   Future<void> _open(InboxItem item) async {
     final uri = Uri(
-      path: item.kind == InboxKind.job
-          ? '/messages/job/${item.routeId}'
-          : '/messages/provider/${item.routeId}',
+      path: _pathFor(item),
       queryParameters: {
         'name': item.name,
-        'subtitle': item.kind == InboxKind.job
-            ? 'Booking chat · ${item.contextLabel}'
-            : 'Provider chat',
+        'subtitle': switch (item.kind) {
+          InboxKind.job => 'Booking chat · ${item.contextLabel}',
+          InboxKind.direct => 'Provider chat',
+          InboxKind.store => 'Shop chat',
+        },
       },
     );
     await context.push(uri.toString());
@@ -47,6 +55,32 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
       ref.read(messagesProvider).refresh();
     }
   }
+
+  IconData get _emptyIcon => switch (_filter) {
+    _InboxFilter.jobs => Icons.event_available_outlined,
+    _InboxFilter.stores => Icons.storefront_outlined,
+    _ => Icons.chat_bubble_outline_rounded,
+  };
+
+  String get _emptyTitle => switch (_filter) {
+    _InboxFilter.jobs => 'No booking chats',
+    _InboxFilter.stores => 'No shop chats',
+    _InboxFilter.providers => 'No provider chats',
+    _ => 'Nothing here',
+  };
+
+  String get _emptyMessage => switch (_filter) {
+    _InboxFilter.jobs =>
+      'Booking chats appear once a provider accepts your '
+          'request.',
+    _InboxFilter.stores =>
+      'Open a product and message the shop to start a '
+          'conversation here.',
+    _InboxFilter.providers =>
+      'Open a provider page and send them a message '
+          'to start here.',
+    _ => 'Choose another filter to see your conversations.',
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +92,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
           children: [
             ScreenTopBar(
               title: 'Messages',
-              subtitle: 'Chats with providers',
+              subtitle: 'Chats with shops and providers',
               onBack: () {
                 if (context.canPop()) {
                   context.pop();
@@ -96,14 +130,13 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
                             icon: Icons.forum_outlined,
                             title: 'No messages yet',
                             message:
-                                'A chat opens when a provider accepts your '
-                                'booking, or when you message a provider '
-                                'directly.',
+                                'Message a shop about a product, or open a '
+                                'chat with a service provider.',
                             action: AppButton(
-                              label: 'Find a service',
-                              icon: Icons.home_repair_service_rounded,
+                              label: 'Browse shops',
+                              icon: Icons.storefront_rounded,
                               expand: false,
-                              onPressed: () => context.go('/services'),
+                              onPressed: () => context.go('/home'),
                             ),
                           ),
                         ],
@@ -120,6 +153,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
                           values: _InboxFilter.values,
                           labelOf: (filter) => switch (filter) {
                             _InboxFilter.all => 'All',
+                            _InboxFilter.stores => 'Shops',
                             _InboxFilter.jobs => 'Bookings',
                             _InboxFilter.providers => 'Providers',
                           },
@@ -144,17 +178,9 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
                                   ),
                                   children: [
                                     EmptyState(
-                                      icon: _filter == _InboxFilter.jobs
-                                          ? Icons.event_available_outlined
-                                          : Icons.chat_bubble_outline_rounded,
-                                      title: _filter == _InboxFilter.jobs
-                                          ? 'No booking chats'
-                                          : 'No provider chats',
-                                      message: _filter == _InboxFilter.jobs
-                                          ? 'Booking chats appear once a '
-                                                'provider accepts your request.'
-                                          : 'Open a provider page and send '
-                                                'them a message to start here.',
+                                      icon: _emptyIcon,
+                                      title: _emptyTitle,
+                                      message: _emptyMessage,
                                     ),
                                   ],
                                 )
@@ -218,7 +244,11 @@ class _InboxTile extends StatelessWidget {
     final preview = item.preview.trim();
     final hasPreview = preview.isNotEmpty;
     final unread = item.unread > 0;
-    final kindLabel = item.kind == InboxKind.job ? 'Booking' : 'Provider';
+    final kindLabel = switch (item.kind) {
+      InboxKind.job => 'Booking',
+      InboxKind.direct => 'Provider',
+      InboxKind.store => 'Shop',
+    };
 
     return SurfaceCard(
       onTap: onTap,

@@ -91,6 +91,40 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  Future<void> _forgotPassword() async {
+    final initial = _email.text.trim();
+    final message = await showAppSheet<String>(
+      context,
+      title: 'Reset your password',
+      subtitle: 'We will email you a link to choose a new password.',
+      child: _EmailSheet(
+        initialEmail: initial,
+        fieldLabel: 'Email',
+        actionLabel: 'Send reset link',
+        submit: (email) =>
+            ref.read(shopperRepositoryProvider).requestPasswordReset(email),
+      ),
+    );
+    if (message != null && mounted) showAppSnack(context, message);
+  }
+
+  Future<void> _resendVerification([String? email]) async {
+    final initial = (email ?? _email.text).trim();
+    final message = await showAppSheet<String>(
+      context,
+      title: 'Resend confirmation',
+      subtitle: 'We will send the confirmation link to this address again.',
+      child: _EmailSheet(
+        initialEmail: initial,
+        fieldLabel: 'Email',
+        actionLabel: 'Send email',
+        submit: (value) =>
+            ref.read(shopperRepositoryProvider).resendVerification(value),
+      ),
+    );
+    if (message != null && mounted) showAppSnack(context, message);
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(serverSettingsProvider);
@@ -115,6 +149,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         _mode = _AuthMode.signIn;
                       });
                     },
+                    onResend: () => _resendVerification(_registeredEmail),
                   )
                 else ...[
                   SegmentedControl<_AuthMode>(
@@ -252,6 +287,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodySmall,
           ),
+          if (!registering)
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 4,
+              children: [
+                TextButton(
+                  onPressed: _busy ? null : _forgotPassword,
+                  child: const Text('Forgot password?'),
+                ),
+                TextButton(
+                  onPressed: _busy ? null : () => _resendVerification(),
+                  child: const Text('Resend confirmation'),
+                ),
+              ],
+            ),
         ],
       ),
     );
@@ -296,10 +346,15 @@ class _LoginMark extends StatelessWidget {
 }
 
 class _CheckInbox extends StatelessWidget {
-  const _CheckInbox({required this.email, required this.onBack});
+  const _CheckInbox({
+    required this.email,
+    required this.onBack,
+    required this.onResend,
+  });
 
   final String email;
   final VoidCallback onBack;
+  final VoidCallback onResend;
 
   @override
   Widget build(BuildContext context) {
@@ -337,8 +392,114 @@ class _CheckInbox extends StatelessWidget {
             icon: Icons.login_rounded,
             onPressed: onBack,
           ),
+          const SizedBox(height: 4),
+          Center(
+            child: TextButton(
+              onPressed: onResend,
+              child: const Text('Resend confirmation email'),
+            ),
+          ),
         ],
       ),
+    );
+  }
+}
+
+/// A small sheet that asks for an email and hands it to the server. The server
+/// answers with a generic message so this screen never reveals whether an
+/// account exists.
+class _EmailSheet extends StatefulWidget {
+  const _EmailSheet({
+    required this.initialEmail,
+    required this.fieldLabel,
+    required this.actionLabel,
+    required this.submit,
+  });
+
+  final String initialEmail;
+  final String fieldLabel;
+  final String actionLabel;
+  final Future<String> Function(String email) submit;
+
+  @override
+  State<_EmailSheet> createState() => _EmailSheetState();
+}
+
+class _EmailSheetState extends State<_EmailSheet> {
+  late final TextEditingController _email = TextEditingController(
+    text: widget.initialEmail,
+  );
+  String? _error;
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _email.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    if (_busy) return;
+    final email = _email.text.trim();
+    if (email.isEmpty || !email.contains('@') || !email.contains('.')) {
+      setState(() => _error = 'Enter a valid email address.');
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final message = await widget.submit(email);
+      if (!mounted) return;
+      Navigator.of(context).pop(message);
+    } on ApiException catch (error) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _error = error.message;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _error = 'We could not reach CityCart. Check your connection.';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: _email,
+          autofocus: true,
+          keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _send(),
+          onChanged: (_) {
+            if (_error != null) setState(() => _error = null);
+          },
+          decoration: InputDecoration(
+            labelText: widget.fieldLabel,
+            hintText: 'you@example.com',
+            prefixIcon: const Icon(Icons.alternate_email_rounded, size: 20),
+            errorText: _error,
+          ),
+        ),
+        const SizedBox(height: 16),
+        AppButton(
+          label: widget.actionLabel,
+          icon: Icons.send_rounded,
+          loading: _busy,
+          onPressed: _busy ? null : _send,
+        ),
+      ],
     );
   }
 }

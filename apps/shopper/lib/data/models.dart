@@ -2599,3 +2599,141 @@ class DirectChatConversation {
     );
   }
 }
+
+/// One shop conversation (about a product) in the merged Messages inbox.
+class StoreChatConversation {
+  const StoreChatConversation({
+    required this.id,
+    this.withName = 'Shop',
+    this.withImage,
+    this.canSend = false,
+    this.lastMessageAt,
+    this.lastMessagePreview = '',
+    this.lastSenderRole = '',
+    this.unread = 0,
+  });
+
+  final String id;
+  final String withName;
+  final String? withImage;
+  final bool canSend;
+  final DateTime? lastMessageAt;
+  final String lastMessagePreview;
+  final String lastSenderRole;
+  final int unread;
+
+  factory StoreChatConversation.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    final withMap = asMap(map['with']);
+    return StoreChatConversation(
+      id: text(map['_id']),
+      withName: text(withMap['name'], 'Shop'),
+      withImage: optionalText(withMap['image']),
+      canSend: map['canSend'] == true,
+      lastMessageAt: asDate(map['lastMessageAt']),
+      lastMessagePreview: text(map['lastMessagePreview']),
+      lastSenderRole: text(map['lastSenderRole']),
+      unread: asInt(map['unread']),
+    );
+  }
+}
+
+// --- Notifications ---------------------------------------------------------
+
+class AppNotification {
+  const AppNotification({
+    required this.id,
+    required this.title,
+    required this.message,
+    this.type = '',
+    this.isRead = false,
+    this.createdAt,
+    this.data = const <String, dynamic>{},
+  });
+
+  final String id;
+  final String type;
+  final String title;
+  final String message;
+  final bool isRead;
+  final DateTime? createdAt;
+  final Map<String, dynamic> data;
+
+  String get orderId => text(data['orderId']);
+  String get bookingId => text(data['bookingId']);
+
+  AppNotification copyWith({bool? isRead}) {
+    return AppNotification(
+      id: id,
+      type: type,
+      title: title,
+      message: message,
+      isRead: isRead ?? this.isRead,
+      createdAt: createdAt,
+      data: data,
+    );
+  }
+
+  factory AppNotification.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return AppNotification(
+      id: text(map['_id']),
+      type: text(map['type']),
+      title: text(map['title'], 'Update'),
+      message: text(map['message']),
+      isRead: map['isRead'] == true,
+      createdAt: asDate(map['createdAt']),
+      data: asMap(map['data']),
+    );
+  }
+}
+
+class NotificationPage {
+  const NotificationPage({
+    required this.items,
+    this.pagination = const Pagination(),
+    this.unreadCount = 0,
+  });
+
+  final List<AppNotification> items;
+  final Pagination pagination;
+  final int unreadCount;
+
+  bool get hasMore => pagination.hasMore;
+
+  factory NotificationPage.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return NotificationPage(
+      items: asList(map['notifications'])
+          .map(AppNotification.fromJson)
+          .toList(growable: false),
+      pagination: Pagination.fromJson(map['pagination']),
+      unreadCount: asInt(map['unreadCount']),
+    );
+  }
+}
+
+// --- Public settings -------------------------------------------------------
+
+/// The public part of the platform settings: only what the Help page may show.
+class PublicSettings {
+  const PublicSettings({
+    this.platformName = 'CityCart',
+    this.supportEmail = '',
+    this.supportPhone = '',
+  });
+
+  final String platformName;
+  final String supportEmail;
+  final String supportPhone;
+
+  factory PublicSettings.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    final settings = asMap(map['settings']);
+    return PublicSettings(
+      platformName: text(settings['platformName'], 'CityCart'),
+      supportEmail: text(settings['supportEmail']),
+      supportPhone: text(settings['supportPhone']),
+    );
+  }
+}
