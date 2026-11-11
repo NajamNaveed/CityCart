@@ -1687,6 +1687,384 @@ class BrandReturnSummary {
   }
 }
 
+/// The shop's public details and delivery defaults, as the brand owner edits
+/// them. Money values are stored as rupees by the server, like product prices.
+class BrandProfile {
+  const BrandProfile({
+    required this.id,
+    required this.name,
+    required this.slug,
+    required this.status,
+    this.billingStatus,
+    this.description = '',
+    this.logo,
+    this.cityId,
+    this.street = '',
+    this.area = '',
+    this.city = '',
+    this.supportPhone = '',
+    this.supportEmail = '',
+    this.opensAt = '',
+    this.closesAt = '',
+    this.closedDays = const [],
+    this.deliveryFee,
+    this.estimatedDeliveryTime = '',
+    this.minimumOrderValue,
+    this.deliveryNote = '',
+  });
+
+  final String id;
+  final String name;
+  final String slug;
+  final String status;
+  final String? billingStatus;
+  final String description;
+  final String? logo;
+  final String? cityId;
+  final String street;
+  final String area;
+  final String city;
+  final String supportPhone;
+  final String supportEmail;
+  final String opensAt;
+  final String closesAt;
+  final List<String> closedDays;
+  final double? deliveryFee;
+  final String estimatedDeliveryTime;
+  final double? minimumOrderValue;
+  final String deliveryNote;
+
+  bool get hasSupportContact =>
+      supportPhone.trim().isNotEmpty || supportEmail.trim().isNotEmpty;
+
+  factory BrandProfile.fromJson(Map<String, dynamic> json) {
+    final contact = _map(json['contact']);
+    final address = _map(contact['address']);
+    final hours = _map(contact['operatingHours']);
+    final settings = _map(json['settings']);
+    final closed = hours['closedDays'];
+    return BrandProfile(
+      id: (json['_id'] ?? json['id'] ?? '').toString(),
+      name: _text(json['name'], 'Your shop'),
+      slug: _text(json['slug']),
+      status: _text(json['status'], 'PENDING'),
+      billingStatus: _optionalText(json['billingStatus']),
+      description: _text(json['description']),
+      logo: _optionalText(json['logo']),
+      cityId: _optionalText(json['cityId']),
+      street: _text(address['street']),
+      area: _text(address['area']),
+      city: _text(address['city']),
+      supportPhone: _text(contact['supportPhone']),
+      supportEmail: _text(contact['supportEmail']),
+      opensAt: _text(hours['opensAt']),
+      closesAt: _text(hours['closesAt']),
+      closedDays: closed is List
+          ? closed.map((day) => day.toString()).toList(growable: false)
+          : const [],
+      deliveryFee: _optionalDouble(settings['deliveryFee']),
+      estimatedDeliveryTime: _text(settings['estimatedDeliveryTime']),
+      minimumOrderValue: _optionalDouble(settings['minimumOrderValue']),
+      deliveryNote: _text(settings['deliveryNote']),
+    );
+  }
+}
+
+/// One physical shop of the brand.
+class BrandBranch {
+  const BrandBranch({
+    required this.id,
+    required this.name,
+    required this.blockId,
+    required this.blockName,
+    this.address = '',
+    this.phone = '',
+    this.isActive = true,
+    this.latitude,
+    this.longitude,
+  });
+
+  final String id;
+  final String name;
+  final String blockId;
+  final String blockName;
+  final String address;
+  final String phone;
+  final bool isActive;
+  final double? latitude;
+  final double? longitude;
+
+  factory BrandBranch.fromJson(Map<String, dynamic> json) {
+    return BrandBranch(
+      id: (json['_id'] ?? json['id'] ?? '').toString(),
+      name: _text(json['name'], 'Branch'),
+      blockId: _text(json['blockId']),
+      blockName: _text(json['blockName'], 'Area not set'),
+      address: _text(json['address']),
+      phone: _text(json['phone']),
+      isActive: json['isActive'] != false,
+      latitude: _optionalDouble(json['latitude']),
+      longitude: _optionalDouble(json['longitude']),
+    );
+  }
+}
+
+/// A neighbourhood a branch can sit in.
+class BranchBlock {
+  const BranchBlock({
+    required this.id,
+    required this.name,
+    this.isActive = true,
+  });
+
+  final String id;
+  final String name;
+  final bool isActive;
+
+  factory BranchBlock.fromJson(Map<String, dynamic> json) {
+    return BranchBlock(
+      id: (json['_id'] ?? json['id'] ?? '').toString(),
+      name: _text(json['name'], 'Area'),
+      isActive: json['isActive'] != false,
+    );
+  }
+}
+
+/// A person who works in the shop: a team member with access, or a picker who
+/// only works the packing queue.
+class TeamMember {
+  const TeamMember({
+    required this.id,
+    required this.name,
+    required this.email,
+    required this.role,
+    this.phone = '',
+    this.jobTitle = '',
+    this.permissions = const [],
+    this.isActive = true,
+    this.removedAt,
+    this.createdAt,
+  });
+
+  final String id;
+  final String name;
+  final String email;
+  final String role;
+  final String phone;
+  final String jobTitle;
+  final List<String> permissions;
+  final bool isActive;
+  final DateTime? removedAt;
+  final DateTime? createdAt;
+
+  bool get isPicker => role == 'PICKER';
+  bool get wasRemoved => removedAt != null;
+
+  String get roleLabel => isPicker ? 'Picker' : 'Team member';
+
+  String get statusLabel {
+    if (!isActive) return 'Removed';
+    return isPicker ? 'Picking orders' : 'Active';
+  }
+
+  factory TeamMember.fromJson(Map<String, dynamic> json) {
+    final user = _map(json['user']);
+    final rawPermissions = json['permissions'];
+    return TeamMember(
+      id: (json['_id'] ?? json['id'] ?? '').toString(),
+      name: _text(user['name'] ?? json['name'], 'Team member'),
+      email: _text(user['email'] ?? json['email']),
+      role: _text(json['role'], 'BRAND_EMPLOYEE'),
+      phone: _text(user['phone'] ?? json['phone']),
+      jobTitle: _text(json['jobTitle']),
+      permissions: rawPermissions is List
+          ? rawPermissions
+                .map((value) => value.toString())
+                .toList(growable: false)
+          : const [],
+      isActive: json['isActive'] != false,
+      removedAt: _date(json['removedAt']),
+      createdAt: _date(json['createdAt']),
+    );
+  }
+}
+
+/// The numbers behind the shop's Insights screen.
+class BrandAnalytics {
+  const BrandAnalytics({
+    required this.from,
+    required this.to,
+    required this.summary,
+    this.salesTrend = const [],
+    this.orderStatuses = const [],
+    this.topProducts = const [],
+    this.inventoryAlerts = const [],
+    this.deliveryStatuses = const [],
+  });
+
+  final String from;
+  final String to;
+  final AnalyticsSummary summary;
+  final List<SalesPoint> salesTrend;
+  final List<StatusCount> orderStatuses;
+  final List<TopProduct> topProducts;
+  final List<InventoryAlert> inventoryAlerts;
+  final List<StatusCount> deliveryStatuses;
+
+  factory BrandAnalytics.fromJson(Map<String, dynamic> json) {
+    final range = _map(json['range']);
+    return BrandAnalytics(
+      from: _text(range['from']),
+      to: _text(range['to']),
+      summary: AnalyticsSummary.fromJson(_map(json['summary'])),
+      salesTrend: _mapList(json['salesTrend'])
+          .map(SalesPoint.fromJson)
+          .toList(growable: false),
+      orderStatuses: _mapList(json['orderStatuses'])
+          .map(StatusCount.fromJson)
+          .toList(growable: false),
+      topProducts: _mapList(json['topProducts'])
+          .map(TopProduct.fromJson)
+          .toList(growable: false),
+      inventoryAlerts: _mapList(json['inventoryAlerts'])
+          .map(InventoryAlert.fromJson)
+          .toList(growable: false),
+      deliveryStatuses: _mapList(json['deliveryStatuses'])
+          .map(StatusCount.fromJson)
+          .toList(growable: false),
+    );
+  }
+}
+
+class AnalyticsSummary {
+  const AnalyticsSummary({
+    this.orders = 0,
+    this.deliveredOrders = 0,
+    this.cancelledOrders = 0,
+    this.pendingOrders = 0,
+    this.revenuePaisa = 0,
+    this.averageOrderValuePaisa = 0,
+    this.customers = 0,
+    this.repeatCustomers = 0,
+    this.productsSold = 0,
+    this.lowStockProducts = 0,
+    this.outOfStockProducts = 0,
+  });
+
+  final int orders;
+  final int deliveredOrders;
+  final int cancelledOrders;
+  final int pendingOrders;
+  final int revenuePaisa;
+  final int averageOrderValuePaisa;
+  final int customers;
+  final int repeatCustomers;
+  final int productsSold;
+  final int lowStockProducts;
+  final int outOfStockProducts;
+
+  factory AnalyticsSummary.fromJson(Map<String, dynamic> json) {
+    return AnalyticsSummary(
+      orders: _int(json['orders'], 0),
+      deliveredOrders: _int(json['deliveredOrders'], 0),
+      cancelledOrders: _int(json['cancelledOrders'], 0),
+      pendingOrders: _int(json['pendingOrders'], 0),
+      revenuePaisa: rupeesToPaisa(json['revenue']),
+      averageOrderValuePaisa: rupeesToPaisa(json['averageOrderValue']),
+      customers: _int(json['customers'], 0),
+      repeatCustomers: _int(json['repeatCustomers'], 0),
+      productsSold: _int(json['productsSold'], 0),
+      lowStockProducts: _int(json['lowStockProducts'], 0),
+      outOfStockProducts: _int(json['outOfStockProducts'], 0),
+    );
+  }
+}
+
+class SalesPoint {
+  const SalesPoint({
+    required this.date,
+    this.orders = 0,
+    this.revenuePaisa = 0,
+  });
+
+  final String date;
+  final int orders;
+  final int revenuePaisa;
+
+  factory SalesPoint.fromJson(Map<String, dynamic> json) {
+    return SalesPoint(
+      date: _text(json['date']),
+      orders: _int(json['orders'], 0),
+      revenuePaisa: rupeesToPaisa(json['revenue']),
+    );
+  }
+}
+
+class StatusCount {
+  const StatusCount({required this.status, this.count = 0});
+
+  final String status;
+  final int count;
+
+  factory StatusCount.fromJson(Map<String, dynamic> json) {
+    return StatusCount(
+      status: _text(json['status']),
+      count: _int(json['count'], 0),
+    );
+  }
+}
+
+class TopProduct {
+  const TopProduct({
+    this.productId = '',
+    required this.name,
+    this.unitsSold = 0,
+    this.revenuePaisa = 0,
+  });
+
+  final String productId;
+  final String name;
+  final int unitsSold;
+  final int revenuePaisa;
+
+  factory TopProduct.fromJson(Map<String, dynamic> json) {
+    return TopProduct(
+      productId: _text(json['productId']),
+      name: _text(json['productName'], 'Product'),
+      unitsSold: _int(json['unitsSold'], 0),
+      revenuePaisa: rupeesToPaisa(json['revenue']),
+    );
+  }
+}
+
+class InventoryAlert {
+  const InventoryAlert({
+    this.productId = '',
+    required this.name,
+    this.available = 0,
+    this.threshold = 0,
+    this.status = 'LOW_STOCK',
+  });
+
+  final String productId;
+  final String name;
+  final int available;
+  final int threshold;
+  final String status;
+
+  bool get isOutOfStock => status == 'OUT_OF_STOCK';
+
+  factory InventoryAlert.fromJson(Map<String, dynamic> json) {
+    return InventoryAlert(
+      productId: _text(json['productId']),
+      name: _text(json['productName'], 'Product'),
+      available: _int(json['availableQuantity'], 0),
+      threshold: _int(json['lowStockThreshold'], 0),
+      status: _text(json['status'], 'LOW_STOCK'),
+    );
+  }
+}
+
 /// Shop prices and order totals cross the API in decimal rupees ("64.97"),
 /// not paisa. Screens use the same integer-paisa money format everywhere.
 int rupeesToPaisa(Object? value) {

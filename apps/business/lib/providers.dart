@@ -53,6 +53,17 @@ final brandSummaryProvider = FutureProvider.autoDispose<BrandSummary>((
   return ref.watch(businessRepositoryProvider).currentBrand();
 });
 
+/// The full shop profile, including contact details and delivery defaults.
+final brandProfileProvider = FutureProvider.autoDispose<BrandProfile>((
+  ref,
+) async {
+  final user = ref.watch(sessionProvider).user;
+  if (user == null || !user.isBrand) {
+    throw ApiException('Sign in with a shop account to see this.');
+  }
+  return ref.watch(businessRepositoryProvider).brandProfile();
+});
+
 /// The service business behind a provider account.
 final providerProfileProvider = FutureProvider.autoDispose<ProviderProfile>((
   ref,

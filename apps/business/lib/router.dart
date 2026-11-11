@@ -10,8 +10,10 @@ import 'features/auth/splash_screen.dart';
 import 'features/availability/availability_screen.dart';
 import 'features/bookings/booking_detail_screen.dart';
 import 'features/bookings/bookings_screen.dart';
+import 'features/brand_branches/brand_branches_screen.dart';
 import 'features/brand_deliveries/brand_deliveries_screen.dart';
 import 'features/brand_deliveries/brand_delivery_detail_screen.dart';
+import 'features/brand_insights/brand_insights_screen.dart';
 import 'features/brand_orders/brand_order_detail_screen.dart';
 import 'features/brand_orders/brand_orders_screen.dart';
 import 'features/brand_products/add_product_screen.dart';
@@ -20,6 +22,8 @@ import 'features/brand_products/brand_products_screen.dart';
 import 'features/brand_returns/brand_return_detail_screen.dart';
 import 'features/brand_returns/brand_returns_screen.dart';
 import 'features/brand_riders/brand_riders_screen.dart';
+import 'features/brand_settings/brand_settings_screen.dart';
+import 'features/brand_team/brand_team_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/messages/chat_thread_screen.dart';
 import 'features/messages/messages_screen.dart';
@@ -153,6 +157,22 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const BrandRidersScreen(),
       ),
       GoRoute(
+        path: '/brand-team',
+        builder: (context, state) => const BrandTeamScreen(),
+      ),
+      GoRoute(
+        path: '/brand-branches',
+        builder: (context, state) => const BrandBranchesScreen(),
+      ),
+      GoRoute(
+        path: '/brand-insights',
+        builder: (context, state) => const BrandInsightsScreen(),
+      ),
+      GoRoute(
+        path: '/brand-settings',
+        builder: (context, state) => const BrandSettingsScreen(),
+      ),
+      GoRoute(
         path: '/offerings',
         builder: (context, state) => const OfferingsScreen(),
       ),
@@ -222,6 +242,10 @@ const _brandOnlyPaths = <String>[
   '/brand-deliveries',
   '/brand-returns',
   '/brand-riders',
+  '/brand-team',
+  '/brand-branches',
+  '/brand-insights',
+  '/brand-settings',
 ];
 
 bool _isBrandOnly(String location) {

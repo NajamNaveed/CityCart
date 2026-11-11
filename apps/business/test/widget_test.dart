@@ -12,8 +12,10 @@ import 'package:citycart_business/features/auth/login_screen.dart';
 import 'package:citycart_business/features/availability/availability_screen.dart';
 import 'package:citycart_business/features/bookings/booking_detail_screen.dart';
 import 'package:citycart_business/features/bookings/bookings_screen.dart';
+import 'package:citycart_business/features/brand_branches/brand_branches_screen.dart';
 import 'package:citycart_business/features/brand_deliveries/brand_deliveries_screen.dart';
 import 'package:citycart_business/features/brand_deliveries/brand_delivery_detail_screen.dart';
+import 'package:citycart_business/features/brand_insights/brand_insights_screen.dart';
 import 'package:citycart_business/features/brand_orders/brand_order_detail_screen.dart';
 import 'package:citycart_business/features/brand_orders/brand_orders_screen.dart';
 import 'package:citycart_business/features/brand_products/add_product_screen.dart';
@@ -22,6 +24,8 @@ import 'package:citycart_business/features/brand_products/brand_products_screen.
 import 'package:citycart_business/features/brand_returns/brand_return_detail_screen.dart';
 import 'package:citycart_business/features/brand_returns/brand_returns_screen.dart';
 import 'package:citycart_business/features/brand_riders/brand_riders_screen.dart';
+import 'package:citycart_business/features/brand_settings/brand_settings_screen.dart';
+import 'package:citycart_business/features/brand_team/brand_team_screen.dart';
 import 'package:citycart_business/features/home/home_screen.dart';
 import 'package:citycart_business/features/messages/chat_thread_screen.dart';
 import 'package:citycart_business/features/messages/messages_screen.dart';
@@ -162,6 +166,10 @@ void main() {
         '/brand-returns',
         '/brand-returns/r1',
         '/brand-riders',
+        '/brand-team',
+        '/brand-branches',
+        '/brand-insights',
+        '/brand-settings',
       ]) {
         expect(
           businessRedirect(
@@ -2183,6 +2191,245 @@ void main() {
       expect(find.text('Back in stock'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('team access is filtered and a member gets a sign-in', (
+      tester,
+    ) async {
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        shopProfile: _sampleShopProfile(),
+        team: _sampleTeam(),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(const BrandTeamScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ayesha Khan'), findsOneWidget);
+      expect(find.text('Imran Ali'), findsOneWidget);
+      expect(find.text('Sana Yousaf'), findsNothing);
+
+      await tester.dragUntilVisible(
+        find.byKey(const Key('team_filter_removed')),
+        find.byKey(const Key('team_filters')),
+        const Offset(-140, 0),
+      );
+      await tester.ensureVisible(find.byKey(const Key('team_filter_removed')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('team_filter_removed')));
+      await tester.pumpAndSettle();
+
+      expect(fake.lastTeamActive, isFalse);
+      expect(find.text('Sana Yousaf'), findsOneWidget);
+      expect(find.text('Ayesha Khan'), findsNothing);
+
+      await tester.dragUntilVisible(
+        find.byKey(const Key('team_filter_active')),
+        find.byKey(const Key('team_filters')),
+        const Offset(140, 0),
+      );
+      await tester.ensureVisible(find.byKey(const Key('team_filter_active')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('team_filter_active')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('add_team_member')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('team_name')), 'Nadia Iqbal');
+      await tester.enterText(
+        find.byKey(const Key('team_email')),
+        'nadia@example.com',
+      );
+      await tester.enterText(
+        find.byKey(const Key('team_password')),
+        'secret123',
+      );
+      await tester.pumpAndSettle();
+
+      final permission = find.byKey(const Key('team_permission_orders.view'));
+      await tester.ensureVisible(permission);
+      await tester.pumpAndSettle();
+      await tester.tap(permission);
+      await tester.pumpAndSettle();
+
+      final save = find.byKey(const Key('team_save'));
+      await tester.ensureVisible(save);
+      await tester.pumpAndSettle();
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+
+      expect(fake.createdTeamName, 'Nadia Iqbal');
+      expect(fake.createdTeamEmail, 'nadia@example.com');
+      expect(fake.createdTeamPassword, 'secret123');
+      expect(fake.createdTeamRole, 'BRAND_EMPLOYEE');
+      expect(fake.createdTeamPermissions, contains('orders.view'));
+      expect(find.text('Nadia Iqbal can now sign in.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('branches are added in an area and closed with a warning', (
+      tester,
+    ) async {
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        shopProfile: _sampleShopProfile(),
+        branches: _sampleBranches,
+        branchBlocks: _sampleBlocks,
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(const BrandBranchesScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Gulberg shop'), findsOneWidget);
+      expect(find.text('DHA shop'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('branch_actions_br1')));
+      await tester.pumpAndSettle();
+      expect(find.text('Close Gulberg shop?'), findsOneWidget);
+      await tester.tap(find.text('Close branch'));
+      await tester.pumpAndSettle();
+
+      expect(fake.toggledBranchId, 'br1');
+      expect(fake.toggledBranchActive, isFalse);
+      expect(find.text('Gulberg shop was closed.'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('add_branch')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('branch_name')),
+        'Johar shop',
+      );
+      await tester.tap(find.byKey(const Key('branch_area')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('DHA').last);
+      await tester.pumpAndSettle();
+
+      final save = find.byKey(const Key('branch_save'));
+      await tester.ensureVisible(save);
+      await tester.pumpAndSettle();
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+
+      expect(fake.createdBranchName, 'Johar shop');
+      expect(fake.createdBranchBlockId, 'bl2');
+      expect(find.text('Johar shop is now open.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('insights show money, best sellers and stock warnings', (
+      tester,
+    ) async {
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        shopProfile: _sampleShopProfile(),
+        analytics: _sampleAnalytics(),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(const BrandInsightsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('insight_revenue')), findsOneWidget);
+      expect(find.text('Rs 54,000'), findsOneWidget);
+      expect(find.text('12'), findsOneWidget);
+      expect(find.text('Best sellers'), findsOneWidget);
+      expect(find.text('Cotton kurta'), findsOneWidget);
+      expect(find.text('Silk scarf'), findsOneWidget);
+      expect(find.text('Out of stock'), findsOneWidget);
+      expect(find.text('Where orders are'), findsOneWidget);
+      expect(find.text('Where deliveries are'), findsOneWidget);
+
+      final firstFrom = fake.analyticsFrom;
+      await tester.tap(find.byKey(const Key('insight_range_7d')));
+      await tester.pumpAndSettle();
+
+      expect(fake.analyticsFrom, isNotNull);
+      expect(fake.analyticsFrom, isNot(firstFrom));
+      expect(fake.analyticsTo, matches(RegExp(r'^\d{4}-\d{2}-\d{2}$')));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('shop details and delivery defaults are saved', (tester) async {
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        shopProfile: _sampleShopProfile(),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(const BrandSettingsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('settings_name')), findsOneWidget);
+
+      await tester.enterText(
+        find.byKey(const Key('settings_name')),
+        'Loom Home',
+      );
+
+      final monday = find.byKey(const Key('settings_day_Monday'));
+      await tester.dragUntilVisible(
+        monday,
+        find.byType(ListView),
+        const Offset(0, -250),
+      );
+      expect(find.text('Opening hours'), findsOneWidget);
+      await tester.ensureVisible(monday);
+      await tester.pumpAndSettle();
+      await tester.tap(monday);
+      await tester.pumpAndSettle();
+
+      final fee = find.byKey(const Key('settings_delivery_fee'));
+      await tester.dragUntilVisible(
+        fee,
+        find.byType(ListView),
+        const Offset(0, -250),
+      );
+      expect(find.text('Delivery defaults'), findsOneWidget);
+      await tester.enterText(fee, '175');
+      await tester.pumpAndSettle();
+
+      final save = find.byKey(const Key('settings_save'));
+      await tester.dragUntilVisible(
+        save,
+        find.byType(ListView),
+        const Offset(0, -250),
+      );
+      await tester.ensureVisible(save);
+      await tester.pumpAndSettle();
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+
+      expect(fake.savedShopName, 'Loom Home');
+      expect(fake.savedDeliveryFee, 175);
+      expect(fake.savedClosedDays, containsAll(<String>['Monday', 'Sunday']));
+      expect(find.text('Shop details saved.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   });
 }
 
@@ -2567,6 +2814,125 @@ const _returnSummary = BrandReturnSummary(
   refundAmountPaisa: 66200,
 );
 
+BrandProfile _sampleShopProfile() {
+  return const BrandProfile(
+    id: 'b1',
+    name: 'Loom & Co.',
+    slug: 'loom-co',
+    status: 'ACTIVE',
+    cityId: 'c1',
+    street: '12 Main Road',
+    area: 'Gulberg',
+    city: 'Lahore',
+    supportPhone: '042 1234567',
+    supportEmail: 'help@loom.co',
+    opensAt: '09:00',
+    closesAt: '21:00',
+    closedDays: ['Sunday'],
+    deliveryFee: 150,
+    estimatedDeliveryTime: '30-45 minutes',
+    minimumOrderValue: 500,
+    deliveryNote: 'Delivered by the shop',
+  );
+}
+
+List<TeamMember> _sampleTeam() {
+  return const [
+    TeamMember(
+      id: 'e1',
+      name: 'Ayesha Khan',
+      email: 'ayesha@example.com',
+      role: 'BRAND_EMPLOYEE',
+      jobTitle: 'Store supervisor',
+      permissions: ['orders.view', 'orders.manage'],
+    ),
+    TeamMember(
+      id: 'e2',
+      name: 'Imran Ali',
+      email: 'imran@example.com',
+      role: 'PICKER',
+    ),
+    TeamMember(
+      id: 'e3',
+      name: 'Sana Yousaf',
+      email: 'sana@example.com',
+      role: 'BRAND_EMPLOYEE',
+      isActive: false,
+      removedAt: null,
+    ),
+  ];
+}
+
+const _sampleBranches = [
+  BrandBranch(
+    id: 'br1',
+    name: 'Gulberg shop',
+    blockId: 'bl1',
+    blockName: 'Gulberg',
+    address: '12 Main Road',
+    phone: '03001234567',
+  ),
+  BrandBranch(
+    id: 'br2',
+    name: 'DHA shop',
+    blockId: 'bl2',
+    blockName: 'DHA',
+    isActive: false,
+  ),
+];
+
+const _sampleBlocks = [
+  BranchBlock(id: 'bl1', name: 'Gulberg'),
+  BranchBlock(id: 'bl2', name: 'DHA'),
+];
+
+BrandAnalytics _sampleAnalytics() {
+  return const BrandAnalytics(
+    from: '2026-11-01',
+    to: '2026-11-11',
+    summary: AnalyticsSummary(
+      orders: 12,
+      deliveredOrders: 9,
+      cancelledOrders: 1,
+      pendingOrders: 2,
+      revenuePaisa: 5400000,
+      averageOrderValuePaisa: 600000,
+      customers: 8,
+      repeatCustomers: 2,
+      productsSold: 31,
+      lowStockProducts: 1,
+      outOfStockProducts: 1,
+    ),
+    salesTrend: [
+      SalesPoint(date: '2026-11-03', orders: 3, revenuePaisa: 1800000),
+      SalesPoint(date: '2026-11-07', orders: 4, revenuePaisa: 2400000),
+      SalesPoint(date: '2026-11-10', orders: 2, revenuePaisa: 1200000),
+    ],
+    orderStatuses: [
+      StatusCount(status: 'DELIVERED', count: 9),
+      StatusCount(status: 'PENDING', count: 2),
+    ],
+    topProducts: [
+      TopProduct(
+        productId: 'p1',
+        name: 'Cotton kurta',
+        unitsSold: 12,
+        revenuePaisa: 2400000,
+      ),
+    ],
+    inventoryAlerts: [
+      InventoryAlert(
+        productId: 'p2',
+        name: 'Silk scarf',
+        available: 0,
+        threshold: 3,
+        status: 'OUT_OF_STOCK',
+      ),
+    ],
+    deliveryStatuses: [StatusCount(status: 'DELIVERED', count: 8)],
+  );
+}
+
 /// Builds a container whose session has already been restored, so the home
 /// providers see a signed-in owner before the first frame.
 Future<ProviderContainer> _signedIn({
@@ -2589,6 +2955,11 @@ Future<ProviderContainer> _signedIn({
   List<BrandRider> riders = const [],
   List<BrandReturn> returns = const [],
   BrandReturnSummary returnSummary = const BrandReturnSummary(),
+  BrandProfile? shopProfile,
+  List<TeamMember> team = const [],
+  List<BrandBranch> branches = const [],
+  List<BranchBlock> branchBlocks = const [],
+  BrandAnalytics? analytics,
 }) async {
   final result = await _signedInWithFake(
     user: user,
@@ -2610,6 +2981,11 @@ Future<ProviderContainer> _signedIn({
     riders: riders,
     returns: returns,
     returnSummary: returnSummary,
+    shopProfile: shopProfile,
+    team: team,
+    branches: branches,
+    branchBlocks: branchBlocks,
+    analytics: analytics,
   );
   return result.$1;
 }
@@ -2634,6 +3010,11 @@ Future<(ProviderContainer, _FakeRepository)> _signedInWithFake({
   List<BrandRider> riders = const [],
   List<BrandReturn> returns = const [],
   BrandReturnSummary returnSummary = const BrandReturnSummary(),
+  BrandProfile? shopProfile,
+  List<TeamMember> team = const [],
+  List<BrandBranch> branches = const [],
+  List<BranchBlock> branchBlocks = const [],
+  BrandAnalytics? analytics,
 }) async {
   final prefs = await SharedPreferences.getInstance();
   final store = _FakeSessionStore('token', user);
@@ -2658,6 +3039,11 @@ Future<(ProviderContainer, _FakeRepository)> _signedInWithFake({
     riders: riders,
     returns: returns,
     returnSummary: returnSummary,
+    shopProfile: shopProfile,
+    team: team,
+    branches: branches,
+    branchBlocks: branchBlocks,
+    analytics: analytics,
   );
   final container = ProviderContainer(
     overrides: [
@@ -2763,6 +3149,11 @@ class _FakeRepository extends BusinessRepository {
     this.riders = const [],
     this.returns = const [],
     this.returnSummary = const BrandReturnSummary(),
+    this.shopProfile,
+    this.team = const [],
+    this.branches = const [],
+    this.branchBlocks = const [],
+    this.analytics,
   }) : super(ApiClient(store));
 
   final AppUser user;
@@ -2784,10 +3175,17 @@ class _FakeRepository extends BusinessRepository {
   final List<BrandRider> riders;
   final List<BrandReturn> returns;
   final BrandReturnSummary returnSummary;
+  BrandProfile? shopProfile;
+  final List<TeamMember> team;
+  final List<BrandBranch> branches;
+  final List<BranchBlock> branchBlocks;
+  final BrandAnalytics? analytics;
   final Map<String, BrandProduct> _editedProducts = {};
   final Map<String, BrandRider> _editedRiders = {};
   final Map<String, BrandDelivery> _editedDeliveries = {};
   final Map<String, BrandReturn> _receivedReturns = {};
+  final Map<String, TeamMember> _editedTeam = {};
+  final Map<String, BrandBranch> _editedBranches = {};
 
   String? lastBookingStatus;
   int? acceptedPricePaisa;
@@ -2823,6 +3221,27 @@ class _FakeRepository extends BusinessRepository {
   String? lastReturnStatus;
   String? receivedReturnId;
   Map<int, bool>? receivedRestock;
+
+  bool? lastTeamActive;
+  String? createdTeamName;
+  String? createdTeamEmail;
+  String? createdTeamPassword;
+  String? createdTeamRole;
+  List<String>? createdTeamPermissions;
+  String? removedTeamId;
+  String? updatedTeamId;
+  bool? updatedTeamActive;
+  List<String>? updatedTeamPermissions;
+  String? createdBranchName;
+  String? createdBranchBlockId;
+  String? createdBranchAddress;
+  String? toggledBranchId;
+  bool? toggledBranchActive;
+  String? analyticsFrom;
+  String? analyticsTo;
+  String? savedShopName;
+  double? savedDeliveryFee;
+  List<String>? savedClosedDays;
 
   String? lastProductStatus;
   String? lastProductSearch;
@@ -3708,6 +4127,275 @@ class _FakeRepository extends BusinessRepository {
       serviceTitle: review.serviceTitle,
       createdAt: review.createdAt,
     );
+  }
+
+  @override
+  Future<BrandProfile> brandProfile() async {
+    final profile = shopProfile;
+    if (profile == null) throw StateError('No shop profile in this test.');
+    return profile;
+  }
+
+  @override
+  Future<BrandProfile> saveBrandProfile({
+    required String brandId,
+    required String name,
+    required String description,
+    required String street,
+    required String area,
+    required String city,
+    required String supportPhone,
+    required String supportEmail,
+    required String opensAt,
+    required String closesAt,
+    required List<String> closedDays,
+    required double? deliveryFee,
+    required String estimatedDeliveryTime,
+    required double? minimumOrderValue,
+    required String deliveryNote,
+  }) async {
+    savedShopName = name;
+    savedDeliveryFee = deliveryFee;
+    savedClosedDays = closedDays;
+    final current = shopProfile ?? _sampleShopProfile();
+    final updated = BrandProfile(
+      id: brandId,
+      name: name,
+      slug: current.slug,
+      status: current.status,
+      billingStatus: current.billingStatus,
+      description: description,
+      logo: current.logo,
+      cityId: current.cityId,
+      street: street,
+      area: area,
+      city: city,
+      supportPhone: supportPhone,
+      supportEmail: supportEmail,
+      opensAt: opensAt,
+      closesAt: closesAt,
+      closedDays: closedDays,
+      deliveryFee: deliveryFee,
+      estimatedDeliveryTime: estimatedDeliveryTime,
+      minimumOrderValue: minimumOrderValue,
+      deliveryNote: deliveryNote,
+    );
+    shopProfile = updated;
+    return updated;
+  }
+
+  TeamMember _teamRecord(String memberId) {
+    final edited = _editedTeam[memberId];
+    if (edited != null) return edited;
+    return team.firstWhere(
+      (member) => member.id == memberId,
+      orElse: () => _sampleTeam().first,
+    );
+  }
+
+  @override
+  Future<data.Page<TeamMember>> teamMembers({
+    bool? isActive,
+    int page = 1,
+    int limit = 20,
+  }) async {
+    lastTeamActive = isActive;
+    final all = [
+      for (final member in team) _editedTeam[member.id] ?? member,
+      for (final entry in _editedTeam.entries)
+        if (!team.any((member) => member.id == entry.key)) entry.value,
+    ];
+    final filtered = all
+        .where((member) => isActive == null || member.isActive == isActive)
+        .toList(growable: false);
+    return data.Page(
+      items: filtered,
+      pagination: Pagination(
+        page: 1,
+        limit: limit,
+        pages: filtered.isEmpty ? 0 : 1,
+        total: filtered.length,
+      ),
+    );
+  }
+
+  @override
+  Future<TeamMember> createTeamMember({
+    required String name,
+    required String email,
+    required String password,
+    required String role,
+    String? phone,
+    String? jobTitle,
+    List<String> permissions = const [],
+  }) async {
+    createdTeamName = name;
+    createdTeamEmail = email;
+    createdTeamPassword = password;
+    createdTeamRole = role;
+    createdTeamPermissions = permissions;
+    final member = TeamMember(
+      id: 'team-new',
+      name: name,
+      email: email,
+      role: role,
+      phone: phone ?? '',
+      jobTitle: jobTitle ?? '',
+      permissions: permissions,
+    );
+    _editedTeam[member.id] = member;
+    return member;
+  }
+
+  @override
+  Future<TeamMember> updateTeamMember(
+    String memberId, {
+    String? name,
+    String? phone,
+    String? jobTitle,
+    bool? isActive,
+  }) async {
+    updatedTeamId = memberId;
+    updatedTeamActive = isActive;
+    final current = _teamRecord(memberId);
+    final updated = TeamMember(
+      id: current.id,
+      name: name ?? current.name,
+      email: current.email,
+      role: current.role,
+      phone: phone ?? current.phone,
+      jobTitle: jobTitle ?? current.jobTitle,
+      permissions: current.permissions,
+      isActive: isActive ?? current.isActive,
+      removedAt: current.removedAt,
+      createdAt: current.createdAt,
+    );
+    _editedTeam[memberId] = updated;
+    return updated;
+  }
+
+  @override
+  Future<TeamMember> updateTeamMemberPermissions(
+    String memberId, {
+    required List<String> permissions,
+  }) async {
+    updatedTeamId = memberId;
+    updatedTeamPermissions = permissions;
+    final current = _teamRecord(memberId);
+    final updated = TeamMember(
+      id: current.id,
+      name: current.name,
+      email: current.email,
+      role: current.role,
+      phone: current.phone,
+      jobTitle: current.jobTitle,
+      permissions: permissions,
+      isActive: current.isActive,
+      removedAt: current.removedAt,
+      createdAt: current.createdAt,
+    );
+    _editedTeam[memberId] = updated;
+    return updated;
+  }
+
+  @override
+  Future<TeamMember> removeTeamMember(String memberId, {String? reason}) async {
+    removedTeamId = memberId;
+    final current = _teamRecord(memberId);
+    final removed = TeamMember(
+      id: current.id,
+      name: current.name,
+      email: current.email,
+      role: current.role,
+      phone: current.phone,
+      jobTitle: current.jobTitle,
+      permissions: current.permissions,
+      isActive: false,
+      removedAt: DateTime(2026, 11, 11, 12),
+      createdAt: current.createdAt,
+    );
+    _editedTeam[memberId] = removed;
+    return removed;
+  }
+
+  @override
+  Future<List<BrandBranch>> brandBranches() async {
+    final all = [
+      for (final branch in branches) _editedBranches[branch.id] ?? branch,
+      for (final entry in _editedBranches.entries)
+        if (!branches.any((branch) => branch.id == entry.key)) entry.value,
+    ];
+    return all;
+  }
+
+  @override
+  Future<List<BranchBlock>> brandBranchBlocks(String cityId) async {
+    return branchBlocks;
+  }
+
+  @override
+  Future<BrandBranch> createBrandBranch({
+    required String name,
+    required String blockId,
+    String? address,
+    String? phone,
+  }) async {
+    createdBranchName = name;
+    createdBranchBlockId = blockId;
+    createdBranchAddress = address;
+    final block = branchBlocks.firstWhere(
+      (entry) => entry.id == blockId,
+      orElse: () => const BranchBlock(id: 'bl1', name: 'Gulberg'),
+    );
+    final branch = BrandBranch(
+      id: 'branch-new',
+      name: name,
+      blockId: blockId,
+      blockName: block.name,
+      address: address ?? '',
+      phone: phone ?? '',
+    );
+    _editedBranches[branch.id] = branch;
+    return branch;
+  }
+
+  @override
+  Future<BrandBranch> updateBrandBranch(
+    String branchId, {
+    String? name,
+    String? blockId,
+    String? address,
+    String? phone,
+    bool? isActive,
+  }) async {
+    toggledBranchId = branchId;
+    toggledBranchActive = isActive;
+    final current =
+        _editedBranches[branchId] ??
+        branches.firstWhere(
+          (branch) => branch.id == branchId,
+          orElse: () => _sampleBranches.first,
+        );
+    final updated = BrandBranch(
+      id: current.id,
+      name: name ?? current.name,
+      blockId: blockId ?? current.blockId,
+      blockName: current.blockName,
+      address: address ?? current.address,
+      phone: phone ?? current.phone,
+      isActive: isActive ?? current.isActive,
+      latitude: current.latitude,
+      longitude: current.longitude,
+    );
+    _editedBranches[branchId] = updated;
+    return updated;
+  }
+
+  @override
+  Future<BrandAnalytics> brandAnalytics({String? from, String? to}) async {
+    analyticsFrom = from;
+    analyticsTo = to;
+    return analytics ?? _sampleAnalytics();
   }
 }
 

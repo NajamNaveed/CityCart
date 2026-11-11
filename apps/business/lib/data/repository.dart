@@ -860,6 +860,242 @@ class BusinessRepository {
     return BrandReturn.fromJson(Map<String, dynamic>.from(value));
   }
 
+  // --- Brand shop settings, team and branches -----------------------------
+
+  Future<BrandProfile> brandProfile() async {
+    final body = await _api.get('/brands/me');
+    final brand = body['brand'];
+    if (brand is! Map) {
+      throw StateError('The server did not return your shop.');
+    }
+    return BrandProfile.fromJson(Map<String, dynamic>.from(brand));
+  }
+
+  /// Saves the shop profile and its delivery defaults. The full contact and
+  /// settings blocks are sent because the server replaces them as a whole.
+  Future<BrandProfile> saveBrandProfile({
+    required String brandId,
+    required String name,
+    required String description,
+    required String street,
+    required String area,
+    required String city,
+    required String supportPhone,
+    required String supportEmail,
+    required String opensAt,
+    required String closesAt,
+    required List<String> closedDays,
+    required double? deliveryFee,
+    required String estimatedDeliveryTime,
+    required double? minimumOrderValue,
+    required String deliveryNote,
+  }) async {
+    final body = await _api.patch(
+      '/brands/$brandId',
+      data: {
+        'name': name.trim(),
+        'description': description.trim(),
+        'contact': {
+          'address': {
+            'street': street.trim(),
+            'area': area.trim(),
+            'city': city.trim(),
+          },
+          'supportPhone': supportPhone.trim(),
+          'supportEmail': supportEmail.trim(),
+          'operatingHours': {
+            'opensAt': opensAt,
+            'closesAt': closesAt,
+            'closedDays': closedDays,
+          },
+        },
+        'settings': {
+          'deliveryFee': deliveryFee,
+          'estimatedDeliveryTime': estimatedDeliveryTime.trim(),
+          'minimumOrderValue': minimumOrderValue,
+          'deliveryNote': deliveryNote.trim(),
+        },
+      },
+    );
+    final brand = body['brand'];
+    if (brand is! Map) {
+      throw StateError('The server did not return your shop.');
+    }
+    return BrandProfile.fromJson(Map<String, dynamic>.from(brand));
+  }
+
+  Future<Page<TeamMember>> teamMembers({
+    bool? isActive,
+    int page = 1,
+    int limit = 20,
+  }) async {
+    final body = await _api.get(
+      '/employees',
+      query: {
+        'page': page,
+        'limit': limit,
+        if (isActive != null) 'isActive': isActive ? 'true' : 'false',
+      },
+    );
+    return Page.fromJson(body, TeamMember.fromJson, 'employees');
+  }
+
+  Future<TeamMember> createTeamMember({
+    required String name,
+    required String email,
+    required String password,
+    required String role,
+    String? phone,
+    String? jobTitle,
+    List<String> permissions = const [],
+  }) async {
+    final body = await _api.post(
+      '/employees',
+      data: {
+        'name': name.trim(),
+        'email': email.trim(),
+        'password': password,
+        'role': role,
+        if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
+        if (jobTitle != null && jobTitle.trim().isNotEmpty)
+          'jobTitle': jobTitle.trim(),
+        if (role != 'PICKER') 'permissions': permissions,
+      },
+    );
+    return _teamFrom(body);
+  }
+
+  Future<TeamMember> updateTeamMember(
+    String memberId, {
+    String? name,
+    String? phone,
+    String? jobTitle,
+    bool? isActive,
+  }) async {
+    final body = await _api.patch(
+      '/employees/$memberId',
+      data: {
+        if (name != null) 'name': name.trim(),
+        if (phone != null) 'phone': phone.trim(),
+        if (jobTitle != null) 'jobTitle': jobTitle.trim(),
+        'isActive': ?isActive,
+      },
+    );
+    return _teamFrom(body);
+  }
+
+  Future<TeamMember> updateTeamMemberPermissions(
+    String memberId, {
+    required List<String> permissions,
+  }) async {
+    final body = await _api.patch(
+      '/employees/$memberId/permissions',
+      data: {'permissions': permissions},
+    );
+    return _teamFrom(body);
+  }
+
+  Future<TeamMember> removeTeamMember(String memberId, {String? reason}) async {
+    final body = await _api.delete(
+      '/employees/$memberId',
+      data: {
+        if (reason != null && reason.trim().isNotEmpty)
+          'removalReason': reason.trim(),
+      },
+    );
+    return _teamFrom(body);
+  }
+
+  TeamMember _teamFrom(Map<String, dynamic> body) {
+    final member = body['employee'];
+    if (member is! Map) {
+      throw StateError('The server did not return the team member.');
+    }
+    return TeamMember.fromJson(Map<String, dynamic>.from(member));
+  }
+
+  Future<List<BrandBranch>> brandBranches() async {
+    final body = await _api.get('/branches');
+    final items = body['branches'];
+    if (items is! List) return const [];
+    return items
+        .whereType<Map>()
+        .map((item) => BrandBranch.fromJson(Map<String, dynamic>.from(item)))
+        .toList(growable: false);
+  }
+
+  /// The neighbourhoods a branch can sit in. Only the brand's own city is
+  /// offered because a branch cannot open anywhere else.
+  Future<List<BranchBlock>> brandBranchBlocks(String cityId) async {
+    final body = await _api.get('/blocks', query: {'cityId': cityId});
+    final items = body['blocks'];
+    if (items is! List) return const [];
+    return items
+        .whereType<Map>()
+        .map((item) => BranchBlock.fromJson(Map<String, dynamic>.from(item)))
+        .toList(growable: false);
+  }
+
+  Future<BrandBranch> createBrandBranch({
+    required String name,
+    required String blockId,
+    String? address,
+    String? phone,
+  }) async {
+    final body = await _api.post(
+      '/brand/branches',
+      data: {
+        'name': name.trim(),
+        'blockId': blockId,
+        if (address != null && address.trim().isNotEmpty)
+          'address': address.trim(),
+        if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
+      },
+    );
+    return _branchFrom(body);
+  }
+
+  Future<BrandBranch> updateBrandBranch(
+    String branchId, {
+    String? name,
+    String? blockId,
+    String? address,
+    String? phone,
+    bool? isActive,
+  }) async {
+    final body = await _api.patch(
+      '/brand/branches/$branchId',
+      data: {
+        if (name != null) 'name': name.trim(),
+        'blockId': ?blockId,
+        if (address != null) 'address': address.trim(),
+        if (phone != null) 'phone': phone.trim(),
+        'isActive': ?isActive,
+      },
+    );
+    return _branchFrom(body);
+  }
+
+  BrandBranch _branchFrom(Map<String, dynamic> body) {
+    final branch = body['branch'];
+    if (branch is! Map) {
+      throw StateError('The server did not return the branch.');
+    }
+    return BrandBranch.fromJson(Map<String, dynamic>.from(branch));
+  }
+
+  Future<BrandAnalytics> brandAnalytics({String? from, String? to}) async {
+    final body = await _api.get(
+      '/brand/analytics',
+      query: {'from': ?from, 'to': ?to},
+    );
+    final analytics = body['analytics'];
+    if (analytics is! Map) {
+      throw StateError('The server did not return the shop numbers.');
+    }
+    return BrandAnalytics.fromJson(Map<String, dynamic>.from(analytics));
+  }
+
   AuthResult _authFrom(Map<String, dynamic> body) {
     final token = body['token'];
     final user = body['user'];
