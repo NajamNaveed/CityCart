@@ -1,0 +1,35 @@
+{
+    "name": "CityCart Staff",
+    "short_name": "CityCart Staff",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#F5F0E6",
+    "theme_color": "#1E3A2F",
+    "description": "Picking, deliveries, returns and takings for CityCart store teams.",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "icons/Icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-maskable-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "icons/Icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}
