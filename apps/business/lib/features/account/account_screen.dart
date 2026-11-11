@@ -151,6 +151,22 @@ class AccountScreen extends ConsumerWidget {
                       ),
                       const Divider(indent: 66),
                       InfoRow(
+                        key: const Key('account_messages'),
+                        icon: Icons.forum_outlined,
+                        label: 'Customer messages',
+                        value: 'Questions about products and orders',
+                        onTap: () => context.push('/brand-messages'),
+                      ),
+                      const Divider(indent: 66),
+                      InfoRow(
+                        key: const Key('account_reviews'),
+                        icon: Icons.star_outline_rounded,
+                        label: 'Reviews',
+                        value: 'What customers say about your products',
+                        onTap: () => context.push('/brand-reviews'),
+                      ),
+                      const Divider(indent: 66),
+                      InfoRow(
                         key: const Key('account_products'),
                         icon: Icons.inventory_2_outlined,
                         label: 'Products',

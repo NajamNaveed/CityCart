@@ -14,6 +14,8 @@ import 'features/brand_branches/brand_branches_screen.dart';
 import 'features/brand_deliveries/brand_deliveries_screen.dart';
 import 'features/brand_deliveries/brand_delivery_detail_screen.dart';
 import 'features/brand_insights/brand_insights_screen.dart';
+import 'features/brand_messages/brand_chat_screen.dart';
+import 'features/brand_messages/brand_messages_screen.dart';
 import 'features/brand_orders/brand_order_detail_screen.dart';
 import 'features/brand_orders/brand_orders_screen.dart';
 import 'features/brand_products/add_product_screen.dart';
@@ -21,6 +23,7 @@ import 'features/brand_products/brand_product_detail_screen.dart';
 import 'features/brand_products/brand_products_screen.dart';
 import 'features/brand_returns/brand_return_detail_screen.dart';
 import 'features/brand_returns/brand_returns_screen.dart';
+import 'features/brand_reviews/brand_reviews_screen.dart';
 import 'features/brand_riders/brand_riders_screen.dart';
 import 'features/brand_settings/brand_settings_screen.dart';
 import 'features/brand_team/brand_team_screen.dart';
@@ -69,6 +72,10 @@ final routerProvider = Provider<GoRouter>((ref) {
                 path: '/bookings',
                 builder: (context, state) => const BookingsScreen(),
               ),
+              GoRoute(
+                path: '/brand-messages',
+                builder: (context, state) => const BrandMessagesScreen(),
+              ),
             ],
           ),
           StatefulShellBranch(
@@ -87,6 +94,15 @@ final routerProvider = Provider<GoRouter>((ref) {
           bookingId: state.pathParameters['id']!,
           initial: state.extra is BusinessBooking
               ? state.extra as BusinessBooking
+              : null,
+        ),
+      ),
+      GoRoute(
+        path: '/brand-messages/:id',
+        builder: (context, state) => BrandChatScreen(
+          conversationId: state.pathParameters['id']!,
+          initial: state.extra is BrandChatThread
+              ? state.extra as BrandChatThread
               : null,
         ),
       ),
@@ -155,6 +171,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/brand-riders',
         builder: (context, state) => const BrandRidersScreen(),
+      ),
+      GoRoute(
+        path: '/brand-reviews',
+        builder: (context, state) => const BrandReviewsScreen(),
       ),
       GoRoute(
         path: '/brand-team',
@@ -242,10 +262,12 @@ const _brandOnlyPaths = <String>[
   '/brand-deliveries',
   '/brand-returns',
   '/brand-riders',
+  '/brand-reviews',
   '/brand-team',
   '/brand-branches',
   '/brand-insights',
   '/brand-settings',
+  '/brand-messages',
 ];
 
 bool _isBrandOnly(String location) {

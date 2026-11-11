@@ -28,29 +28,23 @@ const _bookingsDestination = _Destination(
   Icons.event_note_outlined,
   Icons.event_note_rounded,
 );
+const _messagesDestination = _Destination(
+  'Messages',
+  Icons.chat_bubble_outline_rounded,
+  Icons.chat_bubble_rounded,
+);
 const _accountDestination = _Destination(
   'Account',
   Icons.person_outline_rounded,
   Icons.person_rounded,
 );
 
+/// The middle tab is the provider's bookings or the shop's customer messages.
 List<_Destination> _destinationsFor(AppUser? user) {
   if (user?.isProvider ?? false) {
     return const [_homeDestination, _bookingsDestination, _accountDestination];
   }
-  return const [_homeDestination, _accountDestination];
-}
-
-/// The shell always has three branches in this order. A shop owner only sees
-/// two of them, so visible positions are mapped to branch positions.
-int _branchForVisible(AppUser? user, int visible) {
-  if (user?.isProvider ?? false) return visible;
-  return visible == 0 ? 0 : 2;
-}
-
-int _visibleForBranch(AppUser? user, int branch) {
-  if (user?.isProvider ?? false) return branch;
-  return branch == 2 ? 1 : 0;
+  return const [_homeDestination, _messagesDestination, _accountDestination];
 }
 
 class BusinessShell extends ConsumerWidget {
@@ -58,7 +52,11 @@ class BusinessShell extends ConsumerWidget {
 
   final StatefulNavigationShell navigationShell;
 
-  void _openBranch(int branch) {
+  void _openBranch(BuildContext context, AppUser? user, int branch) {
+    if (branch == 1 && (user?.isBrand ?? false)) {
+      context.go('/brand-messages');
+      return;
+    }
     navigationShell.goBranch(
       branch,
       initialLocation: branch == navigationShell.currentIndex,
@@ -69,7 +67,7 @@ class BusinessShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(sessionProvider).user;
     final destinations = _destinationsFor(user);
-    final selected = _visibleForBranch(user, navigationShell.currentIndex);
+    final selected = navigationShell.currentIndex;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -82,8 +80,7 @@ class BusinessShell extends ConsumerWidget {
                     user: user,
                     destinations: destinations,
                     index: selected,
-                    onOpen: (visible) =>
-                        _openBranch(_branchForVisible(user, visible)),
+                    onOpen: (visible) => _openBranch(context, user, visible),
                   ),
                   const VerticalDivider(width: 1),
                   Expanded(child: navigationShell),
@@ -102,7 +99,7 @@ class BusinessShell extends ConsumerWidget {
             child: NavigationBar(
               selectedIndex: selected,
               onDestinationSelected: (visible) =>
-                  _openBranch(_branchForVisible(user, visible)),
+                  _openBranch(context, user, visible),
               destinations: [
                 for (final destination in destinations)
                   NavigationDestination(

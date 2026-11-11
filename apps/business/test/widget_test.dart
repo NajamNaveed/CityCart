@@ -1,8 +1,12 @@
+import 'dart:async' as async;
+
 import 'package:citycart_business/app.dart';
 import 'package:citycart_business/core/format.dart';
 import 'package:citycart_business/core/status.dart';
 import 'package:citycart_business/core/theme.dart';
+import 'package:citycart_business/core/widgets.dart';
 import 'package:citycart_business/data/api_client.dart';
+import 'package:citycart_business/data/api_exception.dart';
 import 'package:citycart_business/data/models.dart';
 import 'package:citycart_business/data/models.dart' as data;
 import 'package:citycart_business/data/repository.dart';
@@ -16,6 +20,8 @@ import 'package:citycart_business/features/brand_branches/brand_branches_screen.
 import 'package:citycart_business/features/brand_deliveries/brand_deliveries_screen.dart';
 import 'package:citycart_business/features/brand_deliveries/brand_delivery_detail_screen.dart';
 import 'package:citycart_business/features/brand_insights/brand_insights_screen.dart';
+import 'package:citycart_business/features/brand_messages/brand_chat_screen.dart';
+import 'package:citycart_business/features/brand_messages/brand_messages_screen.dart';
 import 'package:citycart_business/features/brand_orders/brand_order_detail_screen.dart';
 import 'package:citycart_business/features/brand_orders/brand_orders_screen.dart';
 import 'package:citycart_business/features/brand_products/add_product_screen.dart';
@@ -23,6 +29,7 @@ import 'package:citycart_business/features/brand_products/brand_product_detail_s
 import 'package:citycart_business/features/brand_products/brand_products_screen.dart';
 import 'package:citycart_business/features/brand_returns/brand_return_detail_screen.dart';
 import 'package:citycart_business/features/brand_returns/brand_returns_screen.dart';
+import 'package:citycart_business/features/brand_reviews/brand_reviews_screen.dart';
 import 'package:citycart_business/features/brand_riders/brand_riders_screen.dart';
 import 'package:citycart_business/features/brand_settings/brand_settings_screen.dart';
 import 'package:citycart_business/features/brand_team/brand_team_screen.dart';
@@ -170,6 +177,9 @@ void main() {
         '/brand-branches',
         '/brand-insights',
         '/brand-settings',
+        '/brand-messages',
+        '/brand-messages/cv1',
+        '/brand-reviews',
       ]) {
         expect(
           businessRedirect(
@@ -679,6 +689,95 @@ void main() {
       expect(rider.isActive, isFalse);
       expect(rider.phone, '03001234567');
     });
+  });
+
+  group('middle tab navigation', () {
+    for (final width in [320.0, 1024.0]) {
+      for (final (user, label, path) in [
+        (_brandUser, 'Messages', '/brand-messages'),
+        (_providerUser, 'Bookings', '/bookings'),
+      ]) {
+        testWidgets(
+          '$label opens on first tap, reselection and after Home at $width wide',
+          (tester) async {
+            tester.view.physicalSize = Size(width, 800);
+            tester.view.devicePixelRatio = 1;
+            addTearDown(tester.view.resetPhysicalSize);
+            addTearDown(tester.view.resetDevicePixelRatio);
+            final container = await _signedIn(
+              user: user,
+              profile: _profile,
+              brand: _activeBrand,
+              brandThreads: _sampleBrandThreads(),
+            );
+            addTearDown(container.dispose);
+
+            await tester.pumpWidget(
+              UncontrolledProviderScope(
+                container: container,
+                child: const CityCartBusinessApp(),
+              ),
+            );
+            await tester.pumpAndSettle();
+
+            final router = container.read(routerProvider);
+            expect(router.routeInformationProvider.value.uri.path, '/home');
+            expect(
+              find.byType(NavigationBar),
+              width < 900 ? findsOneWidget : findsNothing,
+            );
+
+            Finder destination(String text) => width < 900
+                ? find.descendant(
+                    of: find.byType(NavigationBar),
+                    matching: find.text(text),
+                  )
+                : find.widgetWithText(InkWell, text).first;
+
+            for (final step in ['first tap', 'reselection', 'after Home']) {
+              if (step == 'after Home') {
+                await tester.tap(destination('Home'));
+                await tester.pumpAndSettle();
+                expect(router.routeInformationProvider.value.uri.path, '/home');
+                expect(find.byType(HomeScreen), findsOneWidget);
+              }
+
+              await tester.tap(destination(label));
+              await tester.pumpAndSettle();
+
+              expect(
+                router.routeInformationProvider.value.uri.path,
+                path,
+                reason: step,
+              );
+              expect(
+                find.byType(
+                  user.isBrand ? BrandMessagesScreen : BookingsScreen,
+                ),
+                findsOneWidget,
+                reason: step,
+              );
+              expect(
+                find.byType(
+                  user.isBrand ? BookingsScreen : BrandMessagesScreen,
+                ),
+                findsNothing,
+                reason: step,
+              );
+              if (width < 900) {
+                expect(
+                  tester
+                      .widget<NavigationBar>(find.byType(NavigationBar))
+                      .selectedIndex,
+                  1,
+                );
+              }
+              expect(tester.takeException(), isNull);
+            }
+          },
+        );
+      }
+    }
   });
 
   group('screens at 320 wide and 1.3 text', () {
@@ -1431,6 +1530,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Bookings'), findsNothing);
+      expect(find.text('Messages'), findsWidgets);
       expect(find.text('Account'), findsWidgets);
       expect(tester.takeException(), isNull);
     });
@@ -2430,6 +2530,612 @@ void main() {
       expect(find.text('Shop details saved.'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('shop messages list customers and their questions', (
+      tester,
+    ) async {
+      final (container, _) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        brandThreads: _sampleBrandThreads(),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(const BrandMessagesScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Sana Malik'), findsOneWidget);
+      expect(find.text('Bilal Ahmed'), findsOneWidget);
+      expect(find.text('Do you have this in blue?'), findsOneWidget);
+      expect(find.text('You: It will be back on Monday.'), findsOneWidget);
+      expect(find.text('3 new'), findsOneWidget);
+      expect(find.text('2 new'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('shop inbox header uses the unread total beyond its page', (
+      tester,
+    ) async {
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        brandThreads: _sampleBrandThreads(),
+      );
+      addTearDown(container.dispose);
+      fake.brandChatUnreadCount = 37;
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(const BrandMessagesScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byType(PageHeader),
+          matching: find.text('37 new'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('3 new'), findsNothing);
+      expect(find.text('2 new'), findsOneWidget);
+      expect(find.text('1 new'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('shop inbox retries a failed next page without losing rows', (
+      tester,
+    ) async {
+      final threads = _sampleBrandThreads();
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        brandThreads: threads,
+      );
+      addTearDown(container.dispose);
+      fake.brandChatsPage = data.Page(
+        items: [threads.first],
+        pagination: const Pagination(page: 1, limit: 1, pages: 2, total: 2),
+      );
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(const BrandMessagesScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('brand_chat_row_cv1')), findsOneWidget);
+      expect(find.byKey(const Key('brand_chat_row_cv2')), findsNothing);
+      fake.brandChatsError = ApiException(
+        'More conversations could not be loaded.',
+        status: 503,
+      );
+      final more = find.widgetWithText(AppButton, 'Load more conversations');
+      await tester.ensureVisible(more);
+      await tester.pumpAndSettle();
+      await tester.tap(more);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('More conversations could not be loaded.'),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('brand_chat_row_cv1')), findsOneWidget);
+      expect(find.byKey(const Key('brand_chat_row_cv2')), findsNothing);
+      expect(tester.widget<AppButton>(more).loading, isFalse);
+      expect(tester.widget<AppButton>(more).onPressed, isNotNull);
+      expect(fake.requestedBrandChatPages, [1, 2]);
+
+      fake.brandChatsError = null;
+      fake.brandChatsPage = data.Page(
+        items: [threads.last],
+        pagination: const Pagination(page: 2, limit: 1, pages: 2, total: 2),
+      );
+      ScaffoldMessenger.of(tester.element(find.byType(BrandMessagesScreen)))
+          .hideCurrentSnackBar();
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(more);
+      await tester.pumpAndSettle();
+      await tester.tap(more);
+      await tester.pumpAndSettle();
+
+      expect(fake.requestedBrandChatPages, [1, 2, 2]);
+      expect(find.byKey(const Key('brand_chat_row_cv1')), findsOneWidget);
+      expect(find.byKey(const Key('brand_chat_row_cv2')), findsOneWidget);
+      expect(find.text('Load more conversations'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a shop reply is sent and the thread is marked read', (
+      tester,
+    ) async {
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        brandMessagesPage: _sampleBrandMessages(),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(
+            BrandChatScreen(
+              conversationId: 'cv1',
+              initial: _sampleBrandThreads().first,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Sana Malik'), findsOneWidget);
+      expect(find.text('Do you have this in blue?'), findsOneWidget);
+      expect(find.text('Linen shirt'), findsOneWidget);
+      expect(find.text('Rs 2,400'), findsOneWidget);
+      expect(fake.markedBrandChatId, 'cv1');
+
+      await tester.enterText(
+        find.byKey(const Key('brand_chat_input')),
+        'Yes, blue is back on Monday.',
+      );
+      await tester.tap(find.byKey(const Key('brand_chat_send')));
+      await tester.pumpAndSettle();
+
+      expect(fake.sentBrandChatId, 'cv1');
+      expect(fake.sentBrandChatBody, 'Yes, blue is back on Monday.');
+      expect(find.text('Yes, blue is back on Monday.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+      'shop chat refresh failure replaces loaded messages until retry',
+      (tester) async {
+        final (container, fake) = await _signedInWithFake(
+          user: _brandUser,
+          brand: _activeBrand,
+          brandMessagesPage: _sampleBrandMessages(),
+        );
+        addTearDown(container.dispose);
+
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: _shell(
+              BrandChatScreen(
+                conversationId: 'cv1',
+                initial: _sampleBrandThreads().first,
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Do you have this in blue?'), findsOneWidget);
+        expect(fake.markedBrandChatId, 'cv1');
+        fake.brandChatMessagesError = ApiException(
+          'The conversation could not be refreshed.',
+          status: 503,
+        );
+        await tester.tap(find.byKey(const Key('brand_chat_refresh')));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(ErrorPanel), findsOneWidget);
+        expect(
+          find.text('The conversation could not be refreshed.'),
+          findsOneWidget,
+        );
+        expect(find.byKey(const Key('brand_chat_thread')), findsNothing);
+        expect(find.byKey(const Key('brand_chat_load_earlier')), findsNothing);
+        expect(find.text('Do you have this in blue?'), findsNothing);
+        expect(find.text('Let me check the stock.'), findsNothing);
+        expect(find.text('Linen shirt'), findsNothing);
+        final retry = find.descendant(
+          of: find.byType(ErrorPanel),
+          matching: find.text('Try again'),
+        );
+        expect(retry, findsOneWidget);
+
+        fake.brandChatMessagesError = null;
+        fake.markedBrandChatId = null;
+        await tester.tap(retry);
+        await tester.pumpAndSettle();
+
+        expect(find.byType(ErrorPanel), findsNothing);
+        expect(find.byKey(const Key('brand_chat_thread')), findsOneWidget);
+        expect(find.text('Do you have this in blue?'), findsOneWidget);
+        expect(find.text('Let me check the stock.'), findsOneWidget);
+        expect(fake.markedBrandChatId, 'cv1');
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'shop chat closes the composer when the seller stops messages',
+      (tester) async {
+        final (container, fake) = await _signedInWithFake(
+          user: _brandUser,
+          brand: _activeBrand,
+          brandMessagesPage: _sampleBrandMessages(),
+        );
+        addTearDown(container.dispose);
+        fake.sendBrandChatError = ApiException(
+          'This seller is not taking messages right now.',
+          status: 409,
+        );
+
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: _shell(
+              BrandChatScreen(
+                conversationId: 'cv1',
+                initial: _sampleBrandThreads().first,
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const Key('brand_chat_input')),
+          'Blue is available.',
+        );
+        await tester.tap(find.byKey(const Key('brand_chat_send')));
+        await tester.pumpAndSettle();
+
+        expect(fake.sentBrandChatId, 'cv1');
+        expect(fake.sentBrandChatBody, 'Blue is available.');
+        expect(find.byKey(const Key('brand_chat_input')), findsNothing);
+        expect(find.byKey(const Key('brand_chat_send')), findsNothing);
+        expect(
+          find.text(
+            'Replying is closed for now. Sana Malik can still read the conversation.',
+          ),
+          findsOneWidget,
+        );
+        expect(find.text('Do you have this in blue?'), findsOneWidget);
+        expect(find.text('Blue is available.'), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    for (final (kind, error, message) in [
+      (
+        'API',
+        ApiException('Please try sending again.', status: 500),
+        'Please try sending again.',
+      ),
+      (
+        'network',
+        ApiException('You appear to be offline.', isNetwork: true),
+        'You appear to be offline.',
+      ),
+      (
+        'unexpected',
+        Exception('Connection lost'),
+        'Your message was not sent. Check the connection and try again.',
+      ),
+    ]) {
+      testWidgets(
+        'shop chat keeps the draft and retries a $kind send failure',
+        (tester) async {
+          final (container, fake) = await _signedInWithFake(
+            user: _brandUser,
+            brand: _activeBrand,
+            brandMessagesPage: _sampleBrandMessages(),
+          );
+          addTearDown(container.dispose);
+          fake.sendBrandChatError = error;
+
+          await tester.pumpWidget(
+            UncontrolledProviderScope(
+              container: container,
+              child: _shell(
+                BrandChatScreen(
+                  conversationId: 'cv1',
+                  initial: _sampleBrandThreads().first,
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          final input = find.byKey(const Key('brand_chat_input'));
+          final send = find.byKey(const Key('brand_chat_send'));
+          const draft = 'Blue will be available on Monday.';
+          await tester.enterText(input, draft);
+          await tester.tap(send);
+          await tester.pumpAndSettle();
+
+          expect(find.text(message), findsOneWidget);
+          expect(tester.widget<TextField>(input).controller!.text, draft);
+          expect(tester.widget<IconButton>(send).onPressed, isNotNull);
+          expect(
+            find.textContaining('Replying is closed for now.'),
+            findsNothing,
+          );
+          expect(
+            find.descendant(
+              of: find.byKey(const Key('brand_chat_thread')),
+              matching: find.text(draft),
+            ),
+            findsNothing,
+          );
+
+          fake.sendBrandChatError = null;
+          ScaffoldMessenger.of(tester.element(find.byType(BrandChatScreen)))
+              .hideCurrentSnackBar();
+          await tester.pumpAndSettle();
+          await tester.tap(send);
+          await tester.pumpAndSettle();
+
+          expect(fake.sentBrandChatId, 'cv1');
+          expect(fake.sentBrandChatBody, draft);
+          expect(tester.widget<TextField>(input).controller!.text, isEmpty);
+          expect(find.text(draft), findsOneWidget);
+          expect(tester.widget<IconButton>(send).onPressed, isNotNull);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+
+    testWidgets('shop reviews show the summary and filter by rating', (
+      tester,
+    ) async {
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        brandReviewPage: _sampleBrandReviewPage(),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(const BrandReviewsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('4.5'), findsOneWidget);
+      expect(find.text('from 8 reviews'), findsOneWidget);
+      expect(find.text('Sana Malik'), findsOneWidget);
+      expect(find.text('Linen shirt'), findsOneWidget);
+      expect(find.text('Lovely fabric.'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('brand_reviews_filter_5')));
+      await tester.pumpAndSettle();
+
+      expect(fake.lastBrandReviewRating, 5);
+      expect(tester.takeException(), isNull);
+    });
+
+    for (final resetFilter in [false, true]) {
+      testWidgets(
+        'shop review ${resetFilter ? 'reset' : 'filter'} hides stale rows '
+        'during loading and failure until retry succeeds',
+        (tester) async {
+          final initial = _sampleBrandReviewPage();
+          final (container, fake) = await _signedInWithFake(
+            user: _brandUser,
+            brand: _activeBrand,
+            brandReviewPage: BrandReviewPage(
+              reviews: initial.reviews,
+              summary: initial.summary,
+              pagination: const Pagination(
+                page: 1,
+                limit: 1,
+                pages: 8,
+                total: 8,
+              ),
+            ),
+          );
+          addTearDown(container.dispose);
+
+          await tester.pumpWidget(
+            UncontrolledProviderScope(
+              container: container,
+              child: _shell(const BrandReviewsScreen()),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          if (resetFilter) {
+            final fiveStars = find.byKey(const Key('brand_reviews_filter_5'));
+            await tester.ensureVisible(fiveStars);
+            await tester.pumpAndSettle();
+            await tester.tap(fiveStars);
+            await tester.pumpAndSettle();
+            expect(fake.lastBrandReviewRating, 5);
+          }
+          expect(find.byKey(const Key('brand_review_br1')), findsOneWidget);
+          expect(find.text('Lovely fabric.'), findsOneWidget);
+          expect(find.byType(SectionTitle), findsOneWidget);
+          expect(find.text('Load more reviews'), findsOneWidget);
+
+          final selected = find.byKey(
+            Key('brand_reviews_filter_${resetFilter ? 'all' : '4'}'),
+          );
+          void expectReviewsHidden() {
+            expect(find.text('4.5'), findsOneWidget);
+            expect(find.text('from 8 reviews'), findsOneWidget);
+            expect(find.byType(ChoiceChip), findsNWidgets(6));
+            expect(tester.widget<ChoiceChip>(selected).selected, isTrue);
+            expect(find.byKey(const Key('brand_review_br1')), findsNothing);
+            expect(find.text('Lovely fabric.'), findsNothing);
+            expect(find.byType(SectionTitle), findsNothing);
+            expect(find.text('8'), findsNothing);
+            expect(find.text('Load more reviews'), findsNothing);
+          }
+
+          final failedRequest = async.Completer<BrandReviewPage>();
+          fake.brandReviewRequest = failedRequest;
+          await tester.ensureVisible(selected);
+          await tester.pumpAndSettle();
+          await tester.tap(selected);
+          await tester.pump();
+
+          expect(fake.lastBrandReviewRating, resetFilter ? isNull : 4);
+          expect(fake.lastBrandReviewPage, 1);
+          expect(find.byType(LoadingView), findsOneWidget);
+          expect(find.byType(ErrorPanel), findsNothing);
+          expectReviewsHidden();
+
+          failedRequest.completeError(
+            ApiException('Reviews could not be refreshed.', status: 503),
+          );
+          await tester.pumpAndSettle();
+
+          expect(find.byType(LoadingView), findsNothing);
+          expect(find.byType(ErrorPanel), findsOneWidget);
+          expect(find.text('Reviews could not be refreshed.'), findsOneWidget);
+          expectReviewsHidden();
+
+          final retryRequest = async.Completer<BrandReviewPage>();
+          fake.brandReviewRequest = retryRequest;
+          final retry = find.descendant(
+            of: find.byType(ErrorPanel),
+            matching: find.text('Try again'),
+          );
+          await tester.ensureVisible(retry);
+          await tester.pumpAndSettle();
+          await tester.tap(retry);
+          await tester.pump();
+
+          expect(fake.lastBrandReviewRating, resetFilter ? isNull : 4);
+          expect(fake.lastBrandReviewPage, 1);
+          expect(find.byType(LoadingView), findsOneWidget);
+          expect(find.byType(ErrorPanel), findsNothing);
+          expectReviewsHidden();
+
+          retryRequest.complete(
+            BrandReviewPage(
+              reviews: const [
+                BrandReview(
+                  id: 'br4',
+                  rating: 4,
+                  comment: 'Good everyday shirt.',
+                  reviewerName: 'Bilal Ahmed',
+                  productId: 'p1',
+                  productName: 'Linen shirt',
+                ),
+              ],
+              summary: initial.summary,
+              pagination: Pagination(
+                page: 1,
+                limit: 1,
+                pages: resetFilter ? 8 : 2,
+                total: resetFilter ? 8 : 2,
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          expect(find.byType(LoadingView), findsNothing);
+          expect(find.byType(ErrorPanel), findsNothing);
+          expect(find.byKey(const Key('brand_review_br1')), findsNothing);
+          expect(find.byKey(const Key('brand_review_br4')), findsOneWidget);
+          expect(find.text('Good everyday shirt.'), findsOneWidget);
+          expect(find.text('from 8 reviews'), findsOneWidget);
+          expect(tester.widget<ChoiceChip>(selected).selected, isTrue);
+          expect(
+            find.text(resetFilter ? 'All reviews' : '4-star reviews'),
+            findsOneWidget,
+          );
+          expect(
+            find.descendant(
+              of: find.byType(SectionTitle),
+              matching: find.text(resetFilter ? '8' : '2'),
+            ),
+            findsOneWidget,
+          );
+          expect(find.text('Load more reviews'), findsOneWidget);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+
+    testWidgets('an empty shop review filter keeps the summary and can reset', (
+      tester,
+    ) async {
+      final initial = _sampleBrandReviewPage();
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        brandReviewPage: initial,
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(const BrandReviewsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Lovely fabric.'), findsOneWidget);
+      fake.brandReviewPage = BrandReviewPage(
+        summary: initial.summary,
+        pagination: const Pagination(page: 1, limit: 10, pages: 0, total: 0),
+      );
+      final threeStars = find.byKey(const Key('brand_reviews_filter_3'));
+      await tester.ensureVisible(threeStars);
+      await tester.pumpAndSettle();
+      await tester.tap(threeStars);
+      await tester.pumpAndSettle();
+
+      expect(fake.lastBrandReviewRating, 3);
+      expect(tester.widget<ChoiceChip>(threeStars).selected, isTrue);
+      expect(find.text('4.5'), findsOneWidget);
+      expect(find.text('from 8 reviews'), findsOneWidget);
+      expect(find.byType(ChoiceChip), findsNWidgets(6));
+      expect(find.text('3-star reviews'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(SectionTitle),
+          matching: find.text('0'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Nothing here yet'), findsOneWidget);
+      expect(find.text('No reviews yet'), findsNothing);
+      expect(find.byKey(const Key('brand_review_br1')), findsNothing);
+      expect(find.text('Lovely fabric.'), findsNothing);
+      expect(find.text('Load more reviews'), findsNothing);
+      expect(find.byType(LoadingView), findsNothing);
+      expect(find.byType(ErrorPanel), findsNothing);
+
+      fake.brandReviewPage = initial;
+      final clear = find.byKey(const Key('brand_reviews_clear_filter'));
+      await tester.ensureVisible(clear);
+      await tester.pumpAndSettle();
+      await tester.tap(clear);
+      await tester.pumpAndSettle();
+
+      expect(fake.lastBrandReviewRating, isNull);
+      expect(fake.lastBrandReviewPage, 1);
+      expect(
+        tester
+            .widget<ChoiceChip>(
+              find.byKey(const Key('brand_reviews_filter_all')),
+            )
+            .selected,
+        isTrue,
+      );
+      expect(find.text('Nothing here yet'), findsNothing);
+      expect(find.text('All reviews'), findsOneWidget);
+      expect(find.byKey(const Key('brand_review_br1')), findsOneWidget);
+      expect(find.text('Lovely fabric.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   });
 }
 
@@ -2512,6 +3218,73 @@ List<ProviderChatThread> _sampleChats() {
       lastSenderRole: 'CUSTOMER',
     ),
   ];
+}
+
+List<BrandChatThread> _sampleBrandThreads() {
+  final now = DateTime.now();
+  return [
+    BrandChatThread(
+      id: 'cv1',
+      customerName: 'Sana Malik',
+      canSend: true,
+      lastMessageAt: now,
+      preview: 'Do you have this in blue?',
+      lastSenderRole: 'CUSTOMER',
+      unread: 2,
+    ),
+    BrandChatThread(
+      id: 'cv2',
+      customerName: 'Bilal Ahmed',
+      canSend: true,
+      lastMessageAt: now.subtract(const Duration(hours: 3)),
+      preview: 'It will be back on Monday.',
+      lastSenderRole: 'BRAND',
+      unread: 1,
+    ),
+  ];
+}
+
+ChatMessagePage _sampleBrandMessages() {
+  return const ChatMessagePage(
+    messages: [
+      ChatMessage(
+        id: 'm1',
+        body: 'Do you have this in blue?',
+        senderRole: 'CUSTOMER',
+        product: ChatProduct(id: 'p1', name: 'Linen shirt', pricePaisa: 240000),
+      ),
+      ChatMessage(
+        id: 'm2',
+        body: 'Let me check the stock.',
+        senderRole: 'BRAND',
+        mine: true,
+        sentBy: 'Ayesha Khan',
+      ),
+    ],
+    hasMore: true,
+  );
+}
+
+BrandReviewPage _sampleBrandReviewPage() {
+  return const BrandReviewPage(
+    reviews: [
+      BrandReview(
+        id: 'br1',
+        rating: 5,
+        title: 'Soft and well stitched',
+        comment: 'Lovely fabric.',
+        reviewerName: 'Sana Malik',
+        productId: 'p1',
+        productName: 'Linen shirt',
+      ),
+    ],
+    summary: ReviewSummary(
+      average: 4.5,
+      count: 8,
+      distribution: {1: 0, 2: 1, 3: 0, 4: 2, 5: 5},
+    ),
+    pagination: Pagination(page: 1, limit: 10, pages: 1, total: 8),
+  );
 }
 
 ChatMessagePage _sampleMessages() {
@@ -2960,6 +3733,9 @@ Future<ProviderContainer> _signedIn({
   List<BrandBranch> branches = const [],
   List<BranchBlock> branchBlocks = const [],
   BrandAnalytics? analytics,
+  List<BrandChatThread> brandThreads = const [],
+  ChatMessagePage brandMessagesPage = const ChatMessagePage(),
+  BrandReviewPage brandReviewPage = const BrandReviewPage(),
 }) async {
   final result = await _signedInWithFake(
     user: user,
@@ -2986,6 +3762,9 @@ Future<ProviderContainer> _signedIn({
     branches: branches,
     branchBlocks: branchBlocks,
     analytics: analytics,
+    brandThreads: brandThreads,
+    brandMessagesPage: brandMessagesPage,
+    brandReviewPage: brandReviewPage,
   );
   return result.$1;
 }
@@ -3015,6 +3794,9 @@ Future<(ProviderContainer, _FakeRepository)> _signedInWithFake({
   List<BrandBranch> branches = const [],
   List<BranchBlock> branchBlocks = const [],
   BrandAnalytics? analytics,
+  List<BrandChatThread> brandThreads = const [],
+  ChatMessagePage brandMessagesPage = const ChatMessagePage(),
+  BrandReviewPage brandReviewPage = const BrandReviewPage(),
 }) async {
   final prefs = await SharedPreferences.getInstance();
   final store = _FakeSessionStore('token', user);
@@ -3044,6 +3826,9 @@ Future<(ProviderContainer, _FakeRepository)> _signedInWithFake({
     branches: branches,
     branchBlocks: branchBlocks,
     analytics: analytics,
+    brandThreads: brandThreads,
+    brandMessagesPage: brandMessagesPage,
+    brandReviewPage: brandReviewPage,
   );
   final container = ProviderContainer(
     overrides: [
@@ -3154,6 +3939,9 @@ class _FakeRepository extends BusinessRepository {
     this.branches = const [],
     this.branchBlocks = const [],
     this.analytics,
+    this.brandThreads = const [],
+    this.brandMessagesPage = const ChatMessagePage(),
+    this.brandReviewPage = const BrandReviewPage(),
   }) : super(ApiClient(store));
 
   final AppUser user;
@@ -3180,6 +3968,16 @@ class _FakeRepository extends BusinessRepository {
   final List<BrandBranch> branches;
   final List<BranchBlock> branchBlocks;
   final BrandAnalytics? analytics;
+  final List<BrandChatThread> brandThreads;
+  final ChatMessagePage brandMessagesPage;
+  BrandReviewPage brandReviewPage;
+  async.Completer<BrandReviewPage>? brandReviewRequest;
+  data.Page<BrandChatThread>? brandChatsPage;
+  Object? brandChatsError;
+  Object? brandChatMessagesError;
+  Object? sendBrandChatError;
+  int? brandChatUnreadCount;
+  final requestedBrandChatPages = <int>[];
   final Map<String, BrandProduct> _editedProducts = {};
   final Map<String, BrandRider> _editedRiders = {};
   final Map<String, BrandDelivery> _editedDeliveries = {};
@@ -3275,6 +4073,11 @@ class _FakeRepository extends BusinessRepository {
   String? sentChatRouteId;
   String? sentChatBody;
   String? markedReadId;
+  String? sentBrandChatId;
+  String? sentBrandChatBody;
+  String? markedBrandChatId;
+  int? lastBrandReviewRating;
+  int? lastBrandReviewPage;
   int? lastReviewRating;
   String? repliedReviewId;
   String? repliedReviewBody;
@@ -3534,6 +4337,81 @@ class _FakeRepository extends BusinessRepository {
   @override
   Future<void> markDirectChatRead(String conversationId) async {
     markedReadId = conversationId;
+  }
+
+  @override
+  Future<data.Page<BrandChatThread>> brandChats({
+    int page = 1,
+    int limit = 20,
+  }) async {
+    requestedBrandChatPages.add(page);
+    final error = brandChatsError;
+    if (error != null) throw error;
+    final response = brandChatsPage;
+    if (response != null) return response;
+    return data.Page(
+      items: brandThreads,
+      pagination: Pagination(
+        page: 1,
+        limit: limit,
+        pages: brandThreads.isEmpty ? 0 : 1,
+        total: brandThreads.length,
+      ),
+    );
+  }
+
+  @override
+  Future<int> brandChatUnread() async {
+    return brandChatUnreadCount ??
+        brandThreads.fold<int>(0, (total, thread) => total + thread.unread);
+  }
+
+  @override
+  Future<ChatMessagePage> brandChatMessages(
+    String conversationId, {
+    String? before,
+    int limit = 30,
+  }) async {
+    final error = brandChatMessagesError;
+    if (error != null) throw error;
+    return brandMessagesPage;
+  }
+
+  @override
+  Future<ChatMessage> sendBrandChatMessage(
+    String conversationId,
+    String body,
+  ) async {
+    sentBrandChatId = conversationId;
+    sentBrandChatBody = body;
+    final error = sendBrandChatError;
+    if (error != null) throw error;
+    return ChatMessage(
+      id: 'sent',
+      body: body,
+      senderRole: 'BRAND',
+      mine: true,
+      createdAt: DateTime(2026, 11, 11, 12),
+      sentBy: 'Ayesha Khan',
+    );
+  }
+
+  @override
+  Future<void> markBrandChatRead(String conversationId) async {
+    markedBrandChatId = conversationId;
+  }
+
+  @override
+  Future<BrandReviewPage> brandReviews({
+    int? rating,
+    int page = 1,
+    int limit = 10,
+  }) async {
+    lastBrandReviewRating = rating;
+    lastBrandReviewPage = page;
+    final request = brandReviewRequest;
+    if (request != null) return request.future;
+    return brandReviewPage;
   }
 
   @override

@@ -864,6 +864,8 @@ class ChatMessage {
     this.senderRole = 'CUSTOMER',
     this.mine = false,
     this.createdAt,
+    this.sentBy = '',
+    this.product,
   });
 
   final String id;
@@ -873,9 +875,16 @@ class ChatMessage {
   final bool mine;
   final DateTime? createdAt;
 
+  /// The team member who replied, when the shop side sent it.
+  final String sentBy;
+
+  /// The product a customer asked about, when the chat started from a page.
+  final ChatProduct? product;
+
   bool get isSystem => senderRole == 'SYSTEM';
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    final product = json['product'];
     return ChatMessage(
       id: _text(json['_id']),
       body: _text(json['body']),
@@ -883,6 +892,76 @@ class ChatMessage {
       senderRole: _text(json['senderRole'], 'CUSTOMER'),
       mine: json['mine'] == true,
       createdAt: _date(json['createdAt']),
+      sentBy: _text(json['sentBy']),
+      product: product is Map
+          ? ChatProduct.fromJson(Map<String, dynamic>.from(product))
+          : null,
+    );
+  }
+}
+
+/// The product a customer started a conversation about.
+class ChatProduct {
+  const ChatProduct({
+    required this.id,
+    required this.name,
+    this.pricePaisa = 0,
+    this.image,
+    this.available = true,
+  });
+
+  final String id;
+  final String name;
+  final int pricePaisa;
+  final String? image;
+  final bool available;
+
+  factory ChatProduct.fromJson(Map<String, dynamic> json) {
+    return ChatProduct(
+      id: _text(json['_id']),
+      name: _text(json['name'], 'Product'),
+      pricePaisa: rupeesToPaisa(json['price']),
+      image: _optionalText(json['image']),
+      available: json['available'] != false,
+    );
+  }
+}
+
+/// One customer conversation in the shop's inbox.
+class BrandChatThread {
+  const BrandChatThread({
+    required this.id,
+    this.customerName = 'Customer',
+    this.customerImage,
+    this.canSend = false,
+    this.lastMessageAt,
+    this.preview = '',
+    this.lastSenderRole = '',
+    this.unread = 0,
+  });
+
+  final String id;
+  final String customerName;
+  final String? customerImage;
+  final bool canSend;
+  final DateTime? lastMessageAt;
+  final String preview;
+  final String lastSenderRole;
+  final int unread;
+
+  bool get lastFromShop => lastSenderRole == 'BRAND';
+
+  factory BrandChatThread.fromJson(Map<String, dynamic> json) {
+    final other = _map(json['with']);
+    return BrandChatThread(
+      id: _text(json['_id']),
+      customerName: _text(other['name'], 'Customer'),
+      customerImage: _optionalText(other['image']),
+      canSend: json['canSend'] == true,
+      lastMessageAt: _date(json['lastMessageAt']),
+      preview: _text(json['lastMessagePreview']),
+      lastSenderRole: _text(json['lastSenderRole']),
+      unread: _int(json['unread'], 0),
     );
   }
 }
@@ -1006,6 +1085,65 @@ class ProviderReviewPage {
     return ProviderReviewPage(
       reviews: _mapList(json['reviews'])
           .map(ServiceReview.fromJson)
+          .toList(growable: false),
+      summary: ReviewSummary.fromJson(_map(json['summary'])),
+      pagination: Pagination.fromJson(_map(json['pagination'])),
+    );
+  }
+}
+
+/// A customer review of one of this shop's products. Shops read these; the
+/// server only returns approved reviews of the signed-in brand.
+class BrandReview {
+  const BrandReview({
+    required this.id,
+    required this.rating,
+    this.title = '',
+    this.comment = '',
+    this.reviewerName = 'Customer',
+    this.productId = '',
+    this.productName = 'A product',
+    this.createdAt,
+  });
+
+  final String id;
+  final int rating;
+  final String title;
+  final String comment;
+  final String reviewerName;
+  final String productId;
+  final String productName;
+  final DateTime? createdAt;
+
+  factory BrandReview.fromJson(Map<String, dynamic> json) {
+    return BrandReview(
+      id: _text(json['_id']),
+      rating: _int(json['rating'], 0),
+      title: _text(json['title']),
+      comment: _text(json['comment']),
+      reviewerName: _text(json['reviewerName'], 'Customer'),
+      productId: _text(json['productId']),
+      productName: _text(json['productName'], 'A product'),
+      createdAt: _date(json['createdAt']),
+    );
+  }
+}
+
+class BrandReviewPage {
+  const BrandReviewPage({
+    this.reviews = const <BrandReview>[],
+    this.summary = const ReviewSummary(),
+    this.pagination = const Pagination(),
+  });
+
+  final List<BrandReview> reviews;
+  final ReviewSummary summary;
+  final Pagination pagination;
+
+  factory BrandReviewPage.fromJson(Map<String, dynamic> json) {
+    return BrandReviewPage(
+      reviews: _mapList(json['reviews'])
+          .map(BrandReview.fromJson)
           .toList(growable: false),
       summary: ReviewSummary.fromJson(_map(json['summary'])),
       pagination: Pagination.fromJson(_map(json['pagination'])),

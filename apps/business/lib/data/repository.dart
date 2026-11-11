@@ -436,6 +436,53 @@ class BusinessRepository {
     await _api.post('/services/direct-chats/$conversationId/read');
   }
 
+  // --- Shop customer chats -------------------------------------------------
+
+  /// Customers who started a conversation with this shop. The server scopes
+  /// the list to the signed-in brand.
+  Future<Page<BrandChatThread>> brandChats({
+    int page = 1,
+    int limit = 20,
+  }) async {
+    final body = await _api.get(
+      '/chats',
+      query: {'page': page, 'limit': limit},
+    );
+    return Page.fromJson(body, BrandChatThread.fromJson, 'conversations');
+  }
+
+  Future<int> brandChatUnread() async {
+    final body = await _api.get('/chats/unread-count');
+    return _int(body['unread'], 0);
+  }
+
+  Future<ChatMessagePage> brandChatMessages(
+    String conversationId, {
+    String? before,
+    int limit = 30,
+  }) async {
+    final body = await _api.get(
+      '/chats/$conversationId/messages',
+      query: {'limit': limit, 'before': ?before},
+    );
+    return ChatMessagePage.fromJson(body);
+  }
+
+  Future<ChatMessage> sendBrandChatMessage(
+    String conversationId,
+    String body,
+  ) async {
+    final response = await _api.post(
+      '/chats/$conversationId/messages',
+      data: {'body': body.trim()},
+    );
+    return _messageFrom(response);
+  }
+
+  Future<void> markBrandChatRead(String conversationId) async {
+    await _api.post('/chats/$conversationId/read');
+  }
+
   ChatMessage _messageFrom(Map<String, dynamic> body) {
     final message = body['message'];
     if (message is! Map) {
@@ -456,6 +503,20 @@ class BusinessRepository {
       query: {'page': page, 'limit': limit, 'rating': ?rating},
     );
     return ProviderReviewPage.fromJson(body);
+  }
+
+  /// Approved customer reviews of this shop's products. The brand comes from
+  /// the session, so the app never asks for another shop's reviews.
+  Future<BrandReviewPage> brandReviews({
+    int? rating,
+    int page = 1,
+    int limit = 10,
+  }) async {
+    final body = await _api.get(
+      '/reviews/brand',
+      query: {'page': page, 'limit': limit, 'rating': ?rating},
+    );
+    return BrandReviewPage.fromJson(body);
   }
 
   /// Each review accepts exactly one reply. The server answers 409
@@ -1115,4 +1176,10 @@ List<Map<String, dynamic>> _rows(Object? value) {
       .whereType<Map>()
       .map((row) => Map<String, dynamic>.from(row))
       .toList(growable: false);
+}
+
+int _int(Object? value, int fallback) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse('$value') ?? fallback;
 }
