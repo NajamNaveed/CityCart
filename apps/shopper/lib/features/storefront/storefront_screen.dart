@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/format.dart';
 import '../../core/status.dart';
@@ -9,9 +10,9 @@ import '../../data/api_exception.dart';
 import '../../data/models.dart';
 import '../../providers.dart';
 
-/// A shop's public page: who they are, what they sell, and a few products to
-/// start from. Product detail and the full catalogue arrive in the next phase;
-/// this page never invents a product that the server did not send.
+/// A shop's public page: who they are, what they sell, and the newest items the
+/// server publishes. Every product opens its own page; this screen never
+/// invents an item that the server did not send.
 class StorefrontScreen extends ConsumerWidget {
   const StorefrontScreen({super.key, required this.brandId});
 
@@ -75,7 +76,7 @@ class _StorefrontBody extends StatelessWidget {
         ],
         if (categories.isNotEmpty) ...[
           const SizedBox(height: 22),
-          const SectionLabel('Categories'),
+          const SectionLabel('What they sell'),
           const SizedBox(height: 10),
           Wrap(
             spacing: 8,
@@ -92,10 +93,10 @@ class _StorefrontBody extends StatelessWidget {
         ],
         const SizedBox(height: 24),
         SectionHeader(
-          title: 'Fresh in store',
+          title: 'New in store',
           subtitle: data.featuredProducts.isEmpty
               ? null
-              : plural(data.featuredProducts.length, 'new arrival'),
+              : 'Latest ${plural(data.featuredProducts.length, 'arrival')}',
         ),
         const SizedBox(height: 12),
         if (data.featuredProducts.isEmpty)
@@ -122,16 +123,11 @@ class _StorefrontBody extends StatelessWidget {
           for (final product in data.featuredProducts)
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: _ProductCard(product: product),
+              child: _ProductCard(
+                product: product,
+                onTap: () => context.push('/product/${product.id}'),
+              ),
             ),
-        if (data.featuredProducts.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          Text(
-            'The full catalogue and product pages are coming next.',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
       ],
     );
   }
@@ -239,9 +235,10 @@ class _BrandHero extends StatelessWidget {
 }
 
 class _ProductCard extends StatelessWidget {
-  const _ProductCard({required this.product});
+  const _ProductCard({required this.product, required this.onTap});
 
   final Product product;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -253,6 +250,7 @@ class _ProductCard extends StatelessWidget {
 
     return SurfaceCard(
       padding: const EdgeInsets.all(12),
+      onTap: onTap,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

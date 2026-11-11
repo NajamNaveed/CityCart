@@ -83,4 +83,74 @@ class ShopperRepository {
     final body = await _api.get('/brands/$brandId/storefront');
     return Storefront.fromJson(body);
   }
+
+  Future<PublicBrand> brand(String brandId) async {
+    final body = await _api.get('/brands/$brandId');
+    return PublicBrand.fromJson(body['brand']);
+  }
+
+  // --- Products ------------------------------------------------------------
+
+  Future<Product> product(String productId) async {
+    final body = await _api.get('/products/$productId');
+    return Product.fromJson(body['product']);
+  }
+
+  Future<ProductReviewPage> productReviews(
+    String productId, {
+    int page = 1,
+    int limit = 10,
+  }) async {
+    final body = await _api.get(
+      '/products/$productId/reviews',
+      query: {'page': page, 'limit': limit},
+    );
+    return ProductReviewPage.fromJson(body);
+  }
+
+  // --- Product chat --------------------------------------------------------
+
+  Future<ProductChatContext> productChatContext(String productId) async {
+    final body = await _api.get('/chats/product/$productId');
+    return ProductChatContext.fromJson(body);
+  }
+
+  Future<ChatStartResult> startProductChat(
+    String productId, {
+    required String body,
+  }) async {
+    final response = await _api.post(
+      '/chats/start',
+      data: {'productId': productId, 'body': body},
+    );
+    return ChatStartResult.fromJson(response);
+  }
+
+  Future<ChatMessagePage> chatMessages(
+    String conversationId, {
+    String? before,
+    int limit = 30,
+  }) async {
+    final body = await _api.get(
+      '/chats/$conversationId/messages',
+      query: {'limit': limit, 'before': ?before},
+    );
+    return ChatMessagePage.fromJson(body);
+  }
+
+  Future<ChatMessage> sendChatMessage(
+    String conversationId,
+    String body, {
+    String? productId,
+  }) async {
+    final response = await _api.post(
+      '/chats/$conversationId/messages',
+      data: {'body': body, 'productId': ?productId},
+    );
+    return ChatMessage.fromJson(response['message']);
+  }
+
+  Future<void> markChatRead(String conversationId) async {
+    await _api.post('/chats/$conversationId/read');
+  }
 }

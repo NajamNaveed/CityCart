@@ -6,8 +6,11 @@ import 'core/theme.dart';
 import 'core/widgets.dart';
 import 'features/account/account_screen.dart';
 import 'features/auth/login_screen.dart';
+import 'features/chat/chat_thread_screen.dart';
+import 'features/explore/explore_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/onboarding/area_screen.dart';
+import 'features/product/product_screen.dart';
 import 'features/storefront/storefront_screen.dart';
 import 'providers.dart';
 
@@ -46,6 +49,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
+                path: '/explore',
+                builder: (context, state) => const ExploreScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
                 path: '/account',
                 builder: (context, state) => const AccountScreen(),
               ),
@@ -57,6 +68,18 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/store/:brandId',
         builder: (context, state) =>
             StorefrontScreen(brandId: state.pathParameters['brandId']!),
+      ),
+      GoRoute(
+        path: '/product/:productId',
+        builder: (context, state) =>
+            ProductScreen(productId: state.pathParameters['productId']!),
+      ),
+      GoRoute(
+        path: '/chat/:conversationId',
+        builder: (context, state) => ChatThreadScreen(
+          conversationId: state.pathParameters['conversationId']!,
+          title: state.uri.queryParameters['name'],
+        ),
       ),
     ],
   );
@@ -146,8 +169,9 @@ class AppShell extends StatelessWidget {
   Widget build(BuildContext context) {
     const items = [
       _NavItemData(0, Icons.home_outlined, Icons.home_rounded, 'Home'),
+      _NavItemData(1, Icons.search_rounded, Icons.search_rounded, 'Explore'),
       _NavItemData(
-        1,
+        2,
         Icons.person_outline_rounded,
         Icons.person_rounded,
         'You',

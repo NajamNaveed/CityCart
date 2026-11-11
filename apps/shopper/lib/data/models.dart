@@ -464,6 +464,9 @@ class Product {
     this.compareAtPrice,
     this.sku,
     this.categoryId,
+    this.slug,
+    this.attributes = const <String, dynamic>{},
+    this.createdAt,
     this.availability = 'OUT_OF_STOCK',
   });
 
@@ -476,6 +479,9 @@ class Product {
   final double? compareAtPrice;
   final String? sku;
   final String? categoryId;
+  final String? slug;
+  final Map<String, dynamic> attributes;
+  final DateTime? createdAt;
   final String availability;
 
   String? get image => images.isEmpty ? null : images.first;
@@ -494,7 +500,219 @@ class Product {
       compareAtPrice: optionalDouble(map['compareAtPrice']),
       sku: optionalText(map['sku']),
       categoryId: optionalText(map['categoryId']),
+      slug: optionalText(map['slug']),
+      attributes: asMap(map['attributes']),
+      createdAt: asDate(map['createdAt']),
       availability: text(map['availability'], 'OUT_OF_STOCK'),
+    );
+  }
+}
+
+/// The star summary above a product's reviews. `distribution` maps 1–5 stars
+/// to the number of reviews at that rating.
+class RatingSummary {
+  const RatingSummary({
+    this.average = 0,
+    this.count = 0,
+    this.distribution = const <int, int>{},
+  });
+
+  final double average;
+  final int count;
+  final Map<int, int> distribution;
+
+  int countFor(int stars) => distribution[stars] ?? 0;
+
+  factory RatingSummary.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    final rawDistribution = asMap(map['distribution']);
+    final distribution = <int, int>{};
+    for (var stars = 1; stars <= 5; stars++) {
+      distribution[stars] = asInt(rawDistribution['$stars']);
+    }
+    return RatingSummary(
+      average: asDouble(map['average']),
+      count: asInt(map['count']),
+      distribution: distribution,
+    );
+  }
+}
+
+class ProductReview {
+  const ProductReview({
+    required this.id,
+    required this.rating,
+    this.title,
+    this.comment,
+    this.reviewerName,
+    this.verifiedPurchase = false,
+    this.createdAt,
+  });
+
+  final String id;
+  final int rating;
+  final String? title;
+  final String? comment;
+  final String? reviewerName;
+  final bool verifiedPurchase;
+  final DateTime? createdAt;
+
+  factory ProductReview.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return ProductReview(
+      id: text(map['_id']),
+      rating: asInt(map['rating']).clamp(1, 5),
+      title: optionalText(map['title']),
+      comment: optionalText(map['comment']),
+      reviewerName: optionalText(map['reviewerName']),
+      verifiedPurchase: map['verifiedPurchase'] == true,
+      createdAt: asDate(map['createdAt']),
+    );
+  }
+}
+
+class ProductReviewPage {
+  const ProductReviewPage({
+    required this.reviews,
+    required this.summary,
+    this.pagination = const Pagination(),
+  });
+
+  final List<ProductReview> reviews;
+  final RatingSummary summary;
+  final Pagination pagination;
+
+  factory ProductReviewPage.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return ProductReviewPage(
+      reviews: asList(map['reviews'])
+          .map(ProductReview.fromJson)
+          .toList(growable: false),
+      summary: RatingSummary.fromJson(map['summary']),
+      pagination: Pagination.fromJson(map['pagination']),
+    );
+  }
+}
+
+/// A product preview carried inside a chat thread.
+class ChatProduct {
+  const ChatProduct({
+    required this.id,
+    required this.name,
+    this.price,
+    this.image,
+    this.available = true,
+  });
+
+  final String id;
+  final String name;
+  final double? price;
+  final String? image;
+  final bool available;
+
+  factory ChatProduct.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return ChatProduct(
+      id: text(map['_id']),
+      name: text(map['name'], 'Item'),
+      price: optionalDouble(map['price']),
+      image: optionalText(map['image']),
+      available: map['available'] != false,
+    );
+  }
+}
+
+/// What the server returns when a shopper opens chat from a product page.
+class ProductChatContext {
+  const ProductChatContext({
+    required this.product,
+    required this.brandId,
+    required this.brandName,
+    this.brandLogo,
+    this.conversationId,
+  });
+
+  final ChatProduct product;
+  final String brandId;
+  final String brandName;
+  final String? brandLogo;
+  final String? conversationId;
+
+  factory ProductChatContext.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    final brand = asMap(map['brand']);
+    return ProductChatContext(
+      product: ChatProduct.fromJson(map['product']),
+      brandId: text(brand['_id']),
+      brandName: text(brand['name'], 'The shop'),
+      brandLogo: optionalText(brand['logo']),
+      conversationId: optionalText(map['conversationId']),
+    );
+  }
+}
+
+class ChatMessage {
+  const ChatMessage({
+    required this.id,
+    required this.body,
+    this.conversationId,
+    this.senderRole = 'CUSTOMER',
+    this.mine = false,
+    this.createdAt,
+    this.product,
+  });
+
+  final String id;
+  final String body;
+  final String? conversationId;
+  final String senderRole;
+  final bool mine;
+  final DateTime? createdAt;
+  final ChatProduct? product;
+
+  factory ChatMessage.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    final product = map['product'];
+    return ChatMessage(
+      id: text(map['_id']),
+      body: text(map['body']),
+      conversationId: optionalText(map['conversationId']),
+      senderRole: text(map['senderRole'], 'CUSTOMER'),
+      mine: map['mine'] == true,
+      createdAt: asDate(map['createdAt']),
+      product: product is Map ? ChatProduct.fromJson(product) : null,
+    );
+  }
+}
+
+class ChatStartResult {
+  const ChatStartResult({required this.conversationId, required this.message});
+
+  final String conversationId;
+  final ChatMessage message;
+
+  factory ChatStartResult.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return ChatStartResult(
+      conversationId: text(map['conversationId']),
+      message: ChatMessage.fromJson(map['message']),
+    );
+  }
+}
+
+class ChatMessagePage {
+  const ChatMessagePage({required this.messages, this.hasMore = false});
+
+  final List<ChatMessage> messages;
+  final bool hasMore;
+
+  factory ChatMessagePage.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return ChatMessagePage(
+      messages: asList(map['messages'])
+          .map(ChatMessage.fromJson)
+          .toList(growable: false),
+      hasMore: map['hasMore'] == true,
     );
   }
 }

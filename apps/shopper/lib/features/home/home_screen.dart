@@ -3,12 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/format.dart';
-import '../../core/status.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/api_exception.dart';
-import '../../data/models.dart';
 import '../../providers.dart';
+import '../stores/store_card.dart';
 
 /// The shopper's home: a calm list of the shops around the chosen area, each
 /// showing a few real products so the first screen already feels like a shop.
@@ -109,7 +108,12 @@ class HomeScreen extends ConsumerWidget {
                       for (final brand in result.items)
                         Padding(
                           padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                          child: _StoreCard(brand: brand),
+                          child: StoreCard(
+                            brand: brand,
+                            onTap: () => context.push('/store/${brand.id}'),
+                            onProductTap: (productId) =>
+                                context.push('/product/$productId'),
+                          ),
                         ),
                   ],
                 ),
@@ -167,64 +171,14 @@ class _HomeHeader extends StatelessWidget {
             style: Theme.of(context).textTheme.headlineMedium,
           ),
           const SizedBox(height: 12),
-          _AreaChip(label: areaLabel),
-        ],
-      ),
-    );
-  }
-}
-
-class _AreaChip extends StatelessWidget {
-  const _AreaChip({this.label});
-
-  final String? label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Material(
-        color: AppColors.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.pill),
-          side: const BorderSide(color: AppColors.line),
-        ),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(AppRadius.pill),
-          onTap: () => context.push('/area'),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.place_rounded,
-                  size: 17,
-                  color: AppColors.clay,
-                ),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    label ?? 'Choose your area',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.ink,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                const Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  size: 19,
-                  color: AppColors.muted,
-                ),
-              ],
+          Align(
+            alignment: Alignment.centerLeft,
+            child: LocationPill(
+              label: areaLabel ?? 'Choose your area',
+              onTap: () => context.push('/area'),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -286,148 +240,6 @@ class _NeighbourhoodBanner extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _StoreCard extends StatelessWidget {
-  const _StoreCard({required this.brand});
-
-  final DiscoverBrand brand;
-
-  @override
-  Widget build(BuildContext context) {
-    final place = brand.placeLabel;
-    final distance = formatDistance(brand.nearestKm);
-    final detail = [
-      if (place.isNotEmpty) place,
-      if (distance.isNotEmpty) distance,
-    ].join(' • ');
-
-    return SurfaceCard(
-      onTap: () => context.push('/store/${brand.id}'),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              BrandLogo(name: brand.name, url: brand.logo, size: 52),
-              const SizedBox(width: 13),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      brand.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    if (detail.isNotEmpty) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        detail,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                    const SizedBox(height: 7),
-                    StatusPill(
-                      text: brand.acceptingNewOrders
-                          ? 'Taking orders'
-                          : 'Not taking orders',
-                      tone: brand.acceptingNewOrders
-                          ? StatusTone.sage
-                          : StatusTone.muted,
-                      compact: true,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 6),
-              const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
-            ],
-          ),
-          if (brand.products.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            const Divider(),
-            const SizedBox(height: 12),
-            for (final product in brand.products.take(3))
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: _ProductRow(product: product),
-              ),
-          ],
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  brand.products.isEmpty
-                      ? 'Open the shop'
-                      : '${plural(brand.products.length, 'item')} to start with',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-              const SizedBox(width: 8),
-              const Icon(
-                Icons.arrow_forward_rounded,
-                size: 17,
-                color: AppColors.forest,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProductRow extends StatelessWidget {
-  const _ProductRow({required this.product});
-
-  final ProductSummary product;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        ProductThumb(url: product.image, size: 42, radius: 10),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                product.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.ink,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              if (!product.inStock)
-                Text(
-                  'Out of stock',
-                  style: Theme.of(context).textTheme.bodySmall
-                      ?.copyWith(color: AppColors.danger),
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 10),
-        MoneyText(
-          formatMoney(product.price),
-          size: 14,
-          color: product.inStock ? AppColors.ink : AppColors.muted,
-        ),
-      ],
     );
   }
 }

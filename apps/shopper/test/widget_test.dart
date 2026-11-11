@@ -248,7 +248,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Loom & Co.'), findsWidgets);
-      expect(find.text('Fresh in store'), findsOneWidget);
+      expect(find.text('New in store'), findsOneWidget);
       expect(find.text('Linen Kurta'), findsOneWidget);
       expect(find.text('Rs 4,500'), findsOneWidget);
       expect(find.text('In stock'), findsOneWidget);

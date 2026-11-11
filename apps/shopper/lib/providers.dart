@@ -78,6 +78,20 @@ final homeFeedProvider = FutureProvider.autoDispose<DiscoverResult>((ref) {
   return ref.watch(shopperRepositoryProvider).discover(area: area, limit: 12);
 });
 
+final brandProvider = FutureProvider.autoDispose.family<PublicBrand, String>((
+  ref,
+  brandId,
+) {
+  return ref.watch(shopperRepositoryProvider).brand(brandId);
+});
+
+final productProvider = FutureProvider.autoDispose.family<Product, String>((
+  ref,
+  productId,
+) {
+  return ref.watch(shopperRepositoryProvider).product(productId);
+});
+
 /// The server address: baked into a release build, or chosen on the sign-in
 /// screen while developing.
 class ServerSettings {

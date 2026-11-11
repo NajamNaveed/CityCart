@@ -242,9 +242,13 @@ class AppButton extends StatelessWidget {
       ),
     };
 
-    final wrapped = SizedBox(
-      width: expand ? double.infinity : null,
-      height: height,
+    // A minimum, not a fixed height: at large text sizes the label may need a
+    // second line, and the button grows instead of clipping it.
+    final wrapped = ConstrainedBox(
+      constraints: BoxConstraints(
+        minHeight: height,
+        minWidth: expand ? double.infinity : 0,
+      ),
       child: button,
     );
     if (helper == null) return wrapped;
@@ -694,6 +698,57 @@ class ScreenTopBar extends StatelessWidget {
   }
 }
 
+/// "Gulberg, Faisalabad" with a pin, used wherever the chosen area is shown.
+class LocationPill extends StatelessWidget {
+  const LocationPill({super.key, required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        side: const BorderSide(color: AppColors.line),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.place_rounded, size: 17, color: AppColors.clay),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.ink,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              const Icon(
+                Icons.keyboard_arrow_down_rounded,
+                size: 19,
+                color: AppColors.muted,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class PageHeader extends StatelessWidget {
   const PageHeader({
     super.key,
@@ -996,6 +1051,39 @@ class MoneyText extends StatelessWidget {
           fontFeatures: const [FontFeature.tabularFigures()],
         ),
       ),
+    );
+  }
+}
+
+/// Five stars filled to the nearest half. Used for product and service ratings.
+class StarRating extends StatelessWidget {
+  const StarRating({
+    super.key,
+    required this.rating,
+    this.size = 16,
+    this.color = AppColors.gold,
+  });
+
+  final double rating;
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var star = 1; star <= 5; star++)
+          Icon(
+            rating >= star
+                ? Icons.star_rounded
+                : rating >= star - 0.5
+                ? Icons.star_half_rounded
+                : Icons.star_outline_rounded,
+            size: size,
+            color: color,
+          ),
+      ],
     );
   }
 }
