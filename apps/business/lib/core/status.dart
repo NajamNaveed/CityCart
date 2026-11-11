@@ -1,3 +1,4 @@
+import '../data/models.dart';
 import 'widgets.dart';
 
 /// Shared wording for the review state of a shop or service business. The
@@ -187,6 +188,79 @@ String brandDeliveryStatusLabel(String status) {
     'CANCELLED' => 'Delivery cancelled',
     'RETURNED' => 'Returned to the shop',
     _ => 'Unknown',
+  };
+}
+
+String productStatusLabel(String status) {
+  return switch (status) {
+    'ACTIVE' => 'Live',
+    'DRAFT' => 'Draft',
+    'INACTIVE' => 'Hidden',
+    'ARCHIVED' => 'Archived',
+    _ => 'Unknown',
+  };
+}
+
+AppTone productStatusTone(String status) {
+  return switch (status) {
+    'ACTIVE' => AppTone.green,
+    'DRAFT' => AppTone.amber,
+    'INACTIVE' => AppTone.neutral,
+    'ARCHIVED' => AppTone.red,
+    _ => AppTone.neutral,
+  };
+}
+
+String productStatusDetail(String status) {
+  return switch (status) {
+    'ACTIVE' => 'Customers can find this product in your shop right now.',
+    'DRAFT' =>
+      'This product is not in the shop yet. Publish it when it is ready.',
+    'INACTIVE' =>
+      'You hid this product. Customers cannot see it until you show it again.',
+    'ARCHIVED' =>
+      'This product is archived. Its past orders keep their record.',
+    _ => 'The product state is not known.',
+  };
+}
+
+String stockStatusLabel(String status) {
+  return switch (status) {
+    'IN_STOCK' => 'In stock',
+    'LOW_STOCK' => 'Running low',
+    'OUT_OF_STOCK' => 'Out of stock',
+    'NOT_TRACKED' => 'Stock not tracked',
+    _ => 'Unknown',
+  };
+}
+
+AppTone stockStatusTone(String status) {
+  return switch (status) {
+    'IN_STOCK' => AppTone.green,
+    'LOW_STOCK' => AppTone.amber,
+    'OUT_OF_STOCK' => AppTone.red,
+    _ => AppTone.neutral,
+  };
+}
+
+/// The quantity sentence on a product card: "6 left", "Out of stock".
+String stockQuantityLabel(BrandStock? stock) {
+  if (stock == null) return 'Out of stock';
+  if (!stock.trackInventory) return 'Stock not tracked';
+  if (stock.availableQuantity <= 0) return 'Out of stock';
+  final unit = stock.availableQuantity == 1 ? 'item' : 'items';
+  return '${stock.availableQuantity} $unit left';
+}
+
+String stockAdjustmentReasonLabel(String reason) {
+  return switch (reason) {
+    'STOCK_RECEIVED' => 'Stock received',
+    'MANUAL_ADJUSTMENT' => 'Manual correction',
+    'DAMAGED' => 'Damaged',
+    'LOST' => 'Lost',
+    'RETURNED' => 'Customer return',
+    'CORRECTION' => 'Counting correction',
+    _ => 'Manual correction',
   };
 }
 

@@ -1304,6 +1304,177 @@ class BrandOrderDetail {
   }
 }
 
+/// Stock for one product. The server derives [availableQuantity] and
+/// [stockStatus]; the app never calculates them itself.
+class BrandStock {
+  const BrandStock({
+    this.quantity = 0,
+    this.reservedQuantity = 0,
+    this.availableQuantity = 0,
+    this.lowStockThreshold = 0,
+    this.trackInventory = true,
+    this.stockStatus = 'OUT_OF_STOCK',
+  });
+
+  final int quantity;
+  final int reservedQuantity;
+  final int availableQuantity;
+  final int lowStockThreshold;
+  final bool trackInventory;
+  final String stockStatus;
+
+  factory BrandStock.fromJson(Map<String, dynamic> json) {
+    final quantity = _int(json['quantity'], 0);
+    final reserved = _int(json['reservedQuantity'], 0);
+    return BrandStock(
+      quantity: quantity,
+      reservedQuantity: reserved,
+      availableQuantity:
+          _optionalInt(json['availableQuantity']) ?? (quantity - reserved),
+      lowStockThreshold: _int(json['lowStockThreshold'], 0),
+      trackInventory: json['trackInventory'] != false,
+      stockStatus: _text(json['stockStatus'], 'OUT_OF_STOCK'),
+    );
+  }
+}
+
+/// One item this shop lists. Name, description and image come from the shared
+/// catalogue item; price, SKU, state and stock belong to the shop.
+class BrandProduct {
+  const BrandProduct({
+    required this.id,
+    required this.name,
+    this.description = '',
+    this.sku = '',
+    this.status = 'DRAFT',
+    this.isActive = true,
+    this.pricePaisa = 0,
+    this.compareAtPricePaisa = 0,
+    this.image,
+    this.stock,
+  });
+
+  final String id;
+  final String name;
+  final String description;
+  final String sku;
+  final String status;
+  final bool isActive;
+  final int pricePaisa;
+  final int compareAtPricePaisa;
+  final String? image;
+  final BrandStock? stock;
+
+  bool get isArchived => status == 'ARCHIVED';
+  bool get isLive => status == 'ACTIVE' && isActive;
+
+  factory BrandProduct.fromJson(Map<String, dynamic> json) {
+    final images = json['images'];
+    final firstImage = images is List && images.isNotEmpty
+        ? _optionalText(images.first)
+        : null;
+    final inventory = _map(json['inventory']);
+    return BrandProduct(
+      id: _text(json['_id'] ?? json['id']),
+      name: _text(json['name'], 'Product'),
+      description: _text(json['description']),
+      sku: _text(json['sku']),
+      status: _text(json['status'], 'DRAFT'),
+      isActive: json['isActive'] != false,
+      pricePaisa: rupeesToPaisa(json['price']),
+      compareAtPricePaisa: rupeesToPaisa(json['compareAtPrice']),
+      image: firstImage,
+      stock: inventory.isEmpty ? null : BrandStock.fromJson(inventory),
+    );
+  }
+
+  BrandProduct copyWith({
+    String? status,
+    bool? isActive,
+    int? pricePaisa,
+    int? compareAtPricePaisa,
+    String? sku,
+    BrandStock? stock,
+  }) {
+    return BrandProduct(
+      id: id,
+      name: name,
+      description: description,
+      sku: sku ?? this.sku,
+      status: status ?? this.status,
+      isActive: isActive ?? this.isActive,
+      pricePaisa: pricePaisa ?? this.pricePaisa,
+      compareAtPricePaisa: compareAtPricePaisa ?? this.compareAtPricePaisa,
+      image: image,
+      stock: stock ?? this.stock,
+    );
+  }
+}
+
+/// One product plus its stock, as the owner detail screen needs it.
+class BrandProductDetail {
+  const BrandProductDetail({required this.product, this.stock});
+
+  final BrandProduct product;
+  final BrandStock? stock;
+
+  factory BrandProductDetail.fromJson(Map<String, dynamic> json) {
+    final raw = json['product'];
+    final product = BrandProduct.fromJson(
+      raw is Map ? Map<String, dynamic>.from(raw) : const {},
+    );
+    final inventory = json['inventory'];
+    return BrandProductDetail(
+      product: product,
+      stock: inventory is Map
+          ? BrandStock.fromJson(Map<String, dynamic>.from(inventory))
+          : product.stock,
+    );
+  }
+}
+
+/// A shared catalogue item a shop may list. The shop only chooses a price;
+/// the name, description and image stay with the catalogue.
+class CatalogItem {
+  const CatalogItem({
+    required this.id,
+    required this.name,
+    this.manufacturer = '',
+    this.description = '',
+    this.sizeLabel = '',
+    this.image,
+  });
+
+  final String id;
+  final String name;
+  final String manufacturer;
+  final String description;
+  final String sizeLabel;
+  final String? image;
+
+  factory CatalogItem.fromJson(Map<String, dynamic> json) {
+    final images = json['images'];
+    final firstImage = images is List && images.isNotEmpty
+        ? _optionalText(images.first)
+        : null;
+    final size = _map(json['size']);
+    final value = _optionalDouble(size['value']);
+    final unit = _text(size['unit']);
+    return CatalogItem(
+      id: _text(json['_id'] ?? json['id']),
+      name: _text(json['name'], 'Catalogue item'),
+      manufacturer: _text(json['manufacturer']),
+      description: _text(json['description']),
+      sizeLabel: value == null
+          ? ''
+          : unit.isEmpty
+          ? '$value'
+          : '${value % 1 == 0 ? value.toInt() : value} $unit',
+      image: firstImage,
+    );
+  }
+}
+
 /// Shop prices and order totals cross the API in decimal rupees ("64.97"),
 /// not paisa. Screens use the same integer-paisa money format everywhere.
 int rupeesToPaisa(Object? value) {

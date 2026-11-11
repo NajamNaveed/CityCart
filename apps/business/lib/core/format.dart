@@ -39,6 +39,9 @@ String rupeesField(int paisa) {
       : value.toStringAsFixed(2);
 }
 
+/// Shop prices cross the API in decimal rupees; the app works in paisa.
+double rupeesFromPaisa(int paisa) => paisa / 100;
+
 String dayLabel(DateTime date) =>
     DateFormat('EEE d MMM').format(date.toLocal());
 

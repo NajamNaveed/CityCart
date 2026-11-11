@@ -14,6 +14,9 @@ import 'package:citycart_business/features/bookings/booking_detail_screen.dart';
 import 'package:citycart_business/features/bookings/bookings_screen.dart';
 import 'package:citycart_business/features/brand_orders/brand_order_detail_screen.dart';
 import 'package:citycart_business/features/brand_orders/brand_orders_screen.dart';
+import 'package:citycart_business/features/brand_products/add_product_screen.dart';
+import 'package:citycart_business/features/brand_products/brand_product_detail_screen.dart';
+import 'package:citycart_business/features/brand_products/brand_products_screen.dart';
 import 'package:citycart_business/features/home/home_screen.dart';
 import 'package:citycart_business/features/messages/chat_thread_screen.dart';
 import 'package:citycart_business/features/messages/messages_screen.dart';
@@ -127,6 +130,32 @@ void main() {
 
     test('providers cannot open shop order screens', () {
       for (final path in ['/brand-orders', '/brand-orders/o1']) {
+        expect(
+          businessRedirect(
+            status: SessionStatus.signedIn,
+            location: path,
+            role: providerRole,
+          ),
+          '/home',
+          reason: 'provider accounts must not reach $path',
+        );
+        expect(
+          businessRedirect(
+            status: SessionStatus.signedIn,
+            location: path,
+            role: brandRole,
+          ),
+          isNull,
+        );
+      }
+    });
+
+    test('providers cannot open shop product screens', () {
+      for (final path in [
+        '/brand-products',
+        '/brand-products/add',
+        '/brand-products/p1',
+      ]) {
         expect(
           businessRedirect(
             status: SessionStatus.signedIn,
@@ -486,6 +515,47 @@ void main() {
       expect(brandOrderStatusDetail('PENDING'), contains('Confirm'));
       expect(paymentStatusLabel('PENDING'), 'Unpaid');
       expect(paymentMethodLabel('COD'), 'Cash on delivery');
+    });
+
+    test('a shop product reads rupee prices, state and stock', () {
+      final detail = BrandProductDetail.fromJson({
+        'product': {
+          '_id': 'p1',
+          'name': 'Cotton kurta',
+          'status': 'ACTIVE',
+          'isActive': true,
+          'price': 2500.0,
+          'compareAtPrice': 3000.5,
+          'sku': 'KURTA-M',
+          'images': ['https://example.com/kurta.jpg'],
+        },
+        'inventory': {
+          'quantity': 12,
+          'reservedQuantity': 2,
+          'availableQuantity': 10,
+          'lowStockThreshold': 3,
+          'trackInventory': true,
+          'stockStatus': 'IN_STOCK',
+        },
+      });
+
+      expect(detail.product.pricePaisa, 250000);
+      expect(detail.product.compareAtPricePaisa, 300050);
+      expect(detail.product.isLive, isTrue);
+      expect(detail.product.image, 'https://example.com/kurta.jpg');
+      expect(detail.stock?.availableQuantity, 10);
+      expect(stockQuantityLabel(detail.stock), '10 items left');
+      expect(stockStatusLabel('LOW_STOCK'), 'Running low');
+      expect(productStatusLabel('DRAFT'), 'Draft');
+
+      final item = CatalogItem.fromJson({
+        '_id': 'c1',
+        'name': 'Dalda Ghee 1 kg',
+        'manufacturer': 'Dalda',
+        'size': {'value': 1, 'unit': 'kg'},
+      });
+      expect(item.manufacturer, 'Dalda');
+      expect(item.sizeLabel, '1 kg');
     });
   });
 
@@ -1451,6 +1521,194 @@ void main() {
       expect(find.text('Proposal withdrawn.'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('products show price, stock and filter by state', (
+      tester,
+    ) async {
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        products: _sampleProducts(),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(const BrandProductsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Cotton kurta'), findsOneWidget);
+      expect(find.text('Silk scarf'), findsOneWidget);
+      expect(find.text('Rs 2,500'), findsOneWidget);
+      expect(find.text('10 items left · KURTA-M'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('brand_product_filter_draft')));
+      await tester.pumpAndSettle();
+
+      expect(fake.lastProductStatus, 'DRAFT');
+      expect(find.text('Silk scarf'), findsOneWidget);
+      expect(find.text('Cotton kurta'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a price and product code can be changed', (tester) async {
+      final product = _sampleProduct();
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        products: [product],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(
+            BrandProductDetailScreen(productId: 'p1', initial: product),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final edit = find.byKey(const Key('product_edit_price'));
+      await tester.ensureVisible(edit);
+      await tester.pumpAndSettle();
+      await tester.tap(edit);
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byKey(const Key('product_price')), '2750');
+      await tester.enterText(find.byKey(const Key('product_sku')), 'KURTA-L');
+      final save = find.byKey(const Key('product_save'));
+      await tester.ensureVisible(save);
+      await tester.pumpAndSettle();
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+
+      expect(fake.updatedProductPrice, 275000);
+      expect(fake.updatedProductSku, 'KURTA-L');
+      expect(find.text('Price updated.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('stock is added with a reason', (tester) async {
+      final product = _sampleProduct();
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        products: [product],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(
+            BrandProductDetailScreen(productId: 'p1', initial: product),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final add = find.byKey(const Key('stock_add'));
+      await tester.ensureVisible(add);
+      await tester.pumpAndSettle();
+      await tester.tap(add);
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byKey(const Key('stock_quantity')), '5');
+      final save = find.byKey(const Key('stock_save'));
+      await tester.ensureVisible(save);
+      await tester.pumpAndSettle();
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+
+      expect(fake.adjustedStockChange, 5);
+      expect(fake.adjustedStockReason, 'STOCK_RECEIVED');
+      expect(find.text('5 added to stock.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('hiding a live product asks first', (tester) async {
+      final product = _sampleProduct();
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        products: [product],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(
+            BrandProductDetailScreen(productId: 'p1', initial: product),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final visibility = find.byKey(const Key('product_visibility'));
+      await tester.ensureVisible(visibility);
+      await tester.pumpAndSettle();
+      await tester.tap(visibility);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Hide this product?'), findsOneWidget);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.text('Hide product'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(fake.updatedProductStatus, 'INACTIVE');
+      expect(fake.updatedProductActive, isFalse);
+      expect(find.text('Product hidden.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('an item from the catalogue is added at the shop price', (
+      tester,
+    ) async {
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        catalog: _catalogItems,
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _routeHarness(const AddProductScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('open_screen')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Dalda Ghee 1 kg'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('catalog_item_c1')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byKey(const Key('add_price')), '1200');
+      await tester.pumpAndSettle();
+      final save = find.byKey(const Key('add_save'));
+      await tester.ensureVisible(save);
+      await tester.pumpAndSettle();
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+
+      expect(fake.addedCatalogId, 'c1');
+      expect(fake.addedPricePaisa, 120000);
+      expect(fake.addedStatus, 'ACTIVE');
+      expect(tester.takeException(), isNull);
+    });
   });
 }
 
@@ -1635,6 +1893,89 @@ List<BrandOrder> _sampleBrandOrders() {
   ];
 }
 
+BrandProduct _sampleProduct({
+  String id = 'p1',
+  String name = 'Cotton kurta',
+  String status = 'ACTIVE',
+  bool isActive = true,
+  int pricePaisa = 250000,
+  int compareAtPaisa = 0,
+  String sku = 'KURTA-M',
+  BrandStock? stock,
+}) {
+  return BrandProduct(
+    id: id,
+    name: name,
+    status: status,
+    isActive: isActive,
+    pricePaisa: pricePaisa,
+    compareAtPricePaisa: compareAtPaisa,
+    sku: sku,
+    stock:
+        stock ??
+        const BrandStock(
+          quantity: 12,
+          reservedQuantity: 2,
+          availableQuantity: 10,
+          lowStockThreshold: 3,
+          trackInventory: true,
+          stockStatus: 'IN_STOCK',
+        ),
+  );
+}
+
+List<BrandProduct> _sampleProducts() {
+  return [
+    _sampleProduct(compareAtPaisa: 300000),
+    _sampleProduct(
+      id: 'p2',
+      name: 'Silk scarf',
+      status: 'DRAFT',
+      pricePaisa: 150000,
+      sku: 'SCARF-1',
+      stock: const BrandStock(
+        quantity: 4,
+        reservedQuantity: 0,
+        availableQuantity: 4,
+        lowStockThreshold: 0,
+        trackInventory: true,
+        stockStatus: 'IN_STOCK',
+      ),
+    ),
+    _sampleProduct(
+      id: 'p3',
+      name: 'Woollen shawl',
+      status: 'INACTIVE',
+      isActive: false,
+      pricePaisa: 450000,
+      sku: 'SHAWL-2',
+      stock: const BrandStock(
+        quantity: 0,
+        reservedQuantity: 0,
+        availableQuantity: 0,
+        lowStockThreshold: 0,
+        trackInventory: true,
+        stockStatus: 'OUT_OF_STOCK',
+      ),
+    ),
+  ];
+}
+
+const _catalogItems = [
+  CatalogItem(
+    id: 'c1',
+    name: 'Dalda Ghee 1 kg',
+    manufacturer: 'Dalda',
+    sizeLabel: '1 kg',
+  ),
+  CatalogItem(
+    id: 'c2',
+    name: 'Tapal Danedar Tea',
+    manufacturer: 'Tapal',
+    sizeLabel: '500 g',
+  ),
+];
+
 /// Builds a container whose session has already been restored, so the home
 /// providers see a signed-in owner before the first frame.
 Future<ProviderContainer> _signedIn({
@@ -1651,6 +1992,8 @@ Future<ProviderContainer> _signedIn({
   ProviderReviewPage reviewPage = const ProviderReviewPage(),
   List<BrandOrder> orders = const [],
   BrandOrderDetail? orderDetail,
+  List<BrandProduct> products = const [],
+  List<CatalogItem> catalog = const [],
 }) async {
   final result = await _signedInWithFake(
     user: user,
@@ -1666,6 +2009,8 @@ Future<ProviderContainer> _signedIn({
     reviewPage: reviewPage,
     orders: orders,
     orderDetail: orderDetail,
+    products: products,
+    catalog: catalog,
   );
   return result.$1;
 }
@@ -1684,6 +2029,8 @@ Future<(ProviderContainer, _FakeRepository)> _signedInWithFake({
   ProviderReviewPage reviewPage = const ProviderReviewPage(),
   List<BrandOrder> orders = const [],
   BrandOrderDetail? orderDetail,
+  List<BrandProduct> products = const [],
+  List<CatalogItem> catalog = const [],
 }) async {
   final prefs = await SharedPreferences.getInstance();
   final store = _FakeSessionStore('token', user);
@@ -1702,6 +2049,8 @@ Future<(ProviderContainer, _FakeRepository)> _signedInWithFake({
     reviewPage: reviewPage,
     orders: orders,
     orderDetail: orderDetail,
+    products: products,
+    catalog: catalog,
   );
   final container = ProviderContainer(
     overrides: [
@@ -1728,6 +2077,32 @@ Widget _shell(Widget home) {
       child: child!,
     ),
     home: home,
+  );
+}
+
+/// A placeholder page that pushes [screen], so a screen that closes itself
+/// with a result can be tested without the full router.
+Widget _routeHarness(Widget screen) {
+  return MaterialApp(
+    debugShowCheckedModeBanner: false,
+    theme: AppTheme.light,
+    builder: (context, child) => MediaQuery(
+      data: MediaQuery.of(context)
+          .copyWith(textScaler: const TextScaler.linear(1.3)),
+      child: child!,
+    ),
+    home: Builder(
+      builder: (context) => Scaffold(
+        body: Center(
+          child: TextButton(
+            key: const Key('open_screen'),
+            onPressed: () => Navigator.of(context)
+                .push(MaterialPageRoute<void>(builder: (context) => screen)),
+            child: const Text('Open'),
+          ),
+        ),
+      ),
+    ),
   );
 }
 
@@ -1775,6 +2150,8 @@ class _FakeRepository extends BusinessRepository {
     this.reviewPage = const ProviderReviewPage(),
     this.orders = const [],
     this.orderDetail,
+    this.products = const [],
+    this.catalog = const [],
   }) : super(ApiClient(store));
 
   final AppUser user;
@@ -1790,6 +2167,9 @@ class _FakeRepository extends BusinessRepository {
   final ProviderReviewPage reviewPage;
   final List<BrandOrder> orders;
   final BrandOrderDetail? orderDetail;
+  final List<BrandProduct> products;
+  final List<CatalogItem> catalog;
+  final Map<String, BrandProduct> _editedProducts = {};
 
   String? lastBookingStatus;
   int? acceptedPricePaisa;
@@ -1803,6 +2183,24 @@ class _FakeRepository extends BusinessRepository {
   String? updatedOrderStatus;
   String? withdrawnOrderId;
   String? withdrawnAdjustmentId;
+
+  String? lastProductStatus;
+  String? lastProductSearch;
+  int? updatedProductPrice;
+  int? updatedProductCompare;
+  String? updatedProductSku;
+  String? updatedProductStatus;
+  bool? updatedProductActive;
+  String? archivedProductId;
+  int? adjustedStockChange;
+  String? adjustedStockReason;
+  int? savedStockThreshold;
+  bool? savedStockTracking;
+  String? addedCatalogId;
+  int? addedPricePaisa;
+  int? addedComparePaisa;
+  String? addedSku;
+  String? addedStatus;
 
   String? createdOfferingTitle;
   int? createdOfferingPrice;
@@ -2161,6 +2559,196 @@ class _FakeRepository extends BusinessRepository {
   ) async {
     withdrawnOrderId = orderId;
     withdrawnAdjustmentId = adjustmentId;
+  }
+
+  BrandProduct _productRecord(String productId) {
+    final edited = _editedProducts[productId];
+    if (edited != null) return edited;
+    for (final product in products) {
+      if (product.id == productId) return product;
+    }
+    return _sampleProduct();
+  }
+
+  @override
+  Future<data.Page<BrandProduct>> brandProducts({
+    String? status,
+    String? search,
+    int page = 1,
+    int limit = 12,
+  }) async {
+    lastProductStatus = status;
+    lastProductSearch = search;
+    final term = (search ?? '').trim().toLowerCase();
+    final filtered = products
+        .map((product) => _editedProducts[product.id] ?? product)
+        .where(
+          (product) =>
+              (status == null || product.status == status) &&
+              (term.isEmpty || product.name.toLowerCase().contains(term)),
+        )
+        .toList(growable: false);
+    return data.Page(
+      items: filtered,
+      pagination: Pagination(
+        page: 1,
+        limit: limit,
+        pages: filtered.isEmpty ? 0 : 1,
+        total: filtered.length,
+      ),
+    );
+  }
+
+  @override
+  Future<BrandProductDetail> brandProduct(String productId) async {
+    final product = _productRecord(productId);
+    return BrandProductDetail(product: product, stock: product.stock);
+  }
+
+  @override
+  Future<BrandProduct> updateBrandProduct(
+    String productId, {
+    int? pricePaisa,
+    int? compareAtPricePaisa,
+    String? sku,
+    String? status,
+    bool? isActive,
+  }) async {
+    if (pricePaisa != null) updatedProductPrice = pricePaisa;
+    if (compareAtPricePaisa != null) {
+      updatedProductCompare = compareAtPricePaisa;
+    }
+    if (sku != null) updatedProductSku = sku;
+    if (status != null) updatedProductStatus = status;
+    if (isActive != null) updatedProductActive = isActive;
+    final updated = _productRecord(productId).copyWith(
+      pricePaisa: pricePaisa,
+      compareAtPricePaisa: compareAtPricePaisa,
+      sku: sku,
+      status: status,
+      isActive: isActive,
+    );
+    _editedProducts[productId] = updated;
+    return updated;
+  }
+
+  @override
+  Future<void> archiveBrandProduct(String productId) async {
+    archivedProductId = productId;
+    _editedProducts[productId] = _productRecord(productId)
+        .copyWith(status: 'ARCHIVED', isActive: false);
+  }
+
+  @override
+  Future<BrandStock> setBrandStock(
+    String productId, {
+    int? quantity,
+    int? lowStockThreshold,
+    bool? trackInventory,
+  }) async {
+    if (lowStockThreshold != null) {
+      savedStockThreshold = lowStockThreshold;
+    }
+    if (trackInventory != null) savedStockTracking = trackInventory;
+    final current = _productRecord(productId);
+    final existing = current.stock ?? const BrandStock();
+    final stock = BrandStock(
+      quantity: quantity ?? existing.quantity,
+      reservedQuantity: existing.reservedQuantity,
+      availableQuantity: quantity == null
+          ? existing.availableQuantity
+          : quantity - existing.reservedQuantity,
+      lowStockThreshold: lowStockThreshold ?? existing.lowStockThreshold,
+      trackInventory: trackInventory ?? existing.trackInventory,
+      stockStatus: existing.stockStatus,
+    );
+    _editedProducts[productId] = current.copyWith(stock: stock);
+    return stock;
+  }
+
+  @override
+  Future<BrandStock> adjustBrandStock(
+    String productId, {
+    required int change,
+    String? reason,
+  }) async {
+    adjustedStockChange = change;
+    adjustedStockReason = reason;
+    final current = _productRecord(productId);
+    final existing = current.stock ?? const BrandStock();
+    final available = existing.availableQuantity + change;
+    final stock = BrandStock(
+      quantity: existing.quantity + change,
+      reservedQuantity: existing.reservedQuantity,
+      availableQuantity: available,
+      lowStockThreshold: existing.lowStockThreshold,
+      trackInventory: existing.trackInventory,
+      stockStatus: available <= 0
+          ? 'OUT_OF_STOCK'
+          : existing.stockStatus == 'OUT_OF_STOCK'
+          ? 'IN_STOCK'
+          : existing.stockStatus,
+    );
+    _editedProducts[productId] = current.copyWith(stock: stock);
+    return stock;
+  }
+
+  @override
+  Future<data.Page<CatalogItem>> catalogItems({
+    String search = '',
+    int page = 1,
+    int limit = 20,
+  }) async {
+    final term = search.trim().toLowerCase();
+    final filtered = catalog
+        .where((item) => term.isEmpty || item.name.toLowerCase().contains(term))
+        .toList(growable: false);
+    return data.Page(
+      items: filtered,
+      pagination: Pagination(
+        page: 1,
+        limit: limit,
+        pages: filtered.isEmpty ? 0 : 1,
+        total: filtered.length,
+      ),
+    );
+  }
+
+  @override
+  Future<BrandProduct> addBrandProduct({
+    required String catalogProductId,
+    required int pricePaisa,
+    int? compareAtPricePaisa,
+    String? sku,
+    String? status,
+  }) async {
+    addedCatalogId = catalogProductId;
+    addedPricePaisa = pricePaisa;
+    addedComparePaisa = compareAtPricePaisa;
+    addedSku = sku;
+    addedStatus = status;
+    var item = const CatalogItem(id: 'new', name: 'New product');
+    for (final candidate in catalog) {
+      if (candidate.id == catalogProductId) {
+        item = candidate;
+        break;
+      }
+    }
+    return BrandProduct(
+      id: 'new',
+      name: item.name,
+      status: status ?? 'DRAFT',
+      pricePaisa: pricePaisa,
+      compareAtPricePaisa: compareAtPricePaisa ?? 0,
+      sku: sku ?? '',
+      image: item.image,
+      stock: const BrandStock(
+        quantity: 0,
+        reservedQuantity: 0,
+        availableQuantity: 0,
+        stockStatus: 'OUT_OF_STOCK',
+      ),
+    );
   }
 
   @override

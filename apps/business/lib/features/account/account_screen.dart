@@ -140,12 +140,24 @@ class AccountScreen extends ConsumerWidget {
                 const SizedBox(height: 10),
                 SurfacePanel(
                   padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: InfoRow(
-                    key: const Key('account_orders'),
-                    icon: Icons.receipt_long_outlined,
-                    label: 'Orders',
-                    value: 'Confirm and prepare customer orders',
-                    onTap: () => context.push('/brand-orders'),
+                  child: Column(
+                    children: [
+                      InfoRow(
+                        key: const Key('account_orders'),
+                        icon: Icons.receipt_long_outlined,
+                        label: 'Orders',
+                        value: 'Confirm and prepare customer orders',
+                        onTap: () => context.push('/brand-orders'),
+                      ),
+                      const Divider(indent: 66),
+                      InfoRow(
+                        key: const Key('account_products'),
+                        icon: Icons.inventory_2_outlined,
+                        label: 'Products',
+                        value: 'Prices, stock and visibility',
+                        onTap: () => context.push('/brand-products'),
+                      ),
+                    ],
                   ),
                 ),
               ],

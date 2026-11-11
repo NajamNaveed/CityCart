@@ -12,6 +12,9 @@ import 'features/bookings/booking_detail_screen.dart';
 import 'features/bookings/bookings_screen.dart';
 import 'features/brand_orders/brand_order_detail_screen.dart';
 import 'features/brand_orders/brand_orders_screen.dart';
+import 'features/brand_products/add_product_screen.dart';
+import 'features/brand_products/brand_product_detail_screen.dart';
+import 'features/brand_products/brand_products_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/messages/chat_thread_screen.dart';
 import 'features/messages/messages_screen.dart';
@@ -92,6 +95,25 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
+        path: '/brand-products',
+        builder: (context, state) => BrandProductsScreen(
+          initialStatus: state.uri.queryParameters['status'],
+        ),
+      ),
+      GoRoute(
+        path: '/brand-products/add',
+        builder: (context, state) => const AddProductScreen(),
+      ),
+      GoRoute(
+        path: '/brand-products/:id',
+        builder: (context, state) => BrandProductDetailScreen(
+          productId: state.pathParameters['id']!,
+          initial: state.extra is BrandProduct
+              ? state.extra as BrandProduct
+              : null,
+        ),
+      ),
+      GoRoute(
         path: '/offerings',
         builder: (context, state) => const OfferingsScreen(),
       ),
@@ -155,7 +177,7 @@ bool _isProviderOnly(String location) {
 }
 
 /// Areas only a shop owner has.
-const _brandOnlyPaths = <String>['/brand-orders'];
+const _brandOnlyPaths = <String>['/brand-orders', '/brand-products'];
 
 bool _isBrandOnly(String location) {
   return _brandOnlyPaths.any(

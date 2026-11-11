@@ -465,6 +465,16 @@ class _BrandHome extends ConsumerWidget {
                     ),
                 ],
                 const SizedBox(height: 22),
+                const SectionTitle('Catalogue'),
+                ActionTile(
+                  key: const Key('home_products'),
+                  icon: Icons.inventory_2_outlined,
+                  title: 'Products',
+                  subtitle: 'Prices, stock and what customers can see',
+                  tone: AppTone.blue,
+                  onTap: () => context.push('/brand-products'),
+                ),
+                const SizedBox(height: 22),
                 const SectionTitle('Account'),
                 ActionTile(
                   icon: Icons.manage_accounts_outlined,

@@ -523,6 +523,140 @@ class BusinessRepository {
     );
   }
 
+  // --- Brand products and stock -------------------------------------------
+  Future<Page<BrandProduct>> brandProducts({
+    String? status,
+    String? search,
+    int page = 1,
+    int limit = 12,
+  }) async {
+    final term = search?.trim();
+    final body = await _api.get(
+      '/products/mine',
+      query: {
+        'page': page,
+        'limit': limit,
+        'status': ?status,
+        if (term != null && term.isNotEmpty) 'search': term,
+      },
+    );
+    return Page.fromJson(body, BrandProduct.fromJson, 'products');
+  }
+
+  Future<BrandProductDetail> brandProduct(String productId) async {
+    final body = await _api.get('/products/mine/$productId');
+    return BrandProductDetail.fromJson(body);
+  }
+
+  /// Price changes are sent in rupees because that is what the shop API
+  /// stores. The app works in paisa everywhere else.
+  Future<BrandProduct> updateBrandProduct(
+    String productId, {
+    int? pricePaisa,
+    int? compareAtPricePaisa,
+    String? sku,
+    String? status,
+    bool? isActive,
+  }) async {
+    final body = await _api.patch(
+      '/products/$productId',
+      data: {
+        if (pricePaisa != null) 'price': pricePaisa / 100,
+        if (compareAtPricePaisa != null)
+          'compareAtPrice': compareAtPricePaisa / 100,
+        if (sku != null) 'sku': sku.trim(),
+        'status': ?status,
+        'isActive': ?isActive,
+      },
+    );
+    return _productFrom(body);
+  }
+
+  /// Archiving hides a product for good but keeps its past orders intact.
+  Future<void> archiveBrandProduct(String productId) async {
+    await _api.delete('/products/$productId');
+  }
+
+  Future<BrandStock> setBrandStock(
+    String productId, {
+    int? quantity,
+    int? lowStockThreshold,
+    bool? trackInventory,
+  }) async {
+    final body = await _api.patch(
+      '/inventory/$productId',
+      data: {
+        'quantity': ?quantity,
+        'lowStockThreshold': ?lowStockThreshold,
+        'trackInventory': ?trackInventory,
+      },
+    );
+    return _stockFrom(body);
+  }
+
+  Future<BrandStock> adjustBrandStock(
+    String productId, {
+    required int change,
+    String? reason,
+  }) async {
+    final body = await _api.post(
+      '/inventory/$productId/adjust',
+      data: {'change': change, 'reason': ?reason},
+    );
+    return _stockFrom(body);
+  }
+
+  /// What this shop can list: active global catalogue items plus its own.
+  Future<Page<CatalogItem>> catalogItems({
+    String search = '',
+    int page = 1,
+    int limit = 20,
+  }) async {
+    final term = search.trim();
+    final body = await _api.get(
+      '/catalog',
+      query: {'page': page, 'limit': limit, if (term.isNotEmpty) 'q': term},
+    );
+    return Page.fromJson(body, CatalogItem.fromJson, 'items');
+  }
+
+  Future<BrandProduct> addBrandProduct({
+    required String catalogProductId,
+    required int pricePaisa,
+    int? compareAtPricePaisa,
+    String? sku,
+    String? status,
+  }) async {
+    final body = await _api.post(
+      '/products',
+      data: {
+        'catalogProductId': catalogProductId,
+        'price': pricePaisa / 100,
+        if (compareAtPricePaisa != null && compareAtPricePaisa > 0)
+          'compareAtPrice': compareAtPricePaisa / 100,
+        if (sku != null && sku.trim().isNotEmpty) 'sku': sku.trim(),
+        'status': ?status,
+      },
+    );
+    return _productFrom(body);
+  }
+
+  BrandProduct _productFrom(Map<String, dynamic> body) {
+    final product = body['product'];
+    if (product is! Map) {
+      throw StateError('The server did not return the product.');
+    }
+    return BrandProduct.fromJson(Map<String, dynamic>.from(product));
+  }
+
+  BrandStock _stockFrom(Map<String, dynamic> body) {
+    final inventory = body['inventory'];
+    if (inventory is! Map) {
+      throw StateError('The server did not return the stock.');
+    }
+    return BrandStock.fromJson(Map<String, dynamic>.from(inventory));
+  }
+
   AuthResult _authFrom(Map<String, dynamic> body) {
     final token = body['token'];
     final user = body['user'];
