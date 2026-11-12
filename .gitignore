@@ -23,6 +23,9 @@ dist/
 build/
 client/dist/
 server/dist/
+*.apk
+*.aab
+*.ipa
 
 # Vite
 .vite/
@@ -146,6 +149,7 @@ Icon
 # -------------------------
 # Cache
 # -------------------------
+.kotlin/
 .eslintcache
 .stylelintcache
 .prettierignore.local
@@ -165,6 +169,8 @@ Icon
 *.crt
 *.p12
 *.pfx
+*.jks
+*.keystore
 
 # -------------------------
 # Local Configuration
