@@ -156,23 +156,23 @@ class _FilterRow extends StatelessWidget {
       spacing: 8,
       runSpacing: 8,
       children: [
-        ChoiceChip(
+        FilterPill(
           key: const Key('messages_filter_all'),
-          label: const Text('All'),
+          label: 'All',
           selected: selected == null,
-          onSelected: (_) => onChanged(null),
+          onTap: () => onChanged(null),
         ),
-        ChoiceChip(
+        FilterPill(
           key: const Key('messages_filter_job'),
-          label: const Text('Job chats'),
+          label: 'Job chats',
           selected: selected == ProviderChatKind.job,
-          onSelected: (_) => onChanged(ProviderChatKind.job),
+          onTap: () => onChanged(ProviderChatKind.job),
         ),
-        ChoiceChip(
+        FilterPill(
           key: const Key('messages_filter_question'),
-          label: const Text('Questions'),
+          label: 'Questions',
           selected: selected == ProviderChatKind.question,
-          onSelected: (_) => onChanged(ProviderChatKind.question),
+          onTap: () => onChanged(ProviderChatKind.question),
         ),
       ],
     );

@@ -134,7 +134,7 @@ class _BrandInsightsScreenState extends ConsumerState<BrandInsightsScreen> {
                 separatorBuilder: (context, index) => const SizedBox(width: 8),
                 itemBuilder: (context, index) {
                   final range = _ranges[index];
-                  return _RangePill(
+                  return FilterPill(
                     key: Key('insight_range_${range.key}'),
                     label: range.label,
                     selected: index == _rangeIndex,
@@ -365,47 +365,6 @@ class _BrandInsightsScreenState extends ConsumerState<BrandInsightsScreen> {
   }
 }
 
-class _RangePill extends StatelessWidget {
-  const _RangePill({
-    super.key,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: selected ? AppColors.forest : AppColors.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        side: BorderSide(color: selected ? AppColors.forest : AppColors.line),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 9),
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 13,
-              height: 1.2,
-              fontWeight: FontWeight.w700,
-              color: selected ? AppColors.white : AppColors.inkSoft,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class _SalesBars extends StatelessWidget {
   const _SalesBars({required this.points});

@@ -511,7 +511,11 @@ class _Composer extends StatelessWidget {
                           color: AppColors.white,
                         ),
                       )
-                    : const Icon(Icons.arrow_upward_rounded, size: 21),
+                    : const Icon(
+                        Icons.send_rounded,
+                        size: 21,
+                        color: AppColors.white,
+                      ),
               ),
             ),
           ],

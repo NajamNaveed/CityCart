@@ -242,29 +242,23 @@ class _RatingFilter extends StatelessWidget {
       spacing: 8,
       runSpacing: 8,
       children: [
-        ChoiceChip(
+        FilterPill(
           key: const Key('reviews_filter_all'),
-          label: const Text('All'),
+          label: 'All',
           selected: selected == null,
-          onSelected: (_) => onChanged(null),
+          onTap: () => onChanged(null),
         ),
         for (var stars = 5; stars >= 1; stars -= 1)
-          ChoiceChip(
+          FilterPill(
             key: Key('reviews_filter_$stars'),
-            label: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('$stars'),
-                const SizedBox(width: 3),
-                const Icon(
-                  Icons.star_rounded,
-                  size: 14,
-                  color: AppColors.amber,
-                ),
-              ],
+            label: '$stars',
+            trailing: const Icon(
+              Icons.star_rounded,
+              size: 14,
+              color: AppColors.amber,
             ),
             selected: selected == stars,
-            onSelected: (_) => onChanged(stars),
+            onTap: () => onChanged(stars),
           ),
       ],
     );

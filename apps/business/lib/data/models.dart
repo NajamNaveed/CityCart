@@ -1155,6 +1155,7 @@ class BrandReviewPage {
 /// placed, so editing a product later never changes an existing order.
 class BrandOrderItem {
   const BrandOrderItem({
+    this.id = '',
     required this.productId,
     required this.productName,
     this.sku = '',
@@ -1165,6 +1166,8 @@ class BrandOrderItem {
     this.pickStatus = '',
   });
 
+  /// The id of the order line itself, which a change proposal references.
+  final String id;
   final String productId;
   final String productName;
   final String sku;
@@ -1176,6 +1179,7 @@ class BrandOrderItem {
 
   factory BrandOrderItem.fromJson(Map<String, dynamic> json) {
     return BrandOrderItem(
+      id: _text(json['_id'] ?? json['id']),
       productId: _text(json['productId']),
       productName: _text(json['productName'], 'Product'),
       sku: _text(json['sku']),
@@ -1186,6 +1190,26 @@ class BrandOrderItem {
       pickStatus: _text(json['pickStatus']),
     );
   }
+}
+
+/// One line of a change proposal: how many units the shop can supply of an
+/// order item and, optionally, which same-shop product replaces the missing
+/// units. The server validates the substitute and computes all prices.
+class BrandAdjustmentLine {
+  const BrandAdjustmentLine({
+    required this.orderItemId,
+    required this.supplyQuantity,
+    this.substituteProductId,
+    this.substituteQuantity = 0,
+  });
+
+  final String orderItemId;
+  final int supplyQuantity;
+  final String? substituteProductId;
+  final int substituteQuantity;
+
+  bool get hasSubstitute =>
+      substituteProductId != null && substituteProductId!.isNotEmpty;
 }
 
 class BrandShippingAddress {

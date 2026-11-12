@@ -90,7 +90,7 @@ class BusinessShell extends ConsumerWidget {
           );
         }
         return Scaffold(
-          body: navigationShell,
+          body: SafeArea(child: navigationShell),
           bottomNavigationBar: DecoratedBox(
             decoration: const BoxDecoration(
               color: AppColors.surface,

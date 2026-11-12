@@ -44,7 +44,7 @@ class BusinessRepository {
   }
 
   Future<ProviderProfile> currentProvider() async {
-    final body = await _api.get('/provider/me');
+    final body = await _api.get('/services/provider/me');
     final provider = body['provider'];
     if (provider is! Map) {
       throw StateError('The server did not return a business profile.');
@@ -89,14 +89,14 @@ class BusinessRepository {
     int limit = 12,
   }) async {
     final body = await _api.get(
-      '/provider/bookings',
+      '/services/provider/bookings',
       query: {'page': page, 'limit': limit, 'status': ?status},
     );
     return Page.fromJson(body, BusinessBooking.fromJson, 'bookings');
   }
 
   Future<BusinessBooking> providerBooking(String bookingId) async {
-    final body = await _api.get('/provider/bookings/$bookingId');
+    final body = await _api.get('/services/provider/bookings/$bookingId');
     return _bookingFrom(body);
   }
 
@@ -107,7 +107,7 @@ class BusinessRepository {
     required int pricePaisa,
   }) async {
     final body = await _api.post(
-      '/provider/bookings/$bookingId/accept',
+      '/services/provider/bookings/$bookingId/accept',
       data: {'pricePaisa': pricePaisa},
     );
     return _bookingFrom(body);
@@ -116,7 +116,9 @@ class BusinessRepository {
   /// Accepts the exact amount the customer offered, even below the published
   /// price. The amount comes from the booking on the server.
   Future<BusinessBooking> acceptProviderOffer(String bookingId) async {
-    final body = await _api.post('/provider/bookings/$bookingId/offer/accept');
+    final body = await _api.post(
+      '/services/provider/bookings/$bookingId/offer/accept',
+    );
     return _bookingFrom(body);
   }
 
@@ -126,7 +128,7 @@ class BusinessRepository {
   }) async {
     final trimmed = reason?.trim();
     final body = await _api.post(
-      '/provider/bookings/$bookingId/decline',
+      '/services/provider/bookings/$bookingId/decline',
       data: {if (trimmed != null && trimmed.isNotEmpty) 'reason': trimmed},
     );
     return _bookingFrom(body);
@@ -140,7 +142,7 @@ class BusinessRepository {
     int? expiresInHours,
   }) async {
     final body = await _api.post(
-      '/provider/bookings/$bookingId/propose',
+      '/services/provider/bookings/$bookingId/propose',
       data: {
         'pricePaisa': pricePaisa,
         'scope': scope.trim(),
@@ -152,7 +154,9 @@ class BusinessRepository {
   }
 
   Future<BusinessBooking> startProviderBooking(String bookingId) async {
-    final body = await _api.post('/provider/bookings/$bookingId/start');
+    final body = await _api.post(
+      '/services/provider/bookings/$bookingId/start',
+    );
     return _bookingFrom(body);
   }
 
@@ -163,7 +167,7 @@ class BusinessRepository {
   }) async {
     final note = completionNote?.trim();
     final body = await _api.post(
-      '/provider/bookings/$bookingId/complete',
+      '/services/provider/bookings/$bookingId/complete',
       data: {
         'finalAmountPaisa': finalAmountPaisa,
         if (note != null && note.isNotEmpty) 'completionNote': note,
@@ -177,7 +181,7 @@ class BusinessRepository {
     required String reason,
   }) async {
     final body = await _api.post(
-      '/provider/bookings/$bookingId/cancel',
+      '/services/provider/bookings/$bookingId/cancel',
       data: {'reason': reason.trim()},
     );
     return _bookingFrom(body);
@@ -203,7 +207,7 @@ class BusinessRepository {
     required int startingAtPricePaisa,
   }) async {
     final body = await _api.patch(
-      '/provider/me',
+      '/services/provider/me',
       data: {
         'displayName': displayName.trim(),
         'phone': phone.trim().isEmpty ? null : phone.trim(),
@@ -238,7 +242,7 @@ class BusinessRepository {
     required double longitude,
   }) async {
     final body = await _api.patch(
-      '/provider/block',
+      '/services/provider/block',
       data: {'blockId': blockId, 'latitude': latitude, 'longitude': longitude},
     );
     return _providerFrom(body);
@@ -255,7 +259,7 @@ class BusinessRepository {
   // --- Provider offerings --------------------------------------------------
 
   Future<List<ServiceOffering>> providerOfferings() async {
-    final body = await _api.get('/provider/offerings');
+    final body = await _api.get('/services/provider/offerings');
     final offerings = body['offerings'];
     if (offerings is! List) return const <ServiceOffering>[];
     return offerings
@@ -273,7 +277,7 @@ class BusinessRepository {
     required int durationMinutes,
   }) async {
     final body = await _api.post(
-      '/provider/offerings',
+      '/services/provider/offerings',
       data: {
         'title': title.trim(),
         'description': description.trim(),
@@ -295,7 +299,7 @@ class BusinessRepository {
     final trimmedTitle = title?.trim();
     final trimmedDescription = description?.trim();
     final body = await _api.patch(
-      '/provider/offerings/$offeringId',
+      '/services/provider/offerings/$offeringId',
       data: {
         'title': ?trimmedTitle,
         'description': ?trimmedDescription,
@@ -310,7 +314,7 @@ class BusinessRepository {
   /// Soft delete: the service stops appearing in discovery but past bookings
   /// keep their record.
   Future<ServiceOffering> deactivateProviderOffering(String offeringId) async {
-    final body = await _api.delete('/provider/offerings/$offeringId');
+    final body = await _api.delete('/services/provider/offerings/$offeringId');
     return _offeringFrom(body);
   }
 
@@ -325,7 +329,7 @@ class BusinessRepository {
   // --- Provider availability ----------------------------------------------
 
   Future<ServiceAvailability> providerAvailability() async {
-    final body = await _api.get('/provider/availability');
+    final body = await _api.get('/services/provider/availability');
     final availability = body['availability'];
     if (availability is! Map) {
       throw StateError('The server did not return working hours.');
@@ -340,7 +344,7 @@ class BusinessRepository {
     required List<String> blackoutDates,
   }) async {
     final body = await _api.put(
-      '/provider/availability',
+      '/services/provider/availability',
       data: {
         'windows': windows.map((window) => window.toJson()).toList(),
         'blackoutDates': blackoutDates,
@@ -499,7 +503,7 @@ class BusinessRepository {
     int limit = 10,
   }) async {
     final body = await _api.get(
-      '/provider/reviews',
+      '/services/provider/reviews',
       query: {'page': page, 'limit': limit, 'rating': ?rating},
     );
     return ProviderReviewPage.fromJson(body);
@@ -526,7 +530,7 @@ class BusinessRepository {
     required String body,
   }) async {
     final response = await _api.post(
-      '/provider/reviews/$reviewId/reply',
+      '/services/provider/reviews/$reviewId/reply',
       data: {'body': body.trim()},
     );
     final review = response['review'];
@@ -581,6 +585,37 @@ class BusinessRepository {
   ) async {
     await _api.post(
       '/brand/orders/$orderId/adjustments/$adjustmentId/withdraw',
+    );
+  }
+
+  /// Proposes a change to what the customer receives and pays because the
+  /// shop cannot supply the full order. The server checks the order state,
+  /// substitutes and quantities, and computes every price itself.
+  Future<void> proposeBrandAdjustment(
+    String orderId, {
+    required String note,
+    required List<BrandAdjustmentLine> lines,
+    bool? restockRemoved,
+  }) async {
+    await _api.post(
+      '/brand/orders/$orderId/adjustments',
+      data: {
+        'note': note.trim(),
+        'restockRemoved': ?restockRemoved,
+        'lines': [
+          for (final line in lines)
+            {
+              'orderItemId': line.orderItemId,
+              'supplyQuantity': line.supplyQuantity,
+              if (line.substituteProductId != null &&
+                  line.substituteQuantity > 0)
+                'substitute': {
+                  'productId': line.substituteProductId,
+                  'quantity': line.substituteQuantity,
+                },
+            },
+        ],
+      },
     );
   }
 
@@ -1076,7 +1111,7 @@ class BusinessRepository {
   }
 
   Future<List<BrandBranch>> brandBranches() async {
-    final body = await _api.get('/branches');
+    final body = await _api.get('/branches/mine');
     final items = body['branches'];
     if (items is! List) return const [];
     return items

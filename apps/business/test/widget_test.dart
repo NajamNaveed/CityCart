@@ -24,6 +24,7 @@ import 'package:citycart_business/features/brand_messages/brand_chat_screen.dart
 import 'package:citycart_business/features/brand_messages/brand_messages_screen.dart';
 import 'package:citycart_business/features/brand_orders/brand_order_detail_screen.dart';
 import 'package:citycart_business/features/brand_orders/brand_orders_screen.dart';
+import 'package:citycart_business/features/brand_orders/order_adjustment_screen.dart';
 import 'package:citycart_business/features/brand_products/add_product_screen.dart';
 import 'package:citycart_business/features/brand_products/brand_product_detail_screen.dart';
 import 'package:citycart_business/features/brand_products/brand_products_screen.dart';
@@ -145,7 +146,11 @@ void main() {
     });
 
     test('providers cannot open shop order screens', () {
-      for (final path in ['/brand-orders', '/brand-orders/o1']) {
+      for (final path in [
+        '/brand-orders',
+        '/brand-orders/o1',
+        '/brand-orders/o1/adjustments',
+      ]) {
         expect(
           businessRedirect(
             status: SessionStatus.signedIn,
@@ -2967,8 +2972,8 @@ void main() {
           void expectReviewsHidden() {
             expect(find.text('4.5'), findsOneWidget);
             expect(find.text('from 8 reviews'), findsOneWidget);
-            expect(find.byType(ChoiceChip), findsNWidgets(6));
-            expect(tester.widget<ChoiceChip>(selected).selected, isTrue);
+            expect(find.byType(FilterPill), findsNWidgets(6));
+            expect(tester.widget<FilterPill>(selected).selected, isTrue);
             expect(find.byKey(const Key('brand_review_br1')), findsNothing);
             expect(find.text('Lovely fabric.'), findsNothing);
             expect(find.byType(SectionTitle), findsNothing);
@@ -3045,7 +3050,7 @@ void main() {
           expect(find.byKey(const Key('brand_review_br4')), findsOneWidget);
           expect(find.text('Good everyday shirt.'), findsOneWidget);
           expect(find.text('from 8 reviews'), findsOneWidget);
-          expect(tester.widget<ChoiceChip>(selected).selected, isTrue);
+          expect(tester.widget<FilterPill>(selected).selected, isTrue);
           expect(
             find.text(resetFilter ? 'All reviews' : '4-star reviews'),
             findsOneWidget,
@@ -3093,10 +3098,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(fake.lastBrandReviewRating, 3);
-      expect(tester.widget<ChoiceChip>(threeStars).selected, isTrue);
+      expect(tester.widget<FilterPill>(threeStars).selected, isTrue);
       expect(find.text('4.5'), findsOneWidget);
       expect(find.text('from 8 reviews'), findsOneWidget);
-      expect(find.byType(ChoiceChip), findsNWidgets(6));
+      expect(find.byType(FilterPill), findsNWidgets(6));
       expect(find.text('3-star reviews'), findsOneWidget);
       expect(
         find.descendant(
@@ -3124,7 +3129,7 @@ void main() {
       expect(fake.lastBrandReviewPage, 1);
       expect(
         tester
-            .widget<ChoiceChip>(
+            .widget<FilterPill>(
               find.byKey(const Key('brand_reviews_filter_all')),
             )
             .selected,
@@ -3134,6 +3139,333 @@ void main() {
       expect(find.text('All reviews'), findsOneWidget);
       expect(find.byKey(const Key('brand_review_br1')), findsOneWidget);
       expect(find.text('Lovely fabric.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('an order can be opened for a change proposal end to end', (
+      tester,
+    ) async {
+      final order = _sampleBrandOrder(
+        id: 'o1',
+        items: const [
+          BrandOrderItem(
+            id: 'i1',
+            productId: 'pr1',
+            productName: 'Cotton kurta',
+            quantity: 2,
+            unitPricePaisa: 245000,
+            totalPricePaisa: 490000,
+          ),
+        ],
+      );
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        orders: [order],
+        orderDetail: BrandOrderDetail(order: order),
+        products: [
+          _sampleProduct(id: 'pr1', name: 'Cotton kurta'),
+          _sampleProduct(id: 'p2', name: 'Silk scarf', pricePaisa: 150000),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CityCartBusinessApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final openOrders = find.byKey(const Key('home_orders'));
+      await tester.ensureVisible(openOrders);
+      await tester.pumpAndSettle();
+      await tester.tap(openOrders);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('brand_order_card_o1')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Order details'), findsOneWidget);
+      final propose = find.byKey(const Key('order_propose_adjustment'));
+      await tester.ensureVisible(propose);
+      await tester.pumpAndSettle();
+      await tester.tap(propose);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Propose a change'), findsOneWidget);
+      expect(find.text('Cotton kurta'), findsOneWidget);
+      expect(find.text('2 × Rs 2,450 ordered'), findsOneWidget);
+
+      // The ordered product itself is never offered as a substitute.
+      final picker = find.byKey(
+        const Key('adjustment_item_i1_substitute_picker'),
+      );
+      await tester.ensureVisible(picker);
+      await tester.pumpAndSettle();
+      await tester.tap(picker);
+      await tester.pumpAndSettle();
+      expect(find.text('Silk scarf · Rs 1,500'), findsOneWidget);
+      expect(find.textContaining('Cotton kurta ·'), findsNothing);
+      await tester.tap(find.text('Silk scarf · Rs 1,500'));
+      await tester.pumpAndSettle();
+
+      final supplyMinus = find.byKey(
+        const Key('adjustment_item_i1_supply_minus'),
+      );
+      await tester.ensureVisible(supplyMinus);
+      await tester.pumpAndSettle();
+      await tester.tap(supplyMinus);
+      await tester.pumpAndSettle();
+      expect(find.text('1 unit is missing.'), findsOneWidget);
+      expect(find.text('Swap in'), findsOneWidget);
+
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const Key('adjustment_note')),
+          matching: find.byType(TextFormField),
+        ),
+        'Only 1 kurta is left, swapping in a scarf.',
+      );
+      final submit = find.byKey(const Key('adjustment_submit'));
+      await tester.ensureVisible(submit);
+      await tester.pumpAndSettle();
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+
+      expect(fake.proposedOrderId, 'o1');
+      expect(fake.proposedNote, 'Only 1 kurta is left, swapping in a scarf.');
+      expect(fake.proposedRestockRemoved, isFalse);
+      expect(fake.proposedLines, hasLength(1));
+      final line = fake.proposedLines!.single;
+      expect(line.orderItemId, 'i1');
+      expect(line.supplyQuantity, 1);
+      expect(line.substituteProductId, 'p2');
+      expect(line.substituteQuantity, 1);
+      expect(find.text('Proposal sent to the customer.'), findsOneWidget);
+      expect(find.text('Order details'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('an empty or unchanged proposal is explained, not sent', (
+      tester,
+    ) async {
+      final order = _sampleBrandOrder(
+        id: 'o1',
+        items: const [
+          BrandOrderItem(
+            id: 'i1',
+            productId: 'pr1',
+            productName: 'Cotton kurta',
+            quantity: 2,
+            unitPricePaisa: 245000,
+            totalPricePaisa: 490000,
+          ),
+        ],
+      );
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        orders: [order],
+        orderDetail: BrandOrderDetail(order: order),
+        products: [_sampleProduct(id: 'p2', name: 'Silk scarf')],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(
+            BrandOrderAdjustmentScreen(orderId: 'o1', initial: order),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final submit = find.byKey(const Key('adjustment_submit'));
+      await tester.ensureVisible(submit);
+      await tester.pumpAndSettle();
+
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+      expect(find.text('Tell the customer what changed.'), findsOneWidget);
+      expect(fake.proposedOrderId, isNull);
+
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const Key('adjustment_note')),
+          matching: find.byType(TextFormField),
+        ),
+        'A note alone is not a change.',
+      );
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          'Lower the supply of at least one item, or add a substitute.',
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const Key('adjustment_item_i1_supply_minus')),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const Key('adjustment_note')),
+          matching: find.byType(TextFormField),
+        ),
+        '',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+      expect(find.text('Tell the customer what changed.'), findsOneWidget);
+      expect(fake.proposedOrderId, isNull);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a refused proposal stays on the screen with the reason', (
+      tester,
+    ) async {
+      final order = _sampleBrandOrder(
+        id: 'o1',
+        items: const [
+          BrandOrderItem(
+            id: 'i1',
+            productId: 'pr1',
+            productName: 'Cotton kurta',
+            quantity: 2,
+            unitPricePaisa: 245000,
+            totalPricePaisa: 490000,
+          ),
+        ],
+      );
+      final (container, fake) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        orders: [order],
+        orderDetail: BrandOrderDetail(order: order),
+        products: [_sampleProduct(id: 'p2', name: 'Silk scarf')],
+      );
+      fake.proposeAdjustmentError = ApiException(
+        'There is already a proposal waiting for this order.',
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(
+            BrandOrderAdjustmentScreen(orderId: 'o1', initial: order),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const Key('adjustment_item_i1_supply_minus')),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const Key('adjustment_note')),
+          matching: find.byType(TextFormField),
+        ),
+        'Only 1 kurta is left.',
+      );
+      final submit = find.byKey(const Key('adjustment_submit'));
+      await tester.ensureVisible(submit);
+      await tester.pumpAndSettle();
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('There is already a proposal waiting for this order.'),
+        findsOneWidget,
+      );
+      expect(find.text('Propose a change'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+      'a pending proposal or a legacy gateway order hides the entry',
+      (tester) async {
+        final processing = _sampleBrandOrder(id: 'o3', status: 'PROCESSING');
+        final (container, _) = await _signedInWithFake(
+          user: _brandUser,
+          brand: _activeBrand,
+          orders: [processing],
+          orderDetail: BrandOrderDetail(
+            order: processing,
+            pendingAdjustment: const BrandOrderAdjustment(id: 'a1'),
+          ),
+        );
+        addTearDown(container.dispose);
+
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: _shell(
+              BrandOrderDetailScreen(orderId: 'o3', initial: processing),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const Key('order_adjustment_notice')),
+          findsOneWidget,
+        );
+        expect(find.byKey(const Key('order_propose_adjustment')), findsNothing);
+
+        final legacy = _sampleBrandOrder(paymentMethod: 'ONLINE_GATEWAY');
+        final (legacyContainer, _) = await _signedInWithFake(
+          user: _brandUser,
+          brand: _activeBrand,
+          orders: [legacy],
+          orderDetail: BrandOrderDetail(order: legacy),
+        );
+        addTearDown(legacyContainer.dispose);
+
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: legacyContainer,
+            child: _shell(
+              BrandOrderDetailScreen(orderId: 'o1', initial: legacy),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('order_propose_adjustment')), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets('an order that cannot change says so on the proposal screen', (
+      tester,
+    ) async {
+      final delivered = _sampleBrandOrder(id: 'o9', status: 'DELIVERED');
+      final (container, _) = await _signedInWithFake(
+        user: _brandUser,
+        brand: _activeBrand,
+        orders: [delivered],
+        orderDetail: BrandOrderDetail(order: delivered),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _shell(
+            BrandOrderAdjustmentScreen(orderId: 'o9', initial: delivered),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('This order cannot be changed'), findsOneWidget);
+      expect(find.byKey(const Key('adjustment_submit')), findsNothing);
       expect(tester.takeException(), isNull);
     });
   });
@@ -3330,6 +3662,8 @@ BrandOrder _sampleBrandOrder({
   String number = 'CC-2026-000001',
   String status = 'PENDING',
   int totalPaisa = 510000,
+  String paymentMethod = 'COD',
+  List<BrandOrderItem>? items,
 }) {
   final placed = DateTime.now().subtract(const Duration(hours: 3));
   return BrandOrder(
@@ -3337,20 +3671,23 @@ BrandOrder _sampleBrandOrder({
     orderNumber: number,
     orderStatus: status,
     paymentStatus: status == 'REJECTED' ? 'CANCELLED' : 'PENDING',
-    paymentMethod: 'COD',
+    paymentMethod: paymentMethod,
     subtotalPaisa: totalPaisa - 20000,
     deliveryFeePaisa: 20000,
     totalPaisa: totalPaisa,
-    items: [
-      BrandOrderItem(
-        productId: 'pr1',
-        productName: 'Cotton kurta',
-        sku: 'LK-KURTA-01',
-        quantity: 2,
-        unitPricePaisa: 245000,
-        totalPricePaisa: 490000,
-      ),
-    ],
+    items:
+        items ??
+        const [
+          BrandOrderItem(
+            id: 'i1',
+            productId: 'pr1',
+            productName: 'Cotton kurta',
+            sku: 'LK-KURTA-01',
+            quantity: 2,
+            unitPricePaisa: 245000,
+            totalPricePaisa: 490000,
+          ),
+        ],
     shippingAddress: const BrandShippingAddress(
       name: 'Sana Malik',
       phone: '03001234567',
@@ -3997,6 +4334,11 @@ class _FakeRepository extends BusinessRepository {
   String? updatedOrderStatus;
   String? withdrawnOrderId;
   String? withdrawnAdjustmentId;
+  String? proposedOrderId;
+  String? proposedNote;
+  List<BrandAdjustmentLine>? proposedLines;
+  bool? proposedRestockRemoved;
+  Object? proposeAdjustmentError;
 
   String? lastDeliveryStatus;
   String? updatedDeliveryId;
@@ -4496,6 +4838,21 @@ class _FakeRepository extends BusinessRepository {
   ) async {
     withdrawnOrderId = orderId;
     withdrawnAdjustmentId = adjustmentId;
+  }
+
+  @override
+  Future<void> proposeBrandAdjustment(
+    String orderId, {
+    required String note,
+    required List<BrandAdjustmentLine> lines,
+    bool? restockRemoved,
+  }) async {
+    final failure = proposeAdjustmentError;
+    if (failure != null) throw failure;
+    proposedOrderId = orderId;
+    proposedNote = note;
+    proposedLines = lines;
+    proposedRestockRemoved = restockRemoved;
   }
 
   BrandProduct _productRecord(String productId) {

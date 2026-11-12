@@ -203,7 +203,7 @@ class _BrandProductsScreenState extends ConsumerState<BrandProductsScreen> {
                 separatorBuilder: (context, index) => const SizedBox(width: 8),
                 itemBuilder: (context, index) {
                   final filter = _filters[index];
-                  return _FilterPill(
+                  return FilterPill(
                     key: Key('brand_product_filter_${filter.key}'),
                     label: filter.label,
                     selected: index == _filterIndex,
@@ -316,9 +316,9 @@ class _ProductCard extends StatelessWidget {
       onTap: onTap,
       padding: const EdgeInsets.all(12),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          ProductThumb(image: product.image),
+          ProductThumb(image: product.image, size: 64),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -421,48 +421,6 @@ class _BrandOnly extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _FilterPill extends StatelessWidget {
-  const _FilterPill({
-    super.key,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: selected ? AppColors.forest : AppColors.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        side: BorderSide(color: selected ? AppColors.forest : AppColors.line),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 9),
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 13,
-              height: 1.2,
-              fontWeight: FontWeight.w700,
-              color: selected ? AppColors.white : AppColors.inkSoft,
-            ),
-          ),
-        ),
       ),
     );
   }

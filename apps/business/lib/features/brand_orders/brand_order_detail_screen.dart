@@ -171,6 +171,26 @@ class _BrandOrderDetailScreenState
     }
   }
 
+  bool get _canProposeAdjustment {
+    final order = _order;
+    if (order == null) return false;
+    const adjustable = {'PENDING', 'CONFIRMED', 'PROCESSING'};
+    final paymentMethod = _detail?.payment?.method ?? order.paymentMethod;
+    return _detail?.pendingAdjustment == null &&
+        adjustable.contains(order.orderStatus) &&
+        paymentMethod != 'ONLINE_GATEWAY';
+  }
+
+  Future<void> _proposeChange() async {
+    final order = _order;
+    if (order == null || _busy != null) return;
+    final proposed = await context.push<bool>(
+      '/brand-orders/${order.id}/adjustments',
+      extra: order,
+    );
+    if (proposed == true && mounted) await _refresh();
+  }
+
   Future<void> _copyPhone(String phone) async {
     if (phone.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: phone));
@@ -371,6 +391,16 @@ class _BrandOrderDetailScreenState
       );
     }
 
+    Widget proposeButton() {
+      return AppButton(
+        key: const Key('order_propose_adjustment'),
+        label: 'Propose a change',
+        icon: Icons.sync_alt_rounded,
+        variant: AppButtonVariant.outline,
+        onPressed: working ? null : _proposeChange,
+      );
+    }
+
     switch (order.orderStatus) {
       case 'PENDING':
         return Column(
@@ -384,7 +414,9 @@ class _BrandOrderDetailScreenState
               loading: _busy == 'status',
               onPressed: working ? null : () => _move('CONFIRMED'),
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 6),
+            if (_canProposeAdjustment) proposeButton(),
+            if (_canProposeAdjustment) const SizedBox(height: 2),
             rejectButton(),
           ],
         );
@@ -400,7 +432,9 @@ class _BrandOrderDetailScreenState
               loading: _busy == 'status',
               onPressed: working ? null : () => _move('PROCESSING'),
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 6),
+            if (_canProposeAdjustment) proposeButton(),
+            if (_canProposeAdjustment) const SizedBox(height: 2),
             rejectButton(),
           ],
         );
@@ -419,6 +453,10 @@ class _BrandOrderDetailScreenState
                   ? null
                   : () => _move('READY_FOR_SHIPMENT'),
             ),
+            if (_canProposeAdjustment) ...[
+              const SizedBox(height: 6),
+              proposeButton(),
+            ],
             if (blocked)
               Padding(
                 padding: const EdgeInsets.only(top: 8),

@@ -18,6 +18,7 @@ import 'features/brand_messages/brand_chat_screen.dart';
 import 'features/brand_messages/brand_messages_screen.dart';
 import 'features/brand_orders/brand_order_detail_screen.dart';
 import 'features/brand_orders/brand_orders_screen.dart';
+import 'features/brand_orders/order_adjustment_screen.dart';
 import 'features/brand_products/add_product_screen.dart';
 import 'features/brand_products/brand_product_detail_screen.dart';
 import 'features/brand_products/brand_products_screen.dart';
@@ -115,6 +116,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/brand-orders/:id',
         builder: (context, state) => BrandOrderDetailScreen(
+          orderId: state.pathParameters['id']!,
+          initial: state.extra is BrandOrder ? state.extra as BrandOrder : null,
+        ),
+      ),
+      GoRoute(
+        path: '/brand-orders/:id/adjustments',
+        builder: (context, state) => BrandOrderAdjustmentScreen(
           orderId: state.pathParameters['id']!,
           initial: state.extra is BrandOrder ? state.extra as BrandOrder : null,
         ),
