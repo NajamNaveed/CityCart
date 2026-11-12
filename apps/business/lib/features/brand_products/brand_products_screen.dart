@@ -315,80 +315,82 @@ class _ProductCard extends StatelessWidget {
     return SurfacePanel(
       onTap: onTap,
       padding: const EdgeInsets.all(12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          ProductThumb(image: product.image, size: 64),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        product.name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: text.titleSmall,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    StatusTag(
-                      label: productStatusLabel(product.status),
-                      tone: productStatusTone(product.status),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 5),
-                Wrap(
-                  spacing: 7,
-                  runSpacing: 2,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Text(
-                      money(product.pricePaisa),
-                      maxLines: 1,
-                      style: text.titleSmall?.copyWith(fontSize: 16),
-                    ),
-                    if (compare)
-                      Text(
-                        money(product.compareAtPricePaisa),
-                        maxLines: 1,
-                        style: text.bodySmall?.copyWith(
-                          decoration: TextDecoration.lineThrough,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ProductThumb(image: product.image, size: 64, fillHeight: true),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          product.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.titleSmall,
                         ),
                       ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.inventory_2_outlined,
-                      size: 15,
-                      color: AppColors.muted,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        [
-                          stockQuantityLabel(product.stock),
-                          if (product.sku.isNotEmpty) product.sku,
-                        ].join(' · '),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: text.bodySmall,
+                      const SizedBox(width: 8),
+                      StatusTag(
+                        label: productStatusLabel(product.status),
+                        tone: productStatusTone(product.status),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  Wrap(
+                    spacing: 7,
+                    runSpacing: 2,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        money(product.pricePaisa),
+                        maxLines: 1,
+                        style: text.titleSmall?.copyWith(fontSize: 16),
+                      ),
+                      if (compare)
+                        Text(
+                          money(product.compareAtPricePaisa),
+                          maxLines: 1,
+                          style: text.bodySmall?.copyWith(
+                            decoration: TextDecoration.lineThrough,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.inventory_2_outlined,
+                        size: 15,
+                        color: AppColors.muted,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          [
+                            stockQuantityLabel(product.stock),
+                            if (product.sku.isNotEmpty) product.sku,
+                          ].join(' · '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.bodySmall,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
