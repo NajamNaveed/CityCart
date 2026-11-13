@@ -57,6 +57,43 @@ const env = {
     apiKey: (process.env.CLOUDINARY_API_KEY || '').trim(),
     apiSecret: (process.env.CLOUDINARY_API_SECRET || '').trim(),
   },
+  // AI agents (docs/27). Off unless AI_ENABLED=true, so a fresh checkout never
+  // calls a provider and every AI endpoint answers 503 AI_UNAVAILABLE.
+  // Providers are tried in AI_PROVIDER_ORDER; one without a key is skipped.
+  // Model names live here because providers rename and retire them often.
+  ai: {
+    enabled: (process.env.AI_ENABLED || '').trim().toLowerCase() === 'true',
+    requestTimeoutMs: (() => {
+      const ms = Number((process.env.AI_REQUEST_TIMEOUT_MS || '').trim());
+      return Number.isFinite(ms) && ms >= 1000 ? Math.min(ms, 60000) : 15000;
+    })(),
+    providerOrder: (() => {
+      const known = ['gemini', 'groq', 'openrouter'];
+      const requested = (process.env.AI_PROVIDER_ORDER || known.join(','))
+        .split(',')
+        .map((name) => name.trim().toLowerCase())
+        .filter((name) => known.includes(name));
+      const order = [...new Set(requested)];
+      return order.length > 0 ? order : known;
+    })(),
+    // Generations allowed per user per UTC day (docs/27 §3.2).
+    dailyLimit: (() => {
+      const limit = Number((process.env.AI_USER_DAILY_LIMIT || '').trim());
+      return Number.isFinite(limit) && limit >= 1 ? Math.min(limit, 1000) : 30;
+    })(),
+    gemini: {
+      apiKey: (process.env.GEMINI_API_KEY || '').trim(),
+      model: (process.env.GEMINI_MODEL || 'gemini-2.0-flash').trim(),
+    },
+    groq: {
+      apiKey: (process.env.GROQ_API_KEY || '').trim(),
+      model: (process.env.GROQ_MODEL || 'llama-3.3-70b-versatile').trim(),
+    },
+    openrouter: {
+      apiKey: (process.env.OPENROUTER_API_KEY || '').trim(),
+      model: (process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free').trim(),
+    },
+  },
   // Push notifications to the Partner app (docs/12 §31). Off unless PUSH_ENABLED=true, so development and
   // tests never call the push service. EXPO_ACCESS_TOKEN is optional (Expo's "enhanced security").
   push: {
