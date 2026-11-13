@@ -5,6 +5,7 @@ const env = require('./config/env');
 const { connectDB, disconnectDB, describeConnectionError } = require('./config/db');
 const { initSockets, closeSockets } = require('./sockets');
 const { startAdjustmentExpiryJob } = require('./jobs/adjustmentExpiry');
+const { startPaymentConfirmationExpiryJob } = require('./jobs/paymentConfirmationExpiry');
 const { startPaymentProofRetentionJob } = require('./jobs/paymentProofRetention');
 const { startBrandTerminationCleanupJob } = require('./jobs/brandTerminationCleanup');
 const { startServiceBookingJobs } = require('./jobs/serviceBookingJobs');
@@ -12,6 +13,7 @@ const { startBillingJobs } = require('./jobs/billingJobs');
 
 let httpServer;
 let stopAdjustmentExpiryJob;
+let stopPaymentConfirmationExpiryJob;
 let stopPaymentProofRetentionJob;
 let stopBrandTerminationCleanupJob;
 let stopServiceBookingJobs;
@@ -45,6 +47,8 @@ async function start() {
   initSockets(httpServer);
   // Unanswered change proposals expire after 24 hours (docs/21 §H).
   stopAdjustmentExpiryJob = startAdjustmentExpiryJob();
+  // An unconfirmed non-cash door payment fails after its 5-minute window (docs/10 §31.3).
+  stopPaymentConfirmationExpiryJob = startPaymentConfirmationExpiryJob();
   // Checked payment-proof photos are deleted after their retention window (docs/21 §I.4).
   stopPaymentProofRetentionJob = startPaymentProofRetentionJob();
   // Terminated brands release their staff emails once access has ended (docs/24 §3.7).
@@ -78,6 +82,7 @@ async function shutdown(signal) {
 
   try {
     if (stopAdjustmentExpiryJob) stopAdjustmentExpiryJob();
+    if (stopPaymentConfirmationExpiryJob) stopPaymentConfirmationExpiryJob();
     if (stopPaymentProofRetentionJob) stopPaymentProofRetentionJob();
     if (stopBrandTerminationCleanupJob) stopBrandTerminationCleanupJob();
     if (stopServiceBookingJobs) stopServiceBookingJobs();

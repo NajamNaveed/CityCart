@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'format.dart';
@@ -266,6 +268,88 @@ class Pill extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Ticks a server-supplied number of seconds down while the screen refreshes
+/// the authoritative value in the background.
+class CountdownLine extends StatefulWidget {
+  const CountdownLine({
+    super.key,
+    required this.secondsLeft,
+    required this.color,
+    this.prefix = '',
+    this.zeroText = 'The window has closed',
+  });
+
+  final int? secondsLeft;
+  final Color color;
+  final String prefix;
+  final String zeroText;
+
+  @override
+  State<CountdownLine> createState() => _CountdownLineState();
+}
+
+class _CountdownLineState extends State<CountdownLine> {
+  Timer? _ticker;
+  late int _seconds = widget.secondsLeft ?? 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _start();
+  }
+
+  @override
+  void didUpdateWidget(CountdownLine oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final next = widget.secondsLeft ?? 0;
+    if (next != _seconds) {
+      _seconds = next;
+      _start();
+    }
+  }
+
+  void _start() {
+    _ticker?.cancel();
+    if (_seconds <= 0) return;
+    _ticker = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      setState(() => _seconds = _seconds > 0 ? _seconds - 1 : 0);
+      if (_seconds <= 0) timer.cancel();
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  static String _format(int seconds) {
+    final minutes = seconds ~/ 60;
+    final rest = (seconds % 60).toString().padLeft(2, '0');
+    return '$minutes:$rest';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final label = _seconds <= 0
+        ? widget.zeroText
+        : '${widget.prefix}${_format(_seconds)} left';
+    return Text(
+      label,
+      style: TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+        color: widget.color,
+        fontFeatures: const [FontFeature.tabularFigures()],
       ),
     );
   }

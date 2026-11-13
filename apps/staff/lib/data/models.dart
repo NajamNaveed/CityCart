@@ -1024,6 +1024,9 @@ class ProofRecord {
     this.deliveryPending = false,
     this.url,
     this.expiresAt,
+    this.confirmBy,
+    this.secondsLeft,
+    this.expiredAt,
   });
 
   final String paymentId;
@@ -1044,7 +1047,21 @@ class ProofRecord {
   final String? url;
   final DateTime? expiresAt;
 
+  /// Deadline for this brand to confirm the payment (docs/10 §31.3).
+  final DateTime? confirmBy;
+
+  /// Server-computed seconds left when this record was built.
+  final int? secondsLeft;
+
+  /// The window closed with no decision; the rider collects again.
+  final DateTime? expiredAt;
+
   bool get isPending => verification == 'SUBMITTED';
+
+  /// A pending record whose confirmation window has passed. The server may
+  /// not have flipped it to rejected yet, so the screen stops offering a
+  /// decision here.
+  bool get isWindowClosed => isPending && secondsLeft != null && secondsLeft! <= 0;
 
   factory ProofRecord.fromJson(dynamic raw) {
     final map = asMap(raw);
@@ -1066,6 +1083,9 @@ class ProofRecord {
       deliveryPending: map['deliveryPending'] == true,
       url: optionalText(map['url']),
       expiresAt: asDate(map['expiresAt']),
+      confirmBy: asDate(map['confirmBy']),
+      secondsLeft: map['secondsLeft'] == null ? null : asInt(map['secondsLeft']),
+      expiredAt: asDate(map['expiredAt']),
     );
   }
 }

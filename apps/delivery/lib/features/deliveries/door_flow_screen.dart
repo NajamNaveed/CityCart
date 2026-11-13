@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -48,17 +50,46 @@ class _DoorFlowScreenState extends ConsumerState<DoorFlowScreen> {
 
   bool _finished = false;
   bool _paymentHeld = false;
+  double _finalAmount = 0;
+  Timer? _pollTimer;
+
+  bool get _waitingForStore =>
+      _paymentHeld || _delivery?.paymentPending == true;
 
   @override
   void initState() {
     super.initState();
     _load();
+    // The store confirms while the rider waits. Polling keeps the held screen
+    // current without a realtime connection (docs/10 §31.3).
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (_waitingForStore && !_busy) _refreshStatus();
+    });
   }
 
   @override
   void dispose() {
+    _pollTimer?.cancel();
     _code.dispose();
     super.dispose();
+  }
+
+  Future<void> _refreshStatus() async {
+    try {
+      final updated = await ref
+          .read(deliveryRepositoryProvider)
+          .get(widget.deliveryId);
+      if (!mounted) return;
+      setState(() {
+        _delivery = updated;
+        if (updated.paymentPending) return;
+        _paymentHeld = false;
+        // A timeout keeps the job open so the rider can collect again.
+        if (updated.paymentRejected) _finished = false;
+      });
+    } catch (_) {
+      // Keep the current screen; the next tick tries again.
+    }
   }
 
   Future<void> _load() async {
@@ -162,6 +193,12 @@ class _DoorFlowScreenState extends ConsumerState<DoorFlowScreen> {
       _error = null;
     });
 
+    // Captured before completing: once the payment is held the server stops
+    // reporting the amount to collect.
+    final amount = _needsPayment
+        ? estimateCompletion(_lines, delivery).netTotal
+        : 0.0;
+
     try {
       final updated = await ref
           .read(deliveryRepositoryProvider)
@@ -176,6 +213,7 @@ class _DoorFlowScreenState extends ConsumerState<DoorFlowScreen> {
         _delivery = updated;
         _finished = true;
         _paymentHeld = updated.paymentPending;
+        _finalAmount = amount;
         _busy = false;
       });
     } on ApiException catch (error) {
@@ -238,8 +276,9 @@ class _DoorFlowScreenState extends ConsumerState<DoorFlowScreen> {
     if (_finished) {
       return _SuccessView(
         delivery: _delivery!,
-        amount: estimateCompletion(_lines, delivery).netTotal,
+        amount: _finalAmount,
         held: _paymentHeld,
+        secondsLeft: _delivery!.paymentSecondsLeft,
         onDone: () => context.go('/today'),
       );
     }
@@ -247,17 +286,22 @@ class _DoorFlowScreenState extends ConsumerState<DoorFlowScreen> {
       return _BlockedView(
         title: 'Payment with the store',
         message:
-            'The store is checking the payment you sent. This job closes when they approve it. '
-            'There is nothing to complete at the door now.',
+            'The store is checking the payment you sent. It must confirm within 5 minutes. '
+            'This screen updates by itself and the job closes when they approve it.',
+        secondsLeft: delivery.paymentSecondsLeft,
         onBack: () => Navigator.of(context).maybePop(),
       );
     }
     if (delivery.paymentRejected) {
       return _BlockedView(
-        title: 'Collect the payment again',
-        message:
-            'The store could not verify the last payment. Open the job and tap '
-            '"Collect payment again" before finishing it.',
+        title: delivery.paymentExpired
+            ? 'Confirmation timed out'
+            : 'Collect the payment again',
+        message: delivery.paymentExpired
+            ? 'The store did not confirm the payment in time. Go back and tap '
+                  '"Collect payment again", or take cash from the customer.'
+            : 'The store could not verify the last payment. Open the job and tap '
+                  '"Collect payment again" before finishing it.',
         onBack: () => Navigator.of(context).maybePop(),
       );
     }
@@ -401,10 +445,10 @@ class _DoorFlowScreenState extends ConsumerState<DoorFlowScreen> {
     _Step.payment =>
       _payment.isCash
           ? 'Cash finishes this delivery right away.'
-          : 'The store checks the payment before the job closes.',
+          : 'The store must confirm within 5 minutes.',
     _Step.review =>
       _needsPayment && !_payment.isCash
-          ? 'The job stays open until the store checks the payment.'
+          ? 'The job stays open until the store confirms within 5 minutes.'
           : 'This marks the job delivered.',
   };
 }
@@ -1210,7 +1254,7 @@ class _PaymentStep extends StatelessWidget {
                 const SizedBox(width: 9),
                 Expanded(
                   child: Text(
-                    'A photo payment stays open until the store checks it. The job closes when they approve.',
+                    'A photo payment goes to the store to confirm. They have 5 minutes; when they approve, the job closes and this screen updates by itself.',
                     style: const TextStyle(
                       fontSize: 12.5,
                       height: 1.4,
@@ -1449,11 +1493,13 @@ class _BlockedView extends StatelessWidget {
     required this.title,
     required this.message,
     required this.onBack,
+    this.secondsLeft,
   });
 
   final String title;
   final String message;
   final VoidCallback onBack;
+  final int? secondsLeft;
 
   @override
   Widget build(BuildContext context) {
@@ -1476,6 +1522,15 @@ class _BlockedView extends StatelessWidget {
                 ),
               ),
             ),
+            if (secondsLeft != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+                child: CountdownLine(
+                  secondsLeft: secondsLeft,
+                  color: AppColors.amberInk,
+                  zeroText: 'Waiting for the store to finish checking…',
+                ),
+              ),
           ],
         ),
       ),
@@ -1489,23 +1544,34 @@ class _SuccessView extends StatelessWidget {
     required this.amount,
     required this.held,
     required this.onDone,
+    this.secondsLeft,
   });
 
   final RiderDelivery delivery;
   final double amount;
   final bool held;
   final VoidCallback onDone;
+  final int? secondsLeft;
 
   @override
   Widget build(BuildContext context) {
     final currency = delivery.currency;
+    final confirmedByStore = !held && delivery.proofStatus == 'VERIFIED';
     final (title, message, icon, tone) = held
         ? (
             'Payment sent for checking',
-            'The store will check the ${formatMoney(amount, currency: currency)} payment. '
-                'This job closes as soon as they approve it.',
+            'The store has 5 minutes to check the ${formatMoney(amount, currency: currency)} payment. '
+                'This screen updates by itself and the job closes as soon as they approve it.',
             Icons.hourglass_top_rounded,
             AppColors.amber,
+          )
+        : confirmedByStore
+        ? (
+            'Payment confirmed',
+            'The store confirmed the ${formatMoney(amount, currency: currency)} payment. '
+                'This delivery is complete.',
+            Icons.verified_rounded,
+            AppColors.sage,
           )
         : amount > 0
         ? (
@@ -1571,6 +1637,12 @@ class _SuccessView extends StatelessWidget {
                         background: AppColors.amber,
                         foreground: AppColors.amberInk,
                         icon: Icons.schedule_rounded,
+                      ),
+                      const SizedBox(height: 10),
+                      CountdownLine(
+                        secondsLeft: secondsLeft,
+                        color: AppColors.amberInk,
+                        zeroText: 'Waiting for the store to finish checking…',
                       ),
                     ],
                   ],

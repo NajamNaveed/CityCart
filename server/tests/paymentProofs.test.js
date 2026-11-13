@@ -36,6 +36,7 @@ const {
 const {
   proofBelongsToDelivery,
   purgeVerifiedProofs,
+  expirePendingConfirmations,
 } = require('../src/services/paymentProof.service');
 const { duplicateFlags } = require('../src/services/payment.service');
 
@@ -372,7 +373,14 @@ describe('POST /api/v1/rider/deliveries/:id/complete with a non-cash collection'
       'collection.proof': body.proof,
       'collection.verification': 'SUBMITTED',
       'collection.submittedAt': expect.any(Date),
+      'collection.confirmBy': expect.any(Date),
     });
+    // The brand has the configured window, counted from this submission.
+    expect(update.$set['collection.confirmBy'].getTime() - update.$set['collection.submittedAt'].getTime()).toBe(
+      env.paymentProof.confirmationMinutes * 60 * 1000
+    );
+    // A retry clears any earlier timeout before starting the fresh window.
+    expect(update.$unset).toMatchObject({ 'collection.expiredAt': '' });
     // Nothing is collected and the payment is not PAID: verification does that.
     expect(update.$set).not.toHaveProperty('status');
     expect(update.$set).not.toHaveProperty('collectedBy');
@@ -624,6 +632,24 @@ describe('GET /api/v1/payments/:id/proof — a short signed link', () => {
     expect(JSON.stringify(res.body)).not.toContain('secret456');
   });
 
+  it('reports the confirmation deadline and the seconds left', async () => {
+    const { cookie } = asRole(ROLES.BRAND_ADMIN);
+    const confirmBy = new Date(Date.now() + 4 * 60 * 1000);
+    const payment = storedPayment({
+      collection: { ...storedPayment().collection, confirmBy },
+    });
+    Payment.findOne.mockResolvedValue(payment);
+    Order.findById.mockReturnValue({ select: () => Promise.resolve({ orderNumber: 'CC-2026-000042' }) });
+
+    const res = await get(cookie, payment._id);
+
+    expect(res.status).toBe(200);
+    expect(res.body.proof.confirmBy).toBe(confirmBy.toISOString());
+    expect(res.body.proof.secondsLeft).toBeGreaterThan(4 * 60 - 10);
+    expect(res.body.proof.secondsLeft).toBeLessThanOrEqual(4 * 60);
+    expect(res.body.proof.expiredAt).toBeNull();
+  });
+
   it('503 when Cloudinary is not set up', async () => {
     const { cookie } = asRole(ROLES.BRAND_ADMIN);
     env.cloudinary = { cloudName: '', apiKey: '', apiSecret: '' };
@@ -675,6 +701,11 @@ describe('PATCH /api/v1/payments/:id/proof — verify or reject', () => {
         brandId: brandId.toString(),
         'collection.proof.publicId': { $exists: true, $ne: '' },
         'collection.verification': 'SUBMITTED',
+        $or: [
+          { 'collection.confirmBy': { $exists: false } },
+          { 'collection.confirmBy': null },
+          { 'collection.confirmBy': { $gt: expect.any(Date) } },
+        ],
       },
       { $set: { 'collection.verification': 'VERIFIED', 'collection.verifiedBy': user._id, 'collection.verifiedAt': expect.any(Date) } },
       { new: true, session: 'SESSION' }
@@ -795,6 +826,27 @@ describe('PATCH /api/v1/payments/:id/proof — verify or reject', () => {
     expect(res.body.code).toBe('PROOF_ALREADY_DECIDED');
   });
 
+  it('refuses a decision after the confirmation window closed', async () => {
+    const { cookie } = asRole(ROLES.BRAND_ADMIN);
+    const payment = storedPayment({
+      collection: {
+        ...storedPayment().collection,
+        confirmBy: new Date(Date.now() - 1000),
+      },
+    });
+    Payment.findOneAndUpdate.mockResolvedValue(null); // the conditional filter matched nothing
+    Payment.findOne.mockResolvedValue(payment);
+
+    const res = await patch(cookie, payment._id, { verification: 'VERIFIED' });
+
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('PAYMENT_CONFIRMATION_EXPIRED');
+    // Nothing moved: no rider notice, no delivery change, no settlement.
+    expect(notifications.notifyRiderOfRejectedProof).not.toHaveBeenCalled();
+    expect(Delivery.updateOne).not.toHaveBeenCalled();
+    expect(Order.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
   it("404 for another brand's payment", async () => {
     const { cookie } = asRole(ROLES.BRAND_ADMIN);
     Payment.findOneAndUpdate.mockResolvedValue(null);
@@ -813,10 +865,105 @@ describe('PATCH /api/v1/payments/:id/proof — verify or reject', () => {
 
     expect(res.status).toBe(200);
     expect(Payment.findOneAndUpdate).toHaveBeenCalledWith(
-      { _id: payment._id.toString(), 'collection.proof.publicId': { $exists: true, $ne: '' }, 'collection.verification': 'SUBMITTED' },
+      {
+        _id: payment._id.toString(),
+        'collection.proof.publicId': { $exists: true, $ne: '' },
+        'collection.verification': 'SUBMITTED',
+        $or: [
+          { 'collection.confirmBy': { $exists: false } },
+          { 'collection.confirmBy': null },
+          { 'collection.confirmBy': { $gt: expect.any(Date) } },
+        ],
+      },
       expect.anything(),
       { new: true, session: 'SESSION' }
     );
+  });
+});
+
+describe('expiry of unconfirmed door payments', () => {
+  const findLimit = (items) => ({ select: () => ({ limit: () => Promise.resolve(items) }) });
+  const overdue = (overrides = {}) => ({
+    _id: oid(),
+    orderId: oid(),
+    brandId,
+    amount: 2450,
+    currency: 'PKR',
+    collection: { verification: 'SUBMITTED', confirmBy: new Date('2026-10-28T00:00:00Z') },
+    ...overrides,
+  });
+
+  it('refuses an attempt whose window closed and tells the rider to collect again', async () => {
+    const now = new Date('2026-10-28T00:05:00Z');
+    const payment = overdue();
+    const rider = { _id: oid(), riderId: oid() };
+    Payment.find.mockReturnValue(findLimit([payment]));
+    Payment.findOneAndUpdate.mockResolvedValue({
+      ...payment,
+      collection: { ...payment.collection, verification: 'REJECTED', expiredAt: now },
+    });
+    Delivery.findOne.mockReturnValue({ select: () => ({ session: () => Promise.resolve(rider) }) });
+    Delivery.updateOne.mockResolvedValue({});
+    Order.findById.mockReturnValue({
+      select: () => Promise.resolve({ orderNumber: 'CC-2026-000042', brandId }),
+    });
+
+    expect(await expirePendingConfirmations({ now })).toBe(1);
+
+    expect(Payment.find).toHaveBeenCalledWith({
+      'collection.verification': 'SUBMITTED',
+      'collection.confirmBy': { $lte: now },
+    });
+    // The conditional update is the race guard: only a still-open attempt expires.
+    expect(Payment.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: payment._id, 'collection.verification': 'SUBMITTED', 'collection.confirmBy': { $lte: now } },
+      {
+        $set: {
+          'collection.verification': 'REJECTED',
+          'collection.verifiedAt': now,
+          'collection.expiredAt': now,
+          'collection.note': expect.stringContaining('window closed'),
+        },
+      },
+      { new: true, session: 'SESSION' }
+    );
+    expect(Delivery.updateOne).toHaveBeenCalledWith(
+      { _id: rider._id, 'pendingCompletion.paymentId': payment._id },
+      { $set: { 'pendingCompletion.rejectedAt': now } },
+      { session: 'SESSION' }
+    );
+    expect(notifications.notifyRiderOfRejectedProof).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: rider.riderId,
+        paymentId: payment._id,
+        orderNumber: 'CC-2026-000042',
+        amount: 2450,
+        note: expect.stringContaining('window closed'),
+      })
+    );
+    // A timeout never moves money.
+    expect(Order.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(Payment.updateOne).not.toHaveBeenCalled();
+  });
+
+  it('leaves an attempt alone when a decision won the race', async () => {
+    const payment = overdue();
+    Payment.find.mockReturnValue(findLimit([payment]));
+    Payment.findOneAndUpdate.mockResolvedValue(null);
+
+    expect(await expirePendingConfirmations()).toBe(0);
+
+    expect(Delivery.updateOne).not.toHaveBeenCalled();
+    expect(notifications.notifyRiderOfRejectedProof).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when no window has closed', async () => {
+    Payment.find.mockReturnValue(findLimit([]));
+
+    expect(await expirePendingConfirmations()).toBe(0);
+
+    expect(Payment.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(notifications.notifyRiderOfRejectedProof).not.toHaveBeenCalled();
   });
 });
 

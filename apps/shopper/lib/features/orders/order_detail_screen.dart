@@ -272,8 +272,10 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
               tone: StatusTone.info,
               title: 'Payment being checked',
               message:
-                  'You paid the rider. The shop is checking the payment; your '
-                  'order is complete as soon as it is confirmed.',
+                  'You paid the rider. The shop has 5 minutes to confirm the '
+                  'payment; your order is complete as soon as it is confirmed. '
+                  'If it is not confirmed, the rider will collect again or take '
+                  'cash.',
             ),
           ],
           if (order.fulfilment != null) ...[

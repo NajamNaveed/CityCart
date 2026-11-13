@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -281,15 +283,22 @@ class _ProofsTab extends ConsumerStatefulWidget {
 class _ProofsTabState extends ConsumerState<_ProofsTab> {
   PagedController<ProofRecord>? _controller;
   String _status = 'SUBMITTED';
+  Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
     _bind();
+    // Keeps the confirmation countdown truthful while the waiting list is open.
+    _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      final items = _controller?.items ?? const <ProofRecord>[];
+      if (_status == 'SUBMITTED' && items.isNotEmpty) _controller?.refresh();
+    });
   }
 
   @override
   void dispose() {
+    _pollTimer?.cancel();
     _controller?.removeListener(_onChanged);
     _controller?.dispose();
     super.dispose();
@@ -434,6 +443,11 @@ class _ProofCard extends StatelessWidget {
   final ProofRecord proof;
   final VoidCallback onTap;
 
+  static String _clock(int seconds) {
+    final rest = (seconds % 60).toString().padLeft(2, '0');
+    return '${seconds ~/ 60}:$rest';
+  }
+
   @override
   Widget build(BuildContext context) {
     final what = proof.wallet == null
@@ -496,6 +510,21 @@ class _ProofCard extends StatelessWidget {
                   text: 'Sent ${formatAge(proof.submittedAt)}',
                   background: AppColors.paperDeep,
                   foreground: AppColors.muted,
+                ),
+              if (proof.isPending && proof.secondsLeft != null)
+                Pill(
+                  text: proof.isWindowClosed
+                      ? 'Window closed'
+                      : 'Confirm in ${_clock(proof.secondsLeft!)}',
+                  background: proof.isWindowClosed
+                      ? AppColors.claySoft
+                      : AppColors.amber,
+                  foreground: proof.isWindowClosed
+                      ? AppColors.clay
+                      : AppColors.amberInk,
+                  icon: proof.isWindowClosed
+                      ? Icons.timer_off_outlined
+                      : Icons.timer_outlined,
                 ),
             ],
           ),

@@ -40,8 +40,10 @@ const pickAddress = (a) => ({
 
 // A payment is loaded only to tell the rider how it was collected and (afterwards)
 // whether its photo passed the brand's check, or why the brand refused it. The
-// reference and photo never leave the brand's screens.
-const PAYMENT_VIEW_FIELDS = 'orderId collection.method collection.verification collection.note';
+// reference and photo never leave the brand's screens. The confirmation deadline
+// is shown so the rider can see the remaining window (docs/10 §31.3).
+const PAYMENT_VIEW_FIELDS =
+  'orderId collection.method collection.verification collection.note collection.submittedAt collection.confirmBy collection.expiredAt';
 
 async function paymentForOrder(orderId) {
   const query = Payment.findOne({ orderId });
@@ -67,6 +69,12 @@ function toRiderView(delivery, order, payment) {
   const unpaid = cod && order.paymentStatus === 'PENDING';
   const paymentPending = unpaid && isWaiting(d);
   const paymentRejected = unpaid && Boolean(d.pendingCompletion && d.pendingCompletion.rejectedAt);
+  const confirmBy = collection && collection.confirmBy ? new Date(collection.confirmBy) : null;
+  const paymentSecondsLeft =
+    paymentPending && confirmBy && !Number.isNaN(confirmBy.getTime())
+      ? Math.max(0, Math.ceil((confirmBy.getTime() - Date.now()) / 1000))
+      : null;
+  const paymentExpired = paymentRejected && Boolean(collection && collection.expiredAt);
   // The pin the customer chose at checkout, shown on the rider's map.
   const pin = !closed && order && order.deliveryLocation ? latLngFromPoint(order.deliveryLocation) : null;
   // What the rider must collect: the accepted total once a door answer exists.
@@ -114,6 +122,11 @@ function toRiderView(delivery, order, payment) {
     // payment again (the same way, or another one).
     paymentPending,
     paymentRejected,
+    // The store has until this moment to confirm a submitted non-cash payment.
+    paymentConfirmBy: paymentPending && confirmBy && !Number.isNaN(confirmBy.getTime()) ? confirmBy.toISOString() : null,
+    paymentSecondsLeft,
+    // The window closed with no decision: the rider collects again (or cash).
+    paymentExpired,
     paymentNote: paymentRejected && collection ? collection.note || null : null,
     // What the app may offer at the door; without Cloudinary only cash is possible.
     paymentOptions: unpaid && !paymentPending
@@ -265,6 +278,9 @@ async function stagePendingPayment({ brandId, riderId, deliveryId, collection, l
       'collection.reference': collection.reference,
       'collection.proof': collection.proof,
       'collection.submittedAt': now,
+      // The brand must decide within this window or the attempt expires
+      // (docs/10 §31.3). Every retry starts a fresh window.
+      'collection.confirmBy': new Date(now.getTime() + env.paymentProof.confirmationMinutes * 60 * 1000),
       'collection.verification': 'SUBMITTED',
       'collection.duplicateReference': false,
       'collection.duplicateProof': false,
@@ -275,6 +291,7 @@ async function stagePendingPayment({ brandId, riderId, deliveryId, collection, l
       'collection.note': '',
       'collection.verifiedBy': '',
       'collection.verifiedAt': '',
+      'collection.expiredAt': '',
       'collection.proofDeletedAt': '',
     };
     if (!collection.wallet) unset['collection.wallet'] = '';

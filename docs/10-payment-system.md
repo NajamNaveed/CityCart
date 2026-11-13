@@ -762,10 +762,12 @@ wallet          WALLET only: JAZZCASH | EASYPAISA | OTHER
 reference       the transaction id or the card machine's approval code (never a card number)
 proof           { publicId, fingerprint }  private Cloudinary asset (non-cash only)
 submittedAt     when the rider sent this attempt
+confirmBy       when the brand's confirmation window closes (server-set, §31.3)
 verification    SUBMITTED | VERIFIED | REJECTED
 verifiedBy      the team member who decided
 verifiedAt      when
-note            the decision's reason (required for REJECTED)
+expiredAt       set by the server when the window closed with no decision
+note            the decision's reason (required for REJECTED; the timeout note on expiry)
 duplicateReference / duplicateProof   flags for the verifier
 proofDeletedAt  set when the retention job removed the photo
 ```
@@ -791,6 +793,27 @@ shape as `collection`) before the rider's next attempt overwrites `collection`, 
 the brand keeps the audit trail. Nothing about the customer's money moves on a
 refusal.
 
+### The five-minute confirmation window
+
+Every non-cash submission opens a confirmation window (`PAYMENT_CONFIRMATION_MINUTES`,
+default 5, 1 to 60). The server writes `collection.confirmBy` when it holds the
+attempt; the app never supplies it. A record keeper — a brand employee with
+`payments.view` / `payments.manage` — must confirm the payment before that moment:
+
+* **Confirmed in time:** the payment becomes `PAID`, the delivery `DELIVERED` and the
+  rider's screen updates by itself (§31.3).
+* **Not confirmed in time:** a server timer (every 15 seconds) turns the attempt into
+  a refusal in one conditional update — `REJECTED`, `expiredAt` and a timeout note —
+  marks the hold refused and tells the rider (`PAYMENT_PROOF_REJECTED`, "collect
+  again"). The payment stays `PENDING` and the delivery stays `OUT_FOR_DELIVERY`, so
+  the rider and customer can try again.
+* **Retry:** cash completes the job at once; another non-cash method is held for a
+  **fresh** window (`confirmBy` is reset and `expiredAt` cleared).
+
+The window and the decision are mutually exclusive: verification requires
+`confirmBy > now`, expiry requires `confirmBy <= now`, so whichever write lands
+first wins and the other matches nothing.
+
 ## 31.2 What the rider does
 
 The rider enters the customer's delivery code, answers the per-line accept/reject
@@ -815,9 +838,13 @@ offer cash only.
 
 After a non-cash submission the rider's screen says **"Payment waiting for
 verification"**: the delivery is not theirs to finish any more, and the code is not
-asked again. If the brand refuses it, the rider is notified and collects again from
-the same delivery screen (`POST /rider/deliveries/:id/payment`, §31.3): cash
-completes immediately; another non-cash method is held for a fresh check.
+asked again. The screen shows a live countdown taken from `paymentSecondsLeft`
+(server-computed) and refreshes itself every 5 seconds, so it flips to the completed
+delivery the moment the brand confirms — no manual refresh. If the window closes, the
+same screen shows **"Confirmation timed out"**; if the brand rejects the proof, the
+rider is notified instead. Either way the rider collects again from the delivery
+screen (`POST /rider/deliveries/:id/payment`, §31.3): cash completes immediately;
+another non-cash method is held for a fresh check and a fresh window.
 
 A brand user completing a delivery from the dashboard has no collection step and is
 recorded as cash, exactly as before. While a non-cash payment is waiting, the brand
@@ -836,12 +863,20 @@ SUBMITTED  -> VERIFIED   (payments.manage)  records verifiedBy/verifiedAt and, i
 SUBMITTED  -> REJECTED   (payments.manage)  a reason is required; the delivery stays
                                             OUT_FOR_DELIVERY, the payment stays PENDING,
                                             the rider and the brand owner are notified
+SUBMITTED  -> REJECTED   (the timer)        no decision before confirmBy: verifiedAt,
+                                            expiredAt and a timeout note are written,
+                                            the hold is marked refused and the rider is
+                                            told to collect again
 VERIFIED / REJECTED -> anything else        409 PROOF_ALREADY_DECIDED, nothing changes
+decision after confirmBy                    409 PAYMENT_CONFIRMATION_EXPIRED, nothing changes
 ```
 
 Verification is therefore the **only** thing that completes a non-cash delivery; the
 customer stays "out for delivery" (with a "payment is being checked" note) until then.
-The decision is one conditional update, so two people cannot decide the same proof.
+The decision is one conditional update that also requires the window to be open, so
+two people cannot decide the same proof and a late decision cannot verify money. The
+keeper's screens show the same countdown and stop offering a decision once it reaches
+zero.
 
 A rejection notifies the rider (`PAYMENT_PROOF_REJECTED`, "collect again") and the
 brand's owners (`12-notification-system.md`). The rider then collects from the
@@ -897,6 +932,7 @@ Endpoints and request bodies are in `05-api-specification.md` §22. New error co
 409 PAYMENT_PREPAID            a collection was sent for an order paid up front
 409 PAYMENT_ALREADY_COLLECTED  a non-cash collection arrived after the payment was already collected
 409 PROOF_ALREADY_DECIDED      someone already verified/rejected this proof (with `verification`)
+409 PAYMENT_CONFIRMATION_EXPIRED  a decision arrived after the window closed (with `confirmBy`)
 409 PAYMENT_VERIFICATION_PENDING  a new answer (or a dashboard move) while a proof is waiting
 409 NO_REFUSED_PAYMENT         collecting again on a delivery whose payment was not refused
 409 PAYMENT_CHANGED / DELIVERY_CHANGED   another request changed the row; reload and retry
@@ -912,13 +948,16 @@ in `05-api-specification.md` §22.
 CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET   required for the camera flow
 PAYMENT_PROOF_LINK_MINUTES=5        signed link lifetime (1 to 60)
 PAYMENT_PROOF_RETENTION_DAYS=90     days after the decision before the photo is deleted (1 to 3650)
+PAYMENT_CONFIRMATION_MINUTES=5      minutes the brand has to confirm a door payment (1 to 60)
 ```
 
 ## 31.8 Tests
 
 ```text
 server/tests/paymentProofs.test.js   queue scoping, signed link, decisions, duplicates, retention,
-                                     verification completing the delivery and a refusal leaving it open
+                                     verification completing the delivery and a refusal leaving it open,
+                                     the confirmation window: deadline on submission, expiry job and
+                                     rider notice, a late decision refused, a retry starting fresh
 server/tests/riderDeliveries.test.js upload only for an own out-for-delivery, non-cash held for checking,
                                      prepaid/refusal, collect-again (cash completes, non-cash re-stages),
                                      another delivery's photo refused, cash balance excludes non-cash
@@ -931,7 +970,7 @@ partner/__tests__/                   rider method/camera/reference screens, the 
 mobile/__tests__/shopping-screens.test.js   the customer's order page shows the verification wait
 ```
 
-Demo data (`npm run seed:demo`) includes verified, submitted and refused proofs, a
-payment refused and waiting for the rider to collect again, an older attempt in
-`collectionHistory`, a duplicate pair and `PAYMENT_PROOF_SUBMITTED` /
-`PAYMENT_PROOF_REJECTED` notifications.
+Demo data (`npm run seed:demo`) includes verified, submitted and timed-out proofs, a
+payment whose window closed and is waiting for the rider to collect again, older
+attempts in `collectionHistory` (a timed-out one and a brand refusal), a duplicate
+pair and `PAYMENT_PROOF_SUBMITTED` / `PAYMENT_PROOF_REJECTED` notifications.

@@ -171,8 +171,10 @@ payment id; verification completes the delivery. `PAYMENT_RECEIVED` is sent when
 payment actually becomes `PAID` (cash at the door, or a verified non-cash payment). A
 rejection sends `PAYMENT_PROOF_REJECTED` (with the reason) to the assigned rider
 ("collect again") and to the brand's owners (`BRAND_ADMIN`, active), so both sides act.
-Nothing is sent to the customer about verification or rejection
-(`10-payment-system.md` §31.3). See `21-next-features-plan.md` §I.
+The same notification is sent when the five-minute confirmation window closes with no
+decision, with a timeout note instead of a reviewer's reason
+(`10-payment-system.md` §31.3). Nothing is sent to the customer about verification or
+rejection (`10-payment-system.md` §31.3). See `21-next-features-plan.md` §I.
 
 Brand users should only receive information relevant to their brand and permissions.
 

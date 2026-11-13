@@ -1930,10 +1930,12 @@ folder.
 
 The queue (`status` defaults to `SUBMITTED`, oldest first) answers
 `{ proofs: [{ paymentId, orderNumber, amount, currency, method, wallet, reference,
-verification, submittedAt, verifiedAt, note, duplicateReference, duplicateProof,
-proofAvailable }], pagination }`. The photo's `publicId` and fingerprint are **never**
-returned. `GET /payments/:id/proof` returns the same item plus `{ url, expiresAt }`,
-a signed link valid for about 5 minutes.
+verification, submittedAt, confirmBy, secondsLeft, verifiedAt, expiredAt, note,
+duplicateReference, duplicateProof, proofAvailable }], pagination }`. The photo's
+`publicId` and fingerprint are **never** returned. `secondsLeft` is the server's view
+of the confirmation window when the response was built (null once decided). `GET
+/payments/:id/proof` returns the same item plus `{ url, expiresAt }`, a signed link
+valid for about 5 minutes.
 
 The decision body is `{ "verification": "VERIFIED" | "REJECTED", "note": "..." }`.
 `note` is required with `REJECTED` (1 to 300 characters), optional with `VERIFIED`.
@@ -1950,7 +1952,9 @@ the same delivery view as the rider's detail. See `10-payment-system.md` §31.3.
 Errors: `503 PROOF_NOT_CONFIGURED`, `404 PROOF_NOT_FOUND` (no photo, or deleted),
 `409 PROOF_NOT_ALLOWED` (not out for delivery), `422 PROOF_NOT_YOURS`,
 `409 PAYMENT_PREPAID`, `409 PAYMENT_ALREADY_COLLECTED`, `409 PROOF_ALREADY_DECIDED`,
-`409 PAYMENT_VERIFICATION_PENDING` (a move while a proof waits), `409 NO_REFUSED_PAYMENT`.
+`409 PAYMENT_CONFIRMATION_EXPIRED` (the five-minute window closed; the rider collects
+again), `409 PAYMENT_VERIFICATION_PENDING` (a move while a proof waits),
+`409 NO_REFUSED_PAYMENT`.
 
 ---
 
@@ -2190,8 +2194,10 @@ A rider's delivery view contains: order number, status, address (only while the
 delivery is open), the customer's checkout pin as `deliveryLocation`
 (`{ latitude, longitude }`, or `null` once closed), item names and quantities,
 `paymentMethod`, `amountToCollect`, `cashCollected`, `paymentPending`,
-`paymentRejected`, and (for a non-cash door payment) `proofStatus`
-(`SUBMITTED`/`VERIFIED`/`REJECTED`) — never the reference or the photo. Never the
+`paymentRejected`, `paymentConfirmBy`, `paymentSecondsLeft`, `paymentExpired`, and
+(for a non-cash door payment) `proofStatus` (`SUBMITTED`/`VERIFIED`/`REJECTED`) —
+never the reference or the photo. `paymentSecondsLeft` is non-null only while a proof
+waits; `paymentExpired` marks a window that closed with no decision. Never the
 customer account, brand, prices or the code. `complete`
 errors: `422 INVALID_CODE` (with `attemptsRemaining`), `429 CODE_LOCKED`,
 `409 INVALID_TRANSITION`, `409 NO_DELIVERY_CODE`, plus the proof errors above.

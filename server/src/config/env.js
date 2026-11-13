@@ -89,10 +89,16 @@ const env = {
   })(),
   // Payment proof photos at the door (docs/21 §I.4). A staff member sees a proof
   // through a signed link valid for linkMinutes; the photo is deleted from
-  // Cloudinary retentionDays after the brand verified or rejected it.
+  // Cloudinary retentionDays after the brand verified or rejected it. A
+  // non-cash collection must be confirmed within confirmationMinutes or that
+  // attempt fails and the rider collects again (docs/10 §31.3).
   paymentProof: {
     linkMinutes: (() => {
       const minutes = Number((process.env.PAYMENT_PROOF_LINK_MINUTES || '').trim());
+      return Number.isFinite(minutes) && minutes >= 1 ? Math.min(minutes, 60) : 5;
+    })(),
+    confirmationMinutes: (() => {
+      const minutes = Number((process.env.PAYMENT_CONFIRMATION_MINUTES || '').trim());
       return Number.isFinite(minutes) && minutes >= 1 ? Math.min(minutes, 60) : 5;
     })(),
     retentionDays: (() => {

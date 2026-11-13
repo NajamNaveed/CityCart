@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -29,17 +31,30 @@ class _DeliveryScreenState extends ConsumerState<DeliveryScreen> {
   String? _loadError;
   String? _notice;
   bool _noticeIsError = false;
+  Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
     _load();
+    // The store confirms while the rider waits at the door. Polling keeps the
+    // screen current without a realtime connection (docs/10 §31.3).
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (_delivery?.paymentPending == true && !_busy) _load(silent: true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _load({bool silent = false}) async {
     if (!silent && _delivery == null) {
       setState(() => _loading = true);
     }
+    final wasPending = _delivery?.paymentPending == true;
     try {
       final delivery = await ref
           .read(deliveryRepositoryProvider)
@@ -48,6 +63,16 @@ class _DeliveryScreenState extends ConsumerState<DeliveryScreen> {
       setState(() {
         _delivery = delivery;
         _loadError = null;
+        if (wasPending && !delivery.paymentPending) {
+          if (delivery.status == 'DELIVERED') {
+            _notice = 'Payment confirmed. This delivery is complete.';
+            _noticeIsError = false;
+          } else if (delivery.paymentExpired) {
+            _notice =
+                'The store did not confirm in time. Collect the payment again or ask for cash.';
+            _noticeIsError = false;
+          }
+        }
       });
     } on ApiException catch (error) {
       if (!mounted) return;
@@ -222,7 +247,9 @@ class _DeliveryScreenState extends ConsumerState<DeliveryScreen> {
                             const SizedBox(height: 12),
                             _WaitingCard(
                               title: 'Waiting for the store',
-                              message: 'The store is checking the payment you sent. This job finishes when they approve it. Nothing more to collect.',
+                              message:
+                                  'The store is checking the payment you sent. It must confirm within 5 minutes, or the customer can try again or pay cash. Nothing more to collect for now.',
+                              secondsLeft: delivery.paymentSecondsLeft,
                               onRefresh: () => _load(silent: true),
                             ),
                           ],
@@ -446,11 +473,13 @@ class _WaitingCard extends StatelessWidget {
     required this.title,
     required this.message,
     this.onRefresh,
+    this.secondsLeft,
   });
 
   final String title;
   final String message;
   final VoidCallback? onRefresh;
+  final int? secondsLeft;
 
   @override
   Widget build(BuildContext context) {
@@ -491,6 +520,14 @@ class _WaitingCard extends StatelessWidget {
               color: AppColors.amberInk,
             ),
           ),
+          if (secondsLeft != null) ...[
+            const SizedBox(height: 7),
+            CountdownLine(
+              secondsLeft: secondsLeft,
+              color: AppColors.amberInk,
+              zeroText: 'Waiting for the store to finish checking…',
+            ),
+          ],
           if (onRefresh != null)
             Align(
               alignment: Alignment.centerLeft,
@@ -677,6 +714,7 @@ class _MoneyCard extends StatelessWidget {
 
     if (line.kind == CashKind.collect || line.kind == CashKind.rejected) {
       final rejected = line.kind == CashKind.rejected;
+      final timedOut = rejected && delivery.paymentExpired;
       return SurfaceCard(
         color: rejected ? AppColors.claySoft : AppColors.surface,
         borderColor: rejected
@@ -706,7 +744,9 @@ class _MoneyCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        rejected
+                        timedOut
+                            ? 'Confirmation timed out'
+                            : rejected
                             ? 'Collect the payment again'
                             : 'Cash to collect',
                         style: const TextStyle(
@@ -717,7 +757,9 @@ class _MoneyCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        rejected
+                        timedOut
+                            ? 'The store did not confirm in time. Collect it again or ask for cash.'
+                            : rejected
                             ? 'The store could not verify the last payment.'
                             : 'Ask for this amount at the door.',
                         style: Theme.of(context).textTheme.bodySmall,
@@ -736,7 +778,7 @@ class _MoneyCard extends StatelessWidget {
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
-            if (rejected && delivery.paymentNote != null) ...[
+            if (rejected && !timedOut && delivery.paymentNote != null) ...[
               const SizedBox(height: 8),
               Text(
                 'Store note: ${delivery.paymentNote}',
@@ -821,6 +863,14 @@ class _MoneyCard extends StatelessWidget {
                   style: Theme.of(context).textTheme.bodySmall
                       ?.copyWith(color: AppColors.inkSoft),
                 ),
+                if (line.kind == CashKind.waiting) ...[
+                  const SizedBox(height: 5),
+                  CountdownLine(
+                    secondsLeft: delivery.paymentSecondsLeft,
+                    color: AppColors.inkSoft,
+                    zeroText: 'Waiting for the store to finish checking…',
+                  ),
+                ],
               ],
             ),
           ),
@@ -983,15 +1033,16 @@ class _BottomActions extends StatelessWidget {
         icon: Icons.refresh_rounded,
         onPressed: onRefresh,
       );
-      helper = 'The store completes this job after checking the payment.';
+      helper = 'The store must confirm within 5 minutes. This screen updates by itself.';
     } else if (delivery.paymentRejected) {
       primary = AppButton(
         label: 'Collect payment again',
         icon: Icons.payments_outlined,
         onPressed: busy ? null : onCollectAgain,
       );
-      helper =
-          'Cash finishes the job now. Another method waits for a store check.';
+      helper = delivery.paymentExpired
+          ? 'The store did not confirm in time. Collect again or take cash.'
+          : 'Cash finishes the job now. Another method waits for a store check.';
     } else if (atDoor) {
       primary = AppButton(
         label: 'Complete delivery',

@@ -28,10 +28,16 @@ const collectionSchema = new mongoose.Schema(
     },
     // When the rider sent this collection for checking (docs/10 §31).
     submittedAt: { type: Date },
+    // Server-authoritative deadline for the brand to confirm this attempt
+    // (docs/10 §31.3). Missing on rows created before the window existed.
+    confirmBy: { type: Date },
     // Non-cash payments wait unverified; the brand checks the proof.
     verification: { type: String, enum: PROOF_VERIFICATIONS },
     verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     verifiedAt: { type: Date },
+    // Set by the expiry job when the window closed without a decision. The
+    // attempt is then treated as refused and the rider collects again.
+    expiredAt: { type: Date },
     note: { type: String, trim: true },
     // Duplicate use is flagged, never blocked: the same reference or the same photo
     // (Cloudinary's etag) on another payment of this brand.
@@ -173,6 +179,8 @@ paymentSchema.index({ brandId: 1, collectedBy: 1, settledAt: 1 });
 
 // The brand's verification queue: non-cash proofs waiting for (or given) a decision.
 paymentSchema.index({ brandId: 1, 'collection.verification': 1, paidAt: 1 });
+// The expiry job looks for awaiting proofs whose confirmation window closed.
+paymentSchema.index({ 'collection.verification': 1, 'collection.confirmBy': 1 });
 // Duplicate-reference / duplicate-photo checks when a proof is submitted.
 paymentSchema.index({ brandId: 1, 'collection.reference': 1 });
 paymentSchema.index({ 'collection.proof.fingerprint': 1 });

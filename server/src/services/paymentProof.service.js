@@ -48,6 +48,14 @@ function proofItem(payment, orderNumber) {
     verification: payment.collection.verification,
     // Older payments only have paidAt; new submissions record when they were sent.
     submittedAt: payment.collection.submittedAt || payment.paidAt || null,
+    // The record keeper's window closes at this moment (docs/10 §31.3).
+    confirmBy: payment.collection.confirmBy || null,
+    secondsLeft:
+      payment.collection.verification === 'SUBMITTED' && payment.collection.confirmBy
+        ? Math.max(0, Math.ceil((new Date(payment.collection.confirmBy).getTime() - Date.now()) / 1000))
+        : null,
+    // Set when nobody confirmed in time; the attempt is treated as refused.
+    expiredAt: payment.collection.expiredAt || null,
     verifiedAt: payment.collection.verifiedAt || null,
     note: payment.collection.note || null,
     duplicateReference: Boolean(payment.collection.duplicateReference),
@@ -130,16 +138,35 @@ async function decideProof({ user, tenantBrandId, paymentId, verification, note 
     };
     if (note !== undefined) decision['collection.note'] = note;
 
-    const saved = await Payment.findOneAndUpdate(
-      { ...scope, 'collection.verification': 'SUBMITTED' },
-      { $set: decision },
-      { new: true, session }
-    );
+    // The confirmation window is part of the condition: a decision after the
+    // deadline cannot verify money. Rows from before the window (no confirmBy)
+    // stay decidable.
+    const stillOpen = {
+      ...scope,
+      'collection.verification': 'SUBMITTED',
+      $or: [
+        { 'collection.confirmBy': { $exists: false } },
+        { 'collection.confirmBy': null },
+        { 'collection.confirmBy': { $gt: now } },
+      ],
+    };
+    const saved = await Payment.findOneAndUpdate(stillOpen, { $set: decision }, { new: true, session });
 
     if (!saved) {
       const existing = await Payment.findOne(scope);
       if (!existing) {
         throw new OrderError(404, 'Payment not found.');
+      }
+      const windowClosed =
+        existing.collection &&
+        existing.collection.verification === 'SUBMITTED' &&
+        existing.collection.confirmBy &&
+        new Date(existing.collection.confirmBy).getTime() <= now.getTime();
+      if (windowClosed) {
+        throw new OrderError(409, 'The confirmation window has closed. The rider will collect the payment again.', {
+          code: 'PAYMENT_CONFIRMATION_EXPIRED',
+          confirmBy: existing.collection.confirmBy,
+        });
       }
       throw new OrderError(409, 'This payment proof has already been checked.', {
         code: 'PROOF_ALREADY_DECIDED',
@@ -232,6 +259,80 @@ async function decideProof({ user, tenantBrandId, paymentId, verification, note 
     note: updated.collection.note || null,
     deliveryCompleted: Boolean(outcome && outcome.delivery),
   };
+}
+
+const CONFIRMATION_TIMEOUT_NOTE =
+  'The confirmation window closed before the payment was checked. Collect the payment again.';
+
+/**
+ * Fails non-cash attempts whose confirmation window closed without a decision
+ * (docs/10 §31.3). The attempt becomes a refusal: the payment stays PENDING,
+ * the delivery stays OUT_FOR_DELIVERY, and the hold is marked refused so the
+ * rider can collect again (cash or another method). One conditional update per
+ * payment makes this safe to repeat and safe on several servers; a decision
+ * that wins the race first leaves nothing to expire.
+ */
+async function expirePendingConfirmations({ now = new Date(), limit = 100 } = {}) {
+  const due = await Payment.find({
+    'collection.verification': 'SUBMITTED',
+    'collection.confirmBy': { $lte: now },
+  })
+    .select('_id orderId brandId amount currency collection.confirmBy')
+    .limit(limit);
+
+  let expiredCount = 0;
+  for (const payment of due) {
+    let outcome = null;
+    await runInTransaction(async (session) => {
+      const saved = await Payment.findOneAndUpdate(
+        {
+          _id: payment._id,
+          'collection.verification': 'SUBMITTED',
+          'collection.confirmBy': { $lte: now },
+        },
+        {
+          $set: {
+            'collection.verification': 'REJECTED',
+            'collection.verifiedAt': now,
+            'collection.expiredAt': now,
+            'collection.note': CONFIRMATION_TIMEOUT_NOTE,
+          },
+        },
+        { new: true, session }
+      );
+      if (!saved) return;
+
+      const delivery = await Delivery.findOne({
+        orderId: saved.orderId,
+        'pendingCompletion.paymentId': saved._id,
+      })
+        .select('riderId')
+        .session(session);
+
+      if (delivery) {
+        await Delivery.updateOne(
+          { _id: delivery._id, 'pendingCompletion.paymentId': saved._id },
+          { $set: { 'pendingCompletion.rejectedAt': now } },
+          { session }
+        );
+      }
+      outcome = { payment: saved, delivery };
+    });
+    if (!outcome) continue;
+    expiredCount += 1;
+
+    const order = await Order.findById(outcome.payment.orderId).select('orderNumber brandId');
+    await notifyRiderOfRejectedProof({
+      userId: outcome.delivery ? outcome.delivery.riderId : null,
+      brandId: outcome.payment.brandId,
+      orderNumber: order ? order.orderNumber : '',
+      deliveryId: outcome.delivery ? outcome.delivery._id : null,
+      paymentId: outcome.payment._id,
+      amount: outcome.payment.amount,
+      note: CONFIRMATION_TIMEOUT_NOTE,
+    });
+  }
+  return expiredCount;
 }
 
 // The photo path must be inside THIS brand's and THIS delivery's folder, which
@@ -358,6 +459,7 @@ module.exports = {
   listProofs,
   getProofLink,
   decideProof,
+  expirePendingConfirmations,
   proofBelongsToDelivery,
   createProofUpload,
   purgeVerifiedProofs,

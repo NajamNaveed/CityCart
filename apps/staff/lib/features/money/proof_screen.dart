@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -24,11 +26,23 @@ class _ProofScreenState extends ConsumerState<ProofScreen> {
   bool _loading = true;
   bool _working = false;
   String? _error;
+  Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
     _load();
+    // The window closes on the server's clock; refresh so this screen follows
+    // the expiry instead of offering a decision that can no longer land.
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (_proof?.isPending == true && !_working) _load(quiet: true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _load({bool quiet = false}) async {
@@ -124,6 +138,8 @@ class _ProofScreenState extends ConsumerState<ProofScreen> {
       if (!mounted) return;
       setState(() => _error = error.message);
       showAppSnack(context, error.message, error: true);
+      // The window closed while the screen was open; reload the real state.
+      if (error.status == 409) await _load(quiet: true);
     } finally {
       if (mounted) setState(() => _working = false);
     }
@@ -134,7 +150,8 @@ class _ProofScreenState extends ConsumerState<ProofScreen> {
     final proof = _proof;
     final access = ref.watch(accessProvider);
     final pending = proof?.isPending == true;
-    final canDecide = pending && access.paymentsManage;
+    final windowClosed = proof?.isWindowClosed == true;
+    final canDecide = pending && access.paymentsManage && !windowClosed;
 
     return Scaffold(
       body: SafeArea(
@@ -279,19 +296,32 @@ class _ProofScreenState extends ConsumerState<ProofScreen> {
                                   ),
                                 if (proof.note != null)
                                   InfoRow(label: 'Note', value: proof.note!),
-                                if (proof.deliveryPending)
-                                  const Padding(
-                                    padding: EdgeInsets.only(top: 8),
-                                    child: Text(
-                                      'The delivery is still open until this '
-                                      'payment is checked.',
-                                      style: TextStyle(
-                                        fontSize: 12.5,
-                                        height: 1.4,
-                                        color: AppColors.amberInk,
-                                      ),
+                                if (proof.deliveryPending) ...[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    windowClosed
+                                        ? 'The confirmation window closed. The rider will collect the payment again.'
+                                        : 'The delivery stays open until a record keeper confirms this payment. Confirm on time or the rider collects again.',
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      height: 1.4,
+                                      color: windowClosed
+                                          ? AppColors.clay
+                                          : AppColors.amberInk,
                                     ),
                                   ),
+                                  if (pending && proof.secondsLeft != null) ...[
+                                    const SizedBox(height: 6),
+                                    CountdownLine(
+                                      secondsLeft: proof.secondsLeft,
+                                      color: windowClosed
+                                          ? AppColors.clay
+                                          : AppColors.amberInk,
+                                      prefix: 'Confirm within ',
+                                      zeroText: 'The confirmation window has closed.',
+                                    ),
+                                  ],
+                                ],
                               ],
                             ),
                           ),
@@ -303,14 +333,28 @@ class _ProofScreenState extends ConsumerState<ProofScreen> {
                                   : Icons.cancel_outlined,
                               title: proof.verification == 'VERIFIED'
                                   ? 'Payment verified'
+                                  : proof.expiredAt != null
+                                  ? 'Confirmation timed out'
                                   : 'Proof rejected',
                               message: proof.verification == 'VERIFIED'
                                   ? 'This payment is recorded as paid.'
+                                  : proof.expiredAt != null
+                                  ? 'The confirmation window closed before this payment was checked. The rider was asked to collect again.'
                                   : 'The rider was asked to collect again.'
                                         '${proof.note == null ? '' : ' Note: ${proof.note}'}',
                               tone: proof.verification == 'VERIFIED'
                                   ? StatusTone.sage
                                   : StatusTone.danger,
+                            )
+                          else if (windowClosed)
+                            const NoticeCard(
+                              icon: Icons.timer_off_outlined,
+                              title: 'Confirmation window closed',
+                              message:
+                                  'This payment can no longer be confirmed. '
+                                  'The rider will collect it again, so do not '
+                                  'send money against this proof.',
+                              tone: StatusTone.danger,
                             )
                           else if (!access.paymentsManage)
                             const NoticeCard(

@@ -1127,6 +1127,8 @@ function buildDataset({ now = new Date(), hashes }) {
       reference: plan.reference,
       proof: { publicId: `${folder}/${plan.reference.toLowerCase()}.jpg`, fingerprint: `etag-${plan.reference.toLowerCase()}` },
       submittedAt,
+      // The keeper confirmed inside the five-minute window (docs/10 §31.3).
+      confirmBy: new Date(submittedAt.getTime() + 5 * (HOUR / 60)),
       verification: plan.verification,
       ...(verifiedAt && {
         verifiedBy: brand.owner._id,
@@ -1161,7 +1163,7 @@ function buildDataset({ now = new Date(), hashes }) {
   const refusedEntry = (waitingEntry && awaitingCheck.find((e) => String(e.order.brandId) !== String(waitingEntry.order.brandId)))
     || awaitingCheck[1];
 
-  const stageDoorPayment = (entry, { method, reference, verification, reject }) => {
+  const stageDoorPayment = (entry, { method, reference, verification, reject, timedOut }) => {
     const { order, payment, brand } = entry;
     const delivery = deliveryOf(order);
     // A delivery without a rider gets one of the brand's, so this rider's screen
@@ -1174,6 +1176,8 @@ function buildDataset({ now = new Date(), hashes }) {
     }
     const folder = `citycart/brands/${brand.doc._id}/deliveries/${delivery._id}`;
     const at = new Date(Math.min(now.getTime() - 20 * (HOUR / 60), delivery.updatedAt.getTime() + 20 * (HOUR / 60)));
+    const closedAt = new Date(at.getTime() + 5 * (HOUR / 60)); // the confirmation window
+    const decidedAt = new Date(at.getTime() + 10 * (HOUR / 60));
     const first = order.items[0];
     const rejectedQty = reject ? Math.max(1, Math.floor(first.quantity / 2)) : 0;
     const netTotal = Math.max(0, order.total - rejectedQty * first.unitPrice);
@@ -1185,12 +1189,18 @@ function buildDataset({ now = new Date(), hashes }) {
       reference,
       proof: { publicId: `${folder}/payment-proofs/${reference.toLowerCase()}.jpg`, fingerprint: `etag-${reference.toLowerCase()}` },
       submittedAt: at,
+      confirmBy: closedAt,
       verification,
       duplicateReference: false,
       duplicateProof: false,
-      ...(reject && {
+      ...(timedOut && {
+        verifiedAt: closedAt,
+        expiredAt: closedAt,
+        note: 'The confirmation window closed before the payment was checked. Collect the payment again.',
+      }),
+      ...(reject && !timedOut && {
         verifiedBy: brand.owner._id,
-        verifiedAt: new Date(at.getTime() + 10 * (HOUR / 60)),
+        verifiedAt: decidedAt,
         note: 'No card settlement matches this approval code.',
       }),
     };
@@ -1208,7 +1218,7 @@ function buildDataset({ now = new Date(), hashes }) {
       netTotal,
       submittedBy: delivery.riderId,
       submittedAt: at,
-      ...(reject && { rejectedAt: new Date(at.getTime() + 10 * (HOUR / 60)) }),
+      ...(reject && { rejectedAt: timedOut ? closedAt : decidedAt }),
     };
     delivery.updatedAt = at;
     return at;
@@ -1218,12 +1228,17 @@ function buildDataset({ now = new Date(), hashes }) {
     const at = stageDoorPayment(waitingEntry, { method: 'BANK_TRANSFER', reference: 'FT-771204', verification: 'SUBMITTED' });
     const { brand } = waitingEntry;
     const folder = `citycart/brands/${brand.doc._id}/deliveries/${deliveryOf(waitingEntry.order)._id}`;
-    // Two earlier attempts: one refused by the brand, one too old to keep a photo.
+    // Two earlier attempts: one whose window closed unchecked, one refused by
+    // the brand for a missing transaction id.
     waitingEntry.payment.collectionHistory = [
       {
         method: 'CARD_MACHINE', reference: 'APPR-330011',
         submittedAt: new Date(at.getTime() - 200 * DAY),
-        verification: 'REJECTED', verifiedBy: brand.owner._id, verifiedAt: new Date(at.getTime() - 200 * DAY + HOUR),
+        confirmBy: new Date(at.getTime() - 200 * DAY + 5 * (HOUR / 60)),
+        verification: 'REJECTED',
+        verifiedAt: new Date(at.getTime() - 200 * DAY + 5 * (HOUR / 60)),
+        expiredAt: new Date(at.getTime() - 200 * DAY + 5 * (HOUR / 60)),
+        note: 'The confirmation window closed before the payment was checked. Collect the payment again.',
         duplicateReference: false, duplicateProof: false,
         proofDeletedAt: new Date(at.getTime() - 200 * DAY + 90 * DAY),
       },
@@ -1231,6 +1246,7 @@ function buildDataset({ now = new Date(), hashes }) {
         method: 'WALLET', wallet: 'JAZZCASH', reference: 'JC-771204',
         proof: { publicId: `${folder}/payment-proofs/jc-771204.jpg`, fingerprint: 'etag-jc-771204' },
         submittedAt: new Date(at.getTime() - 2 * HOUR),
+        confirmBy: new Date(at.getTime() - 2 * HOUR + 5 * (HOUR / 60)),
         verification: 'REJECTED', verifiedBy: brand.owner._id, verifiedAt: new Date(at.getTime() - HOUR),
         note: 'The screenshot did not show the transaction id.',
         duplicateReference: true, duplicateProof: true,
@@ -1238,7 +1254,7 @@ function buildDataset({ now = new Date(), hashes }) {
     ];
   }
   if (refusedEntry) {
-    stageDoorPayment(refusedEntry, { method: 'CARD_MACHINE', reference: 'APPR-880451', verification: 'REJECTED', reject: true });
+    stageDoorPayment(refusedEntry, { method: 'CARD_MACHINE', reference: 'APPR-880451', verification: 'REJECTED', reject: true, timedOut: true });
   }
 
   // A receipt for every paid payment, numbered in the order the money came in (one counter per year).

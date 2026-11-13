@@ -165,6 +165,9 @@ class RiderDelivery {
     this.netTotal,
     this.paymentNote,
     this.proofStatus,
+    this.paymentConfirmBy,
+    this.paymentSecondsLeft,
+    this.paymentExpired = false,
   });
 
   final String id;
@@ -192,6 +195,16 @@ class RiderDelivery {
   final double? netTotal;
   final String? paymentNote;
   final String? proofStatus;
+
+  /// The moment the store's confirmation window closes (server clock).
+  final DateTime? paymentConfirmBy;
+
+  /// Server-computed seconds left when this view was built; the app counts
+  /// down locally and replaces it on each refresh.
+  final int? paymentSecondsLeft;
+
+  /// The window closed with no decision; the rider collects again.
+  final bool paymentExpired;
 
   bool get isCod => paymentMethod == 'COD';
 
@@ -228,6 +241,11 @@ class RiderDelivery {
     netTotal: asNullableDouble(json['netTotal']),
     paymentNote: asString(json['paymentNote']),
     proofStatus: asString(json['proofStatus']),
+    paymentConfirmBy: asDate(json['paymentConfirmBy']),
+    paymentSecondsLeft: json['paymentSecondsLeft'] == null
+        ? null
+        : asInt(json['paymentSecondsLeft']),
+    paymentExpired: json['paymentExpired'] == true,
   );
 }
 
