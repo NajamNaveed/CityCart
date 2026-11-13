@@ -37,6 +37,16 @@ function errorHandler(err, req, res, next) {
     return res.status(400).json({ success: false, message: 'Validation failed.' });
   }
 
+  // AI kill switch and provider outages (docs/27 §3.3). The UI hides the
+  // feature on this code; the message stays generic on purpose.
+  if (err.code === 'AI_UNAVAILABLE') {
+    return res.status(503).json({
+      success: false,
+      message: 'AI is unavailable right now.',
+      code: 'AI_UNAVAILABLE',
+    });
+  }
+
   if (err.code === 11000) {
     return res.status(409).json({ success: false, message: 'Duplicate value.' });
   }
