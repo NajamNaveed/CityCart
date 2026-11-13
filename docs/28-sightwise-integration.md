@@ -80,8 +80,8 @@ module.exports = {
 
 | Route | Who | Purpose |
 |---|---|---|
-| `POST /api/vision/scan-produce` | brand, staff, customer | Fruit freshness scan |
-| `POST /api/vision/identify` | brand | "Scan product" fills the listing form |
+| `POST /api/v1/vision/scan-produce` | brand, staff, customer | Fruit freshness scan |
+| `POST /api/v1/vision/identify` | brand | "Scan product" fills the listing form |
 | `POST /api/returns/:id/evidence` | customer (owner of the order) | Upload return photos, runs authenticity check |
 
 Use your existing `upload.controller.js` approach for receiving the image in memory (check what it already uses before adding anything). Enforce max size and allowed MIME types before forwarding.

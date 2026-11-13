@@ -451,7 +451,10 @@ CityCart/
 │   ├── 23-delivery-app.md
 │   ├── 24-marketplace-v3-plan.md
 │   ├── 25-device-test-checklist.md
-│   └── 26-security-audit.md
+│   ├── 26-security-audit.md
+│   ├── 27-ai-agents-and-automation-plan.md
+│   ├── 28-sightwise-integration.md
+│   └── 29-ai-phase-roadmap.md
 │
 ├── AGENTS.md
 ├── .gitignore
@@ -798,8 +801,11 @@ The `docs/` directory contains the complete CityCart source of truth.
 | 24       | Marketplace v3 Plan       |
 | 25       | Device Test Checklist     |
 | 26       | Security Audit            |
+| 27       | AI Agents and Automation Plan |
+| 28       | Sightwise Integration     |
+| 29       | AI Phase Roadmap          |
 
-Release plans, runbooks, and per-phase status live in the plan documents (21–26). `docs/17-deployment.md` §30 holds the v2 release runbook and §31 the security operations runbook; `docs/26-security-audit.md` is the Phase 9 internal audit.
+Release plans, runbooks, and per-phase status live in the plan documents (21–29). `docs/17-deployment.md` §30 holds the v2 release runbook and §31 the security operations runbook; `docs/26-security-audit.md` is the Phase 9 internal audit.
 
 When implementation conflicts with documented business rules, the conflict should be identified and resolved before changing the architecture.
 

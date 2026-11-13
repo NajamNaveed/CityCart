@@ -85,4 +85,25 @@ const riderLocationLimiter = rateLimit({
   message: json429('Location updates are too frequent.'),
 });
 
-module.exports = { apiLimiter, authLimiter, paymentWriteLimiter, chatSendLimiter, chatStartLimiter, riderLocationLimiter };
+// AI requests share provider free tiers across every user, so each signed-in
+// user gets a small per-minute burst allowance on top of AI_USER_DAILY_LIMIT
+// (docs/27 §3.2, §6).
+const aiUserLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 10,
+  keyGenerator: perUser,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  skip,
+  message: json429('You are using AI too quickly. Please wait a moment.'),
+});
+
+module.exports = {
+  apiLimiter,
+  authLimiter,
+  paymentWriteLimiter,
+  chatSendLimiter,
+  chatStartLimiter,
+  riderLocationLimiter,
+  aiUserLimiter,
+};

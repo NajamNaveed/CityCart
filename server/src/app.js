@@ -46,6 +46,7 @@ const notificationRoutes = require('./routes/notification.routes');
 const adminSettingsRoutes = require('./routes/adminSettings.routes');
 const publicSettingsRoutes = require('./routes/publicSettings.routes');
 const analyticsRoutes = require('./routes/analytics.routes');
+const aiRoutes = require('./routes/ai.routes');
 const adminUsersRoutes = require('./routes/adminUsers.routes');
 const adminPartnerRoutes = require('./routes/adminPartner.routes');
 const adminActivityRoutes = require('./routes/adminActivity.routes');
@@ -152,6 +153,7 @@ app.use('/api/v1/admin/service-reviews', adminServiceReviewRoutes);
 app.use('/api/v1/services', serviceProviderRoutes);
 app.use('/api/v1/services', serviceBookingRoutes);
 app.use('/api/v1', analyticsRoutes);
+app.use('/api/v1/ai', aiRoutes);
 
 // Must stay LAST: unmatched routes -> 404, then the global error handler.
 app.use(notFound);

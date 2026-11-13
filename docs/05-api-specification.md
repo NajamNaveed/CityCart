@@ -2889,6 +2889,45 @@ Super Admin only.
 
 ---
 
+# 23a. AI Endpoints (Phase 0)
+
+Base:
+
+```text
+/api/v1/ai
+```
+
+All AI endpoints require authentication and run after the global API limiter.
+
+## Ping
+
+```text
+POST /api/v1/ai/ping
+```
+
+Answers the caller's daily allowance without calling a provider or spending it:
+
+```json
+{
+  "success": true,
+  "data": { "dailyLimit": 30, "usedToday": 3, "remaining": 27 }
+}
+```
+
+Response headers `X-AI-Daily-Limit` and `X-AI-Daily-Remaining` carry the same counts.
+
+Failure codes:
+
+```text
+503 AI_UNAVAILABLE   AI_ENABLED is false (kill switch) or every provider failed
+429 AI_DAILY_LIMIT   the user reached AI_USER_DAILY_LIMIT for the UTC day
+429 (rate limiter)   10 requests a minute per user
+```
+
+Agent endpoints and their role checks are specified in `docs/27-ai-agents-and-automation-plan.md` and `docs/29-ai-phase-roadmap.md`.
+
+---
+
 # 24. Query Parameters
 
 Collection endpoints should use predictable query parameters.

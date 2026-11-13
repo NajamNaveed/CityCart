@@ -34,9 +34,11 @@ Build once; every agent depends on it.
 |---|---|---|
 | 0a | `services/ai/index.js` + Gemini and Groq adapters, fallback on timeout/429/5xx | forced failure of provider 1 falls to provider 2 in a test |
 | 0b | `aiUsage.model.js`, `aiCache.model.js` (TTL index), `AI_ENABLED` kill switch | every call logged; kill switch returns 503 `AI_UNAVAILABLE` |
-| 0c | `ai.routes.js` mounted under `/api/ai`, auth + role check, per-user rate limit + daily counter, `guard.js` (trim + zod) | `POST /api/ai/ping` works for a logged-in user and is rate limited |
+| 0c | `ai.routes.js` mounted under `/api/v1/ai`, auth + role check, per-user rate limit + daily counter, `guard.js` (trim + zod) | `POST /api/v1/ai/ping` works for a logged-in user and is rate limited |
 
 **Gate 0:** jest tests green with mocked `fetch`; app starts and works with **no** AI keys set. Tag `ai-phase-0`.
+
+> **Status:** Phase 0 built on branch `new` and tagged `ai-phase-0` (2026-11-13). `AI_ENABLED` ships closed; set it to `true` with provider keys to turn the AI layer on.
 
 ---
 
@@ -44,7 +46,7 @@ Build once; every agent depends on it.
 
 ### 1a — Listing writer (Brand)
 - **What:** from a product image URL or a few words, drafts title, description, suggested category.
-- **Endpoint:** `POST /api/ai/listing-draft` (role: brand/employee).
+- **Endpoint:** `POST /api/v1/ai/listing-draft` (role: brand/employee).
 - **Tools:** none. Output validated with zod `{ title, description, category }`.
 - **UI:** "Generate description" button in the product form (client + business app). Brand edits before saving.
 - **Tests:** schema validation; non-brand role gets 403; provider failure returns clean 503.
@@ -52,7 +54,7 @@ Build once; every agent depends on it.
 
 ### 1b — Review summarizer (Customer-facing)
 - **What:** 2-3 line summary of pros/cons for a product.
-- **Endpoint:** `GET /api/ai/products/:id/review-summary` (public or logged-in).
+- **Endpoint:** `GET /api/v1/ai/products/:id/review-summary` (public or logged-in).
 - **Tools:** reads that product's reviews only (inside the service, no model-controlled IDs).
 - **Cache:** `AiCache` keyed by product + review count; regenerate only when count changes. Minimum 3 reviews.
 - **UI:** summary card above reviews (client + shopper app), marked "AI summary".
@@ -61,7 +63,7 @@ Build once; every agent depends on it.
 
 ### 1c — Chat translator (Customer + Brand)
 - **What:** translates one chat message on request (Urdu / English / Roman Urdu).
-- **Endpoint:** `POST /api/ai/translate` with `{ messageId, targetLang }`.
+- **Endpoint:** `POST /api/v1/ai/translate` with `{ messageId, targetLang }`.
 - **Rule:** server loads the message and checks the caller is a participant; never trust client-sent text for authorization.
 - **UI:** "Translate" action on a message bubble (chat screens).
 - **Tests:** non-participant gets 403; cached by `(messageId, lang)`.
@@ -77,7 +79,7 @@ Before 2a: build the **tool layer** (`tools/*.tool.js`, read-only, `(ctx, args)`
 
 ### 2a — Shopping assistant
 - **What:** "cheap rice near me", "gift under 3000", in Urdu / English / Roman Urdu.
-- **Endpoint:** `POST /api/ai/shop-assistant`.
+- **Endpoint:** `POST /api/v1/ai/shop-assistant`.
 - **Tools:** product search, categories, discover/nearby (existing services).
 - **Output:** short answer + **product cards from real DB results**; the model may not invent products.
 - **UI:** chat widget in the client and shopper app; tapping a card opens the normal product page.
@@ -86,7 +88,7 @@ Before 2a: build the **tool layer** (`tools/*.tool.js`, read-only, `(ctx, args)`
 
 ### 2b — Order helper
 - **What:** "where is my order?", explains status, cancellation and return rules.
-- **Endpoint:** `POST /api/ai/order-helper`.
+- **Endpoint:** `POST /api/v1/ai/order-helper`.
 - **Tools:** the caller's own orders (`ctx.userId` only), return/cancel policy text from settings.
 - **Rule:** can *suggest* "Cancel order" or "Start return" buttons; the user performs them via the normal API.
 - **Tests:** **user A can never read user B's order** (explicit test); unknown order returns a polite "not found".
@@ -94,7 +96,7 @@ Before 2a: build the **tool layer** (`tools/*.tool.js`, read-only, `(ctx, args)`
 
 ### 2c — Service booking helper
 - **What:** finds a suitable service provider and suggests a time slot.
-- **Endpoint:** `POST /api/ai/service-helper`.
+- **Endpoint:** `POST /api/v1/ai/service-helper`.
 - **Tools:** service discovery, categories, availability.
 - **Rule:** only suggests; booking goes through the existing booking flow.
 - **Tests:** suggested slots exist in availability data; no double-booking suggestions.
@@ -108,7 +110,7 @@ Before 2a: build the **tool layer** (`tools/*.tool.js`, read-only, `(ctx, args)`
 
 ### 3a — Seller advisor
 - **What:** "what should I restock?", "why did sales drop this week?", pricing suggestions.
-- **Endpoint:** `POST /api/ai/seller-advisor` (brand roles).
+- **Endpoint:** `POST /api/v1/ai/seller-advisor` (brand roles).
 - **Tools:** analytics and inventory for `ctx.brandId` only. Numbers are computed by your code and passed in; the model explains, it does not calculate.
 - **UI:** advisor panel in the brand dashboard and business app.
 - **Tests:** a brand can never see another brand's numbers; numbers in the answer match the tool output.
@@ -116,7 +118,7 @@ Before 2a: build the **tool layer** (`tools/*.tool.js`, read-only, `(ctx, args)`
 
 ### 3b — Catalogue matcher + CSV cleaner
 - **What:** (1) on a new product, suggests an existing global-catalogue match and flags likely duplicates; (2) cleans messy CSV rows (names, units, categories) with preview-then-apply.
-- **Endpoints:** `POST /api/ai/catalogue-match`, `POST /api/ai/csv-clean`.
+- **Endpoints:** `POST /api/v1/ai/catalogue-match`, `POST /api/v1/ai/csv-clean`.
 - **Tools:** catalogue search (read-only).
 - **Rule:** CSV cleaner returns a **diff preview**; nothing is written until the brand confirms.
 - **Tests:** diff shape; confirm step required; large CSV is processed in chunks.
@@ -124,7 +126,7 @@ Before 2a: build the **tool layer** (`tools/*.tool.js`, read-only, `(ctx, args)`
 
 ### 3c — Reply drafter (reviews + chat)
 - **What:** drafts a polite reply to a review or a customer chat message.
-- **Endpoints:** `POST /api/ai/reply-draft` with `{ type: 'review'|'chat', id }`.
+- **Endpoints:** `POST /api/v1/ai/reply-draft` with `{ type: 'review'|'chat', id }`.
 - **Rule:** returns a draft only; the brand edits and sends through the normal path. Never auto-sends.
 - **Tests:** ownership check on the review/chat; draft never sent without a user action.
 - **Done when:** draft appears in the reply box and sending uses the existing endpoint.
@@ -139,7 +141,7 @@ Before 2a: build the **tool layer** (`tools/*.tool.js`, read-only, `(ctx, args)`
 
 ### 4a — Picker substitution
 - **What:** when an item is out of stock during picking, suggests same-category alternatives with similar price.
-- **Endpoint:** `POST /api/ai/substitutions` (picker/staff roles).
+- **Endpoint:** `POST /api/v1/ai/substitutions` (picker/staff roles).
 - **Tools:** same-store, same-category, in-stock products.
 - **Rule:** suggestion only; customer approval rules of your order flow stay unchanged.
 - **Tests:** suggestions are in stock, same store; empty result handled.
@@ -147,7 +149,7 @@ Before 2a: build the **tool layer** (`tools/*.tool.js`, read-only, `(ctx, args)`
 
 ### 4b — Admin triage (billing help + support)
 - **What:** classifies `BillingHelpRequest` items (type, urgency) and drafts an answer.
-- **Endpoint:** `POST /api/ai/admin-triage` (admin only).
+- **Endpoint:** `POST /api/v1/ai/admin-triage` (admin only).
 - **Tools:** the request itself, the brand's billing summary (read-only).
 - **Rule:** admin approves every reply.
 - **Tests:** non-admin 403; classification schema validated.
@@ -155,7 +157,7 @@ Before 2a: build the **tool layer** (`tools/*.tool.js`, read-only, `(ctx, args)`
 
 ### 4c — Moderation agent
 - **What:** scores a piece of text (review, product text, chat) for abuse/spam/scam and returns reasons.
-- **Endpoint:** `POST /api/ai/moderate` (internal + admin).
+- **Endpoint:** `POST /api/v1/ai/moderate` (internal + admin).
 - **Output:** `{ score, labels[], reason }`; no automatic punishment.
 - **Tests:** obvious abuse flagged; normal Roman Urdu text not flagged; injection text does not change the score.
 - **Done when:** the admin "flagged content" view can call it on demand. (Phase 5a will call it automatically.)
@@ -195,10 +197,10 @@ Only start after Gate 4: automations reuse the agents.
 Prerequisite: Sightwise v1 is deployed (its phases 0-5, see the Sightwise repo). Contract: Sightwise `docs/02-api-contract.md`. Integration details: doc 28.
 
 ### 6a — "Scan product" in the listing form
-- `vision.client.js`, env vars, `POST /api/vision/identify`; button fills title/category/description. Brand edits everything.
+- `vision.client.js`, env vars, `POST /api/v1/vision/identify`; button fills title/category/description. Brand edits everything.
 
 ### 6b — Fruit freshness scan
-- `POST /api/vision/scan-produce`; scan screen for staff/brand (and customer if you want). Shows band, score, shelf-life range, and "estimate" label.
+- `POST /api/v1/vision/scan-produce`; scan screen for staff/brand (and customer if you want). Shows band, score, shelf-life range, and "estimate" label.
 
 ### 6c — Return evidence + authenticity
 - Live capture + one-time order code, `POST /api/returns/:id/evidence`, Sightwise authenticity + phash comparison with catalogue images, risk badge with reasons for the brand. Human decides.
