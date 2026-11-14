@@ -38,7 +38,7 @@ Build once; every agent depends on it.
 
 **Gate 0:** jest tests green with mocked `fetch`; app starts and works with **no** AI keys set. Tag `ai-phase-0`.
 
-> **Status:** Phase 0 built on branch `new` and tagged `ai-phase-0` (2026-11-13). Phase 1a built on branch `new` (2026-11-14). `AI_ENABLED` ships closed; set it to `true` with provider keys to turn the AI layer on.
+> **Status:** Phase 0 built on branch `new` and tagged `ai-phase-0` (2026-11-13). Phase 1a and 1b built on branch `new` (2026-11-14). `AI_ENABLED` ships closed; set it to `true` with provider keys to turn the AI layer on.
 
 ---
 
@@ -54,11 +54,11 @@ Build once; every agent depends on it.
 
 ### 1b — Review summarizer (Customer-facing)
 - **What:** 2-3 line summary of pros/cons for a product.
-- **Endpoint:** `GET /api/v1/ai/products/:id/review-summary` (public or logged-in).
-- **Tools:** reads that product's reviews only (inside the service, no model-controlled IDs).
-- **Cache:** `AiCache` keyed by product + review count; regenerate only when count changes. Minimum 3 reviews.
-- **UI:** summary card above reviews (client + shopper app), marked "AI summary".
-- **Tests:** cache hit avoids provider call; review text containing instructions is ignored.
+- **Endpoint:** `GET /api/v1/ai/products/:id/review-summary` (signed-in, any role). Guests keep the normal reviews and simply do not see the card.
+- **Tools:** reads that product's approved reviews only (inside the service, no model-controlled IDs). The product must be public: active listing in an active brand. Review text is sanitized and marked as data in the prompt.
+- **Cache:** `AiCache` keyed by product + approved review count for one hour; regenerate only when count changes. Minimum 3 approved reviews, below which the endpoint answers `summary: null` without a provider call.
+- **UI:** "AI summary" card above the reviews grid on the product page (client). It is fetched only for signed-in users with 3+ reviews and disappears silently on a kill switch, quota or bad output. Shopper app is deferred with the "web first, apps later" decision.
+- **Tests:** cache hit avoids a provider call; review text containing instructions is sanitized and never treated as instructions; below 3 reviews no provider call; a changed count regenerates; non-public product 404; malformed output 502; provider failure 503; kill switch and daily limit return before any provider call.
 - **Done when:** summary appears, is cached, and refreshes after a new review.
 
 ### 1c — Chat translator (Customer + Brand)

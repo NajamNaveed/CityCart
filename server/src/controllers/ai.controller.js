@@ -3,6 +3,7 @@ const { z } = require('zod');
 const env = require('../config/env');
 const { countUsageToday } = require('../services/ai/usage');
 const { draftListing, NOTES_LIMIT } = require('../services/ai/agents/listing.agent');
+const { draftReviewSummary, ReviewSummaryError } = require('../services/ai/agents/reviewSummary.agent');
 const { formatZodError } = require('../utils/formatZodError');
 
 /**
@@ -59,4 +60,24 @@ async function listingDraft(req, res, next) {
   }
 }
 
-module.exports = { ping, listingDraft };
+/**
+ * Phase 1b: a read-only summary of a product's approved reviews. Guests get
+ * the reviews themselves from the public endpoint; this one is signed-in so
+ * every provider call is attributable and covered by the daily allowance.
+ */
+async function reviewSummary(req, res, next) {
+  try {
+    const data = await draftReviewSummary({
+      productId: req.params.id,
+      ctx: { userId: req.user._id, role: req.user.role },
+    });
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    if (err instanceof ReviewSummaryError) {
+      return res.status(err.status).json({ success: false, message: err.message });
+    }
+    return next(err);
+  }
+}
+
+module.exports = { ping, listingDraft, reviewSummary };

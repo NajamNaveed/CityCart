@@ -2963,6 +2963,46 @@ Failure codes:
 429 AI_DAILY_LIMIT / rate limiter
 ```
 
+## Review summary
+
+```text
+GET /api/v1/ai/products/:id/review-summary
+```
+
+Signed-in callers only (any role), so every provider call is attributable and covered by the daily allowance. The product page hides the card for guests.
+
+The server checks the product is public (active product in an active brand), reads its **approved** reviews only (latest 30), and uses the total approved count. Below 3 approved reviews it answers without calling a provider:
+
+```json
+{
+  "success": true,
+  "data": { "summary": null, "reviewCount": 2, "minimumReviews": 3 }
+}
+```
+
+Otherwise it asks the provider for a 2–3 sentence summary of what customers liked and disliked, validates it with zod, and caches it in `AiCache` for an hour under `review-summary:<productId>:<reviewCount>`. A new, deleted or edited-away review changes the count and regenerates the summary.
+
+```json
+{
+  "success": true,
+  "data": {
+    "summary": "Most customers like the rice for its fragrance and value, though a few found the bag stale and noted broken grains.",
+    "reviewCount": 12,
+    "minimumReviews": 3
+  }
+}
+```
+
+Review text is sanitized and treated as data, never as instructions. Failure codes:
+
+```text
+400 (invalid id)
+404 Product not found.       product missing, inactive, or its brand is not active
+502 AI_BAD_OUTPUT            the model answered with text that is not a valid { summary } object
+503 AI_UNAVAILABLE           kill switch or every provider failed
+429 AI_DAILY_LIMIT / rate limiter
+```
+
 Agent endpoints and their role checks are specified in `docs/27-ai-agents-and-automation-plan.md` and `docs/29-ai-phase-roadmap.md`.
 
 ---

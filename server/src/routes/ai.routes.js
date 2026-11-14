@@ -1,8 +1,9 @@
 const express = require('express');
 
-const { ping, listingDraft } = require('../controllers/ai.controller');
+const { ping, listingDraft, reviewSummary } = require('../controllers/ai.controller');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
+const validateObjectIdParam = require('../middleware/validateObjectIdParam');
 const { ROLES } = require('../config/roles');
 const { requireAiEnabled, aiDailyLimit } = require('../middleware/aiAccess');
 const { aiUserLimiter } = require('../middleware/rateLimiters');
@@ -22,6 +23,16 @@ router.post(
   aiUserLimiter,
   aiDailyLimit,
   listingDraft,
+);
+
+router.get(
+  '/products/:id/review-summary',
+  authenticate,
+  validateObjectIdParam,
+  requireAiEnabled,
+  aiUserLimiter,
+  aiDailyLimit,
+  reviewSummary,
 );
 
 module.exports = router;

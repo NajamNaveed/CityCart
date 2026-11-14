@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BadgeCheck } from 'lucide-react'
 import Stars from './Stars'
+import api from '../services/api'
 import { formatDate } from '../ui'
 import { btn, eyebrow, shell } from '../design'
 
@@ -43,9 +44,32 @@ function ReviewBody({ comment }) {
   )
 }
 
-// `data` is what useProductReviews returns.
-export default function ReviewsSection({ data }) {
+// `data` is what useProductReviews returns. `signedIn` gates the AI summary,
+// which the API only serves to signed-in callers.
+export default function ReviewsSection({ data, productId, signedIn }) {
   const { loading, reviews, summary, hasMore, loadingMore, loadMore } = data
+  const [aiSummary, setAiSummary] = useState(null)
+  const [aiSummaryLoading, setAiSummaryLoading] = useState(false)
+
+  useEffect(() => {
+    if (!signedIn || !productId || summary.count < 3) {
+      setAiSummary(null)
+      setAiSummaryLoading(false)
+      return undefined
+    }
+    let active = true
+    setAiSummaryLoading(true)
+    api
+      .get(`/ai/products/${productId}/review-summary`)
+      // The card is optional: a failure (kill switch, quota, bad output) just
+      // leaves the normal reviews untouched.
+      .then((res) => active && setAiSummary(res.data.data.summary || null))
+      .catch(() => active && setAiSummary(null))
+      .finally(() => active && setAiSummaryLoading(false))
+    return () => {
+      active = false
+    }
+  }, [signedIn, productId, summary.count])
 
   return (
     <section id="reviews" className="scroll-mt-24 border-t border-line-warm bg-canvas py-14">
@@ -54,6 +78,25 @@ export default function ReviewsSection({ data }) {
       <h2 className="font-display mt-2 text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
         What customers say
       </h2>
+
+      {!loading && summary.count >= 3 && (aiSummaryLoading || aiSummary) && (
+        <div className="mt-8 rounded-card border border-line-warm bg-paper-warm p-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-forest px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-cream">
+              AI
+            </span>
+            <p className="text-[13px] font-medium text-ink">AI summary</p>
+          </div>
+          {aiSummaryLoading ? (
+            <div className="mt-3 h-14 animate-pulse rounded-md bg-sand" aria-hidden="true" />
+          ) : (
+            <p className="mt-2 max-w-3xl text-[14.5px] leading-relaxed text-ink/70">{aiSummary}</p>
+          )}
+          <p className="mt-2.5 text-xs text-ink/45">
+            Generated from {summary.count} {summary.count === 1 ? 'review' : 'reviews'}. AI can make mistakes.
+          </p>
+        </div>
+      )}
 
       {loading ? (
         <div className="mt-8 h-36 animate-pulse rounded-lg bg-sand" />

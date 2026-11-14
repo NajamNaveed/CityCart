@@ -478,7 +478,7 @@ function ProductView({ product, brand }) {
         </div>
       </div>
 
-      <ReviewsSection data={reviews} />
+      <ReviewsSection data={reviews} productId={product._id} signedIn={Boolean(user)} />
 
       {/* Full-screen image viewer — height-capped so the whole photo always
           fits on screen, whatever its shape or the viewport size. */}
