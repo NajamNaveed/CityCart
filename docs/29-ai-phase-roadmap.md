@@ -38,7 +38,7 @@ Build once; every agent depends on it.
 
 **Gate 0:** jest tests green with mocked `fetch`; app starts and works with **no** AI keys set. Tag `ai-phase-0`.
 
-> **Status:** Phase 0 built on branch `new` and tagged `ai-phase-0` (2026-11-13). Phase 1a and 1b built on branch `new` (2026-11-14). `AI_ENABLED` ships closed; set it to `true` with provider keys to turn the AI layer on.
+> **Status:** Phase 0 built on branch `new` and tagged `ai-phase-0` (2026-11-13). Phases 1a and 1b committed on branch `new` (2026-11-14); 1c built on branch `new` and waiting for review (2026-11-14). `AI_ENABLED` ships closed; set it to `true` with provider keys to turn the AI layer on.
 
 ---
 
@@ -63,10 +63,13 @@ Build once; every agent depends on it.
 
 ### 1c — Chat translator (Customer + Brand)
 - **What:** translates one chat message on request (Urdu / English / Roman Urdu).
-- **Endpoint:** `POST /api/v1/ai/translate` with `{ messageId, targetLang }`.
-- **Rule:** server loads the message and checks the caller is a participant; never trust client-sent text for authorization.
-- **UI:** "Translate" action on a message bubble (chat screens).
-- **Tests:** non-participant gets 403; cached by `(messageId, lang)`.
+- **Endpoint:** `POST /api/v1/ai/translate` with `{ messageId, targetLang }`; `targetLang` is `en`, `ur` or `roman-ur`.
+- **Rule:** the caller never sends the text. The server loads the message and its conversation and checks the signed-in user is that conversation's customer or brand. The message body is sanitized and marked as data in the prompt; the model must answer `{ translation }`, validated with zod.
+- **Roles and scope:** `CUSTOMER`, `BRAND_ADMIN`, `BRAND_EMPLOYEE` (employee needs `messages.view`), through `chatAccess`. Store chats only in this sub-phase; the direct provider and booking threads stay without Translate.
+- **Cache:** `AiCache` keyed by `(messageId, lang)` for 7 days, because messages are immutable.
+- **UI:** "Translate" action under a message bubble in the web ChatPanel (customer and brand dashboards). The picker offers English / اردو / Roman Urdu; the translation appears in an AI-labelled card **under** the original, which stays visible.
+- **Tests:** non-participant gets 403; another brand gets 403; a non-chat role is refused before the message is loaded; invalid language 400; malformed id and missing message 404; cache hit avoids a provider call; cached by `(messageId, lang)`; injected instructions are stripped but the text survives; malformed output 502; provider failure 503; kill switch and daily limit return before any provider call.
+- **Note:** a non-participant gets **403 `NOT_A_PARTICIPANT`** (the roadmap's required answer) rather than the chat service's deliberate 404 anti-probing answer. That is intentional for this endpoint and documented in docs/05 §23a.
 - **Done when:** both sides can translate a message and the original stays visible.
 
 **Gate 1:** 1a + 1b + 1c done, tests green, `AiUsage` reviewed (calls per agent, failure rate), kill switch tested again. Tag `ai-phase-1`.

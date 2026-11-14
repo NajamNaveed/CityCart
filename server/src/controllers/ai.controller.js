@@ -4,6 +4,7 @@ const env = require('../config/env');
 const { countUsageToday } = require('../services/ai/usage');
 const { draftListing, NOTES_LIMIT } = require('../services/ai/agents/listing.agent');
 const { draftReviewSummary, ReviewSummaryError } = require('../services/ai/agents/reviewSummary.agent');
+const { translateMessage, TranslateError, TARGET_LANGS } = require('../services/ai/agents/translate.agent');
 const { formatZodError } = require('../utils/formatZodError');
 
 /**
@@ -80,4 +81,37 @@ async function reviewSummary(req, res, next) {
   }
 }
 
-module.exports = { ping, listingDraft, reviewSummary };
+const translateSchema = z.object({
+  messageId: z.string().trim().min(1, 'Choose a message.').max(64),
+  targetLang: z.enum(TARGET_LANGS, { error: 'Choose English, Urdu or Roman Urdu.' }),
+});
+
+/**
+ * Phase 1c: translate one chat message on request. chatAccess already decided
+ * whether the caller may read that chat family; the agent then loads the
+ * message and checks the caller is a participant of its own conversation.
+ */
+async function translate(req, res, next) {
+  const parsed = translateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsed.error),
+    });
+  }
+
+  try {
+    const data = await translateMessage({ ...parsed.data, chat: req.chat });
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    if (err instanceof TranslateError) {
+      return res
+        .status(err.status)
+        .json({ success: false, message: err.message, ...(err.code && { code: err.code }) });
+    }
+    return next(err);
+  }
+}
+
+module.exports = { ping, listingDraft, reviewSummary, translate };

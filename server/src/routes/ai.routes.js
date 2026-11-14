@@ -1,9 +1,10 @@
 const express = require('express');
 
-const { ping, listingDraft, reviewSummary } = require('../controllers/ai.controller');
+const { ping, listingDraft, reviewSummary, translate } = require('../controllers/ai.controller');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
 const validateObjectIdParam = require('../middleware/validateObjectIdParam');
+const { chatAccess } = require('../middleware/chatAccess');
 const { ROLES } = require('../config/roles');
 const { requireAiEnabled, aiDailyLimit } = require('../middleware/aiAccess');
 const { aiUserLimiter } = require('../middleware/rateLimiters');
@@ -33,6 +34,19 @@ router.get(
   aiUserLimiter,
   aiDailyLimit,
   reviewSummary,
+);
+
+// Store chat only (customer and brand team). chatAccess rejects every other
+// role before the message is even loaded; the agent then checks that the
+// caller is a participant of the message's own conversation.
+router.post(
+  '/translate',
+  authenticate,
+  chatAccess,
+  requireAiEnabled,
+  aiUserLimiter,
+  aiDailyLimit,
+  translate,
 );
 
 module.exports = router;

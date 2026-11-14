@@ -3003,6 +3003,49 @@ Review text is sanitized and treated as data, never as instructions. Failure cod
 429 AI_DAILY_LIMIT / rate limiter
 ```
 
+## Chat translation
+
+```text
+POST /api/v1/ai/translate
+```
+
+Roles: `CUSTOMER`, `BRAND_ADMIN`, `BRAND_EMPLOYEE` (an employee needs `messages.view`). Store chats only — the direct provider and booking threads do not offer it in Phase 1c.
+
+Request:
+
+```json
+{ "messageId": "66f1a0c2b3d4e5f60718293a", "targetLang": "ur" }
+```
+
+`targetLang` is `en`, `ur` (Urdu script) or `roman-ur`. The caller never sends the text. The server loads the message and its conversation and checks the signed-in user is that conversation's customer or brand; a message from any other conversation is refused before a provider is called. Messages are immutable, so the answer is cached in `AiCache` for 7 days under `translate:<messageId>:<targetLang>`.
+
+The body is sanitized and treated as data, never as instructions. The model must answer `{ "translation": "..." }`, validated with zod. The original message is never replaced: the client shows the translation in a card under the bubble.
+
+```json
+{
+  "success": true,
+  "data": {
+    "translation": "کیا یہ شال سردی کے لیے ٹھیک ہے؟",
+    "targetLang": "ur"
+  }
+}
+```
+
+Failure codes:
+
+```text
+400 (zod)                 messageId missing, or targetLang outside en/ur/roman-ur
+400 This message has no text to translate.
+403 ROLE_NOT_ALLOWED      caller is not a customer, brand admin or brand employee
+403 NOT_A_PARTICIPANT     the message belongs to another customer's or another brand's conversation
+404 Message not found.    malformed id, or the message does not exist
+502 AI_BAD_OUTPUT         the model answered with text that is not a valid { translation } object
+503 AI_UNAVAILABLE        kill switch or every provider failed
+429 AI_DAILY_LIMIT / rate limiter
+```
+
+`NOT_A_PARTICIPANT` is a 403 rather than the chat endpoints' 404 anti-probing answer because the roadmap fixes 403 for this endpoint (docs/29 Phase 1c).
+
 Agent endpoints and their role checks are specified in `docs/27-ai-agents-and-automation-plan.md` and `docs/29-ai-phase-roadmap.md`.
 
 ---

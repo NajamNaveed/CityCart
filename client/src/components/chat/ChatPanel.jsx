@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, MessageCircle, Paperclip, Send, Wrench, X } from 'lucide-react'
+import { ArrowLeft, Languages, MessageCircle, Paperclip, Send, Wrench, X } from 'lucide-react'
 import api, { getErrorMessage } from '../../services/api'
 import { useChat } from '../../hooks/useChat'
 import ProductImage from '../ProductImage'
@@ -10,6 +10,15 @@ import { clockTime, dayLabel, initialOf, isObjectId, listTime, MAX_MESSAGE_LENGT
 import { CHAT_OPEN_STATUSES } from '../../utils/serviceBookings'
 
 const PAGE = 30
+
+// Phase 1c: store chat only (customer and brand). The server re-checks that
+// the signed-in user is part of the message's conversation.
+const TRANSLATE_LANGS = [
+  { id: 'en', label: 'English' },
+  { id: 'ur', label: 'اردو' },
+  { id: 'roman-ur', label: 'Roman Urdu' },
+]
+const langLabel = (id) => TRANSLATE_LANGS.find((lang) => lang.id === id)?.label || id
 
 // Three REST families share one panel: brand store chats, direct provider
 // chats, and a booking's own thread. `kind` in the URL picks the family.
@@ -52,7 +61,34 @@ function ProductChip({ product, onRemove }) {
 
 // Message text is always rendered as a text node: whatever a person types,
 // including <tags>, is shown literally and never interpreted as HTML.
-function Bubble({ message, showSender }) {
+function Bubble({ message, showSender, canTranslate }) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [translation, setTranslation] = useState(null)
+  const [loadingLang, setLoadingLang] = useState('')
+  const [translateError, setTranslateError] = useState('')
+
+  async function translate(targetLang) {
+    setTranslateError('')
+    if (translation?.targetLang === targetLang) {
+      setMenuOpen(false)
+      return
+    }
+    setLoadingLang(targetLang)
+    try {
+      const res = await api.post('/ai/translate', { messageId: message._id, targetLang })
+      setTranslation({ text: res.data.data.translation, targetLang })
+      setMenuOpen(false)
+    } catch (err) {
+      setTranslateError(
+        err.response?.data?.code === 'AI_UNAVAILABLE'
+          ? 'Translation is unavailable right now.'
+          : getErrorMessage(err),
+      )
+    } finally {
+      setLoadingLang('')
+    }
+  }
+
   return (
     <div className={`flex flex-col ${message.mine ? 'items-end' : 'items-start'}`}>
       <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-[14px] leading-relaxed sm:max-w-[75%] ${message.mine ? 'rounded-br-md bg-noir text-cream' : 'rounded-bl-md border border-line-warm bg-paper-warm text-ink'}`}>
@@ -67,6 +103,65 @@ function Bubble({ message, showSender }) {
         {showSender && message.sentBy ? `${message.sentBy} · ` : ''}
         {clockTime(message.createdAt)}
       </p>
+
+      {canTranslate && (
+        <div className="mt-1 w-full px-1">
+          <div className={`flex flex-wrap items-center gap-2 ${message.mine ? 'justify-end' : 'justify-start'}`}>
+            <button
+              type="button"
+              onClick={() => setMenuOpen((open) => !open)}
+              aria-expanded={menuOpen}
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-ink/45 transition hover:text-clay"
+            >
+              <Languages className="h-3.5 w-3.5" aria-hidden="true" />
+              {loadingLang ? 'Translating…' : 'Translate'}
+            </button>
+            {translation && !menuOpen && (
+              <button type="button" onClick={() => setTranslation(null)} className="text-[11px] text-ink/40 transition hover:text-ink">
+                Hide
+              </button>
+            )}
+          </div>
+
+          {menuOpen && (
+            <div className={`mt-1 flex ${message.mine ? 'justify-end' : 'justify-start'}`}>
+              <div className="inline-flex flex-wrap items-center gap-2 rounded-tile border border-line-warm bg-paper-warm px-2.5 py-1.5">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ink/40">Into</span>
+                {TRANSLATE_LANGS.map(({ id, label }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => translate(id)}
+                    disabled={Boolean(loadingLang)}
+                    aria-pressed={translation?.targetLang === id}
+                    className={`text-[11.5px] font-medium transition disabled:opacity-50 ${
+                      translation?.targetLang === id ? 'text-clay underline underline-offset-4' : 'text-ink/70 hover:text-clay'
+                    }`}
+                  >
+                    {loadingLang === id ? '…' : label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {translateError && (
+            <p role="alert" className={`mt-1 text-[11px] text-clay ${message.mine ? 'text-right' : ''}`}>
+              {translateError}
+            </p>
+          )}
+
+          {translation && (
+            <div className={`mt-1.5 max-w-[85%] rounded-tile border border-line-warm bg-paper-warm px-3 py-2 sm:max-w-[75%] ${message.mine ? 'ml-auto' : ''}`}>
+              <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-ink/45">
+                <span className="rounded-full bg-forest px-1.5 py-0.5 text-[9px] tracking-[0.12em] text-cream">AI</span>
+                {langLabel(translation.targetLang)}
+              </p>
+              <p className="mt-1 whitespace-pre-wrap break-words text-[13.5px] leading-relaxed text-ink/80">{translation.text}</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -593,7 +688,7 @@ export default function ChatPanel({ mode = 'customer', source, canReply = true }
                   {rows.map(({ m, divider }) => (
                     <div key={m._id} className="space-y-3">
                       {divider && <p className="text-center text-[10px] font-medium uppercase tracking-[0.16em] text-ink/40">{dayLabel(m.createdAt)}</p>}
-                      <Bubble message={m} showSender={isBrand || isProvider} />
+                      <Bubble message={m} showSender={isBrand || isProvider} canTranslate={selected?.kind === 'store'} />
                     </div>
                   ))}
                 </>
