@@ -38,19 +38,19 @@ Build once; every agent depends on it.
 
 **Gate 0:** jest tests green with mocked `fetch`; app starts and works with **no** AI keys set. Tag `ai-phase-0`.
 
-> **Status:** Phase 0 built on branch `new` and tagged `ai-phase-0` (2026-11-13). `AI_ENABLED` ships closed; set it to `true` with provider keys to turn the AI layer on.
+> **Status:** Phase 0 built on branch `new` and tagged `ai-phase-0` (2026-11-13). Phase 1a built on branch `new` (2026-11-14). `AI_ENABLED` ships closed; set it to `true` with provider keys to turn the AI layer on.
 
 ---
 
 ## Phase 1 — Quick-win generation (low risk, no tools, no data access)
 
 ### 1a — Listing writer (Brand)
-- **What:** from a product image URL or a few words, drafts title, description, suggested category.
-- **Endpoint:** `POST /api/v1/ai/listing-draft` (role: brand/employee).
-- **Tools:** none. Output validated with zod `{ title, description, category }`.
-- **UI:** "Generate description" button in the product form (client + business app). Brand edits before saving.
-- **Tests:** schema validation; non-brand role gets 403; provider failure returns clean 503.
-- **Done when:** button fills the form in a real brand account and the AI label is visible.
+- **What:** from a few words of notes, drafts title, description and a suggested category. Image input is deferred to the Phase 6 vision link.
+- **Endpoint:** `POST /api/v1/ai/listing-draft` (role: BRAND_ADMIN or BRAND_EMPLOYEE). Body `{ notes }`, 3–400 characters.
+- **Tools:** none. The server loads the active leaf categories itself, then validates the model output with zod `{ title, description, category }` and resolves the category against that list (`null` when it matches nothing). Nothing is written to the database.
+- **UI:** "Draft the details for me" panel in the brand's **Request a new product** form on Add product (client). Brands do not author a listing's name, description or category directly — those come from the catalogue — so the request form is the only place a brand writes new product copy. On success the panel fills name, description and category; the brand edits them before sending the normal catalogue request. The panel is hidden when `AI_ENABLED` answers 503.
+- **Tests:** zod validation (too short/too long); non-brand role gets 403 without a provider call; notes are sanitized; category resolved by id or name; unknown category returns `null`; malformed model output returns 502 `AI_BAD_OUTPUT`; provider failure returns 503; kill switch and daily limit return before any provider call; brand-employee membership path works.
+- **Done when:** the button fills the form in a real brand account and the AI label is visible.
 
 ### 1b — Review summarizer (Customer-facing)
 - **What:** 2-3 line summary of pros/cons for a product.

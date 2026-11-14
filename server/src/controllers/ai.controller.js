@@ -1,5 +1,9 @@
+const { z } = require('zod');
+
 const env = require('../config/env');
 const { countUsageToday } = require('../services/ai/usage');
+const { draftListing, NOTES_LIMIT } = require('../services/ai/agents/listing.agent');
+const { formatZodError } = require('../utils/formatZodError');
 
 /**
  * Phase 0 connectivity check. It answers only for a signed-in user, does not
@@ -22,4 +26,37 @@ async function ping(req, res, next) {
   }
 }
 
-module.exports = { ping };
+const listingDraftSchema = z.object({
+  notes: z
+    .string()
+    .trim()
+    .min(3, 'Add a few words about the product.')
+    .max(NOTES_LIMIT, `Keep the notes under ${NOTES_LIMIT} characters.`),
+});
+
+/**
+ * Phase 1a: a draft only. The brand edits it and sends the normal catalogue
+ * request, so nothing here writes to the database.
+ */
+async function listingDraft(req, res, next) {
+  const parsed = listingDraftSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsed.error),
+    });
+  }
+
+  try {
+    const data = await draftListing({
+      notes: parsed.data.notes,
+      ctx: { userId: req.user._id, role: req.user.role },
+    });
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+module.exports = { ping, listingDraft };

@@ -86,7 +86,46 @@ function RequestForm({ categories, onDone, onCancel }) {
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
   const [saving, setSaving] = useState(false)
+  // AI draft (docs/29 Phase 1a). Hidden entirely when the kill switch answers 503.
+  const [aiAvailable, setAiAvailable] = useState(false)
+  const [aiNotes, setAiNotes] = useState('')
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiError, setAiError] = useState('')
+  const [aiUsed, setAiUsed] = useState(false)
   const onChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }))
+
+  useEffect(() => {
+    let active = true
+    api
+      .post('/ai/ping')
+      .then(() => active && setAiAvailable(true))
+      // A 503 is the kill switch (or no provider keys): keep the panel hidden.
+      // Other failures (e.g. today's limit) still show it so the click explains why.
+      .catch((err) => active && setAiAvailable(err?.response?.status !== 503))
+    return () => {
+      active = false
+    }
+  }, [])
+
+  async function draftWithAi() {
+    setAiError('')
+    setAiBusy(true)
+    try {
+      const res = await api.post('/ai/listing-draft', { notes: aiNotes })
+      const draft = res.data.data
+      setForm((f) => ({
+        ...f,
+        name: draft.title,
+        description: draft.description,
+        ...(draft.category && { categoryId: draft.category.id }),
+      }))
+      setAiUsed(true)
+    } catch (err) {
+      setAiError(`${getErrorMessage(err)} You can still fill in the details yourself.`)
+    } finally {
+      setAiBusy(false)
+    }
+  }
 
   async function submit(e) {
     e.preventDefault()
@@ -121,6 +160,39 @@ function RequestForm({ categories, onDone, onCancel }) {
           {error}
         </p>
       )}
+
+      {aiAvailable && (
+        <div className="rounded-md border border-line-warm bg-paper-warm p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-forest px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-cream">AI</span>
+            <p className="text-[13.5px] font-medium text-ink">Draft the details for me</p>
+          </div>
+          <p className="mt-1 text-xs text-ink/55">Describe the product in a few words and CityCart fills the name, description and category. Check and edit everything before sending.</p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <input
+              value={aiNotes}
+              onChange={(e) => setAiNotes(e.target.value)}
+              maxLength={400}
+              placeholder="For example: 1 kg basmati rice bag"
+              aria-label="Describe the product for the AI draft"
+              className={`h-11 ${inputClass}`}
+            />
+            <button
+              type="button"
+              onClick={draftWithAi}
+              disabled={aiBusy || aiNotes.trim().length < 3}
+              className="inline-flex h-11 shrink-0 items-center justify-center rounded-md border border-forest/40 bg-forest/5 px-4 text-[13px] font-medium text-forest transition hover:border-forest disabled:opacity-50"
+            >
+              {aiBusy ? 'Drafting…' : 'Draft with AI'}
+            </button>
+          </div>
+          {aiError && <p role="alert" className="mt-2 text-xs text-clay">{aiError}</p>}
+          {aiUsed && !aiError && (
+            <p className="mt-2 text-xs text-ink/55">AI draft added below. Edit it before sending, it is your listing.</p>
+          )}
+        </div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Name" id="req-name" name="name" value={form.name} onChange={onChange} error={fieldErrors.name} required />
         <Field label="Made by" id="req-manufacturer" name="manufacturer" value={form.manufacturer} onChange={onChange} hint="Optional. For example Dalda." />

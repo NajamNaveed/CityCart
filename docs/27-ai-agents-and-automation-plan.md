@@ -114,7 +114,7 @@ Keep it simple and testable:
 
 | Agent | Role | Tools (read-only) | Roadmap step |
 |---|---|---|---|
-| Listing writer | Brand | none (image URL / short text in) | 1a |
+| Listing writer | Brand | none (short text notes in; image input arrives with the Phase 6 vision link) | 1a |
 | Review summarizer | Customer (public) | reviews | 1b |
 | Chat translator | Customer, Brand | none | 1c |
 | CSV cleaner | Brand | none | 3b |

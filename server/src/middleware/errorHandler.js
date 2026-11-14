@@ -47,6 +47,15 @@ function errorHandler(err, req, res, next) {
     });
   }
 
+  // The provider answered, but not in the shape the agent can use.
+  if (err.code === 'AI_BAD_OUTPUT') {
+    return res.status(502).json({
+      success: false,
+      message: 'The AI answer could not be used. Please try again.',
+      code: 'AI_BAD_OUTPUT',
+    });
+  }
+
   if (err.code === 11000) {
     return res.status(409).json({ success: false, message: 'Duplicate value.' });
   }

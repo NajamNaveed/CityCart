@@ -2889,7 +2889,7 @@ Super Admin only.
 
 ---
 
-# 23a. AI Endpoints (Phase 0)
+# 23a. AI Endpoints (Phase 0–1)
 
 Base:
 
@@ -2922,6 +2922,45 @@ Failure codes:
 503 AI_UNAVAILABLE   AI_ENABLED is false (kill switch) or every provider failed
 429 AI_DAILY_LIMIT   the user reached AI_USER_DAILY_LIMIT for the UTC day
 429 (rate limiter)   10 requests a minute per user
+```
+
+## Listing draft
+
+```text
+POST /api/v1/ai/listing-draft
+```
+
+Role: `BRAND_ADMIN` or `BRAND_EMPLOYEE`. Used by the brand's "Request a new product" form on Add product, because a brand does not author a listing's name and description directly (they come from the catalogue).
+
+Request:
+
+```json
+{ "notes": "1 kg basmati rice bag" }
+```
+
+`notes` is 3–400 characters of free text. The server sanitizes it and treats it as data, never as instructions.
+
+The server loads the active leaf categories, asks the provider for `{ title, description, category }`, validates the answer with zod, and resolves the category against that list. An answer that matches no active leaf category returns `category: null`. Nothing is written to the database: the caller copies the values into the form and still sends the normal catalogue request.
+
+```json
+{
+  "success": true,
+  "data": {
+    "title": "Basmati Rice, 1 kg",
+    "description": "Long-grain basmati rice in a 1 kg bag, suited to everyday biryani and pulao.",
+    "category": { "id": "66f1a0c2b3d4e5f60718293a", "name": "Kitchen & Dining" }
+  }
+}
+```
+
+Failure codes:
+
+```text
+400 (zod)            notes missing, shorter than 3 or longer than 400 characters
+403 ROLE_NOT_ALLOWED caller is not a brand admin or brand employee
+502 AI_BAD_OUTPUT    the model answered with text that is not a valid { title, description } JSON object
+503 AI_UNAVAILABLE   kill switch or every provider failed
+429 AI_DAILY_LIMIT / rate limiter
 ```
 
 Agent endpoints and their role checks are specified in `docs/27-ai-agents-and-automation-plan.md` and `docs/29-ai-phase-roadmap.md`.
