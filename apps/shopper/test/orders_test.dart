@@ -10,6 +10,7 @@ import 'package:citycart_shopper/features/orders/orders_controller.dart';
 import 'package:citycart_shopper/features/orders/orders_screen.dart';
 import 'package:citycart_shopper/providers.dart';
 import 'package:flutter/material.dart' hide Page;
+import 'package:citycart_shopper/features/location/maps.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -113,6 +114,11 @@ class _FakeRepository extends ShopperRepository {
 
   @override
   Future<String> deliveryCode(String deliveryId) async => '4821';
+
+  RiderPosition? riderState;
+
+  @override
+  Future<RiderPosition?> riderLocation(String deliveryId) async => riderState;
 
   @override
   Future<List<MyReview>> myReviews({String? orderId}) async => reviews;
@@ -331,6 +337,69 @@ void main() {
       await tester.scrollUntilVisible(find.text('Order again'), 250);
       await tester.pumpAndSettle();
       expect(find.text('Order again'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a sharing rider shows the live map, marker and trail', (
+      tester,
+    ) async {
+      final prefs = await SharedPreferences.getInstance();
+      final detail = OrderDetail(
+        order: _order(status: 'OUT_FOR_DELIVERY'),
+        payment: const OrderPayment(status: 'PENDING', amount: 4750),
+        delivery: const OrderDelivery(id: 'd1', status: 'OUT_FOR_DELIVERY'),
+      );
+      final repository = _FakeRepository(details: {'o1': detail})
+        ..riderState = RiderPosition(
+          latitude: 31.5,
+          longitude: 74.3,
+          recordedAt: DateTime.now(),
+        );
+
+      await tester.pumpWidget(
+        _app(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(prefs),
+            shopperRepositoryProvider.overrideWithValue(repository),
+            orderDetailProvider('o1').overrideWith((ref) async => detail),
+            deliveryCodeProvider('d1').overrideWith((ref) async => '4821'),
+            brandProvider('b1').overrideWith(
+              (ref) async =>
+                  const PublicBrand(id: 'b1', name: 'Loom & Co.', slug: 'loom'),
+            ),
+            myReviewsProvider('o1').overrideWith((ref) async => const []),
+          ],
+          home: const OrderDetailScreen(orderId: 'o1'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(find.byType(RiderTrackingMap), 250);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Your rider'), findsOneWidget);
+      expect(find.byIcon(Icons.two_wheeler_rounded), findsOneWidget);
+      expect(find.text('Last seen just now.'), findsOneWidget);
+      expect(
+        find.text('The line shows the way since you opened this page.'),
+        findsNothing,
+      );
+
+      // The next poll finds the rider a street further along, so the trail and
+      // the heading arrow appear.
+      repository.riderState = RiderPosition(
+        latitude: 31.501,
+        longitude: 74.3,
+        recordedAt: DateTime.now(),
+      );
+      await tester.pump(const Duration(seconds: 15));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('The line shows the way since you opened this page.'),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.navigation_rounded), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 

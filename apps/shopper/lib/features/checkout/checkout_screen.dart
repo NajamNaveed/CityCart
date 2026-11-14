@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart' hide Block;
+import 'package:latlong2/latlong.dart';
 
 import '../../core/format.dart';
 import '../../core/status.dart';
@@ -10,6 +11,8 @@ import '../../data/api_exception.dart';
 import '../../data/models.dart';
 import '../../providers.dart';
 import '../cart/cart_controller.dart';
+import '../location/geo.dart';
+import '../location/maps.dart';
 
 /// One page from basket to order: where it goes, how the rider finds it, and
 /// how it is paid. The server splits the basket into one order per shop, so the
@@ -37,7 +40,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   String? _selectedAddressId;
   bool _newAddress = true;
   bool _saveAddress = false;
-  Block? _block;
+  LatLng? _pin;
+  String? _pinLabel;
   bool _blockMissing = false;
   String? _notesError;
 
@@ -122,54 +126,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     });
   }
 
-  Future<void> _pickBlock(List<Block> blocks) async {
-    final picked = await showAppSheet<Block>(
-      context,
-      title: 'Choose your block',
-      subtitle: 'The rider uses the centre of this block as the delivery pin.',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (final block in blocks)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: SurfaceCard(
-                onTap: () => Navigator.of(context).pop(block),
-                color: _block?.id == block.id ? AppColors.sage : null,
-                borderColor: _block?.id == block.id ? AppColors.sage : null,
-                padding: const EdgeInsets.fromLTRB(14, 13, 12, 13),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.place_outlined,
-                      size: 20,
-                      color: AppColors.inkSoft,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        block.name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                    ),
-                    if (_block?.id == block.id)
-                      const Icon(
-                        Icons.check_circle_rounded,
-                        size: 20,
-                        color: AppColors.forest,
-                      ),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-    if (picked == null || !mounted) return;
+  void _pickOnMap(LatLng point, List<Block> blocks) {
+    final inside = blocksContainingPoint(blocks, point);
     setState(() {
-      _block = picked;
+      _pin = point;
+      _pinLabel = inside.isEmpty
+          ? 'Pinned on the map'
+          : inside.map((block) => block.name).join(' + ');
       _blockMissing = false;
       _placeError = null;
     });
@@ -228,17 +191,23 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       }
     } else {
       final valid = _formKey.currentState?.validate() ?? false;
-      setState(() => _blockMissing = _block == null);
-      if (!valid || _block == null) {
+      setState(() => _blockMissing = _pin == null);
+      if (!valid || _pin == null) {
         FocusScope.of(context).unfocus();
         return;
       }
-      if (_block?.latitude == null || _block?.longitude == null) {
-        setState(
-          () => _placeError =
-              'That block has no delivery point yet. Choose another block.',
-        );
-        return;
+      final area = ref.read(areaProvider).area;
+      if (area != null) {
+        try {
+          final blocks = await ref.read(blocksProvider(area.cityId).future);
+          if (blocks.isNotEmpty &&
+              blocksContainingPoint(blocks, _pin!).isEmpty) {
+            setState(() => _blockMissing = true);
+            return;
+          }
+        } catch (_) {
+          // The server still checks the point; a failed hint must not stop it.
+        }
       }
     }
 
@@ -256,8 +225,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             addressLine: saved?.addressLine ?? _addressLine.text.trim(),
             city: saved?.city ?? _city.text.trim(),
             deliveryNotes: notes,
-            latitude: saved?.latitude ?? _block!.latitude!,
-            longitude: saved?.longitude ?? _block!.longitude!,
+            latitude: saved?.latitude ?? _pin!.latitude,
+            longitude: saved?.longitude ?? _pin!.longitude,
             state: saved?.state,
             postalCode: saved?.postalCode,
             country: saved?.country,
@@ -512,18 +481,17 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             },
           ),
           const SizedBox(height: 12),
-          _BlockField(
-            value: _block,
-            missing: _blockMissing,
+          DeliverySpotPicker(
+            hasArea: area != null,
             blocks: blocks,
+            pin: _pin,
+            label: _pinLabel,
+            error: _blockMissing,
+            onPick: (point) =>
+                _pickOnMap(point, blocks.asData?.value ?? const <Block>[]),
             onRetry: area == null
                 ? null
                 : () => ref.invalidate(blocksProvider(area.cityId)),
-            onTap: () {
-              final list = blocks.asData?.value;
-              if (list == null || list.isEmpty) return;
-              _pickBlock(list);
-            },
           ),
           const SizedBox(height: 14),
           _SaveAddressToggle(
@@ -750,93 +718,6 @@ class _RadioDot extends StatelessWidget {
               ),
             )
           : null,
-    );
-  }
-}
-
-class _BlockField extends StatelessWidget {
-  const _BlockField({
-    required this.value,
-    required this.missing,
-    required this.blocks,
-    required this.onTap,
-    this.onRetry,
-  });
-
-  final Block? value;
-  final bool missing;
-  final AsyncValue<List<Block>> blocks;
-  final VoidCallback onTap;
-  final VoidCallback? onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final list = blocks.asData?.value;
-    final ready = list != null && list.isNotEmpty;
-    final hint = blocks.isLoading
-        ? 'Loading delivery blocks'
-        : blocks.hasError
-        ? 'Could not load blocks'
-        : !ready
-        ? 'No delivery blocks here'
-        : 'Choose your block';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SurfaceCard(
-          onTap: ready ? onTap : null,
-          padding: const EdgeInsets.fromLTRB(14, 13, 12, 13),
-          child: Row(
-            children: [
-              const Icon(
-                Icons.pin_drop_outlined,
-                size: 20,
-                color: AppColors.clay,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Delivery block',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      value?.name ?? hint,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                  ],
-                ),
-              ),
-              if (ready)
-                const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
-            ],
-          ),
-        ),
-        if (missing) ...[
-          const SizedBox(height: 6),
-          Text(
-            'Choose the block your address is in.',
-            style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(color: AppColors.danger),
-          ),
-        ],
-        if (blocks.hasError && onRetry != null) ...[
-          const SizedBox(height: 2),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton(
-              onPressed: onRetry,
-              child: const Text('Try loading the blocks again'),
-            ),
-          ),
-        ],
-      ],
     );
   }
 }

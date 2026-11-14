@@ -1,6 +1,8 @@
 // Every type here mirrors a response the server actually sends. Parsing is
 // defensive: one unexpected field must never blank a whole screen.
 
+import 'package:latlong2/latlong.dart';
+
 String text(dynamic value, [String fallback = '']) {
   if (value is String) return value;
   if (value == null) return fallback;
@@ -42,6 +44,34 @@ List<dynamic> asList(dynamic value) =>
 
 List<String> asStringList(dynamic value) =>
     asList(value).whereType<String>().where((s) => s.isNotEmpty).toList();
+
+/// A GeoJSON point (the API sends [longitude, latitude]) as coordinates the map
+/// understands. Anything malformed is simply "no point".
+LatLng? latLngOfGeoPoint(dynamic value) {
+  final coordinates = asList(asMap(value)['coordinates']);
+  if (coordinates.length < 2) return null;
+  final lng = optionalDouble(coordinates[0]);
+  final lat = optionalDouble(coordinates[1]);
+  if (lat == null || lng == null) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  return LatLng(lat, lng);
+}
+
+/// A block boundary as an open [lat, lng] ring. Legacy centre-only blocks send
+/// `null`, which becomes an empty ring.
+List<LatLng> ringOfPolygon(dynamic value) {
+  final points = <LatLng>[];
+  for (final raw in asList(value)) {
+    final pair = asList(raw);
+    if (pair.length < 2) continue;
+    final lat = optionalDouble(pair[0]);
+    final lng = optionalDouble(pair[1]);
+    if (lat == null || lng == null) continue;
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) continue;
+    points.add(LatLng(lat, lng));
+  }
+  return points;
+}
 
 class Pagination {
   const Pagination({
@@ -180,6 +210,7 @@ class Block {
     required this.name,
     this.latitude,
     this.longitude,
+    this.outline = const <LatLng>[],
   });
 
   final String id;
@@ -188,7 +219,14 @@ class Block {
   final double? latitude;
   final double? longitude;
 
+  /// The drawn boundary as an open ring; empty for legacy centre-only blocks.
+  final List<LatLng> outline;
+
   String get label => name;
+
+  LatLng? get center => latitude != null && longitude != null
+      ? LatLng(latitude!, longitude!)
+      : null;
 
   factory Block.fromJson(dynamic raw) {
     final map = asMap(raw);
@@ -198,6 +236,7 @@ class Block {
       name: text(map['name'], 'Area'),
       latitude: optionalDouble(map['latitude']),
       longitude: optionalDouble(map['longitude']),
+      outline: ringOfPolygon(map['polygon']),
     );
   }
 }
@@ -1059,6 +1098,7 @@ class CustomerOrder {
     this.brandName,
     this.items = const <CustomerOrderItem>[],
     this.shippingAddress = const OrderAddress(),
+    this.deliveryLocation,
     this.subtotal = 0,
     this.deliveryFee = 0,
     this.discount = 0,
@@ -1082,6 +1122,9 @@ class CustomerOrder {
   final String? brandName;
   final List<CustomerOrderItem> items;
   final OrderAddress shippingAddress;
+
+  /// The checkout pin, when the order was placed with one.
+  final LatLng? deliveryLocation;
   final double subtotal;
   final double deliveryFee;
   final double discount;
@@ -1125,6 +1168,7 @@ class CustomerOrder {
           .map(CustomerOrderItem.fromJson)
           .toList(growable: false),
       shippingAddress: OrderAddress.fromJson(map['shippingAddress']),
+      deliveryLocation: latLngOfGeoPoint(map['deliveryLocation']),
       subtotal: asDouble(map['subtotal']),
       deliveryFee: asDouble(map['deliveryFee']),
       discount: asDouble(map['discount']),
@@ -1312,6 +1356,35 @@ class OrderDelivery {
       assignedAgent: optionalText(map['assignedAgent']),
       failureReason: optionalText(map['failureReason']),
       paymentPending: map['paymentPending'] == true,
+    );
+  }
+}
+
+/// The last position a rider chose to share while this order is on the way
+/// (docs/11 §30). The server keeps no history, so the trail on screen is only
+/// what this screen has seen since it opened.
+class RiderPosition {
+  const RiderPosition({
+    required this.latitude,
+    required this.longitude,
+    this.accuracy,
+    this.recordedAt,
+  });
+
+  final double latitude;
+  final double longitude;
+  final double? accuracy;
+  final DateTime? recordedAt;
+
+  LatLng get point => LatLng(latitude, longitude);
+
+  factory RiderPosition.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return RiderPosition(
+      latitude: asDouble(map['latitude']),
+      longitude: asDouble(map['longitude']),
+      accuracy: optionalDouble(map['accuracy']),
+      recordedAt: asDate(map['recordedAt']),
     );
   }
 }

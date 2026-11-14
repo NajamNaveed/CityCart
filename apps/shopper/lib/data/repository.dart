@@ -390,6 +390,15 @@ class ShopperRepository {
     return text(body['code']);
   }
 
+  /// The rider's last shared position for this delivery, or null while they are
+  /// not sharing (docs/11 §30). The server scopes it to the caller's own order.
+  Future<RiderPosition?> riderLocation(String deliveryId) async {
+    final body = await _api.get('/deliveries/$deliveryId/rider-location');
+    final location = body['location'];
+    if (location is! Map) return null;
+    return RiderPosition.fromJson(location);
+  }
+
   Future<OrderReceipt> receiptForOrder(String orderId) async {
     final body = await _api.get('/receipts/order/$orderId');
     return OrderReceipt.fromJson(body['receipt']);

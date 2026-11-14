@@ -8,6 +8,7 @@ import 'package:citycart_shopper/features/addresses/address_form_screen.dart';
 import 'package:citycart_shopper/features/addresses/addresses_screen.dart';
 import 'package:citycart_shopper/features/auth/login_screen.dart';
 import 'package:citycart_shopper/features/help/help_screen.dart';
+import 'package:citycart_shopper/features/location/maps.dart';
 import 'package:citycart_shopper/features/messages/messages_screen.dart';
 import 'package:citycart_shopper/features/notifications/notifications_screen.dart';
 import 'package:citycart_shopper/providers.dart';
@@ -17,6 +18,7 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart' hide Block;
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 SavedAddress _address({
@@ -485,6 +487,12 @@ void main() {
                   name: 'Gulberg',
                   latitude: 31.5,
                   longitude: 73.1,
+                  outline: [
+                    LatLng(31.499, 73.099),
+                    LatLng(31.499, 73.101),
+                    LatLng(31.501, 73.101),
+                    LatLng(31.501, 73.099),
+                  ],
                 ),
                 Block(id: 'b3', cityId: 'c1', name: 'Peoples Colony'),
               ],
@@ -495,11 +503,13 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('New address'), findsOneWidget);
-      await tester.tap(find.text('Choose the block for this address'));
+      expect(find.text('No spot chosen yet.'), findsOneWidget);
+      await tester.ensureVisible(find.byType(DeliverySpotMap));
+      await tester.tap(find.byType(DeliverySpotMap));
+      // flutter_map waits out the double-tap window before reporting a tap.
+      await tester.pump(const Duration(milliseconds: 300));
       await tester.pumpAndSettle();
-      expect(find.text('No delivery point yet'), findsOneWidget);
-      await tester.tap(find.text('Gulberg'));
-      await tester.pumpAndSettle();
+      expect(find.textContaining('Delivering to Gulberg'), findsOneWidget);
       expect(find.text('House 9, Street 2'), findsNothing);
 
       final fields = find.byType(TextFormField);
@@ -513,8 +523,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(repository.createdLabel, 'Home');
-      expect(repository.createdLatitude, 31.5);
-      expect(repository.createdLongitude, 73.1);
+      expect(repository.createdLatitude, closeTo(31.5, 0.001));
+      expect(repository.createdLongitude, closeTo(73.1, 0.001));
       expect(find.text('Address list'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });

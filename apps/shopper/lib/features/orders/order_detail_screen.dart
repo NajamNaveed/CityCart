@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../core/format.dart';
 import '../../core/status.dart';
@@ -10,6 +13,8 @@ import '../../data/api_exception.dart';
 import '../../data/models.dart';
 import '../../providers.dart';
 import '../cart/cart_controller.dart';
+import '../location/geo.dart';
+import '../location/maps.dart';
 import 'order_providers.dart';
 import 'order_receipt.dart';
 import 'order_reviews.dart';
@@ -264,6 +269,13 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
           if (delivery != null && delivery.codeVisible) ...[
             const SizedBox(height: 20),
             _DeliveryCodeSection(delivery: delivery),
+          ],
+          if (delivery != null && delivery.status == 'OUT_FOR_DELIVERY') ...[
+            const SizedBox(height: 20),
+            _RiderTrackingSection(
+              deliveryId: delivery.id,
+              destination: order.deliveryLocation,
+            ),
           ],
           if (delivery?.paymentPending == true) ...[
             const SizedBox(height: 16),
@@ -942,6 +954,161 @@ class _DeliveryCodeSection extends ConsumerWidget {
                 ),
               ],
             ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The rider's live position while the order is out for delivery (docs/11 §30).
+/// Polling stops with the screen, and the trail is only what this screen has
+/// seen — the server deliberately keeps no history.
+class _RiderTrackingSection extends ConsumerStatefulWidget {
+  const _RiderTrackingSection({required this.deliveryId, this.destination});
+
+  final String deliveryId;
+  final LatLng? destination;
+
+  @override
+  ConsumerState<_RiderTrackingSection> createState() =>
+      _RiderTrackingSectionState();
+}
+
+class _RiderTrackingSectionState
+    extends ConsumerState<_RiderTrackingSection> {
+  static const _poll = Duration(seconds: 15);
+
+  Timer? _timer;
+  RiderPosition? _position;
+  final List<LatLng> _trail = <LatLng>[];
+  double? _bearing;
+  bool _everShown = false;
+  bool _asking = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _ask();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _ask() async {
+    _timer?.cancel();
+    if (_asking) return;
+    _asking = true;
+    try {
+      final position = await ref
+          .read(shopperRepositoryProvider)
+          .riderLocation(widget.deliveryId);
+      if (!mounted) return;
+      setState(() {
+        _error = null;
+        if (position == null) {
+          _position = null;
+          _bearing = null;
+          _trail.clear();
+          return;
+        }
+        final previous = _position;
+        _position = position;
+        _everShown = true;
+        if (previous == null) {
+          _trail.add(position.point);
+        } else if (hasMoved(previous.point, position.point)) {
+          _bearing = bearingDegrees(previous.point, position.point);
+          _trail.add(position.point);
+          if (_trail.length > 300) _trail.removeAt(0);
+        }
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = 'Could not refresh just now. Trying again…');
+    } finally {
+      _asking = false;
+      if (mounted) _timer = Timer(_poll, _ask);
+    }
+  }
+
+  String _lastSeenLabel() {
+    final at = _position?.recordedAt;
+    if (at == null) return 'Last seen just now.';
+    final minutes = DateTime.now().difference(at).inMinutes;
+    return minutes < 1
+        ? 'Last seen just now.'
+        : 'Last seen $minutes min ago.';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final position = _position;
+    // Nothing to show until the rider shares for the first time; an empty
+    // placeholder keeps the list height stable while polling.
+    if (position == null && !_everShown) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionHeader(title: 'Your rider'),
+        const SizedBox(height: 10),
+        SurfaceCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (position != null) ...[
+                RiderTrackingMap(
+                  rider: position.point,
+                  destination: widget.destination,
+                  trail: List<LatLng>.unmodifiable(_trail),
+                  bearing: _bearing,
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  _lastSeenLabel(),
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'The map moves while your rider shares their location. '
+                  'They may have other orders to deliver before yours.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                if (_trail.length >= 2) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    'The line shows the way since you opened this page.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ],
+              ] else
+                Text(
+                  'Your rider is not sharing their location right now. '
+                  'The map returns when they share it again.',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              if (_error != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  _error!,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
+                ),
+              ],
+            ],
           ),
         ),
       ],

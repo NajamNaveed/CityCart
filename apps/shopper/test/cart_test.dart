@@ -6,6 +6,7 @@ import 'package:citycart_shopper/data/session_store.dart';
 import 'package:citycart_shopper/features/cart/cart_controller.dart';
 import 'package:citycart_shopper/features/cart/cart_screen.dart';
 import 'package:citycart_shopper/features/checkout/checkout_screen.dart';
+import 'package:citycart_shopper/features/location/maps.dart';
 import 'package:citycart_shopper/features/product/product_screen.dart';
 import 'package:citycart_shopper/providers.dart';
 import 'package:flutter/material.dart';
@@ -13,6 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 CartItem _item(int quantity) => CartItem(
@@ -370,6 +372,12 @@ void main() {
                   name: 'Gulberg',
                   latitude: 31.52,
                   longitude: 74.34,
+                  outline: [
+                    LatLng(31.519, 74.339),
+                    LatLng(31.519, 74.341),
+                    LatLng(31.521, 74.341),
+                    LatLng(31.521, 74.339),
+                  ],
                 ),
               ],
             ),
@@ -379,11 +387,31 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      // The map pushed the notes field below the fold; scroll it into view.
+      final scrollable = find
+          .descendant(
+            of: find.byType(ListView),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      await tester.scrollUntilVisible(
+        find.text('DELIVERY NOTES'),
+        200,
+        scrollable: scrollable,
+      );
+      await tester.scrollUntilVisible(
+        find.text('Landmark, gate, floor, or who to call on arrival.'),
+        100,
+        scrollable: scrollable,
+      );
       await tester.enterText(find.byType(TextField).last, 'Gate on the left.');
       await tester.tap(find.text('Place order'));
       await tester.pump();
       expect(find.text('Enter the name for this delivery.'), findsOneWidget);
-      expect(find.text('Choose the block your address is in.'), findsOneWidget);
+      expect(
+        find.text('Drop the pin inside a shaded delivery area to continue.'),
+        findsOneWidget,
+      );
       expect(repository.orderPayload, isNull);
 
       await tester.enterText(find.byType(TextFormField).at(0), 'Sana Iqbal');
@@ -394,11 +422,14 @@ void main() {
       );
       await tester.pump();
 
-      await tester.tap(find.text('Choose your block'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Gulberg'));
+      await tester.ensureVisible(find.byType(DeliverySpotMap));
       await tester.pumpAndSettle();
-      expect(find.text('Gulberg'), findsOneWidget);
+      await tester.tap(find.byType(DeliverySpotMap));
+      // flutter_map waits out the double-tap window before reporting a tap.
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Delivering to Gulberg'), findsOneWidget);
 
       await tester.tap(find.text('Place order'));
       await tester.pumpAndSettle();
@@ -409,8 +440,8 @@ void main() {
       expect(payload['phone'], '0300 1234567');
       expect(payload['addressLine'], 'House 12, Street 4');
       expect(payload['city'], 'Lahore');
-      expect(payload['latitude'], 31.52);
-      expect(payload['longitude'], 74.34);
+      expect(payload['latitude'], closeTo(31.52, 0.001));
+      expect(payload['longitude'], closeTo(74.34, 0.001));
       expect(payload['deliveryNotes'], 'Gate on the left.');
       expect(find.text('Thank you!'), findsOneWidget);
       expect(tester.takeException(), isNull);

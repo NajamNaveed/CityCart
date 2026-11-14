@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart' hide Block;
+import 'package:latlong2/latlong.dart';
 
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/api_exception.dart';
 import '../../data/models.dart';
 import '../../providers.dart';
+import '../location/geo.dart';
+import '../location/maps.dart';
 
-/// Add or edit one saved address. The pin comes from the centre of the chosen
-/// delivery block — the same rule checkout uses — so the server can always tell
-/// whether the address is somewhere the city is actually served.
+/// Add or edit one saved address. The pin is dropped on a free OpenStreetMap
+/// with the delivery areas shaded; the server still checks that it lies inside
+/// an active block before the address is saved.
 class AddressFormScreen extends ConsumerStatefulWidget {
   const AddressFormScreen({super.key, this.addressId});
 
@@ -147,116 +150,35 @@ class _AddressFormScreenState extends ConsumerState<AddressFormScreen> {
     _pinError = false;
   }
 
-  Future<void> _pickBlock() async {
-    final area = ref.read(areaProvider).area;
-    if (area == null) {
-      showAppSnack(
-        context,
-        'Choose your delivery area from the You tab first.',
-        error: true,
-      );
-      return;
-    }
-    List<Block> blocks;
-    try {
-      blocks = await ref.read(blocksProvider(area.cityId).future);
-    } on ApiException catch (error) {
-      if (mounted) showAppSnack(context, error.message, error: true);
-      return;
-    } catch (_) {
-      if (mounted) {
-        showAppSnack(
-          context,
-          'We could not load the blocks nearby.',
-          error: true,
-        );
-      }
-      return;
-    }
-    if (!mounted) return;
-    if (blocks.isEmpty) {
-      showAppSnack(
-        context,
-        'No delivery blocks are set up in ${area.cityName} yet.',
-        error: true,
-      );
-      return;
-    }
-
-    final picked = await showAppSheet<Block>(
-      context,
-      title: 'Choose your block',
-      subtitle: 'The rider uses the centre of this block as the delivery pin.',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (final block in blocks)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: SurfaceCard(
-                onTap: block.latitude == null || block.longitude == null
-                    ? null
-                    : () => Navigator.of(context).pop(block),
-                color: _pinLabel == block.name ? AppColors.sage : null,
-                borderColor: _pinLabel == block.name ? AppColors.sage : null,
-                padding: const EdgeInsets.fromLTRB(14, 13, 12, 13),
-                child: Row(
-                  children: [
-                    Icon(
-                      block.latitude == null || block.longitude == null
-                          ? Icons.location_off_outlined
-                          : Icons.place_outlined,
-                      size: 20,
-                      color: AppColors.inkSoft,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            block.name,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          if (block.latitude == null || block.longitude == null)
-                            Text(
-                              'No delivery point yet',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                        ],
-                      ),
-                    ),
-                    if (_pinLabel == block.name)
-                      const Icon(
-                        Icons.check_circle_rounded,
-                        size: 20,
-                        color: AppColors.forest,
-                      ),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-    if (picked == null || !mounted) return;
-    if (picked.latitude == null || picked.longitude == null) {
-      showAppSnack(
-        context,
-        'That block has no delivery point yet. Choose another block.',
-        error: true,
-      );
-      return;
-    }
+  void _pickOnMap(LatLng point, List<Block> blocks) {
+    final inside = blocksContainingPoint(blocks, point);
     setState(() {
-      _latitude = picked.latitude;
-      _longitude = picked.longitude;
-      _pinLabel = picked.name;
+      _latitude = point.latitude;
+      _longitude = point.longitude;
+      _pinLabel = inside.isEmpty
+          ? 'Pinned on the map'
+          : inside.map((block) => block.name).join(' + ');
       _pinError = false;
       _saveError = null;
     });
+  }
+
+  /// The map is a hint; this asks the same blocks endpoint the server uses so
+  /// a spot outside every drawn area is caught before the save call.
+  Future<bool> _pinIsDeliverable() async {
+    final area = ref.read(areaProvider).area;
+    if (area == null || _latitude == null || _longitude == null) return true;
+    try {
+      final blocks = await ref.read(blocksProvider(area.cityId).future);
+      if (blocks.isEmpty) return true;
+      return blocksContainingPoint(
+        blocks,
+        LatLng(_latitude!, _longitude!),
+      ).isNotEmpty;
+    } catch (_) {
+      // The server is still authoritative; do not block on a hint that failed.
+      return true;
+    }
   }
 
   Future<void> _save() async {
@@ -265,6 +187,11 @@ class _AddressFormScreenState extends ConsumerState<AddressFormScreen> {
     final hasPin = _latitude != null && _longitude != null;
     if (!hasPin && _pinError != true) setState(() => _pinError = true);
     if (!formValid || !hasPin) return;
+    if (!await _pinIsDeliverable()) {
+      if (mounted) setState(() => _pinError = true);
+      return;
+    }
+    if (!mounted) return;
     FocusScope.of(context).unfocus();
     setState(() {
       _busy = true;
@@ -389,6 +316,8 @@ class _AddressFormScreenState extends ConsumerState<AddressFormScreen> {
   }
 
   Widget _form() {
+    final area = ref.watch(areaProvider).area;
+    final blocks = area == null ? null : ref.watch(blocksProvider(area.cityId));
     return Form(
       key: _formKey,
       child: ListView(
@@ -485,7 +414,20 @@ class _AddressFormScreenState extends ConsumerState<AddressFormScreen> {
             },
           ),
           const SizedBox(height: 14),
-          _PinCard(label: _pinLabel, error: _pinError, onTap: _pickBlock),
+          DeliverySpotPicker(
+            hasArea: area != null,
+            blocks: blocks,
+            pin: _latitude != null && _longitude != null
+                ? LatLng(_latitude!, _longitude!)
+                : null,
+            label: _pinLabel,
+            error: _pinError,
+            onPick: (point) =>
+                _pickOnMap(point, blocks?.asData?.value ?? const <Block>[]),
+            onRetry: area == null
+                ? null
+                : () => ref.invalidate(blocksProvider(area.cityId)),
+          ),
           const SizedBox(height: 14),
           TextField(
             controller: _notes,
@@ -620,90 +562,6 @@ class _AddressFormScreenState extends ConsumerState<AddressFormScreen> {
           ],
         ],
       ),
-    );
-  }
-}
-
-class _PinCard extends StatelessWidget {
-  const _PinCard({
-    required this.label,
-    required this.error,
-    required this.onTap,
-  });
-
-  final String? label;
-  final bool error;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasPin = label != null;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SurfaceCard(
-          onTap: onTap,
-          padding: const EdgeInsets.fromLTRB(14, 13, 12, 13),
-          borderColor: error ? AppColors.danger : null,
-          color: error ? AppColors.dangerSoft : null,
-          child: Row(
-            children: [
-              Icon(
-                hasPin ? Icons.place_rounded : Icons.add_location_alt_outlined,
-                size: 21,
-                color: error
-                    ? AppColors.danger
-                    : hasPin
-                    ? AppColors.forest
-                    : AppColors.muted,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Delivery block',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      label ?? 'Choose the block for this address',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: error
-                            ? AppColors.danger
-                            : hasPin
-                            ? AppColors.ink
-                            : AppColors.muted,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'The centre of the block is the delivery pin.',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
-            ],
-          ),
-        ),
-        if (error)
-          const Padding(
-            padding: EdgeInsets.only(top: 7, left: 4),
-            child: Text(
-              'Choose a delivery block before saving.',
-              style: TextStyle(
-                fontSize: 12.5,
-                color: AppColors.danger,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-      ],
     );
   }
 }
