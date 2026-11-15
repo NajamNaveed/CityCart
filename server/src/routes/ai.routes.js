@@ -1,6 +1,6 @@
 const express = require('express');
 
-const { ping, listingDraft, reviewSummary, translate } = require('../controllers/ai.controller');
+const { ping, listingDraft, reviewSummary, translate, shopAssistant } = require('../controllers/ai.controller');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
 const validateObjectIdParam = require('../middleware/validateObjectIdParam');
@@ -47,6 +47,18 @@ router.post(
   aiUserLimiter,
   aiDailyLimit,
   translate,
+);
+
+// Phase 2a: the customer shopping assistant. It may call several tools per
+// question, so the daily allowance is spent per provider call (see docs/05 §23a).
+router.post(
+  '/shop-assistant',
+  authenticate,
+  requireRole(ROLES.CUSTOMER),
+  requireAiEnabled,
+  aiUserLimiter,
+  aiDailyLimit,
+  shopAssistant,
 );
 
 module.exports = router;

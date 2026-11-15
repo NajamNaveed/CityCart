@@ -172,6 +172,29 @@ class ShopperRepository {
     await _api.post('/chats/$conversationId/read');
   }
 
+  // --- Assistant -----------------------------------------------------------
+
+  /// Phase 2a: asks the shopping assistant. The server runs every search
+  /// itself and decides which products come back, so the app only sends the
+  /// question and the chosen area.
+  Future<ShopAssistantReply> askShopAssistant({
+    required String message,
+    String? cityId,
+    double? latitude,
+    double? longitude,
+  }) async {
+    final body = await _api.post(
+      '/ai/shop-assistant',
+      data: {
+        'message': message.trim(),
+        'cityId': ?cityId,
+        'lat': ?latitude,
+        'lng': ?longitude,
+      },
+    );
+    return ShopAssistantReply.fromJson(body['data']);
+  }
+
   // --- Cart ----------------------------------------------------------------
 
   Future<CartView> cart() async {

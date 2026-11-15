@@ -5,6 +5,7 @@ const { countUsageToday } = require('../services/ai/usage');
 const { draftListing, NOTES_LIMIT } = require('../services/ai/agents/listing.agent');
 const { draftReviewSummary, ReviewSummaryError } = require('../services/ai/agents/reviewSummary.agent');
 const { translateMessage, TranslateError, TARGET_LANGS } = require('../services/ai/agents/translate.agent');
+const { askShopAssistant, MESSAGE_LIMIT: ASSISTANT_MESSAGE_LIMIT } = require('../services/ai/agents/shopAssistant.agent');
 const { formatZodError } = require('../utils/formatZodError');
 
 /**
@@ -114,4 +115,49 @@ async function translate(req, res, next) {
   }
 }
 
-module.exports = { ping, listingDraft, reviewSummary, translate };
+const shopAssistantSchema = z
+  .object({
+    message: z
+      .string()
+      .trim()
+      .min(2, 'Ask a question first.')
+      .max(ASSISTANT_MESSAGE_LIMIT, `Keep the question under ${ASSISTANT_MESSAGE_LIMIT} characters.`),
+    cityId: z.string().regex(/^[0-9a-f]{24}$/i, 'Choose a valid city.').optional(),
+    lat: z.number().min(-90).max(90).optional(),
+    lng: z.number().min(-180).max(180).optional(),
+  })
+  .refine((value) => (value.lat === undefined) === (value.lng === undefined), {
+    message: 'Send both coordinates or neither.',
+    path: ['lat'],
+  });
+
+/**
+ * Phase 2a: the shopping assistant. The model may search products, categories
+ * and nearby shops; the response cards come from the tool results, never from
+ * the model's own ids. A provider outage falls back to a plain search.
+ */
+async function shopAssistant(req, res, next) {
+  const parsed = shopAssistantSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsed.error),
+    });
+  }
+
+  try {
+    const data = await askShopAssistant({
+      message: parsed.data.message,
+      ctx: { userId: req.user._id, role: req.user.role },
+      cityId: parsed.data.cityId || null,
+      lat: parsed.data.lat ?? null,
+      lng: parsed.data.lng ?? null,
+    });
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+module.exports = { ping, listingDraft, reviewSummary, translate, shopAssistant };

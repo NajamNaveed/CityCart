@@ -2889,7 +2889,7 @@ Super Admin only.
 
 ---
 
-# 23a. AI Endpoints (Phase 0–1)
+# 23a. AI Endpoints (Phase 0–2a)
 
 Base:
 
@@ -3045,6 +3045,84 @@ Failure codes:
 ```
 
 `NOT_A_PARTICIPANT` is a 403 rather than the chat endpoints' 404 anti-probing answer because the roadmap fixes 403 for this endpoint (docs/29 Phase 1c).
+
+## Shopping assistant
+
+```text
+POST /api/v1/ai/shop-assistant
+```
+
+Role: `CUSTOMER` only. Used by the web `Ask CityCart` panel and the shopper app's assistant screen. This is the first tool-using agent (docs/27 §3.4): the model may ask for data, but every product in the answer comes from the server's own tool results.
+
+Request:
+
+```json
+{
+  "message": "cheap rice for a family of five",
+  "cityId": "66f1a0c2b3d4e5f60718293a",
+  "lat": 31.4187,
+  "lng": 73.0791
+}
+```
+
+`message` is 2–500 characters. `cityId` is optional; `lat` and `lng` must be sent together or not at all (sending one alone is a 400). The message is sanitized and treated as data, never as instructions.
+
+Tools (read-only, strict zod arguments):
+
+```text
+search_products { query?, maxPrice?, limit? }   public discovery of ACTIVE products in ACTIVE brands
+list_categories {}                              the active category tree, flattened (max 80 rows)
+find_stores { query?, limit? }                  stores around the chosen city, nearest first
+```
+
+The tool schemas are `.strict()`, so a model that tries to pass `userId`, `brandId` or any other field is refused and the tool is not run. The caller's scope comes only from the request (the signed-in customer and the chosen city/coordinates).
+
+The loop runs at most 3 tool steps and then forces a final answer. `productIds` in that answer are resolved against the ids seen in tool results; unknown ids are dropped, so a card can never be invented.
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "reply": "Roshan Home Care has a 5 kg bag for Rs 2,450, and it is running low.",
+    "products": [
+      {
+        "_id": "66f1a0c2b3d4e5f60718293a",
+        "name": "Super Kernel Rice 5kg",
+        "price": 2450,
+        "compareAtPrice": null,
+        "image": "https://res.cloudinary.com/.../rice.jpg",
+        "availability": "LOW_STOCK",
+        "brandName": "Roshan Home Care",
+        "brandSlug": "roshan-home-care-demo",
+        "availableAt": ["D Ground", "Madina Town"]
+      }
+    ],
+    "degraded": false,
+    "steps": 2
+  }
+}
+```
+
+When every provider fails (`AI_UNAVAILABLE`) or the loop never produces a usable answer (`AI_BAD_OUTPUT`), the endpoint does not fail: it answers with real products from a plain product search instead, and says so:
+
+```json
+{ "success": true, "data": { "reply": null, "products": [ ... ], "degraded": true, "steps": 0 } }
+```
+
+A kill-switch request (`AI_ENABLED=false`) is still refused before the agent runs (503 below); degraded mode covers provider outages, not a deliberate shutdown.
+
+Failure codes:
+
+```text
+400 (zod)              message missing/shorter than 2/longer than 500, bad cityId, or only one of lat/lng
+403 ROLE_NOT_ALLOWED   caller is not a customer
+429 AI_DAILY_LIMIT / rate limiter
+503 AI_UNAVAILABLE     kill switch is off
+```
+
+Each provider call inside the loop is logged in `AiUsage` and counts against the daily allowance; the burst limiter counts the request once.
 
 Agent endpoints and their role checks are specified in `docs/27-ai-agents-and-automation-plan.md` and `docs/29-ai-phase-roadmap.md`.
 

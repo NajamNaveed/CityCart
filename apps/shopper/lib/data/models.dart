@@ -301,6 +301,8 @@ class ProductSummary {
     this.image,
     this.availability = 'OUT_OF_STOCK',
     this.availableAt = const <String>[],
+    this.brandName,
+    this.brandSlug,
   });
 
   final String id;
@@ -310,6 +312,10 @@ class ProductSummary {
   final String? image;
   final String availability;
   final List<String> availableAt;
+
+  /// Only the assistant sends these: the shop a result came from.
+  final String? brandName;
+  final String? brandSlug;
 
   bool get inStock => availability != 'OUT_OF_STOCK';
 
@@ -323,6 +329,34 @@ class ProductSummary {
       image: optionalText(map['image']),
       availability: text(map['availability'], 'OUT_OF_STOCK'),
       availableAt: asStringList(map['availableAt']),
+      brandName: optionalText(map['brandName']),
+      brandSlug: optionalText(map['brandSlug']),
+    );
+  }
+}
+
+/// Phase 2a: one answer from the shopping assistant. [reply] is null when the
+/// model was unavailable and the server fell back to a plain search
+/// ([degraded]); [products] always come from the server's own tool results.
+class ShopAssistantReply {
+  const ShopAssistantReply({
+    this.reply,
+    this.products = const <ProductSummary>[],
+    this.degraded = false,
+  });
+
+  final String? reply;
+  final List<ProductSummary> products;
+  final bool degraded;
+
+  factory ShopAssistantReply.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return ShopAssistantReply(
+      reply: optionalText(map['reply']),
+      products: asList(
+        map['products'],
+      ).map(ProductSummary.fromJson).toList(growable: false),
+      degraded: map['degraded'] == true,
     );
   }
 }

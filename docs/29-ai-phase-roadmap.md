@@ -38,7 +38,7 @@ Build once; every agent depends on it.
 
 **Gate 0:** jest tests green with mocked `fetch`; app starts and works with **no** AI keys set. Tag `ai-phase-0`.
 
-> **Status:** Phase 0 built on branch `new` and tagged `ai-phase-0` (2026-11-13). Phases 1a and 1b committed on branch `new` (2026-11-14); 1c built on branch `new` and waiting for review (2026-11-14). `AI_ENABLED` ships closed; set it to `true` with provider keys to turn the AI layer on.
+> **Status:** Phase 0 tagged `ai-phase-0` (2026-11-13). Phases 1a, 1b and 1c committed (1c in `a69fca0`, 2026-11-14). Phase 2a is built on `main` (2026-11-15): tool layer (`search_products`, `list_categories`, `find_stores`), the 3-step agent loop, `POST /ai/shop-assistant`, the web `Ask CityCart` panel and the shopper app assistant screen. `AI_ENABLED` ships closed; set it to `true` with provider keys to turn the AI layer on.
 
 ---
 

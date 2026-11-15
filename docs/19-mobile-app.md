@@ -98,6 +98,7 @@ Installed once, inside `mobile/`, each with a stated reason:
 | 11 | Maps and support: a city selector, tri-state Blocks/Stores (and Blocks/Providers) layers and recenter on both maps, provider pins on the services map, and a Help & support screen fed by the public support settings | done |
 | 12 | Theme and accessibility: the web's v3 warm palette in `theme.js`, reduced-motion sheets, AA contrast for small text, and larger tap targets | done |
 | 13 | Push notifications: the phone registers after sign-in, the server's existing Expo pipeline delivers order and booking updates while the app is closed, and a tap opens the matching screen | done |
+| 14 | AI shopping assistant: an **Ask CityCart** card on Home, the `/assistant` screen with product cards, a plain-search fallback and retry | built |
 | later | Seller inbox on mobile | |
 
 Each phase ends with the server tests, lint and a successful app bundle.
@@ -166,6 +167,26 @@ Tests: the paging rules, query building, the home ordering/shelf rules (`service
 and the storefront fetcher are unit tested; `__tests__/screens.test.js`,
 `__tests__/home-screen.test.js` and `__tests__/storefront-screen.test.js` render the real
 screens against a fake API (what is shown and its loading, empty and error states).
+
+### Shopping assistant (AI Phase 2a)
+
+* The Home feed carries an **Ask CityCart** card under Home services; it opens
+  `/assistant` (`lib/features/assistant/`). The card appears for every shopper; the
+  server decides whether the assistant answers.
+* The screen starts with three suggestion chips. A question goes to
+  `POST /ai/shop-assistant` together with the chosen area's `cityId` and coordinates
+  (`ShopperRepository.askShopAssistant`). The app never searches for products itself,
+  so every card comes from the server's own tool results.
+* An answer shows the assistant's text and up to four product cards (photo, name, shop,
+  price, "Low stock"); tapping one opens the normal product page (`/product/:id`).
+* `degraded: true` (provider outage) labels the answer **Plain search results.** and
+  still shows real products. A 503 reads **The assistant is off right now** and Explore
+  keeps working; a 429 shows the daily-limit message; a failed question keeps its bubble
+  and offers **Try again** without asking it twice.
+* The conversation lives only while the screen is open (`assistantProvider` is
+  auto-disposed); nothing is stored on the phone.
+* Tests: `test/assistant_test.dart` covers a question with cards, the degraded label and
+  retry, at 320 px and 1.3 text scale.
 
 ## 9. Nearby and the shopping area (Phases 4, v2 Phase 3 and 11)
 

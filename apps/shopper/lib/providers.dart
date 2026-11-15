@@ -11,6 +11,7 @@ import 'data/area_store.dart';
 import 'data/models.dart';
 import 'data/repository.dart';
 import 'data/session_store.dart';
+import 'features/assistant/assistant_controller.dart';
 
 /// Injected in `main()` after the preferences have loaded.
 final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
@@ -90,6 +91,16 @@ final productProvider = FutureProvider.autoDispose.family<Product, String>((
   productId,
 ) {
   return ref.watch(shopperRepositoryProvider).product(productId);
+});
+
+// --- Assistant -------------------------------------------------------------
+
+/// One conversation per visit to the assistant screen; leaving it starts over.
+final assistantProvider = Provider.autoDispose<AssistantController>((ref) {
+  return AssistantController(
+    ref.watch(shopperRepositoryProvider),
+    ref.read(areaProvider).area,
+  );
 });
 
 // --- Services --------------------------------------------------------------

@@ -8,6 +8,7 @@ import 'core/widgets.dart';
 import 'features/account/account_screen.dart';
 import 'features/addresses/address_form_screen.dart';
 import 'features/addresses/addresses_screen.dart';
+import 'features/assistant/assistant_screen.dart';
 import 'features/auth/login_screen.dart';
 import 'features/bookings/booking_detail_screen.dart';
 import 'features/bookings/bookings_screen.dart';
@@ -152,6 +153,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             AddressFormScreen(addressId: state.pathParameters['addressId']),
       ),
       GoRoute(path: '/help', builder: (context, state) => const HelpScreen()),
+      GoRoute(
+        path: '/assistant',
+        builder: (context, state) => const AssistantScreen(),
+      ),
       GoRoute(
         path: '/messages/job/:conversationId',
         builder: (context, state) => ServiceChatScreen(

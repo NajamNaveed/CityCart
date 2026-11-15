@@ -80,6 +80,9 @@ const _codeMessages = <String, String>{
   'PROVIDER_UNAVAILABLE': 'This provider is not taking requests right now.',
   'PRICE_BELOW_STARTING': 'Your offer is below this provider’s starting price.',
   'INVALID_STATUS': 'This booking changed. Reload it and try again.',
+  'AI_UNAVAILABLE':
+      'The assistant is off right now. You can still search from Explore.',
+  'AI_DAILY_LIMIT': 'You have reached today’s assistant limit. Try again tomorrow.',
 };
 
 ApiException fromDio(DioException error) {

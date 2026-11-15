@@ -5,6 +5,7 @@ import { useFirstVisitDetect } from '../hooks/useFirstVisitDetect'
 import PageTransition from './ui/PageTransition'
 import StoreNavbar from './layout/StoreNavbar'
 import StoreFooter from './layout/StoreFooter'
+import AssistantPanel from './ai/AssistantPanel'
 
 export default function StoreLayout() {
   const { user } = useAuth()
@@ -35,6 +36,8 @@ export default function StoreLayout() {
           <Outlet />
         </PageTransition>
       </main>
+
+      {user?.role === 'CUSTOMER' && <AssistantPanel />}
 
       <StoreFooter flush />
     </div>

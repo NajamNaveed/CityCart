@@ -49,18 +49,21 @@ server/src/services/ai/
     groq.js
     openrouter.js
   tools/                    // thin wrappers over existing services, always take (ctx, args)
-    products.tool.js
-    orders.tool.js
-    reviews.tool.js
-    analytics.tool.js
+    index.js                // request-scoped ctx (signed-in user, city, coordinates) + tool registry
+    product.tool.js         // Phase 2a: public product search
+    category.tool.js        // Phase 2a: active category tree
+    store.tool.js           // Phase 2a: nearby stores
+    order.tool.js           // Phase 2b (planned): the caller's own orders only
+    service.tool.js         // Phase 2c (planned): providers, offerings and availability
+  agentLoop.js              // Phase 2a: one JSON decision per turn, max 3 tool steps
   agents/
-    shopping.agent.js
-    order.agent.js
     listing.agent.js
     reviewSummary.agent.js
-    sellerAdvisor.agent.js
-    moderation.agent.js
-    adminTriage.agent.js
+    translate.agent.js
+    shopAssistant.agent.js
+    sellerAdvisor.agent.js  // Phase 3a (planned)
+    moderation.agent.js     // Phase 4c (planned)
+    adminTriage.agent.js    // Phase 4b (planned)
   prompts/                  // one .js (template string) per agent, easy to version
   guard.js                  // input trimming, injection hardening, output JSON validation (zod)
 server/src/controllers/ai.controller.js

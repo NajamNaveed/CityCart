@@ -81,6 +81,8 @@ class HomeScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 12),
                     _ServicesTeaser(onTap: () => context.go('/services')),
+                    const SizedBox(height: 12),
+                    _AssistantTeaser(onTap: () => context.push('/assistant')),
                     const SizedBox(height: 24),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -254,8 +256,75 @@ class _ServicesTeaser extends StatelessWidget {
   }
 }
 
-class _NeighbourhoodBanner extends StatelessWidget {
-  const _NeighbourhoodBanner({this.areaLabel, required this.storeCount});
+class _AssistantTeaser extends StatelessWidget {
+  const _AssistantTeaser({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: SurfaceCard(
+        onTap: onTap,
+        padding: const EdgeInsets.all(16),
+        color: AppColors.sage,
+        borderColor: AppColors.sage,
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: const Icon(
+                Icons.auto_awesome_rounded,
+                size: 21,
+                color: AppColors.sageInk,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Ask CityCart',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: AppColors.sageInk,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Find a product, a gift or a shop nearby',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.sageInk.withValues(alpha: 0.85),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            const Icon(
+              Icons.arrow_forward_rounded,
+              size: 19,
+              color: AppColors.sageInk,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NeighbourhoodBanner extends StatelessWidget {  const _NeighbourhoodBanner({this.areaLabel, required this.storeCount});
 
   final String? areaLabel;
   final int storeCount;
