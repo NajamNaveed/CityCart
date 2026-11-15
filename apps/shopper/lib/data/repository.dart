@@ -205,6 +205,27 @@ class ShopperRepository {
     return OrderAssistantReply.fromJson(body['data']);
   }
 
+  /// Phase 2c: asks for a service provider or a free time. The server searches
+  /// providers and generates the slot labels itself; the app never sends a
+  /// provider id or a booking time.
+  Future<ServiceAssistantReply> askServiceHelper({
+    required String message,
+    String? cityId,
+    double? latitude,
+    double? longitude,
+  }) async {
+    final body = await _api.post(
+      '/ai/service-helper',
+      data: {
+        'message': message.trim(),
+        'cityId': ?cityId,
+        'lat': ?latitude,
+        'lng': ?longitude,
+      },
+    );
+    return ServiceAssistantReply.fromJson(body['data']);
+  }
+
   // --- Cart ----------------------------------------------------------------
 
   Future<CartView> cart() async {

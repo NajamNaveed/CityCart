@@ -4,9 +4,9 @@ import '../../data/api_exception.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
 
-/// The two assistants share one screen (docs/29 Phase 2a and 2b) and one
+/// The three assistants share one screen (docs/29 Phase 2a–2c) and one
 /// server-provided card format each.
-enum AssistantMode { shop, orders }
+enum AssistantMode { shop, orders, services }
 
 /// One bubble in the assistant thread: the shopper's question or its answer.
 class AssistantTurn {
@@ -15,6 +15,7 @@ class AssistantTurn {
     required this.isQuestion,
     this.products = const <ProductSummary>[],
     this.orders = const <AssistantOrder>[],
+    this.providers = const <AssistantServiceProvider>[],
     this.degraded = false,
   });
 
@@ -25,6 +26,7 @@ class AssistantTurn {
   final bool isQuestion;
   final List<ProductSummary> products;
   final List<AssistantOrder> orders;
+  final List<AssistantServiceProvider> providers;
 
   /// True when the model was unavailable and the server answered with a plain
   /// search (or the customer's latest orders) instead.
@@ -84,6 +86,7 @@ class AssistantController extends ChangeNotifier {
     notifyListeners();
 
     try {
+      final area = _area;
       if (_mode == AssistantMode.orders) {
         final reply = await _repository.askOrderHelper(message: question);
         _turns.add(
@@ -94,8 +97,22 @@ class AssistantController extends ChangeNotifier {
             degraded: reply.degraded,
           ),
         );
+      } else if (_mode == AssistantMode.services) {
+        final reply = await _repository.askServiceHelper(
+          message: question,
+          cityId: area?.cityId,
+          latitude: area?.latitude,
+          longitude: area?.longitude,
+        );
+        _turns.add(
+          AssistantTurn(
+            text: reply.reply ?? 'Here are service providers near you.',
+            isQuestion: false,
+            providers: reply.providers,
+            degraded: reply.degraded,
+          ),
+        );
       } else {
-        final area = _area;
         final reply = await _repository.askShopAssistant(
           message: question,
           cityId: area?.cityId,

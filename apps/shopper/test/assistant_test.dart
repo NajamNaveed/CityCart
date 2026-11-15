@@ -55,18 +55,53 @@ const _orderReply = OrderAssistantReply(
   ],
 );
 
+const _serviceReply = ServiceAssistantReply(
+  reply: 'Cool Air Services can come on Monday evening. Open their page to book.',
+  providers: [
+    AssistantServiceProvider(
+      providerId: 'sp1',
+      displayName: 'Cool Air Services',
+      slug: 'cool-air-services',
+      categoryName: 'AC repair',
+      blockName: 'Ghanta Ghar',
+      distanceKm: 1.2,
+      startingAtPricePaisa: 350000,
+      ratingAvg: 4.6,
+      ratingCount: 12,
+      offerings: [
+        AssistantServiceOffering(
+          offeringId: 'so1',
+          title: 'AC general service',
+          durationMinutes: 60,
+          startingAtPricePaisa: 350000,
+          slots: [
+            AssistantServiceSlot(
+              start: '2026-11-16T12:00:00.000Z',
+              label: 'Mon 16 Nov · 5:00 pm',
+              dateKey: '2026-11-16',
+            ),
+          ],
+        ),
+      ],
+    ),
+  ],
+);
+
 class _FakeRepository extends ShopperRepository {
   _FakeRepository({
     this.reply = _reply,
     this.orderReply = _orderReply,
+    this.serviceReply = _serviceReply,
     this.failures = 0,
   }) : super(ApiClient(SessionStore()));
 
   final ShopAssistantReply reply;
   final OrderAssistantReply orderReply;
+  final ServiceAssistantReply serviceReply;
   int failures;
   final List<String> asked = [];
   final List<String> ordersAsked = [];
+  final List<String> servicesAsked = [];
 
   @override
   Future<ShopAssistantReply> askShopAssistant({
@@ -91,6 +126,17 @@ class _FakeRepository extends ShopperRepository {
   Future<OrderAssistantReply> askOrderHelper({required String message}) async {
     ordersAsked.add(message);
     return orderReply;
+  }
+
+  @override
+  Future<ServiceAssistantReply> askServiceHelper({
+    required String message,
+    String? cityId,
+    double? latitude,
+    double? longitude,
+  }) async {
+    servicesAsked.add(message);
+    return serviceReply;
   }
 }
 
@@ -234,6 +280,90 @@ void main() {
       expect(find.text('View order'), findsOneWidget);
       expect(repository.ordersAsked, ['Where is my order?']);
       expect(repository.asked, isEmpty);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('asks for a service and shows the provider’s free times', (
+      tester,
+    ) async {
+      final prefs = await SharedPreferences.getInstance();
+      final repository = _FakeRepository();
+      final controller = AssistantController(repository, _area);
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        _app(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(prefs),
+            assistantProvider.overrideWith((ref) => controller),
+          ],
+        ),
+      );
+
+      await tester.tap(find.text('Services'));
+      await tester.pump();
+      expect(find.text('Need a service?'), findsOneWidget);
+
+      await tester.tap(find.text('AC repair tomorrow evening'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        find.text(
+          'Cool Air Services can come on Monday evening. Open their page to book.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Cool Air Services'), findsOneWidget);
+      expect(find.text('AC repair · Ghanta Ghar · 1.2 km'), findsOneWidget);
+      expect(find.text('From Rs 3,500'), findsOneWidget);
+      expect(find.text('AC general service'), findsOneWidget);
+      expect(find.text('Free: Mon 16 Nov · 5:00 pm'), findsOneWidget);
+      expect(repository.servicesAsked, ['AC repair tomorrow evening']);
+      expect(repository.asked, isEmpty);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a degraded service answer keeps providers but drops times', (
+      tester,
+    ) async {
+      final prefs = await SharedPreferences.getInstance();
+      final repository = _FakeRepository(
+        serviceReply: const ServiceAssistantReply(
+          degraded: true,
+          providers: [
+            AssistantServiceProvider(
+              providerId: 'sp2',
+              displayName: 'Plumb Line',
+              slug: 'plumb-line',
+              categoryName: 'Plumbing',
+              startingAtPricePaisa: 100000,
+            ),
+          ],
+        ),
+      );
+      final controller = AssistantController(repository, _area);
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        _app(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(prefs),
+            assistantProvider.overrideWith((ref) => controller),
+          ],
+        ),
+      );
+
+      await tester.tap(find.text('Services'));
+      await tester.pump();
+      await tester.tap(find.text('Plumber near me'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Providers without the assistant.'), findsOneWidget);
+      expect(find.text('Here are service providers near you.'), findsOneWidget);
+      expect(find.text('Plumb Line'), findsOneWidget);
+      expect(find.textContaining('Free:'), findsNothing);
       expect(tester.takeException(), isNull);
     });
 

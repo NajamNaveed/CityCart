@@ -2889,7 +2889,7 @@ Super Admin only.
 
 ---
 
-# 23a. AI Endpoints (Phase 0–2b)
+# 23a. AI Endpoints (Phase 0–2c)
 
 Base:
 
@@ -3203,6 +3203,91 @@ Failure codes:
 
 ```text
 400 (zod)              message missing/shorter than 2/longer than 500
+403 ROLE_NOT_ALLOWED   caller is not a customer
+429 AI_DAILY_LIMIT / rate limiter
+503 AI_UNAVAILABLE     kill switch is off
+```
+
+Agent endpoints and their role checks are specified in `docs/27-ai-agents-and-automation-plan.md` and `docs/29-ai-phase-roadmap.md`.
+
+## Service helper
+
+```text
+POST /api/v1/ai/service-helper
+```
+
+Role: `CUSTOMER` only. The **Services** mode of the web `Ask CityCart` panel and of the shopper app's assistant screen. It finds service providers and, when asked about a time, the free appointment slots the provider has published.
+
+Request:
+
+```json
+{ "message": "AC repair tomorrow evening", "cityId": "66f1a0c2b3d4e5f60718293a", "lat": 31.4187, "lng": 73.0791 }
+```
+
+`message` is 2–500 characters, sanitized and treated as data. `cityId` and the coordinate pair are optional; when sent they scope the search the same way the public Services page does. `lat` and `lng` must be sent together.
+
+Tools (read-only, strict zod arguments):
+
+```text
+find_service_providers { query?, categoryId?, limit? }   public provider discovery; query max 80, limit 1–5
+list_service_categories {}                               the active service categories
+get_provider_slots { providerId, day?, part? }           the provider's free starts; day 0–9 (Karachi), part morning/afternoon/evening
+```
+
+Nothing here can create, move or cancel a booking. `get_provider_slots` first applies the public visibility rules (`status: ACTIVE`, `verification: VERIFIED`, billing not `FROZEN`/`RESTRICTED`, and the chosen city when one was sent), then loads the provider's active offerings and its published availability (`docs/24 §4.4`), generates every start that fits the offering duration inside a weekly window on the next 10 days, drops blacked-out days, starts at or before now, and any start that overlaps a booking still holding its slot (`ACCEPTED`, `IN_PROGRESS`, `CONFIRMED`, `COMPLETED`, `DISPUTED`). The model receives only those generated labels, so it cannot quote a time that is not really free.
+
+Provider and offering ids come from the tools; the model's strict schemas refuse an invented id or an ownership field. The model may only choose which providers to show (at most 3), and each card is built by the server from what the tools read.
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "reply": "Cool Air Services has a free 5:00 pm slot tomorrow and can come to your area. Open their page to book.",
+    "providers": [
+      {
+        "providerId": "66f1a0c2b3d4e5f60718293b",
+        "displayName": "Cool Air Services",
+        "slug": "cool-air-services",
+        "categoryName": "AC repair",
+        "blockName": "Ghanta Ghar",
+        "distanceKm": 1.2,
+        "startingAtPrice": 350000,
+        "ratingAvg": 4.6,
+        "ratingCount": 12,
+        "isNew": false,
+        "offerings": [
+          {
+            "offeringId": "66f1a0c2b3d4e5f60718293c",
+            "title": "AC general service",
+            "durationMinutes": 60,
+            "startingAtPrice": 350000,
+            "slots": [
+              {
+                "start": "2026-11-16T12:00:00.000Z",
+                "label": "Mon 16 Nov · 5:00 pm",
+                "dateKey": "2026-11-16"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "degraded": false,
+    "steps": 2
+  }
+}
+```
+
+`startingAtPrice` is paisa, the same unit as the provider endpoints in §22g. When the answer only names providers and no time was asked for, `slots` is an empty array. The assistant never books; the client opens `/services/:slug`, where the normal booking form runs the authoritative slot check again.
+
+When every provider fails (`AI_UNAVAILABLE`) or the loop never produces a usable answer (`AI_BAD_OUTPUT`), the endpoint falls back to a plain provider search and answers `reply: null`, real providers, an empty `slots` array per offering, `degraded: true`, `steps: 0`.
+
+Failure codes:
+
+```text
+400 (zod)              message missing/shorter than 2/longer than 500, bad cityId, only one coordinate
 403 ROLE_NOT_ALLOWED   caller is not a customer
 429 AI_DAILY_LIMIT / rate limiter
 503 AI_UNAVAILABLE     kill switch is off

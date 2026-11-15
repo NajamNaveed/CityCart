@@ -16,10 +16,20 @@ const _orderSuggestions = [
   'How do I cancel an order?',
   'Can I return an item?',
 ];
+const _serviceSuggestions = [
+  'AC repair tomorrow evening',
+  'Plumber near me',
+  'Salon for a haircut',
+];
 
-/// Phase 2a: the shopping assistant. The server answers with real products it
-/// found itself; this screen only shows what came back and links to each
-/// product.
+String _modeTitle(AssistantMode mode) => switch (mode) {
+  AssistantMode.orders => 'Order help',
+  AssistantMode.services => 'Booking help',
+  AssistantMode.shop => 'Shopping assistant',
+};
+
+/// Phase 2a–2c: the shopping, order and service assistants. The server answers
+/// with real rows it read itself; this screen only shows what came back.
 class AssistantScreen extends ConsumerStatefulWidget {
   const AssistantScreen({super.key});
 
@@ -60,7 +70,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
   Widget build(BuildContext context) {
     final controller = ref.watch(assistantProvider);
     final areaLabel = ref.read(areaProvider).area?.label ?? 'your area';
-    final ordersMode = controller.mode == AssistantMode.orders;
+    final mode = controller.mode;
 
     return ListenableBuilder(
       listenable: controller,
@@ -71,25 +81,32 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
               children: [
                 ScreenTopBar(
                   title: 'Ask CityCart',
-                  subtitle: ordersMode ? 'Order help' : 'Shopping assistant',
+                  subtitle: _modeTitle(mode),
                 ),
                 const Divider(height: 1),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                  child: Row(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
                       _ModeChip(
                         label: 'Find products',
-                        active: !ordersMode,
+                        active: mode == AssistantMode.shop,
                         onTap: () =>
                             controller.setMode(AssistantMode.shop),
                       ),
-                      const SizedBox(width: 8),
                       _ModeChip(
                         label: 'My orders',
-                        active: ordersMode,
+                        active: mode == AssistantMode.orders,
                         onTap: () =>
                             controller.setMode(AssistantMode.orders),
+                      ),
+                      _ModeChip(
+                        label: 'Services',
+                        active: mode == AssistantMode.services,
+                        onTap: () =>
+                            controller.setMode(AssistantMode.services),
                       ),
                     ],
                   ),
@@ -97,7 +114,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
                 Expanded(
                   child: controller.turns.isEmpty
                       ? _Starter(
-                          mode: controller.mode,
+                          mode: mode,
                           areaLabel: areaLabel,
                           onSuggestion: (text) => _send(controller, text),
                         )
@@ -111,9 +128,14 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
                           itemBuilder: (context, index) {
                             if (controller.sending && index == 0) {
                               return _Thinking(
-                                label: ordersMode
-                                    ? 'Checking your orders…'
-                                    : 'Looking through the shops…',
+                                label: switch (mode) {
+                                  AssistantMode.orders =>
+                                    'Checking your orders…',
+                                  AssistantMode.services =>
+                                    'Checking providers…',
+                                  AssistantMode.shop =>
+                                    'Looking through the shops…',
+                                },
                               );
                             }
                             final offset = controller.sending ? 1 : 0;
@@ -149,8 +171,15 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
                           textCapitalization: TextCapitalization.sentences,
                           textInputAction: TextInputAction.send,
                           onSubmitted: (_) => _send(controller),
-                          decoration: const InputDecoration(
-                            hintText: 'Ask about a product or a shop',
+                          decoration: InputDecoration(
+                            hintText: switch (mode) {
+                              AssistantMode.orders =>
+                                'Ask about one of your orders',
+                              AssistantMode.services =>
+                                'Ask about a service or a free time',
+                              AssistantMode.shop =>
+                                'Ask about a product or a shop',
+                            },
                             counterText: '',
                             contentPadding: EdgeInsets.symmetric(
                               horizontal: 16,
@@ -217,8 +246,30 @@ class _Starter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ordersMode = mode == AssistantMode.orders;
-    final suggestions = ordersMode ? _orderSuggestions : _shopSuggestions;
+    final (title, body, suggestions, footer) = switch (mode) {
+      AssistantMode.orders => (
+        'Ask about your orders',
+        'Ask where an order is, what its status means, or how cancellation '
+            'and returns work. I can only read your own orders.',
+        _orderSuggestions,
+        'Answers come from your own orders.',
+      ),
+      AssistantMode.services => (
+        'Need a service?',
+        'Ask for a plumber, repair, salon or any other service. I can find '
+            'providers and show the free times they have published. You book '
+            'on the provider page.',
+        _serviceSuggestions,
+        'Answers come from real providers in $areaLabel.',
+      ),
+      AssistantMode.shop => (
+        'What are you looking for?',
+        'Ask in your own words. I can find products, compare prices and point '
+            'you to shops near you.',
+        _shopSuggestions,
+        'Answers come from real listings in $areaLabel.',
+      ),
+    };
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 40, 20, 24),
@@ -240,18 +291,13 @@ class _Starter extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         Text(
-          ordersMode ? 'Ask about your orders' : 'What are you looking for?',
+          title,
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.headlineSmall,
         ),
         const SizedBox(height: 8),
         Text(
-          ordersMode
-              ? 'Ask where an order is, what its status means, or how '
-                    'cancellation and returns work. I can only read your own '
-                    'orders.'
-              : 'Ask in your own words. I can find products, compare prices '
-                    'and point you to shops near you.',
+          body,
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyMedium,
         ),
@@ -270,9 +316,7 @@ class _Starter extends StatelessWidget {
         ),
         const SizedBox(height: 26),
         Text(
-          ordersMode
-              ? 'Answers come from your own orders.'
-              : 'Answers come from real listings in $areaLabel.',
+          footer,
           textAlign: TextAlign.center,
           style: Theme.of(
             context,
@@ -445,6 +489,8 @@ class _Turn extends StatelessWidget {
                         Icon(
                           turn.orders.isNotEmpty
                               ? Icons.receipt_long_rounded
+                              : turn.providers.isNotEmpty
+                              ? Icons.storefront_rounded
                               : Icons.search_rounded,
                           size: 14,
                           color: AppColors.muted,
@@ -453,6 +499,8 @@ class _Turn extends StatelessWidget {
                         Text(
                           turn.orders.isNotEmpty
                               ? 'Latest orders without the assistant.'
+                              : turn.providers.isNotEmpty
+                              ? 'Providers without the assistant.'
                               : 'Plain search results.',
                           style: const TextStyle(
                             fontSize: 11.5,
@@ -472,6 +520,10 @@ class _Turn extends StatelessWidget {
                   for (final order in turn.orders) ...[
                     const SizedBox(height: 10),
                     _AssistantOrderCard(order: order),
+                  ],
+                  for (final provider in turn.providers) ...[
+                    const SizedBox(height: 10),
+                    _AssistantProviderCard(provider: provider),
                   ],
                 ],
               ),
@@ -664,6 +716,157 @@ class _AssistantOrderCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// A provider the server found, with only the free times it generated. The
+/// assistant never books; the card opens the provider page where booking
+/// happens normally.
+class _AssistantProviderCard extends StatelessWidget {
+  const _AssistantProviderCard({required this.provider});
+
+  final AssistantServiceProvider provider;
+
+  @override
+  Widget build(BuildContext context) {
+    final canOpen = provider.slug.isNotEmpty;
+    final meta = [
+      provider.categoryName,
+      provider.blockName,
+      formatDistance(provider.distanceKm),
+    ].whereType<String>().where((part) => part.isNotEmpty).join(' · ');
+    final rated = provider.ratingAvg != null && provider.ratingCount > 0;
+
+    return Material(
+      color: AppColors.paper,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: canOpen
+            ? () => context.push('/services/provider/${provider.slug}')
+            : null,
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      provider.displayName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        height: 1.3,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  if (provider.isNew)
+                    const Pill(
+                      text: 'New',
+                      background: AppColors.paperDeep,
+                      foreground: AppColors.inkSoft,
+                    )
+                  else if (rated)
+                    Text(
+                      '${provider.ratingAvg!.toStringAsFixed(1)} ★ '
+                      '(${provider.ratingCount})',
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.inkSoft,
+                      ),
+                    ),
+                ],
+              ),
+              if (meta.isNotEmpty) ...[
+                const SizedBox(height: 3),
+                Text(
+                  meta,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    color: AppColors.muted,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 6),
+              Text(
+                'From ${formatMoney(provider.startingAtPrice)}',
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.clay,
+                ),
+              ),
+              for (final offering in provider.offerings) ...[
+                const SizedBox(height: 8),
+                _AssistantOffering(offering: offering),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AssistantOffering extends StatelessWidget {
+  const _AssistantOffering({required this.offering});
+
+  final AssistantServiceOffering offering;
+
+  @override
+  Widget build(BuildContext context) {
+    final slots = offering.slots;
+    final shown = slots.take(2).map((slot) => slot.label).join(' · ');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                offering.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.inkSoft,
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              '${offering.durationMinutes} min · '
+              '${formatMoney(offering.startingAtPrice)}',
+              style: const TextStyle(fontSize: 10.5, color: AppColors.muted),
+            ),
+          ],
+        ),
+        if (slots.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(
+            'Free: $shown${slots.length > 2 ? ' +${slots.length - 2} more' : ''}',
+            style: const TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+              color: AppColors.forest,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

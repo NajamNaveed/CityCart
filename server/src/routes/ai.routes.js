@@ -1,6 +1,14 @@
 const express = require('express');
 
-const { ping, listingDraft, reviewSummary, translate, shopAssistant, orderHelper } = require('../controllers/ai.controller');
+const {
+  ping,
+  listingDraft,
+  reviewSummary,
+  translate,
+  shopAssistant,
+  orderHelper,
+  serviceHelper,
+} = require('../controllers/ai.controller');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
 const validateObjectIdParam = require('../middleware/validateObjectIdParam');
@@ -71,6 +79,18 @@ router.post(
   aiUserLimiter,
   aiDailyLimit,
   orderHelper,
+);
+
+// Phase 2c: find a service provider and its free times. The tools only read
+// public provider data and published availability; no booking is created.
+router.post(
+  '/service-helper',
+  authenticate,
+  requireRole(ROLES.CUSTOMER),
+  requireAiEnabled,
+  aiUserLimiter,
+  aiDailyLimit,
+  serviceHelper,
 );
 
 module.exports = router;

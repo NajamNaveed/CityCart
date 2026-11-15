@@ -98,7 +98,7 @@ Installed once, inside `mobile/`, each with a stated reason:
 | 11 | Maps and support: a city selector, tri-state Blocks/Stores (and Blocks/Providers) layers and recenter on both maps, provider pins on the services map, and a Help & support screen fed by the public support settings | done |
 | 12 | Theme and accessibility: the web's v3 warm palette in `theme.js`, reduced-motion sheets, AA contrast for small text, and larger tap targets | done |
 | 13 | Push notifications: the phone registers after sign-in, the server's existing Expo pipeline delivers order and booking updates while the app is closed, and a tap opens the matching screen | done |
-| 14 | AI shopping and order assistant: an **Ask CityCart** card on Home, the `/assistant` screen with **Find products** (product cards) and **My orders** (the shopper's own orders with **View order** / **Cancel order**), a plain fallback and retry | built |
+| 14 | AI shopping, order and service assistant: an **Ask CityCart** card on Home, the `/assistant` screen with **Find products** (product cards), **My orders** (the shopper's own orders with **View order** / **Cancel order**) and **Services** (provider cards with server-generated free times, opening the provider page to book), a plain fallback and retry | built |
 | later | Seller inbox on mobile | |
 
 Each phase ends with the server tests, lint and a successful app bundle.
@@ -168,14 +168,15 @@ and the storefront fetcher are unit tested; `__tests__/screens.test.js`,
 `__tests__/home-screen.test.js` and `__tests__/storefront-screen.test.js` render the real
 screens against a fake API (what is shown and its loading, empty and error states).
 
-### Shopping and order assistant (AI Phases 2a and 2b)
+### Shopping, order and service assistant (AI Phases 2a–2c)
 
 * The Home feed carries an **Ask CityCart** card under Home services; it opens
   `/assistant` (`lib/features/assistant/`). The card appears for every shopper; the
   server decides whether the assistant answers.
-* Two mode chips switch the same thread between **Find products** (the default) and
-  **My orders**. Changing the mode clears the conversation and is ignored while a
-  question is in flight, so an answer never lands in the wrong mode.
+* Three mode chips switch the same thread between **Find products** (the default),
+  **My orders** and **Services**. The chips sit in a `Wrap`, so they still fit at
+  320 px. Changing the mode clears the conversation and is ignored while a question is
+  in flight, so an answer never lands in the wrong mode.
 * **Find products.** The screen starts with three suggestion chips. A question goes to
   `POST /ai/shop-assistant` together with the chosen area's `cityId` and coordinates
   (`ShopperRepository.askShopAssistant`). The app never searches for products itself,
@@ -191,16 +192,27 @@ screens against a fake API (what is shown and its loading, empty and error state
   tags; the whole card opens `/orders/:id`, where the shopper performs the action. The
   assistant never changes an order, and there is no "Start return" tag because v2 has no
   customer-initiated return after delivery.
+* **Services.** A question goes to `POST /ai/service-helper` with the chosen area
+  (`ShopperRepository.askServiceHelper`). The server finds providers and, when the
+  question names a time, generates the free starts from the provider's published hours
+  and existing bookings — the app never calculates or sends a time. An answer shows up to
+  three provider cards: name, category · block · distance, start price, rating ("New"
+  when unrated), and each listed service with its duration, price and up to four free
+  labels (two labels plus "+N more"). Tapping a card opens
+  `/services/provider/:slug`; the assistant never books, so the normal booking form does
+  it and re-checks the slot.
 * `degraded: true` (provider outage) labels the answer **Plain search results.** in Find
-  products and **Latest orders without the assistant.** in My orders, and still shows
-  real products or orders. A 503 reads **The assistant is off right now** and Explore
-  keeps working; a 429 shows the daily-limit message; a failed question keeps its bubble
-  and offers **Try again** without asking it twice.
+  products, **Latest orders without the assistant.** in My orders and **Providers without
+  the assistant.** in Services, and still shows real products, orders or providers —
+  provider cards then carry no times. A 503 reads **The assistant is off right now** and
+  Explore keeps working; a 429 shows the daily-limit message; a failed question keeps its
+  bubble and offers **Try again** without asking it twice.
 * The conversation lives only while the screen is open (`assistantProvider` is
   auto-disposed); nothing is stored on the phone.
 * Tests: `test/assistant_test.dart` covers a question with cards, the degraded label and
-  retry in Find products, and a question answered with the shopper's own order cards in
-  My orders, at 320 px and 1.3 text scale.
+  retry in Find products, a question answered with the shopper's own order cards in
+  My orders, and a service question with a provider card and free times plus its degraded
+  fallback, at 320 px and 1.3 text scale.
 
 ## 9. Nearby and the shopping area (Phases 4, v2 Phase 3 and 11)
 

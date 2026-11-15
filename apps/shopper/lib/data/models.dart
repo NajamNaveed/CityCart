@@ -456,6 +456,135 @@ class OrderAssistantReply {
   }
 }
 
+/// Phase 2c: one free start the server itself generated from the provider's
+/// published hours and existing bookings. [label] is the only text the
+/// assistant may quote for a time.
+class AssistantServiceSlot {
+  const AssistantServiceSlot({
+    required this.start,
+    required this.label,
+    this.dateKey = '',
+  });
+
+  final String start;
+  final String label;
+  final String dateKey;
+
+  factory AssistantServiceSlot.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return AssistantServiceSlot(
+      start: text(map['start']),
+      label: text(map['label']),
+      dateKey: text(map['dateKey']),
+    );
+  }
+}
+
+class AssistantServiceOffering {
+  const AssistantServiceOffering({
+    required this.offeringId,
+    required this.title,
+    this.durationMinutes = 0,
+    this.startingAtPricePaisa = 0,
+    this.slots = const <AssistantServiceSlot>[],
+  });
+
+  final String offeringId;
+  final String title;
+  final int durationMinutes;
+  final int startingAtPricePaisa;
+  final List<AssistantServiceSlot> slots;
+
+  double get startingAtPrice => startingAtPricePaisa / 100;
+
+  factory AssistantServiceOffering.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return AssistantServiceOffering(
+      offeringId: text(map['offeringId']),
+      title: text(map['title'], 'Service'),
+      durationMinutes: asInt(map['durationMinutes']),
+      startingAtPricePaisa: asInt(map['startingAtPrice']),
+      slots: asList(
+        map['slots'],
+      ).map(AssistantServiceSlot.fromJson).toList(growable: false),
+    );
+  }
+}
+
+/// A server-built service provider card. The assistant may only return ids a
+/// tool actually found, and only the server adds the free times.
+class AssistantServiceProvider {
+  const AssistantServiceProvider({
+    required this.providerId,
+    required this.displayName,
+    required this.slug,
+    this.categoryName,
+    this.blockName,
+    this.distanceKm,
+    this.startingAtPricePaisa = 0,
+    this.ratingAvg,
+    this.ratingCount = 0,
+    this.isNew = false,
+    this.offerings = const <AssistantServiceOffering>[],
+  });
+
+  final String providerId;
+  final String displayName;
+  final String slug;
+  final String? categoryName;
+  final String? blockName;
+  final double? distanceKm;
+  final int startingAtPricePaisa;
+  final double? ratingAvg;
+  final int ratingCount;
+  final bool isNew;
+  final List<AssistantServiceOffering> offerings;
+
+  double get startingAtPrice => startingAtPricePaisa / 100;
+
+  factory AssistantServiceProvider.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return AssistantServiceProvider(
+      providerId: text(map['providerId']),
+      displayName: text(map['displayName'], 'Service provider'),
+      slug: text(map['slug']),
+      categoryName: optionalText(map['categoryName']),
+      blockName: optionalText(map['blockName']),
+      distanceKm: optionalDouble(map['distanceKm']),
+      startingAtPricePaisa: asInt(map['startingAtPrice']),
+      ratingAvg: optionalDouble(map['ratingAvg']),
+      ratingCount: asInt(map['ratingCount']),
+      isNew: map['isNew'] == true,
+      offerings: asList(
+        map['offerings'],
+      ).map(AssistantServiceOffering.fromJson).toList(growable: false),
+    );
+  }
+}
+
+class ServiceAssistantReply {
+  const ServiceAssistantReply({
+    this.reply,
+    this.providers = const <AssistantServiceProvider>[],
+    this.degraded = false,
+  });
+
+  final String? reply;
+  final List<AssistantServiceProvider> providers;
+  final bool degraded;
+
+  factory ServiceAssistantReply.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return ServiceAssistantReply(
+      reply: optionalText(map['reply']),
+      providers: asList(
+        map['providers'],
+      ).map(AssistantServiceProvider.fromJson).toList(growable: false),
+      degraded: map['degraded'] == true,
+    );
+  }
+}
+
 class DiscoverBranch {
   const DiscoverBranch({
     required this.id,

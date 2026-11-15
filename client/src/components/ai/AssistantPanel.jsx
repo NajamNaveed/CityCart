@@ -9,6 +9,7 @@ import { Badge } from '../../design'
 import StatusPill from '../StatusPill'
 import Drawer from '../ui/Drawer'
 import { formatDate, formatPrice } from '../../ui'
+import { formatDistance } from '../../utils/geo'
 
 // Each mode posts the same body to its own endpoint; the server decides what a
 // mode may read (docs/29 Phase 2).
@@ -21,6 +22,8 @@ const MODES = [
     intro: 'Ask for a product, a price or a shop around you. Answers use real listings and never invent products.',
     suggestions: ['Cheap rice', 'Gift under 3000', 'Milk nearby'],
     withArea: true,
+    busy: 'Thinking…',
+    fallback: 'Showing matches without the assistant.',
   },
   {
     key: 'order',
@@ -30,6 +33,19 @@ const MODES = [
     intro: 'Ask about your own orders, delivery, cancellation or returns. The assistant can only read your orders.',
     suggestions: ['Where is my order?', 'How do I cancel an order?', 'Can I return an item?'],
     withArea: false,
+    busy: 'Checking your orders…',
+    fallback: 'Here are your latest orders.',
+  },
+  {
+    key: 'service',
+    label: 'Services',
+    endpoint: '/ai/service-helper',
+    placeholder: 'e.g. AC repair tomorrow evening',
+    intro: 'Ask for a service, a price or free time around you. Times come from the provider’s published hours — booking happens on their page.',
+    suggestions: ['AC repair tomorrow evening', 'Plumber near me', 'Salon for a haircut'],
+    withArea: true,
+    busy: 'Checking providers…',
+    fallback: 'Here are service providers near you.',
   },
 ]
 
@@ -113,6 +129,72 @@ function orderCard(order) {
   )
 }
 
+function providerCard(provider) {
+  const distance = provider.distanceKm ?? null
+  return (
+    <Link
+      key={provider.providerId}
+      to={`/services/${provider.slug}`}
+      className="block rounded-tile border border-line-warm bg-paper p-3 transition hover:border-forest/30 hover:bg-paper-warm"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <span className="min-w-0">
+          <span className="block truncate text-[12.5px] font-semibold text-ink">
+            {provider.displayName}
+          </span>
+          <span className="mt-0.5 block truncate text-[11.5px] text-ink/55">
+            {[
+              provider.categoryName,
+              provider.blockName,
+              distance !== null ? `${formatDistance(distance)} away` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </span>
+        </span>
+        <span className="shrink-0 text-right text-[11.5px]">
+          {provider.isNew ? (
+            <span className="font-medium text-ink/50">New</span>
+          ) : provider.ratingAvg ? (
+            <span className="font-semibold text-ink">
+              {Number(provider.ratingAvg).toFixed(1)} ★{' '}
+              <span className="font-normal text-ink/45">({provider.ratingCount})</span>
+            </span>
+          ) : null}
+        </span>
+      </div>
+      {provider.startingAtPrice != null && (
+        <p className="mt-1.5 text-[11.5px] text-ink/55">
+          From <span className="font-semibold text-ink">{formatPrice(provider.startingAtPrice / 100)}</span>
+        </p>
+      )}
+      {(provider.offerings || []).length > 0 && (
+        <div className="mt-2 space-y-1.5 border-t border-line-warm pt-2">
+          {provider.offerings.map((offering) => {
+            const slots = offering.slots || []
+            return (
+              <div key={offering.offeringId} className="text-[11.5px]">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="min-w-0 truncate text-ink/75">{offering.title}</span>
+                  <span className="shrink-0 text-[10.5px] text-ink/45">
+                    {offering.durationMinutes} min · from {formatPrice(offering.startingAtPrice / 100)}
+                  </span>
+                </div>
+                {slots.length > 0 && (
+                  <p className="mt-0.5 text-[10.5px] font-medium text-forest">
+                    Free: {slots.slice(0, 2).map((slot) => slot.label).join(' · ')}
+                    {slots.length > 2 ? ` +${slots.length - 2} more` : ''}
+                  </p>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </Link>
+  )
+}
+
 /**
  * The customer assistant (docs/29 Phase 2). It stays hidden when AI is off:
  * a signed-in customer's first visit probes /ai/ping, which never spends the
@@ -169,11 +251,10 @@ export default function AssistantPanel() {
         {
           id: nextId++,
           role: 'assistant',
-          text:
-            answer.reply ||
-            (active.withArea ? 'Showing matches without the assistant.' : 'Here are your latest orders.'),
+          text: answer.reply || active.fallback,
           products: answer.products || [],
           orders: answer.orders || [],
+          providers: answer.providers || [],
           degraded: Boolean(answer.degraded),
         },
       ])
@@ -186,7 +267,7 @@ export default function AssistantPanel() {
           role: 'assistant',
           error: true,
           text: off
-            ? 'The assistant is off right now. You can still search from Stores.'
+            ? `The assistant is off right now. You can still search from ${active.key === 'service' ? 'Services' : 'Stores'}.`
             : getErrorMessage(err, 'The assistant could not answer just now.'),
         },
       ])
@@ -198,7 +279,7 @@ export default function AssistantPanel() {
   if (!available) return null
 
   function changeMode(key) {
-    if (key === mode) return
+    if (busy || key === mode) return
     setMode(key)
     setMessages([])
   }
@@ -283,10 +364,17 @@ export default function AssistantPanel() {
                   {entry.orders?.length > 0 && (
                     <div className="space-y-1.5">{entry.orders.map(orderCard)}</div>
                   )}
-                  {(entry.products?.length > 0 || entry.orders?.length > 0) && (
+                  {entry.providers?.length > 0 && (
+                    <div className="space-y-1.5">{entry.providers.map(providerCard)}</div>
+                  )}
+                  {(entry.products?.length > 0 ||
+                    entry.orders?.length > 0 ||
+                    entry.providers?.length > 0) && (
                     <p className="text-[10.5px] text-ink/40">
-                      {entry.degraded ? 'Plain search results. ' : ''}AI can make mistakes — check the{' '}
-                      {entry.orders?.length > 0 ? 'order' : 'listing'} before acting.
+                      {entry.degraded ? 'Plain search results. ' : ''}AI can make mistakes —{' '}
+                      {entry.providers?.length > 0
+                        ? 'confirm the time and price on the provider page.'
+                        : `check the ${entry.orders?.length > 0 ? 'order' : 'listing'} before acting.`}
                     </p>
                   )}
                 </div>
@@ -296,7 +384,7 @@ export default function AssistantPanel() {
             {busy && (
               <div className="flex items-center gap-2 text-[12px] text-ink/50" aria-live="polite">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-forest" />
-                {active.key === 'order' ? 'Checking your orders…' : 'Thinking…'}
+                {active.busy}
               </div>
             )}
             <div ref={endRef} />
