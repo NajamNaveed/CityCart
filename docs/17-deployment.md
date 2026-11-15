@@ -283,7 +283,7 @@ Production deployment should be associated with a known Git commit.
 
 ## 10. CI/CD
 
-Future CI/CD should automatically perform:
+CI/CD should automatically perform:
 
 ```text
 Checkout
@@ -301,7 +301,18 @@ Build/verify backend
 Deploy
 ```
 
-GitHub Actions can be used for CI.
+GitHub Actions runs CI in `.github/workflows/ci.yml`:
+
+| Job | What it does |
+|---|---|
+| `server` | `npm ci`, lint, full unit suite in `server/` |
+| `client` | `npm ci`, lint, production build in `client/` |
+| `apps` | a matrix over the four Flutter apps — `apps/shopper`, `apps/staff`, `apps/delivery`, `apps/business` — each `flutter pub get`, `flutter analyze`, `flutter test` |
+| `integration` | the real-database suite (`mongodb-memory-server`) in `server/` |
+
+The website and the API deploy through the gated `deploy` job (Render and
+Vercel hooks). The Flutter apps are built and released from their own
+`apps/<name>` folder (§30.4); CI only analyses and tests them.
 
 Deployment providers can handle the final deployment step.
 
@@ -815,10 +826,11 @@ Phase 7 ships the three-app marketplace: the website, the shopper app, the Staff
 | Vercel | `VITE_SITE_URL` | public origin, for absolute canonical and Open Graph URLs |
 | Vercel | (file) `client/vercel.json` | destination must be the live Render host |
 | Vercel | Deployment Protection | **off**, otherwise API calls redirect to a Vercel login |
-| EAS | `EXPO_PUBLIC_API_URL` | the Render URL, same value for all three apps |
-| EAS | `eas projectId` | created per app by `npx eas-cli init` (writes `extra.eas.projectId`) |
+| Apps | `--dart-define=API_URL` | the Render URL including `/api/v1`, passed on every `flutter build` |
 
-`EXPO_PUBLIC_*` values are baked into the app at build time: change them in EAS and rebuild, not in the phone.
+Each Flutter app reads its API address from `--dart-define=API_URL=...` at build
+time (see `apps/<name>/lib/core/config.dart`); a signed-in user can still change
+the server address in the app when it was built without one.
 
 ### 30.2 Bring up the data
 
@@ -838,15 +850,22 @@ Phase 7 ships the three-app marketplace: the website, the shopper app, the Staff
 3. Deploy the client with `VITE_API_URL` empty. In the browser devtools, `/api/v1/...` must be same-origin, return JSON (never `text/html`), and login must survive a page refresh.
 4. If the API host changed, edit `client/vercel.json` and redeploy; Vercel does not read `RENDER_API_URL`.
 
-### 30.4 The three APKs
+### 30.4 The app builds
+
+The native apps live under `apps/` and are Flutter projects (Dart `^3.13.7`):
 
 ```bash
-cd mobile     && npx eas-cli init && npm run build:android:preview   # com.citycart.app
-cd ../partner && npx eas-cli init && npm run build:android:preview   # com.citycart.staff
-cd ../delivery && npx eas-cli init && npm run build:android:preview  # com.citycart.delivery
+cd apps/shopper  && flutter build apk --release --dart-define=API_URL=https://<render-host>/api/v1
+cd ../staff      && flutter build apk --release --dart-define=API_URL=https://<render-host>/api/v1
+cd ../delivery   && flutter build apk --release --dart-define=API_URL=https://<render-host>/api/v1
+cd ../business   && flutter build apk --release --dart-define=API_URL=https://<render-host>/api/v1
 ```
 
-Each app has its own package name, icon and sign-in door (`/auth/mobile`, `/auth/staff/login`, `/auth/delivery/login`). A token from one app is refused by the other two (`403 WRONG_APP`).
+Each app has its own application id, icon and sign-in door (`/auth/mobile`,
+`/auth/staff/login`, `/auth/delivery/login`). A token from one app is refused by
+the other two (`403 WRONG_APP`). CI (`apps` matrix job) runs
+`flutter analyze` and `flutter test` for every app on each push; the release
+commands above are owner actions.
 
 Release is complete when:
 
@@ -860,7 +879,7 @@ Rollback: redeploy the previous Render and Vercel deployments. The database is a
 
 ### 30.5 What an AI agent may and may not do here
 
-The repository side (tests, build, config, docs, seed scripts) is automated. **Deploying to Render/Vercel and building with EAS are owner actions**: they need credentials, cost build minutes, and touch shared/production systems. An agent must not run them without explicit approval.
+The repository side (tests, build, config, docs, seed scripts) is automated. **Deploying to Render/Vercel and building release APKs/AABs with Flutter are owner actions**: they need credentials, cost build minutes, and touch shared/production systems. An agent must not run them without explicit approval.
 
 ---
 
@@ -918,14 +937,13 @@ working tree; do not rewrite public history as the primary response.
 
 ### 31.4 Dependency update policy
 
-* Run `npm audit --omit=dev` in `server/`, `client/`, `mobile/`, `partner/` and
-  `delivery/` monthly and before every release.
+* Run `npm audit --omit=dev` in `server/` and `client/`, and
+  `flutter pub outdated` in each `apps/<name>/`, monthly and before every release.
 * **Critical / high** in a production dependency: patch or mitigate within
   7 days. If no patch exists, record the accepted risk in `docs/26-security-audit.md` §9.
 * **Moderate**: 30 days. **Low / dev-only**: next scheduled maintenance.
-* Never run `npm audit fix --force` on the Expo apps: it proposes Expo 52 and
-  breaks the SDK 57 toolchain. Use non-breaking `npm audit fix`, then
-  `npm install` to restore dev modules (the omit-dev run prunes them locally).
+* Upgrade Flutter packages with `flutter pub upgrade` and keep
+  `pubspec.lock` committed; never hand-edit the resolved versions.
 * A major SDK/framework upgrade is its own phase with a full app bundle and
   device check, not a release-week patch.
 * Adding a dependency still requires the justification in AGENTS.md §29.

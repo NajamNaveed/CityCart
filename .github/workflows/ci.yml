@@ -3,7 +3,8 @@
 # Runs on every push to main and every pull request:
 #   - server: lint + full unit suite
 #   - client: lint + production build
-#   - mobile: lint + unit tests
+#   - apps: the four Flutter apps (shopper, staff, delivery, business) —
+#           each analysed and unit tested on its own
 #   - integration: the real-database test suite (transactions, concurrency)
 #
 # Deployment (Vercel for the client, Render for the server) can be attached
@@ -67,29 +68,35 @@ jobs:
         working-directory: client
         run: npm run build
 
-  mobile:
-    name: Mobile — lint & unit tests
+  apps:
+    name: Apps — ${{ matrix.app }} (analyze & tests)
     runs-on: ubuntu-latest
+    strategy:
+      # One broken app should not hide the state of the other three.
+      fail-fast: false
+      matrix:
+        app: [shopper, staff, delivery, business]
+    defaults:
+      run:
+        working-directory: apps/${{ matrix.app }}
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      # The apps pin Dart ^3.13.7 in their pubspecs, so stable is the channel
+      # that satisfies them today.
+      - uses: subosito/flutter-action@v2
         with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: mobile/package-lock.json
+          channel: stable
+          cache: true
 
       - name: Install dependencies
-        working-directory: mobile
-        run: npm ci
+        run: flutter pub get
 
-      - name: Lint
-        working-directory: mobile
-        run: npm run lint
+      - name: Analyze
+        run: flutter analyze
 
       - name: Unit tests
-        working-directory: mobile
-        run: npm test
+        run: flutter test
 
   integration:
     name: Server — integration tests (real MongoDB)
@@ -116,7 +123,7 @@ jobs:
 
   deploy:
     name: Deploy — trigger Render & Vercel (main only, after CI)
-    needs: [server, client, integration]
+    needs: [server, client, apps, integration]
     # Deploys only from pushes to main, never from pull requests.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
