@@ -11,7 +11,7 @@ const { innerPoint, toGeoJsonPolygon, ringFromGeoJson, pointInRing } = require('
 const { computeBlockIds } = require('../../src/utils/blockMembership');
 const { PAYMENT_METHOD_FOR_COLLECTION } = require('../../src/config/paymentCollection');
 const { STORE_FAULT_REASONS } = require('../../src/config/returns');
-const { CITIES, BLOCKS, BRANCHES, BRANDS, CHATS, LONG_CHAT, CUSTOMERS, ADMIN, CARTS, REMARKS } = require('./catalog');
+const DEMO = require('./catalog');
 const { karachiDateKey, karachiMonthKey, startOfKarachiMonth } = require('../../src/utils/karachiTime');
 
 const { ObjectId } = mongoose.Types;
@@ -55,28 +55,13 @@ function businessHours({ open, close, closed }) {
   return Object.fromEntries(DAYS.map((day) => [day, closed.includes(day) ? 'Closed' : `${open} to ${close}`]));
 }
 
-// One picker for each active demo brand (docs/22 §E): a brand account that
-// signs in on the partner app and only sees the pick queue.
-const PICKERS = {
-  loom: { name: 'Areeba Saleem', email: 'areeba.saleem@citycart.demo', phone: '+92 321 4487001' },
-  rangrez: { name: 'Fahad Iqbal', email: 'fahad.iqbal@citycart.demo', phone: '+92 302 7738190' },
-  mehr: { name: 'Nimra Aslam', email: 'nimra.aslam@citycart.demo', phone: '+92 345 6102287' },
-  sukoon: { name: 'Tahir Mehmood', email: 'tahir.mehmood@citycart.demo', phone: '+92 311 9054326' },
-  zaitoon: { name: 'Rabia Sattar', email: 'rabia.sattar@citycart.demo', phone: '+92 312 6680142' },
-  naqsh: { name: 'Waleed Akhtar', email: 'waleed.akhtar@citycart.demo', phone: '+92 301 3397650' },
-};
-
-// One brand in each stage of the billing ladder (docs/15 §9), so the demo shows
-// a warning, a restricted seller, a frozen seller and a granted grace period.
-const BILLING_STATE = {
-  loom: { status: 'WARNING' },
-  rangrez: { status: 'RESTRICTED' },
-  sukoon: { status: 'FROZEN' },
-  zaitoon: { status: 'ACTIVE', graceDays: 5 },
-};
-
 // ── the builder ──────────────────────────────────────────────────────────────
-function buildDataset({ now = new Date(), hashes }) {
+function buildDataset({ now = new Date(), hashes, data = DEMO }) {
+  const {
+    CITIES, BLOCKS, BRANCHES, BRANDS, CHATS, LONG_CHAT, CUSTOMERS, ADMIN, CARTS, REMARKS,
+    PICKERS, BILLING_STATE, ADJUSTMENT_NOTES, NEAREST_BLOCK, PLAN, COURIERS, SCENARIOS,
+    SERVICE, CATALOG_REQUESTS, CATALOG_MERGE, SAMPLE_ROWS,
+  } = data;
   const random = makeRandom(20260501);
   const pick = (list) => list[Math.floor(random() * list.length)];
   const between = (min, max) => min + random() * (max - min);
@@ -156,8 +141,7 @@ function buildDataset({ now = new Date(), hashes }) {
   // ── saved addresses: every customer has a pin inside one of the blocks ──
   const ringOfBlock = new Map(ds.blocks.map((b) => [String(b._id), ringFromGeoJson(b.area)]));
   const blocksHolding = (lat, lng) => ds.blocks.filter((b) => b.isActive && pointInRing(lat, lng, ringOfBlock.get(String(b._id)))).map((b) => b._id);
-  // Streets that are not in one of the nine drawn blocks are placed in the nearest one.
-  const NEAREST_BLOCK = { 'Gulistan Colony': 'Peoples Colony', 'Civil Lines': 'Clock Tower', 'Canal Road': 'Gulberg' };
+  // Streets that are not in one of the drawn blocks are placed in a named one (data.NEAREST_BLOCK).
   const pinIn = (block, step) => {
     const [lng, lat] = block.center.coordinates;
     const near = [lat + ((step * 37) % 5 - 2) * 0.0005, lng + ((step * 53) % 5 - 2) * 0.0005];
@@ -193,12 +177,7 @@ function buildDataset({ now = new Date(), hashes }) {
   });
 
   // ── service providers (their own tenant, docs/24 §4) ──
-  const serviceCategoryDefs = [
-    { name: 'Home Cleaning', slug: 'home-cleaning' },
-    { name: 'Deep Cleaning', slug: 'deep-cleaning', parent: 'home-cleaning' },
-    { name: 'Plumbing', slug: 'plumbing' },
-    { name: 'Electrical', slug: 'electrical' },
-  ];
+  const serviceCategoryDefs = SERVICE.categories;
   const serviceCategoryBySlug = {};
   serviceCategoryDefs.forEach((def, order) => {
     const doc = {
@@ -211,27 +190,29 @@ function buildDataset({ now = new Date(), hashes }) {
     serviceCategoryBySlug[def.slug] = doc;
   });
 
-  const serviceBlock = ds.blocks.find((b) => b.slug === 'peoples-colony') || ds.blocks[0];
+  const serviceBlock = ds.blocks.find((b) => b.slug === SERVICE.main.blockSlug) || ds.blocks[0];
   const serviceOwner = userDoc({
-    name: 'Sana Khalid', email: 'service@citycart.local', phone: '+92 300 1234567',
-    role: 'SERVICE_PROVIDER', passwordHash: hashes.demo, createdAt: ago(190 * DAY),
+    ...SERVICE.main.owner, role: 'SERVICE_PROVIDER', passwordHash: hashes.demo, createdAt: ago(SERVICE.main.createdDaysAgo * DAY),
   });
   ds.users.push(serviceOwner);
 
-  const providerMade = ago(185 * DAY);
+  const providerMade = ago(SERVICE.main.approvedDaysAgo * DAY);
   const provider = {
-    _id: new ObjectId(), userId: serviceOwner._id, displayName: 'Sana Home Cleaning',
-    legalName: 'Sana Home Cleaning Services', slug: 'sana-home-cleaning-demo',
-    categoryId: serviceCategoryBySlug['home-cleaning']._id, cityId: faisalabad._id, blockId: serviceBlock._id,
+    _id: new ObjectId(), userId: serviceOwner._id, displayName: SERVICE.main.displayName,
+    legalName: SERVICE.main.legalName, slug: SERVICE.main.slug,
+    categoryId: serviceCategoryBySlug[SERVICE.main.categorySlug]._id, cityId: faisalabad._id, blockId: serviceBlock._id,
     location: { type: 'Point', coordinates: [...serviceBlock.center.coordinates] },
-    addressLine: 'House 12, Street 4, Peoples Colony No. 1', phone: '+92 300 1234567',
-    bio: 'Reliable home cleaning in Faisalabad — deep cleans, sofas and move-in jobs.',
-    avatar: photo('cleaner', 4, 300, 300), coverImage: photo('clean house', 5, 1600, 500),
-    startingAtPrice: 250000, status: 'ACTIVE', verification: 'VERIFIED',
-    ratingAvg: 4.5, ratingCount: 2, completedBookings: 18, rankScore: 0.72,
-    rankInputs: { windowDays: 90, ratingAvg: 4.5, reviewCount: 2, computedAt: ago(2 * DAY) },
+    addressLine: SERVICE.main.addressLine, phone: SERVICE.main.owner.phone,
+    bio: SERVICE.main.bio,
+    avatar: photo(SERVICE.main.avatarKeyword, 4, 300, 300), coverImage: photo(SERVICE.main.coverKeyword, 5, 1600, 500),
+    startingAtPrice: SERVICE.main.startingAtPrice, status: 'ACTIVE', verification: 'VERIFIED',
+    ratingAvg: SERVICE.main.ratingAvg, ratingCount: SERVICE.main.ratingCount,
+    completedBookings: SERVICE.main.completedBookings, rankScore: SERVICE.main.rankScore,
+    rankInputs: {
+      windowDays: 90, ratingAvg: SERVICE.main.ratingAvg, reviewCount: SERVICE.main.ratingCount, computedAt: ago(2 * DAY),
+    },
     rankingUpdatedAt: ago(2 * DAY), billingStatus: 'ACTIVE', billingCheckedAt: ago(DAY),
-    billingGraceUntil: new Date(now.getTime() + 4 * DAY),
+    billingGraceUntil: new Date(now.getTime() + SERVICE.main.billingGraceDays * DAY),
     billingGraceReason: 'First invoice; the super admin allowed extra time to set up the transfer.',
     billingGraceBy: admin._id,
     customerLateCancelMonth: karachiMonthKey(now), customerLateCancelCount: 1,
@@ -241,73 +222,65 @@ function buildDataset({ now = new Date(), hashes }) {
   };
   ds.serviceProviders.push(provider);
 
+  const pendingMade = ago(SERVICE.pending.createdDaysAgo * DAY);
+  const pendingBlock = ds.blocks.find((b) => b.slug === SERVICE.pending.blockSlug) || serviceBlock;
   const pendingOwner = userDoc({
-    name: 'Bilal Ahmed', email: 'bilal.plumbing@citycart.demo', phone: '+92 301 7788120',
-    role: 'SERVICE_PROVIDER', passwordHash: hashes.demo, createdAt: ago(18 * DAY),
+    ...SERVICE.pending.owner, role: 'SERVICE_PROVIDER', passwordHash: hashes.demo, createdAt: pendingMade,
   });
   ds.users.push(pendingOwner);
   const pendingProvider = {
-    _id: new ObjectId(), userId: pendingOwner._id, displayName: 'Bilal Plumbing Works',
-    legalName: 'Bilal Plumbing Works', slug: 'bilal-plumbing-works',
-    categoryId: serviceCategoryBySlug.plumbing._id, cityId: faisalabad._id, blockId: serviceBlock._id,
-    location: { type: 'Point', coordinates: [...serviceBlock.center.coordinates] },
-    addressLine: 'Shop 3, Peoples Colony No. 1 Market', phone: '+92 301 7788120',
-    bio: 'Leak repairs, taps, water tanks and bathroom fittings.',
-    avatar: photo('plumber', 6, 300, 300), coverImage: photo('plumbing tools', 7, 1600, 500),
-    startingAtPrice: 80000, status: 'PENDING', verification: 'UNVERIFIED',
+    _id: new ObjectId(), userId: pendingOwner._id, displayName: SERVICE.pending.displayName,
+    legalName: SERVICE.pending.legalName, slug: SERVICE.pending.slug,
+    categoryId: serviceCategoryBySlug[SERVICE.pending.categorySlug]._id, cityId: faisalabad._id, blockId: pendingBlock._id,
+    location: { type: 'Point', coordinates: [...pendingBlock.center.coordinates] },
+    addressLine: SERVICE.pending.addressLine, phone: SERVICE.pending.owner.phone,
+    bio: SERVICE.pending.bio,
+    avatar: photo(SERVICE.pending.avatarKeyword, 6, 300, 300), coverImage: photo(SERVICE.pending.coverKeyword, 7, 1600, 500),
+    startingAtPrice: SERVICE.pending.startingAtPrice, status: 'PENDING', verification: 'UNVERIFIED',
     ratingAvg: 0, ratingCount: 0, completedBookings: 0, rankScore: 0,
-    rankInputs: { windowDays: 90, ratingAvg: 0, reviewCount: 0, newProvider: true, computedAt: ago(18 * DAY) },
-    rankingUpdatedAt: ago(18 * DAY),
+    rankInputs: { windowDays: 90, ratingAvg: 0, reviewCount: 0, newProvider: true, computedAt: pendingMade },
+    rankingUpdatedAt: pendingMade,
     billingStatus: 'ACTIVE', billingCheckedAt: ago(5 * DAY),
     billingOverride: {
       status: 'ACTIVE', reason: 'Pilot provider; billing reviewed by hand while it is onboarded.',
       until: new Date(now.getTime() + 30 * DAY), by: admin._id, at: ago(5 * DAY),
     },
-    blockChangedAt: ago(18 * DAY),
-    blockHistory: [{ blockId: serviceBlock._id, changedAt: ago(18 * DAY), changedBy: pendingOwner._id }],
-    createdAt: ago(18 * DAY), updatedAt: ago(18 * DAY),
+    blockChangedAt: pendingMade,
+    blockHistory: [{ blockId: pendingBlock._id, changedAt: pendingMade, changedBy: pendingOwner._id }],
+    createdAt: pendingMade, updatedAt: pendingMade,
   };
   ds.serviceProviders.push(pendingProvider);
 
-  const offeringDefs = [
-    {
-      title: 'Deep clean — 2 bedroom', slug: 'deep-clean-2-bedroom', startingAtPrice: 450000,
-      durationMinutes: 180, description: 'Full deep clean of a two-bedroom home, including bathrooms and kitchen.',
-    },
-    {
-      title: 'Sofa shampoo', slug: 'sofa-shampoo', startingAtPrice: 180000,
-      durationMinutes: 90, description: 'Up to five seats, machine shampoo and quick dry.',
-    },
-    {
-      title: 'Move-in deep clean', slug: 'move-in-deep-clean', startingAtPrice: 800000,
-      durationMinutes: 300, description: 'Empty-home clean before you move in, kitchen and bathrooms included.',
-    },
-  ];
+  const offeringDefs = SERVICE.main.offerings;
   const offerings = offeringDefs.map((def, index) => {
     const doc = {
       _id: new ObjectId(), providerId: provider._id, categoryId: provider.categoryId,
       title: def.title, slug: def.slug, description: def.description,
-      images: [photo(`home cleaning ${index + 1}`, index + 8, 900, 600)],
+      images: [photo(def.imageKeyword, index + 8, 900, 600)],
       startingAtPrice: def.startingAtPrice, durationMinutes: def.durationMinutes,
-      attributes: index === 0 ? { bedrooms: 2, bathrooms: 2 } : index === 1 ? { seats: 5 } : { bedrooms: 3, emptyHome: true },
+      attributes: def.attributes,
       isActive: true, createdAt: providerMade, updatedAt: providerMade,
     };
     ds.serviceOfferings.push(doc);
     return doc;
   });
+  const pendingOffering = SERVICE.pending.offering;
   ds.serviceOfferings.push({
     _id: new ObjectId(), providerId: pendingProvider._id, categoryId: pendingProvider.categoryId,
-    title: 'Tap and leak repair', slug: 'tap-and-leak-repair',
-    description: 'Fix a dripping tap or a leaking joint, parts extra.',
-    images: [photo('plumbing repair', 11, 900, 600)], startingAtPrice: 80000,
-    durationMinutes: 60, attributes: { fittings: 'standard', partsExtra: true }, isActive: true,
-    createdAt: ago(18 * DAY), updatedAt: ago(18 * DAY),
+    title: pendingOffering.title, slug: pendingOffering.slug,
+    description: pendingOffering.description,
+    images: [photo(pendingOffering.imageKeyword, 11, 900, 600)], startingAtPrice: pendingOffering.startingAtPrice,
+    durationMinutes: pendingOffering.durationMinutes, attributes: pendingOffering.attributes, isActive: true,
+    createdAt: pendingMade, updatedAt: pendingMade,
   });
 
   ds.serviceAvailabilities.push({
     _id: new ObjectId(), providerId: provider._id,
-    windows: [1, 2, 3, 4, 5, 6].map((weekday) => ({ weekday, startMinute: 540, endMinute: 1080, slotMinutes: 60 })),
-    blackoutDates: [karachiDateKey(new Date(now.getTime() + 21 * DAY))],
+    windows: SERVICE.availability.weekdays.map((weekday) => ({
+      weekday, startMinute: SERVICE.availability.startMinute,
+      endMinute: SERVICE.availability.endMinute, slotMinutes: SERVICE.availability.slotMinutes,
+    })),
+    blackoutDates: [karachiDateKey(new Date(now.getTime() + SERVICE.availability.blackoutInDays * DAY))],
     createdAt: providerMade, updatedAt: ago(2 * DAY),
   });
 
@@ -503,12 +476,15 @@ function buildDataset({ now = new Date(), hashes }) {
           billingGraceReason: 'Bank transfer delayed; the super admin granted a short grace period.',
           billingGraceBy: admin._id,
         }),
-      }),
-      ...(b.key === 'sukoon' && {
-        billingOverride: {
-          status: 'FROZEN', reason: 'No payment received after repeated reminders.',
-          until: new Date(now.getTime() + 30 * DAY), by: admin._id, at: ago(3 * DAY),
-        },
+        ...(BILLING_STATE[b.key].override && {
+          billingOverride: {
+            status: BILLING_STATE[b.key].override.status,
+            reason: BILLING_STATE[b.key].override.reason,
+            until: new Date(now.getTime() + BILLING_STATE[b.key].override.untilDays * DAY),
+            by: admin._id,
+            at: ago(BILLING_STATE[b.key].override.atDaysAgo * DAY),
+          },
+        }),
       }),
       ...(terminatedAt && { terminationReason: b.terminationReason, terminatedAt, terminatedBy: admin._id, accessEndsAt }),
     };
@@ -577,9 +553,13 @@ function buildDataset({ now = new Date(), hashes }) {
       // The shared catalogue item: created once, then reused by every store that sells it.
       let item = catalogBySlug.get(slugify(p.n));
       if (!item) {
+        // A catalog may point a product at uploaded photos (p.folder) instead of
+        // link-based ones; the runner fills data.imageUrls before building.
+        const images = p.images || (p.folder && data.imageUrls && data.imageUrls[p.folder])
+          || [photo(p.kw, 1), photo(p.kw, 2), photo(p.kw, 3)];
         item = {
           _id: new ObjectId(), name: p.n, slug: slugify(p.n), categoryId: categoryByKey[p.c]._id, description: p.d,
-          images: [photo(p.kw, 1), photo(p.kw, 2), photo(p.kw, 3)], scope: 'GLOBAL', status: 'ACTIVE', createdBy: admin._id,
+          images, scope: 'GLOBAL', status: 'ACTIVE', createdBy: admin._id,
           ...(p.m && { manufacturer: p.m }), ...(p.size && { size: p.size }), ...(p.barcode && { barcode: p.barcode }),
           createdAt: made, updatedAt: made,
         };
@@ -670,7 +650,7 @@ function buildDataset({ now = new Date(), hashes }) {
   // ── catalogue-only items: in the shared catalogue, listed by no store yet ──
   // These are the products the shipped sample CSV (sample-products-import.csv)
   // lists for the first store, so the import demo works on a fresh database.
-  const sampleCatalog = require('./sample-catalog.json');
+  const sampleCatalog = SAMPLE_ROWS || [];
   for (const row of sampleCatalog) {
     const categoryDoc = ds.categories.find((c) => c.name === row.category && !ds.categories.some((x) => String(x.parentId) === String(c._id)));
     if (!categoryDoc) throw new Error(`sample-catalog.json: unknown category "${row.category}"`);
@@ -699,27 +679,22 @@ function buildDataset({ now = new Date(), hashes }) {
     ds.catalogProducts.push(item);
     return item;
   };
-  // A store's own item, usable only by that store.
-  request('sukoon', 'Monogrammed Cushion Cover, made to order', 'Cushions & Rugs', {
-    description: 'Cushion cover embroidered with the buyer\'s initials. Made to order in about a week.', scope: 'PRIVATE', status: 'ACTIVE',
-  });
-  // Waiting for the platform admin.
-  request('zaitoon', 'Hand-Stitched Leather Slippers, Kids', 'Chappals & Sandals', {
-    description: 'Soft leather slippers for children, hand-stitched.', scope: 'GLOBAL', status: 'PENDING',
-  });
-  // Turned down, with the reason the store sees.
-  request('naqsh', 'Silver-Plated Anklet Pair', 'Earrings', {
-    description: 'Plain silver-plated anklets.', scope: 'GLOBAL', status: 'REJECTED',
-    reviewNote: 'Not a fit for the Earrings category. Please request it again under a jewellery category that fits.',
-    reviewedBy: admin._id, reviewedAt: ago(5 * DAY),
-  });
+  // One request in each state: a store's own item, one waiting for the admin,
+  // and one turned down with the reason the store sees.
+  for (const req of CATALOG_REQUESTS) {
+    request(req.brandKey, req.name, req.categoryName, {
+      description: req.description, scope: req.scope, status: req.status,
+      ...(req.reviewNote && { reviewNote: req.reviewNote }),
+      ...(req.reviewedDaysAgo && { reviewedBy: admin._id, reviewedAt: ago(req.reviewedDaysAgo * DAY) }),
+    });
+  }
   // A duplicate that an admin merged into the real item.
-  const shared = catalogBySlug.get(slugify('Plain White Cotton Suit Length, 2.5 m'));
-  const duplicateMade = ago(30 * DAY);
+  const shared = catalogBySlug.get(slugify(CATALOG_MERGE.into));
+  const duplicateMade = ago(CATALOG_MERGE.madeDaysAgo * DAY);
   ds.catalogProducts.push({
-    _id: new ObjectId(), name: 'Plain White Cotton Suit Length 2.5m', slug: slugify('Plain White Cotton Suit Length 2.5m'),
+    _id: new ObjectId(), name: CATALOG_MERGE.name, slug: slugify(CATALOG_MERGE.name),
     categoryId: shared.categoryId, scope: 'GLOBAL', status: 'ARCHIVED', mergedIntoId: shared._id, createdBy: admin._id,
-    createdAt: duplicateMade, updatedAt: ago(25 * DAY),
+    createdAt: duplicateMade, updatedAt: ago(CATALOG_MERGE.archivedDaysAgo * DAY),
   });
 
   // ── open carts ──
@@ -738,22 +713,12 @@ function buildDataset({ now = new Date(), hashes }) {
   }
 
   // ── orders, with their payments and deliveries ──
-  const PLAN = {
-    loom: ['DELIVERED', 'DELIVERED', 'DELIVERED', 'DELIVERED', 'DELIVERED', 'DELIVERED', 'PENDING', 'CONFIRMED', 'PROCESSING', 'READY_FOR_SHIPMENT', 'CANCELLED', 'SHIPPED'],
-    rangrez: ['DELIVERED', 'DELIVERED', 'DELIVERED', 'PENDING', 'PROCESSING', 'REJECTED'],
-    mehr: ['DELIVERED', 'DELIVERED', 'DELIVERED', 'DELIVERED', 'PENDING', 'OUT_FOR_DELIVERY', 'SHIPPED', 'CANCELLED'],
-    sukoon: ['DELIVERED', 'DELIVERED', 'DELIVERED', 'DELIVERED', 'CONFIRMED', 'PENDING', 'READY_FOR_SHIPMENT', 'OUT_FOR_DELIVERY'],
-    zaitoon: ['DELIVERED', 'DELIVERED', 'DELIVERED', 'DELIVERED', 'PENDING', 'PROCESSING', 'SHIPPED', 'REJECTED'],
-    naqsh: ['DELIVERED', 'DELIVERED', 'DELIVERED', 'PENDING', 'CONFIRMED', 'OUT_FOR_DELIVERY'],
-    gadgets: ['DELIVERED', 'DELIVERED'],
-    quick: ['DELIVERED', 'DELIVERED', 'REJECTED', 'REJECTED'],
-  };
   const CHAIN = ['PENDING', 'CONFIRMED', 'PROCESSING', 'READY_FOR_SHIPMENT', 'SHIPPED', 'OUT_FOR_DELIVERY', 'DELIVERED'];
   const LAST_EVENT_HOURS = {
     PENDING: [0.5, 30], CONFIRMED: [3, 50], PROCESSING: [5, 70], READY_FOR_SHIPMENT: [8, 80], SHIPPED: [20, 90],
     OUT_FOR_DELIVERY: [1, 8], DELIVERED: [24 * 12, 24 * 58], CANCELLED: [24 * 2, 24 * 25], REJECTED: [24 * 2, 24 * 25],
   };
-  const COURIERS = { loom: 'TCS', rangrez: 'LEO', mehr: 'TCS', sukoon: 'TRAX', zaitoon: 'LEO', naqsh: 'TCS', gadgets: 'TRAX', quick: 'LEO' };
+  const COURIER_BY_BRAND = COURIERS;
   const AGENTS = ['Shoaib (rider)', 'Naveed Akram (TCS)', 'Rizwan (Leopards)', 'Kamran Ali (Trax)', 'Adnan (company rider)', 'Mubashir (rider)'];
   const GIFT_NOTES = ['Gift: please remove the price slip.', 'Needed before the weekend if possible.', 'Please pack carefully, it is a gift.'];
 
@@ -761,7 +726,7 @@ function buildDataset({ now = new Date(), hashes }) {
   const receiptJobs = [];
   for (const [brandKey, statuses] of Object.entries(PLAN)) {
     const brand = brandByKey[brandKey];
-    const sellable = brand.products.filter((p) => (brandKey === 'quick' ? true : p.status === 'ACTIVE'));
+    const sellable = brand.products.filter((p) => (brand.def.sellInactiveProducts ? true : p.status === 'ACTIVE'));
 
     statuses.forEach((status, indexInBrand) => {
       const customer = pick(shoppers);
@@ -776,7 +741,7 @@ function buildDataset({ now = new Date(), hashes }) {
         if (!chosen.includes(p)) chosen.push(p);
       }
       const items = chosen.map((p) => {
-        const quantity = brandKey === 'rangrez' && /per metre/.test(p.name) ? intBetween(3, 10) : intBetween(1, 3);
+        const quantity = p.bulkQuantity ? intBetween(3, 10) : intBetween(1, 3);
         return { _id: new ObjectId(), productId: p._id, productName: p.name, sku: p.sku, quantity, unitPrice: p.price, totalPrice: p.price * quantity, image: p.images[0] };
       });
       const subtotal = items.reduce((sum, i) => sum + i.totalPrice, 0);
@@ -791,15 +756,15 @@ function buildDataset({ now = new Date(), hashes }) {
       const path = status === 'CANCELLED' || status === 'REJECTED' ? ['PENDING', status] : CHAIN.slice(0, CHAIN.indexOf(status) + 1);
       let lastEvent;
       let events;
-      if (brandKey === 'quick' && status === 'REJECTED') {
+      if (brand.terminatedAt && status === 'REJECTED') {
         const rejectedAt = new Date(brand.terminatedAt.getTime() + intBetween(5, 30) * 60 * 1000);
         events = [{ status: 'PENDING', at: new Date(brand.terminatedAt.getTime() - intBetween(20, 60) * HOUR) }, { status: 'REJECTED', at: rejectedAt }];
       } else {
         // One old delivered order (loom's second) is from last quarter, so its checked
         // payment proof can already be past the 90-day photo retention (docs/21 §I.4).
-        const [lo, hi] = brandKey === 'loom' && indexInBrand === 1 && status === 'DELIVERED'
+        const [lo, hi] = SCENARIOS.agedProof.brand === brandKey && indexInBrand === SCENARIOS.agedProof.index && status === 'DELIVERED'
           ? [24 * 120, 24 * 128]
-          : brandKey === 'gadgets' || brandKey === 'quick' ? [24 * 35, 24 * 65] : LAST_EVENT_HOURS[status];
+          : brand.def.status !== 'ACTIVE' ? SCENARIOS.inactiveOrderAgeDays : LAST_EVENT_HOURS[status];
         lastEvent = ago(between(lo, hi) * HOUR);
         events = [];
         let cursor = lastEvent;
@@ -811,7 +776,7 @@ function buildDataset({ now = new Date(), hashes }) {
       const packedEvent = events.find((e) => e.status === 'READY_FOR_SHIPMENT');
       const byFor = (s) => {
         if (s === 'PENDING' || (s === 'CANCELLED')) return customer.doc._id;
-        if (brandKey === 'quick' && s === 'REJECTED') return admin._id;
+        if (brand.terminatedAt && s === 'REJECTED') return admin._id;
         if (s === 'SHIPPED' || s === 'OUT_FOR_DELIVERY' || s === 'DELIVERED') return deliveryHandler._id;
         return orderHandler._id;
       };
@@ -819,11 +784,12 @@ function buildDataset({ now = new Date(), hashes }) {
       const createdAt = events[0].at;
       const finishedAt = events[events.length - 1].at;
 
+      const atScenario = (scenario) => scenario.brand === brandKey && (scenario.index === undefined || scenario.index === indexInBrand);
       const flags = {
-        fullRefund: brandKey === 'loom' && status === 'DELIVERED' && indexInBrand === 0,
-        partRefund: brandKey === 'mehr' && status === 'DELIVERED' && indexInBrand === 1,
-        failedDelivery: brandKey === 'mehr' && status === 'OUT_FOR_DELIVERY',
-        inTransit: brandKey === 'mehr' && status === 'SHIPPED',
+        fullRefund: atScenario(SCENARIOS.fullRefund) && status === 'DELIVERED',
+        partRefund: atScenario(SCENARIOS.partRefund) && status === 'DELIVERED',
+        failedDelivery: SCENARIOS.failedDelivery.brand === brandKey && status === SCENARIOS.failedDelivery.status,
+        inTransit: SCENARIOS.inTransit.brand === brandKey && status === SCENARIOS.inTransit.status,
       };
 
       // Delivered to the customer's pin when one of the store's shops serves that block;
@@ -895,7 +861,7 @@ function buildDataset({ now = new Date(), hashes }) {
           // The customer's proof-of-delivery code, made with the delivery; a failed attempt cost one wrong try.
           deliveryCode: pad(Math.floor(random() * 1e6), 6), codeAttempts: deliveryStatus === 'FAILED' ? 1 : 0,
           ...(deliveryStatus !== 'READY_FOR_PICKUP' && {
-            trackingReference: `${COURIERS[brandKey]}-${pad(Math.floor(random() * 1e10), 10)}`,
+            trackingReference: `${COURIER_BY_BRAND[brandKey] || 'TCS'}-${pad(Math.floor(random() * 1e10), 10)}`,
             assignedAgent: rider ? rider.name : pick(AGENTS),
           }),
           ...(rider && { riderId: rider._id, assignedAt: new Date(readyEvent.at.getTime() + 30 * 60 * 1000) }),
@@ -1067,7 +1033,7 @@ function buildDataset({ now = new Date(), hashes }) {
   // ── picking: accepted orders wait in the queue; one picker has started an order (docs/22 §E) ──
   // CONFIRMED orders are already waiting, unclaimed. A PROCESSING order with a
   // picker shows what a half-picked order looks like: only the last line to go.
-  const loomPicking = orders.find(({ order, brand }) => brand.def.key === 'loom' && order.orderStatus === 'PROCESSING');
+  const loomPicking = orders.find(({ order, brand }) => brand.def.key === SCENARIOS.picking && order.orderStatus === 'PROCESSING');
   if (loomPicking && loomPicking.brand.pickers.length) {
     const picker = loomPicking.brand.pickers[0];
     const startEvent = loomPicking.events.find((e) => e.status === 'PROCESSING');
@@ -1356,7 +1322,7 @@ function buildDataset({ now = new Date(), hashes }) {
     usedOrders.add(activeEntry.order._id);
     addAdjustment({
       order: activeEntry.order, status: 'PROPOSED', at: new Date(now.getTime() - 5 * HOUR), supplyAllBut: 1, wantSubstitute: true,
-      noteText: 'The last piece in this colour has a small mark, so we can send one less and offer a similar lawn suit at today\'s price instead.',
+      noteText: ADJUSTMENT_NOTES.proposed,
     });
   }
   const cancelledEntry = adjustable('CANCELLED', usedOrders);
@@ -1367,7 +1333,7 @@ function buildDataset({ now = new Date(), hashes }) {
       order: cancelledEntry.order, status: 'ORDER_CANCELLED', at, supplyAllBut: cancelledEntry.order.items[0].quantity,
       wantSubstitute: false, respondedAt: new Date(at.getTime() + 3 * HOUR), action: 'CANCEL_ORDER',
       responseNote: 'The customer preferred to cancel the whole order rather than take part of it.',
-      restockRemoved: true, noteText: 'This fabric is out of stock until next week. We can send the rest of the order, or you can cancel it.',
+      restockRemoved: true, noteText: ADJUSTMENT_NOTES.cancelled,
     });
   }
   const pendingEntry = adjustable('PENDING', usedOrders);
@@ -1377,7 +1343,7 @@ function buildDataset({ now = new Date(), hashes }) {
     addAdjustment({
       order: pendingEntry.order, status: 'EXPIRED', at, supplyAllBut: 1, wantSubstitute: true,
       respondedAt: new Date(at.getTime() + 24 * HOUR), action: 'EXPIRED',
-      noteText: 'One unit was damaged in the workshop. We can replace it with the same product in another shade.',
+      noteText: ADJUSTMENT_NOTES.expired,
     });
   }
 
@@ -1403,7 +1369,7 @@ function buildDataset({ now = new Date(), hashes }) {
     addAdjustment({
       order: pickerEntry.order, status: 'PROPOSED', at, supplyAllBut: 1, wantSubstitute: true,
       proposer: picker, proposerRole: 'PICKER',
-      noteText: 'While picking your order I found one unit with a small mark. I can send the rest and offer a similar piece instead.',
+      noteText: ADJUSTMENT_NOTES.picker,
     });
   }
 
@@ -1450,9 +1416,9 @@ function buildDataset({ now = new Date(), hashes }) {
       seenReviews.add(key);
 
       const roll = random();
-      const rating = brand.def.key === 'quick' ? (roll < 0.5 ? 1 : roll < 0.8 ? 2 : 3)
+      const rating = brand.def.key === SCENARIOS.lowRatings ? (roll < 0.5 ? 1 : roll < 0.8 ? 2 : 3)
         : roll < 0.5 ? 5 : roll < 0.8 ? 4 : roll < 0.9 ? 3 : roll < 0.96 ? 2 : 1;
-      const remarks = REMARKS[brand.def.key] || REMARKS.quick;
+      const remarks = REMARKS[brand.def.key] || REMARKS[SCENARIOS.defaultRemarks];
       const remark = pick(rating >= 4 ? remarks.good : remarks.bad);
       const comment = `${pick(OPENERS[rating])} ${remark} ${pick(CLOSERS[rating])}`;
       const reviewedAt = new Date(Math.min(now.getTime() - HOUR, delivered.getTime() + between(1, 6) * DAY));
@@ -1522,20 +1488,20 @@ function buildDataset({ now = new Date(), hashes }) {
   note(serviceOwner._id, 'SERVICE_BOOKING_REQUESTED', `New booking request ${requestedService.bookingNumber}`,
     `${customers[0].name} asked for ${requestedService.offering.title}. Accept it or propose another price and time.`,
     serviceRef(requestedService), ago(2 * HOUR));
-  note(customers[1].doc._id, 'SERVICE_BOOKING_PROPOSED', 'Sana Home Cleaning sent a proposal',
+  note(customers[1].doc._id, 'SERVICE_BOOKING_PROPOSED', `${provider.displayName} sent a proposal`,
     `${money(4800)} for "${proposedService.offering.title}". Accept or decline before it expires.`,
     serviceRef(proposedService), ago(5 * HOUR));
   note(serviceOwner._id, 'SERVICE_BOOKING_PROPOSAL_ANSWERED', 'Proposal declined',
     `${customers[9].name} declined the proposal for ${ds.serviceBookings[9].offering.title}.`,
     serviceRef(ds.serviceBookings[9]), ago(4 * DAY));
   note(customers[2].doc._id, 'SERVICE_BOOKING_ACCEPTED', 'Your booking is accepted',
-    `Sana Home Cleaning accepted ${acceptedService.offering.title} at ${money(5000)}. You can chat about the job now.`,
+    `${provider.displayName} accepted ${acceptedService.offering.title} at ${money(5000)}. You can chat about the job now.`,
     serviceRef(acceptedService), ago(DAY));
   note(customers[3].doc._id, 'SERVICE_BOOKING_STARTED', 'The provider has started',
-    `Sana Home Cleaning started ${ds.serviceBookings[3].offering.title}.`,
+    `${provider.displayName} started ${ds.serviceBookings[3].offering.title}.`,
     serviceRef(ds.serviceBookings[3]), ago(2 * HOUR));
   note(customers[4].doc._id, 'SERVICE_BOOKING_COMPLETED', 'The job is complete',
-    `Sana Home Cleaning marked ${ds.serviceBookings[4].offering.title} complete at ${money(4700)}. Confirm it or raise a dispute.`,
+    `${provider.displayName} marked ${ds.serviceBookings[4].offering.title} complete at ${money(4700)}. Confirm it or raise a dispute.`,
     serviceRef(ds.serviceBookings[4]), ago(6 * HOUR));
   note(serviceOwner._id, 'SERVICE_BOOKING_CONFIRMED', 'Booking confirmed',
     `${customers[5].name} confirmed ${confirmedService.offering.title}. It now counts towards your ranking.`,
@@ -1552,7 +1518,7 @@ function buildDataset({ now = new Date(), hashes }) {
   note(serviceOwner._id, 'SERVICE_BOOKING_DECLINED', 'Proposal declined',
     `${customers[9].name} declined the proposal on ${ds.serviceBookings[9].bookingNumber}.`,
     serviceRef(ds.serviceBookings[9]), ago(4 * DAY));
-  note(confirmedService.customerId, 'SERVICE_REVIEW_REPLIED', 'Sana Home Cleaning replied to your review',
+  note(confirmedService.customerId, 'SERVICE_REVIEW_REPLIED', `${provider.displayName} replied to your review`,
     'Thank you! We are glad the kitchen came up so well.',
     serviceRef(confirmedService), ago(7 * DAY));
 
@@ -1719,10 +1685,13 @@ function buildDataset({ now = new Date(), hashes }) {
   // ── seller billing (docs/15, docs/24 §5) ──
   // One 1% commission ledger, monthly invoices in every state, receipt claims
   // and help requests, so both the seller page and the admin console have data.
-  const loom = brandByKey.loom;
-  const rangrez = brandByKey.rangrez;
-  const sukoon = brandByKey.sukoon;
-  const zaitoon = brandByKey.zaitoon;
+  // The catalog names one brand in each stage of the ladder; everything below
+  // works off those brands, so any catalog can stage the same story.
+  const byBilling = (status) => brands.find((b) => BILLING_STATE[b.def.key] && BILLING_STATE[b.def.key].status === status);
+  const warningBrand = byBilling('WARNING');
+  const restrictedBrand = byBilling('RESTRICTED');
+  const frozenBrand = byBilling('FROZEN');
+  const graceBrand = brands.find((b) => BILLING_STATE[b.def.key] && BILLING_STATE[b.def.key].graceDays);
 
   const currentMonthStart = startOfKarachiMonth(now);
   const lastMonthStart = startOfKarachiMonth(new Date(currentMonthStart.getTime() - 1));
@@ -1744,33 +1713,38 @@ function buildDataset({ now = new Date(), hashes }) {
     return doc;
   };
 
-  const loomAugust = addInvoice({
-    sellerType: 'BRAND', sellerId: loom.doc._id, start: monthBeforeStart, end: lastMonthStart,
+  if (!warningBrand || !restrictedBrand || !frozenBrand) {
+    throw new Error('The catalog must name a brand for the warning, restricted and frozen billing stages.');
+  }
+  const warningPaidInvoice = addInvoice({
+    sellerType: 'BRAND', sellerId: warningBrand.doc._id, start: monthBeforeStart, end: lastMonthStart,
     status: 'PAID', salesPaisa: 12000000, commissionPaisa: 120000, paidPaisa: 120000,
     issuedAt: lastMonthStart, dueAt: new Date(lastMonthStart.getTime() + 7 * DAY),
     paidAt: new Date(lastMonthStart.getTime() + 2 * DAY),
   });
-  const loomSeptember = addInvoice({
-    sellerType: 'BRAND', sellerId: loom.doc._id, start: lastMonthStart, end: currentMonthStart,
+  const warningOverdueInvoice = addInvoice({
+    sellerType: 'BRAND', sellerId: warningBrand.doc._id, start: lastMonthStart, end: currentMonthStart,
     status: 'OVERDUE', salesPaisa: 21000000, commissionPaisa: 210000, creditsPaisa: 5000, paidPaisa: 90000,
     issuedAt: currentMonthStart, dueAt: new Date(now.getTime() - 2 * DAY),
   });
-  const rangrezInvoice = addInvoice({
-    sellerType: 'BRAND', sellerId: rangrez.doc._id, start: monthBeforeStart, end: lastMonthStart,
+  const restrictedInvoice = addInvoice({
+    sellerType: 'BRAND', sellerId: restrictedBrand.doc._id, start: monthBeforeStart, end: lastMonthStart,
     status: 'OVERDUE', salesPaisa: 9600000, commissionPaisa: 96000,
     issuedAt: lastMonthStart, dueAt: new Date(now.getTime() - 10 * DAY),
   });
-  const sukoonInvoice = addInvoice({
-    sellerType: 'BRAND', sellerId: sukoon.doc._id, start: monthBeforeStart, end: lastMonthStart,
+  const frozenInvoice = addInvoice({
+    sellerType: 'BRAND', sellerId: frozenBrand.doc._id, start: monthBeforeStart, end: lastMonthStart,
     status: 'OVERDUE', salesPaisa: 6400000, commissionPaisa: 64000,
     issuedAt: lastMonthStart, dueAt: new Date(now.getTime() - 15 * DAY),
   });
-  addInvoice({
-    sellerType: 'BRAND', sellerId: zaitoon.doc._id, start: monthBeforeStart, end: lastMonthStart,
-    status: 'VOID', salesPaisa: 3000000, commissionPaisa: 30000,
-    issuedAt: lastMonthStart, dueAt: new Date(lastMonthStart.getTime() + 7 * DAY),
-    createdBy: admin._id.toString(),
-  });
+  if (graceBrand) {
+    addInvoice({
+      sellerType: 'BRAND', sellerId: graceBrand.doc._id, start: monthBeforeStart, end: lastMonthStart,
+      status: 'VOID', salesPaisa: 3000000, commissionPaisa: 30000,
+      issuedAt: lastMonthStart, dueAt: new Date(lastMonthStart.getTime() + 7 * DAY),
+      createdBy: admin._id.toString(),
+    });
+  }
   const providerInvoice = addInvoice({
     sellerType: 'SERVICE_PROVIDER', sellerId: provider._id, start: lastMonthStart, end: currentMonthStart,
     status: 'ISSUED', salesPaisa: 440000, commissionPaisa: 4400,
@@ -1795,38 +1769,38 @@ function buildDataset({ now = new Date(), hashes }) {
     const event = order.statusHistory.find((s) => s.status === 'DELIVERED');
     return event ? event.at : order.updatedAt;
   };
-  const loomDelivered = ds.orders
-    .filter((o) => String(o.brandId) === String(loom.doc._id) && o.orderStatus === 'DELIVERED')
+  const warningDelivered = ds.orders
+    .filter((o) => String(o.brandId) === String(warningBrand.doc._id) && o.orderStatus === 'DELIVERED')
     .sort((a, b) => a.createdAt - b.createdAt);
   const billableBase = (order) =>
     Math.round(Math.max(0, order.netTotal - order.deliveryFee - order.tax) * 100);
-  const [paidSale, invoicedSale, reversedSale] = loomDelivered.slice(0, 3);
+  const [paidSale, invoicedSale, reversedSale] = warningDelivered.slice(0, 3);
   addEntry({
-    sellerType: 'BRAND', sellerId: loom.doc._id, sourceType: 'ORDER', sourceId: paidSale._id,
+    sellerType: 'BRAND', sellerId: warningBrand.doc._id, sourceType: 'ORDER', sourceId: paidSale._id,
     eligibleAmountPaisa: billableBase(paidSale), status: 'PAID', occurredAt: deliveredAtOf(paidSale),
-    invoiceId: loomAugust._id, reason: '1% commission on a delivered order.',
+    invoiceId: warningPaidInvoice._id, reason: '1% commission on a delivered order.',
   });
   addEntry({
-    sellerType: 'BRAND', sellerId: loom.doc._id, sourceType: 'ORDER', sourceId: invoicedSale._id,
+    sellerType: 'BRAND', sellerId: warningBrand.doc._id, sourceType: 'ORDER', sourceId: invoicedSale._id,
     eligibleAmountPaisa: billableBase(invoicedSale), status: 'INVOICED', occurredAt: deliveredAtOf(invoicedSale),
-    invoiceId: loomSeptember._id, reason: '1% commission on a delivered order.',
+    invoiceId: warningOverdueInvoice._id, reason: '1% commission on a delivered order.',
   });
   const reversedEntry = addEntry({
-    sellerType: 'BRAND', sellerId: loom.doc._id, sourceType: 'ORDER', sourceId: reversedSale._id,
+    sellerType: 'BRAND', sellerId: warningBrand.doc._id, sourceType: 'ORDER', sourceId: reversedSale._id,
     eligibleAmountPaisa: billableBase(reversedSale), status: 'REVERSED', occurredAt: deliveredAtOf(reversedSale),
-    invoiceId: loomAugust._id, reason: 'Order returned after delivery; the charge was reversed.',
+    invoiceId: warningPaidInvoice._id, reason: 'Order returned after delivery; the charge was reversed.',
   });
   addEntry({
-    sellerType: 'BRAND', sellerId: loom.doc._id, sourceType: 'ORDER', sourceId: reversedSale._id,
+    sellerType: 'BRAND', sellerId: warningBrand.doc._id, sourceType: 'ORDER', sourceId: reversedSale._id,
     eligibleAmountPaisa: billableBase(reversedSale), kind: 'REVERSAL', status: 'REVERSED',
-    occurredAt: new Date(deliveredAtOf(reversedSale).getTime() + 2 * DAY), invoiceId: loomSeptember._id,
+    occurredAt: new Date(deliveredAtOf(reversedSale).getTime() + 2 * DAY), invoiceId: warningOverdueInvoice._id,
     reversalOf: reversedEntry._id, reason: 'Reversal of the charge for a returned order.',
   });
-  if (loomDelivered[3]) {
+  if (warningDelivered[3]) {
     addEntry({
-      sellerType: 'BRAND', sellerId: loom.doc._id, sourceType: 'ORDER', sourceId: loomDelivered[3]._id,
-      eligibleAmountPaisa: billableBase(loomDelivered[3]), status: 'ACCRUED',
-      occurredAt: deliveredAtOf(loomDelivered[3]), reason: '1% commission on a delivered order.',
+      sellerType: 'BRAND', sellerId: warningBrand.doc._id, sourceType: 'ORDER', sourceId: warningDelivered[3]._id,
+      eligibleAmountPaisa: billableBase(warningDelivered[3]), status: 'ACCRUED',
+      occurredAt: deliveredAtOf(warningDelivered[3]), reason: '1% commission on a delivered order.',
     });
   }
   addEntry({
@@ -1849,23 +1823,23 @@ function buildDataset({ now = new Date(), hashes }) {
     ds.sellerPaymentClaims.push(doc);
     return doc;
   };
-  const loomReceipt = `citycart/billing/brands/${loom.doc._id}/receipts`;
+  const warningReceipt = `citycart/billing/brands/${warningBrand.doc._id}/receipts`;
   addClaim({
-    invoiceId: loomAugust._id, sellerType: 'BRAND', sellerId: loom.doc._id, amountPaisa: 125000,
-    method: 'BANK_TRANSFER', reference: 'MCB-2026-0902-8841', receiptId: `${loomReceipt}/loom-august-2026`,
+    invoiceId: warningPaidInvoice._id, sellerType: 'BRAND', sellerId: warningBrand.doc._id, amountPaisa: 125000,
+    method: 'BANK_TRANSFER', reference: 'MCB-2026-0902-8841', receiptId: `${warningReceipt}/warning-paid`,
     comment: 'Paid in full plus an extra PKR 50; keep the difference as credit.', status: 'VERIFIED',
     verifiedBy: admin._id, verifiedAt: new Date(lastMonthStart.getTime() + 3 * DAY),
-    creditPaisa: 5000, creditAppliedInvoiceId: loomSeptember._id,
+    creditPaisa: 5000, creditAppliedInvoiceId: warningOverdueInvoice._id,
     at: new Date(lastMonthStart.getTime() + 2 * DAY),
   });
   addClaim({
-    invoiceId: loomSeptember._id, sellerType: 'BRAND', sellerId: loom.doc._id, amountPaisa: 90000,
-    method: 'JAZZCASH', reference: 'JC-4471-2201', receiptId: `${loomReceipt}/loom-september-part`,
+    invoiceId: warningOverdueInvoice._id, sellerType: 'BRAND', sellerId: warningBrand.doc._id, amountPaisa: 90000,
+    method: 'JAZZCASH', reference: 'JC-4471-2201', receiptId: `${warningReceipt}/warning-overdue-part`,
     comment: 'Part payment while the rest is on the way.', status: 'SUBMITTED', at: ago(DAY),
   });
   addClaim({
-    invoiceId: sukoonInvoice._id, sellerType: 'BRAND', sellerId: sukoon.doc._id, amountPaisa: 30000,
-    method: 'EASYPAISA', reference: 'EP-9932-1180', receiptId: `citycart/billing/brands/${sukoon.doc._id}/receipts/sukoon-august`,
+    invoiceId: frozenInvoice._id, sellerType: 'BRAND', sellerId: frozenBrand.doc._id, amountPaisa: 30000,
+    method: 'EASYPAISA', reference: 'EP-9932-1180', receiptId: `citycart/billing/brands/${frozenBrand.doc._id}/receipts/frozen-month`,
     comment: 'Sent the amount we agreed on the phone.', status: 'REJECTED',
     verifiedBy: admin._id, verifiedAt: ago(2 * DAY),
     rejectionReason: 'The reference number does not match any CityCart payment.', at: ago(5 * DAY),
@@ -1878,13 +1852,13 @@ function buildDataset({ now = new Date(), hashes }) {
     });
   };
   addHelp({
-    sellerType: 'BRAND', sellerId: loom.doc._id,
+    sellerType: 'BRAND', sellerId: warningBrand.doc._id,
     subject: 'Bank account title for the transfer',
     message: 'Our bank account title differs from the brand name. Can we still send the September payment from it?',
     status: 'OPEN', at: ago(6 * HOUR),
   });
   addHelp({
-    sellerType: 'BRAND', sellerId: rangrez.doc._id,
+    sellerType: 'BRAND', sellerId: restrictedBrand.doc._id,
     subject: 'Card machine sales are split with a partner',
     message: 'Half of our card sales settle to a partner account. Which amount should the 1% be calculated on?',
     status: 'RESOLVED',
@@ -1898,24 +1872,24 @@ function buildDataset({ now = new Date(), hashes }) {
     status: 'OPEN', at: ago(4 * HOUR),
   });
 
-  note(loom.owner._id, 'BILLING_WARNING', 'Your CityCart bill is 2 days past due',
-    `Invoice ${loomSeptember.periodKey} has ${money((loomSeptember.amountDuePaisa) / 100)} still to pay. New orders are still accepted until day 7.`,
-    { invoiceId: loomSeptember._id, sellerType: 'BRAND' }, ago(2 * DAY));
-  note(loom.owner._id, 'BILLING_CLAIM_VERIFIED', 'Your payment was verified',
-    `We received ${money(1250)} for invoice ${loomAugust.periodKey}. PKR 50 is kept as credit for your next bill.`,
-    { invoiceId: loomAugust._id, claimId: ds.sellerPaymentClaims[0]._id }, ago(1.5 * DAY));
-  note(sukoon.owner._id, 'BILLING_CLAIM_REJECTED', 'Your payment could not be matched',
+  note(warningBrand.owner._id, 'BILLING_WARNING', 'Your CityCart bill is 2 days past due',
+    `Invoice ${warningOverdueInvoice.periodKey} has ${money((warningOverdueInvoice.amountDuePaisa) / 100)} still to pay. New orders are still accepted until day 7.`,
+    { invoiceId: warningOverdueInvoice._id, sellerType: 'BRAND' }, ago(2 * DAY));
+  note(warningBrand.owner._id, 'BILLING_CLAIM_VERIFIED', 'Your payment was verified',
+    `We received ${money(1250)} for invoice ${warningPaidInvoice.periodKey}. PKR 50 is kept as credit for your next bill.`,
+    { invoiceId: warningPaidInvoice._id, claimId: ds.sellerPaymentClaims[0]._id }, ago(1.5 * DAY));
+  note(frozenBrand.owner._id, 'BILLING_CLAIM_REJECTED', 'Your payment could not be matched',
     'The reference number does not match any CityCart payment. Please check it and send the claim again.',
-    { invoiceId: sukoonInvoice._id, claimId: ds.sellerPaymentClaims[2]._id }, ago(2 * DAY));
-  note(rangrez.owner._id, 'BILLING_HELP_ANSWERED', 'CityCart answered your billing question',
+    { invoiceId: frozenInvoice._id, claimId: ds.sellerPaymentClaims[2]._id }, ago(2 * DAY));
+  note(restrictedBrand.owner._id, 'BILLING_HELP_ANSWERED', 'CityCart answered your billing question',
     'The 1% is on the full completed order; where the money settles does not change the charge.',
     { sellerType: 'BRAND' }, ago(3 * DAY));
-  note(rangrez.owner._id, 'BILLING_RESTRICTED', 'New orders are paused on your account',
-    `Invoice ${rangrezInvoice.periodKey} is 10 days past due. Existing orders can still be fulfilled, and listing stays visible.`,
-    { invoiceId: rangrezInvoice._id, sellerType: 'BRAND' }, ago(DAY));
-  note(sukoon.owner._id, 'BILLING_FROZEN', 'Your listings are hidden',
-    `Invoice ${sukoonInvoice.periodKey} is 15 days past due. Customers cannot find your products until it is settled.`,
-    { invoiceId: sukoonInvoice._id, sellerType: 'BRAND' }, ago(3 * DAY));
+  note(restrictedBrand.owner._id, 'BILLING_RESTRICTED', 'New orders are paused on your account',
+    `Invoice ${restrictedInvoice.periodKey} is 10 days past due. Existing orders can still be fulfilled, and listing stays visible.`,
+    { invoiceId: restrictedInvoice._id, sellerType: 'BRAND' }, ago(DAY));
+  note(frozenBrand.owner._id, 'BILLING_FROZEN', 'Your listings are hidden',
+    `Invoice ${frozenInvoice.periodKey} is 15 days past due. Customers cannot find your products until it is settled.`,
+    { invoiceId: frozenInvoice._id, sellerType: 'BRAND' }, ago(3 * DAY));
 
   return ds;
 }

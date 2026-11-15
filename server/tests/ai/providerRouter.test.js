@@ -154,6 +154,8 @@ describe('AI provider router', () => {
 
     let isolated;
     jest.isolateModules(() => {
+      // The developer's server/.env must not re-add the key removed above.
+      jest.doMock('dotenv', () => ({ config: () => {} }));
       isolated = require('../../src/services/ai');
     });
 

@@ -385,6 +385,8 @@ const BRANDS = [
   // ───────────────────────────────────────────────────────── 9. Quick Cart Deals (TERMINATED)
   {
     key: 'quick', name: 'Quick Cart Deals', city: 'faisalabad', status: 'TERMINATED', ageDays: 80, skuPrefix: 'QCD',
+    // Its orders were placed before the listings were switched off, so they still name them.
+    sellInactiveProducts: true,
     terminationReason: 'Repeated reports of items not matching their listings, and orders accepted but never shipped.',
     terminatedDaysAgo: 2, graceHours: 168,
     description: 'Discount household and fashion items. Terminated by CityCart for breaking the seller rules.',
@@ -632,4 +634,163 @@ for (const brand of BRANDS) {
   if (offer) brand.products.push({ ...SHARED_ITEM, ...offer });
 }
 
-module.exports = { P, CITIES, BLOCKS, BRANCHES, BRANDS, CHATS, LONG_CHAT, CUSTOMERS, ADMIN, CARTS, REMARKS }
+// ─────────────────────────────────────────────────────────────────────────────
+// The rest of what the builder needs. A different demo (e.g. the showcase seed)
+// supplies its own catalog with the same keys, so ./build.js can stay the same.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// One picker for each active demo brand: a brand account that only sees the pick queue.
+const PICKERS = {
+  loom: { name: 'Areeba Saleem', email: 'areeba.saleem@citycart.demo', phone: '+92 321 4487001' },
+  rangrez: { name: 'Fahad Iqbal', email: 'fahad.iqbal@citycart.demo', phone: '+92 302 7738190' },
+  mehr: { name: 'Nimra Aslam', email: 'nimra.aslam@citycart.demo', phone: '+92 345 6102287' },
+  sukoon: { name: 'Tahir Mehmood', email: 'tahir.mehmood@citycart.demo', phone: '+92 311 9054326' },
+  zaitoon: { name: 'Rabia Sattar', email: 'rabia.sattar@citycart.demo', phone: '+92 312 6680142' },
+  naqsh: { name: 'Waleed Akhtar', email: 'waleed.akhtar@citycart.demo', phone: '+92 301 3397650' },
+};
+
+// One brand in each stage of the billing ladder (docs/15 §9), so the demo shows
+// a warning, a restricted seller, a frozen seller and a granted grace period.
+const BILLING_STATE = {
+  loom: { status: 'WARNING' },
+  rangrez: { status: 'RESTRICTED' },
+  sukoon: {
+    status: 'FROZEN',
+    override: {
+      status: 'FROZEN', reason: 'No payment received after repeated reminders.',
+      untilDays: 30, atDaysAgo: 3,
+    },
+  },
+  zaitoon: { status: 'ACTIVE', graceDays: 5 },
+};
+
+// What an order line that cannot be supplied in full says to the customer.
+const ADJUSTMENT_NOTES = {
+  proposed: 'The last piece in this colour has a small mark, so we can send one less and offer a similar lawn suit at today\'s price instead.',
+  cancelled: 'This fabric is out of stock until next week. We can send the rest of the order, or you can cancel it.',
+  expired: 'One unit was damaged in the workshop. We can replace it with the same product in another shade.',
+  picker: 'While picking your order I found one unit with a small mark. I can send the rest and offer a similar piece instead.',
+};
+
+// Streets that are not in one of the drawn blocks are placed in the nearest one.
+const NEAREST_BLOCK = { 'Gulistan Colony': 'Peoples Colony', 'Civil Lines': 'Clock Tower', 'Canal Road': 'Gulberg' };
+
+// How many orders each brand has, and what state the last one is in.
+const PLAN = {
+  loom: ['DELIVERED', 'DELIVERED', 'DELIVERED', 'DELIVERED', 'DELIVERED', 'DELIVERED', 'PENDING', 'CONFIRMED', 'PROCESSING', 'READY_FOR_SHIPMENT', 'CANCELLED', 'SHIPPED'],
+  rangrez: ['DELIVERED', 'DELIVERED', 'DELIVERED', 'PENDING', 'PROCESSING', 'REJECTED'],
+  mehr: ['DELIVERED', 'DELIVERED', 'DELIVERED', 'DELIVERED', 'PENDING', 'OUT_FOR_DELIVERY', 'SHIPPED', 'CANCELLED'],
+  sukoon: ['DELIVERED', 'DELIVERED', 'DELIVERED', 'DELIVERED', 'CONFIRMED', 'PENDING', 'READY_FOR_SHIPMENT', 'OUT_FOR_DELIVERY'],
+  zaitoon: ['DELIVERED', 'DELIVERED', 'DELIVERED', 'DELIVERED', 'PENDING', 'PROCESSING', 'SHIPPED', 'REJECTED'],
+  naqsh: ['DELIVERED', 'DELIVERED', 'DELIVERED', 'PENDING', 'CONFIRMED', 'OUT_FOR_DELIVERY'],
+  gadgets: ['DELIVERED', 'DELIVERED'],
+  quick: ['DELIVERED', 'DELIVERED', 'REJECTED', 'REJECTED'],
+};
+
+const COURIERS = { loom: 'TCS', rangrez: 'LEO', mehr: 'TCS', sukoon: 'TRAX', zaitoon: 'LEO', naqsh: 'TCS', gadgets: 'TRAX', quick: 'LEO' };
+
+// The named stories the builder stages on top of the order plan, so every
+// screen has its one interesting case without the builder knowing brand names.
+const SCENARIOS = {
+  agedProof: { brand: 'loom', index: 1 },
+  fullRefund: { brand: 'loom', index: 0 },
+  partRefund: { brand: 'mehr', index: 1 },
+  failedDelivery: { brand: 'mehr', status: 'OUT_FOR_DELIVERY' },
+  inTransit: { brand: 'mehr', status: 'SHIPPED' },
+  picking: 'loom',
+  // Reviews from a store whose goods were not as described, so 1–3 stars exist.
+  lowRatings: 'quick',
+  // A brand without its own wording borrows these review remarks.
+  defaultRemarks: 'quick',
+  // Orders of a brand that is no longer active are older than the active ones.
+  inactiveOrderAgeDays: [35, 65],
+};
+
+// The service-provider tenant shown in the demo (docs/24 §4).
+const SERVICE = {
+  categories: [
+    { name: 'Home Cleaning', slug: 'home-cleaning' },
+    { name: 'Deep Cleaning', slug: 'deep-cleaning', parent: 'home-cleaning' },
+    { name: 'Plumbing', slug: 'plumbing' },
+    { name: 'Electrical', slug: 'electrical' },
+  ],
+  main: {
+    owner: { name: 'Sana Khalid', email: 'service@citycart.local', phone: '+92 300 1234567' },
+    displayName: 'Sana Home Cleaning', legalName: 'Sana Home Cleaning Services', slug: 'sana-home-cleaning-demo',
+    categorySlug: 'home-cleaning', blockSlug: 'peoples-colony',
+    addressLine: 'House 12, Street 4, Peoples Colony No. 1',
+    bio: 'Reliable home cleaning in Faisalabad — deep cleans, sofas and move-in jobs.',
+    avatarKeyword: 'cleaner', coverKeyword: 'clean house', startingAtPrice: 250000,
+    ratingAvg: 4.5, ratingCount: 2, completedBookings: 18, rankScore: 0.72,
+    createdDaysAgo: 190, approvedDaysAgo: 185, billingGraceDays: 4,
+    offerings: [
+      {
+        title: 'Deep clean — 2 bedroom', slug: 'deep-clean-2-bedroom', startingAtPrice: 450000,
+        durationMinutes: 180, description: 'Full deep clean of a two-bedroom home, including bathrooms and kitchen.',
+        imageKeyword: 'home cleaning 1', attributes: { bedrooms: 2, bathrooms: 2 },
+      },
+      {
+        title: 'Sofa shampoo', slug: 'sofa-shampoo', startingAtPrice: 180000,
+        durationMinutes: 90, description: 'Up to five seats, machine shampoo and quick dry.',
+        imageKeyword: 'home cleaning 2', attributes: { seats: 5 },
+      },
+      {
+        title: 'Move-in deep clean', slug: 'move-in-deep-clean', startingAtPrice: 800000,
+        durationMinutes: 300, description: 'Empty-home clean before you move in, kitchen and bathrooms included.',
+        imageKeyword: 'home cleaning 3', attributes: { bedrooms: 3, emptyHome: true },
+      },
+    ],
+  },
+  pending: {
+    owner: { name: 'Bilal Ahmed', email: 'bilal.plumbing@citycart.demo', phone: '+92 301 7788120' },
+    displayName: 'Bilal Plumbing Works', legalName: 'Bilal Plumbing Works', slug: 'bilal-plumbing-works',
+    categorySlug: 'plumbing', blockSlug: 'peoples-colony',
+    addressLine: 'Shop 3, Peoples Colony No. 1 Market',
+    bio: 'Leak repairs, taps, water tanks and bathroom fittings.',
+    avatarKeyword: 'plumber', coverKeyword: 'plumbing tools', startingAtPrice: 80000,
+    createdDaysAgo: 18,
+    offering: {
+      title: 'Tap and leak repair', slug: 'tap-and-leak-repair',
+      description: 'Fix a dripping tap or a leaking joint, parts extra.',
+      imageKeyword: 'plumbing repair', startingAtPrice: 80000, durationMinutes: 60,
+      attributes: { fittings: 'standard', partsExtra: true },
+    },
+  },
+  availability: { weekdays: [1, 2, 3, 4, 5, 6], startMinute: 540, endMinute: 1080, slotMinutes: 60, blackoutInDays: 21 },
+};
+
+// Catalogue items a store asks the admin about, so the review queue is not empty.
+const CATALOG_REQUESTS = [
+  {
+    brandKey: 'sukoon', name: 'Monogrammed Cushion Cover, made to order', categoryName: 'Cushions & Rugs',
+    description: 'Cushion cover embroidered with the buyer\'s initials. Made to order in about a week.',
+    scope: 'PRIVATE', status: 'ACTIVE',
+  },
+  {
+    brandKey: 'zaitoon', name: 'Hand-Stitched Leather Slippers, Kids', categoryName: 'Chappals & Sandals',
+    description: 'Soft leather slippers for children, hand-stitched.',
+    scope: 'GLOBAL', status: 'PENDING',
+  },
+  {
+    brandKey: 'naqsh', name: 'Silver-Plated Anklet Pair', categoryName: 'Earrings',
+    description: 'Plain silver-plated anklets.',
+    scope: 'GLOBAL', status: 'REJECTED',
+    reviewNote: 'Not a fit for the Earrings category. Please request it again under a jewellery category that fits.',
+    reviewedDaysAgo: 5,
+  },
+];
+
+// A duplicate an admin merged into the real shared item (docs/22).
+const CATALOG_MERGE = {
+  name: 'Plain White Cotton Suit Length 2.5m',
+  into: 'Plain White Cotton Suit Length, 2.5 m',
+  madeDaysAgo: 30, archivedDaysAgo: 25,
+};
+
+const SAMPLE_ROWS = require('./sample-catalog.json');
+
+module.exports = {
+  P, CITIES, BLOCKS, BRANCHES, BRANDS, CHATS, LONG_CHAT, CUSTOMERS, ADMIN, CARTS, REMARKS,
+  PICKERS, BILLING_STATE, ADJUSTMENT_NOTES, NEAREST_BLOCK, PLAN, COURIERS, SCENARIOS,
+  SERVICE, CATALOG_REQUESTS, CATALOG_MERGE, SAMPLE_ROWS,
+};

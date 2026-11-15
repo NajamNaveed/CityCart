@@ -29,6 +29,8 @@ describe('AI kill switch', () => {
 
     let isolatedEnv;
     jest.isolateModules(() => {
+      // The developer's server/.env must not leak into this default check.
+      jest.doMock('dotenv', () => ({ config: () => {} }));
       isolatedEnv = require('../../src/config/env');
     });
 
