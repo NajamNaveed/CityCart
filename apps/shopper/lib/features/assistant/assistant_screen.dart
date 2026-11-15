@@ -3,13 +3,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/format.dart';
+import '../../core/status.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/models.dart';
 import '../../providers.dart';
 import 'assistant_controller.dart';
 
-const _suggestions = ['Cheap rice', 'Gift under 3000', 'Milk nearby'];
+const _shopSuggestions = ['Cheap rice', 'Gift under 3000', 'Milk nearby'];
+const _orderSuggestions = [
+  'Where is my order?',
+  'How do I cancel an order?',
+  'Can I return an item?',
+];
 
 /// Phase 2a: the shopping assistant. The server answers with real products it
 /// found itself; this screen only shows what came back and links to each
@@ -54,6 +60,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
   Widget build(BuildContext context) {
     final controller = ref.watch(assistantProvider);
     final areaLabel = ref.read(areaProvider).area?.label ?? 'your area';
+    final ordersMode = controller.mode == AssistantMode.orders;
 
     return ListenableBuilder(
       listenable: controller,
@@ -62,14 +69,35 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
           body: SafeArea(
             child: Column(
               children: [
-                const ScreenTopBar(
+                ScreenTopBar(
                   title: 'Ask CityCart',
-                  subtitle: 'Shopping assistant',
+                  subtitle: ordersMode ? 'Order help' : 'Shopping assistant',
                 ),
                 const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  child: Row(
+                    children: [
+                      _ModeChip(
+                        label: 'Find products',
+                        active: !ordersMode,
+                        onTap: () =>
+                            controller.setMode(AssistantMode.shop),
+                      ),
+                      const SizedBox(width: 8),
+                      _ModeChip(
+                        label: 'My orders',
+                        active: ordersMode,
+                        onTap: () =>
+                            controller.setMode(AssistantMode.orders),
+                      ),
+                    ],
+                  ),
+                ),
                 Expanded(
                   child: controller.turns.isEmpty
                       ? _Starter(
+                          mode: controller.mode,
                           areaLabel: areaLabel,
                           onSuggestion: (text) => _send(controller, text),
                         )
@@ -82,7 +110,11 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
                               (controller.sending ? 1 : 0),
                           itemBuilder: (context, index) {
                             if (controller.sending && index == 0) {
-                              return const _Thinking();
+                              return _Thinking(
+                                label: ordersMode
+                                    ? 'Checking your orders…'
+                                    : 'Looking through the shops…',
+                              );
                             }
                             final offset = controller.sending ? 1 : 0;
                             final turn = controller.turns[controller
@@ -173,13 +205,21 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
 }
 
 class _Starter extends StatelessWidget {
-  const _Starter({required this.areaLabel, required this.onSuggestion});
+  const _Starter({
+    required this.mode,
+    required this.areaLabel,
+    required this.onSuggestion,
+  });
 
+  final AssistantMode mode;
   final String areaLabel;
   final ValueChanged<String> onSuggestion;
 
   @override
   Widget build(BuildContext context) {
+    final ordersMode = mode == AssistantMode.orders;
+    final suggestions = ordersMode ? _orderSuggestions : _shopSuggestions;
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 40, 20, 24),
       children: [
@@ -200,14 +240,18 @@ class _Starter extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         Text(
-          'What are you looking for?',
+          ordersMode ? 'Ask about your orders' : 'What are you looking for?',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.headlineSmall,
         ),
         const SizedBox(height: 8),
         Text(
-          'Ask in your own words. I can find products, compare prices and '
-          'point you to shops near you.',
+          ordersMode
+              ? 'Ask where an order is, what its status means, or how '
+                    'cancellation and returns work. I can only read your own '
+                    'orders.'
+              : 'Ask in your own words. I can find products, compare prices '
+                    'and point you to shops near you.',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyMedium,
         ),
@@ -217,7 +261,7 @@ class _Starter extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
-            for (final suggestion in _suggestions)
+            for (final suggestion in suggestions)
               _Suggestion(
                 text: suggestion,
                 onTap: () => onSuggestion(suggestion),
@@ -226,13 +270,55 @@ class _Starter extends StatelessWidget {
         ),
         const SizedBox(height: 26),
         Text(
-          'Answers come from real listings in $areaLabel.',
+          ordersMode
+              ? 'Answers come from your own orders.'
+              : 'Answers come from real listings in $areaLabel.',
           textAlign: TextAlign.center,
           style: Theme.of(
             context,
           ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
         ),
       ],
+    );
+  }
+}
+
+class _ModeChip extends StatelessWidget {
+  const _ModeChip({
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: active ? AppColors.forest : AppColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        side: BorderSide(
+          color: active ? AppColors.forest : AppColors.line,
+        ),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: active ? AppColors.white : AppColors.inkSoft,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -353,18 +439,22 @@ class _Turn extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (turn.degraded) ...[
-                    const Row(
+                    Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
-                          Icons.search_rounded,
+                          turn.orders.isNotEmpty
+                              ? Icons.receipt_long_rounded
+                              : Icons.search_rounded,
                           size: 14,
                           color: AppColors.muted,
                         ),
-                        SizedBox(width: 5),
+                        const SizedBox(width: 5),
                         Text(
-                          'Plain search results.',
-                          style: TextStyle(
+                          turn.orders.isNotEmpty
+                              ? 'Latest orders without the assistant.'
+                              : 'Plain search results.',
+                          style: const TextStyle(
                             fontSize: 11.5,
                             fontWeight: FontWeight.w600,
                             color: AppColors.muted,
@@ -378,6 +468,10 @@ class _Turn extends StatelessWidget {
                   for (final product in turn.products) ...[
                     const SizedBox(height: 10),
                     _AssistantProductCard(product: product),
+                  ],
+                  for (final order in turn.orders) ...[
+                    const SizedBox(height: 10),
+                    _AssistantOrderCard(order: order),
                   ],
                 ],
               ),
@@ -476,8 +570,136 @@ class _AssistantProductCard extends StatelessWidget {
   }
 }
 
+class _AssistantOrderCard extends StatelessWidget {
+  const _AssistantOrderCard({required this.order});
+
+  final AssistantOrder order;
+
+  @override
+  Widget build(BuildContext context) {
+    final canOpen = order.id.isNotEmpty;
+    final detail = <String?>[
+      order.brandName,
+      itemCountLabel(order.itemCount),
+      formatShortDate(order.placedAt),
+    ].whereType<String>().where((part) => part.isNotEmpty).join(' · ');
+
+    return Material(
+      color: AppColors.paper,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: canOpen ? () => context.push('/orders/${order.id}') : null,
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      order.orderNumber,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  StatusPill(
+                    text: friendlyOrder(order.orderStatus),
+                    tone: toneForOrder(order.orderStatus),
+                    compact: true,
+                  ),
+                ],
+              ),
+              if (detail.isNotEmpty) ...[
+                const SizedBox(height: 3),
+                Text(
+                  detail,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    color: AppColors.muted,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Text(
+                    formatMoney(order.payableTotal),
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.clay,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (canOpen)
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      size: 18,
+                      color: AppColors.muted,
+                    ),
+                ],
+              ),
+              if (order.actions.isNotEmpty) ...[
+                const SizedBox(height: 7),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    for (final action in order.actions)
+                      _ActionTag(action: action),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The server builds these labels; the card opens the normal order page, where
+/// the customer performs the action (the assistant never changes an order).
+class _ActionTag extends StatelessWidget {
+  const _ActionTag({required this.action});
+
+  final OrderAssistantAction action;
+
+  @override
+  Widget build(BuildContext context) {
+    final cancel = action.type == 'cancel_order';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: cancel ? AppColors.claySoft : AppColors.paperDeep,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+      ),
+      child: Text(
+        action.label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: cancel ? AppColors.clay : AppColors.inkSoft,
+        ),
+      ),
+    );
+  }
+}
+
 class _Thinking extends StatelessWidget {
-  const _Thinking();
+  const _Thinking({required this.label});
+
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -492,10 +714,10 @@ class _Thinking extends StatelessWidget {
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: AppColors.line),
           ),
-          child: const Row(
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              SizedBox(
+              const SizedBox(
                 width: 15,
                 height: 15,
                 child: CircularProgressIndicator(
@@ -503,10 +725,10 @@ class _Thinking extends StatelessWidget {
                   color: AppColors.forest,
                 ),
               ),
-              SizedBox(width: 10),
+              const SizedBox(width: 10),
               Text(
-                'Looking through the shops…',
-                style: TextStyle(fontSize: 13, color: AppColors.muted),
+                label,
+                style: const TextStyle(fontSize: 13, color: AppColors.muted),
               ),
             ],
           ),

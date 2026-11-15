@@ -1,6 +1,6 @@
 const express = require('express');
 
-const { ping, listingDraft, reviewSummary, translate, shopAssistant } = require('../controllers/ai.controller');
+const { ping, listingDraft, reviewSummary, translate, shopAssistant, orderHelper } = require('../controllers/ai.controller');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
 const validateObjectIdParam = require('../middleware/validateObjectIdParam');
@@ -59,6 +59,18 @@ router.post(
   aiUserLimiter,
   aiDailyLimit,
   shopAssistant,
+);
+
+// Phase 2b: questions about the caller's own orders. The tools take the
+// customer id from the authenticated request; no id is ever read from the body.
+router.post(
+  '/order-helper',
+  authenticate,
+  requireRole(ROLES.CUSTOMER),
+  requireAiEnabled,
+  aiUserLimiter,
+  aiDailyLimit,
+  orderHelper,
 );
 
 module.exports = router;

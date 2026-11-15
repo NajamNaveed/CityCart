@@ -195,6 +195,16 @@ class ShopperRepository {
     return ShopAssistantReply.fromJson(body['data']);
   }
 
+  /// Phase 2b: asks about the signed-in customer's own orders. The server
+  /// scopes the tools to the caller, so no order or customer id is sent.
+  Future<OrderAssistantReply> askOrderHelper({required String message}) async {
+    final body = await _api.post(
+      '/ai/order-helper',
+      data: {'message': message.trim()},
+    );
+    return OrderAssistantReply.fromJson(body['data']);
+  }
+
   // --- Cart ----------------------------------------------------------------
 
   Future<CartView> cart() async {

@@ -503,4 +503,5 @@ module.exports = {
   cancelMyOrder,
   nextOrderNumber,
   OrderError,
+  CANCELLABLE_BY_CUSTOMER,
 };

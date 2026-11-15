@@ -6,8 +6,9 @@ import api, { getErrorMessage } from '../../services/api'
 import { useCity } from '../../hooks/useCity'
 import { useNearby } from '../../hooks/useNearby'
 import { Badge } from '../../design'
+import StatusPill from '../StatusPill'
 import Drawer from '../ui/Drawer'
-import { formatPrice } from '../../ui'
+import { formatDate, formatPrice } from '../../ui'
 
 // Each mode posts the same body to its own endpoint; the server decides what a
 // mode may read (docs/29 Phase 2).
@@ -17,7 +18,18 @@ const MODES = [
     label: 'Find products',
     endpoint: '/ai/shop-assistant',
     placeholder: 'What are you looking for? e.g. cheap rice',
+    intro: 'Ask for a product, a price or a shop around you. Answers use real listings and never invent products.',
     suggestions: ['Cheap rice', 'Gift under 3000', 'Milk nearby'],
+    withArea: true,
+  },
+  {
+    key: 'order',
+    label: 'My orders',
+    endpoint: '/ai/order-helper',
+    placeholder: 'e.g. Where is my order?',
+    intro: 'Ask about your own orders, delivery, cancellation or returns. The assistant can only read your orders.',
+    suggestions: ['Where is my order?', 'How do I cancel an order?', 'Can I return an item?'],
+    withArea: false,
   },
 ]
 
@@ -51,6 +63,53 @@ function productCard(product) {
         )}
       </span>
     </Link>
+  )
+}
+
+function orderCard(order) {
+  return (
+    <div key={order.orderId} className="rounded-tile border border-line-warm bg-paper p-3">
+      <div className="flex items-start justify-between gap-2">
+        <span className="min-w-0">
+          <Link
+            to={`/orders/${order.orderId}`}
+            className="text-[12.5px] font-semibold text-ink transition hover:text-forest"
+          >
+            {order.orderNumber}
+          </Link>
+          <span className="mt-0.5 block truncate text-[11.5px] text-ink/55">
+            {[
+              order.brandName,
+              `${order.itemCount} ${order.itemCount === 1 ? 'item' : 'items'}`,
+              formatDate(order.placedAt),
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </span>
+        </span>
+        <StatusPill value={order.orderStatus} />
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <span className="text-[13px] font-semibold text-ink">
+          {formatPrice(order.netTotal ?? order.total)}
+        </span>
+        <span className="flex flex-wrap justify-end gap-1.5">
+          {(order.actions || []).map((action) => (
+            <Link
+              key={`${order.orderId}-${action.type}`}
+              to={`/orders/${order.orderId}`}
+              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+                action.type === 'cancel_order'
+                  ? 'border border-clay/25 bg-clay/5 text-clay hover:bg-clay/10'
+                  : 'border border-line-warm bg-paper-warm text-ink/70 hover:border-forest/30 hover:text-ink'
+              }`}
+            >
+              {action.label}
+            </Link>
+          ))}
+        </span>
+      </div>
+    </div>
   )
 }
 
@@ -101,8 +160,8 @@ export default function AssistantPanel() {
     try {
       const { data } = await api.post(active.endpoint, {
         message,
-        ...(cityId && { cityId }),
-        ...(coords && { lat: coords.lat, lng: coords.lng }),
+        ...(active.withArea && cityId && { cityId }),
+        ...(active.withArea && coords && { lat: coords.lat, lng: coords.lng }),
       })
       const answer = data.data || {}
       setMessages((prev) => [
@@ -110,8 +169,11 @@ export default function AssistantPanel() {
         {
           id: nextId++,
           role: 'assistant',
-          text: answer.reply || 'Showing matches without the assistant.',
+          text:
+            answer.reply ||
+            (active.withArea ? 'Showing matches without the assistant.' : 'Here are your latest orders.'),
           products: answer.products || [],
+          orders: answer.orders || [],
           degraded: Boolean(answer.degraded),
         },
       ])
@@ -135,6 +197,12 @@ export default function AssistantPanel() {
 
   if (!available) return null
 
+  function changeMode(key) {
+    if (key === mode) return
+    setMode(key)
+    setMessages([])
+  }
+
   return (
     <>
       <button
@@ -154,7 +222,7 @@ export default function AssistantPanel() {
               <button
                 key={item.key}
                 type="button"
-                onClick={() => setMode(item.key)}
+                onClick={() => changeMode(item.key)}
                 className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition ${
                   item.key === active.key
                     ? 'bg-forest text-cream'
@@ -173,8 +241,7 @@ export default function AssistantPanel() {
             {messages.length === 0 && (
               <div className="rounded-tile border border-line-warm bg-paper-warm p-4">
                 <p className="text-[13px] leading-relaxed text-ink/70">
-                  Ask for a product, a price or a shop around you. Answers use real listings and
-                  never invent products.
+                  {active.intro}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {active.suggestions.map((suggestion) => (
@@ -213,10 +280,13 @@ export default function AssistantPanel() {
                   {entry.products?.length > 0 && (
                     <div className="space-y-1.5">{entry.products.map(productCard)}</div>
                   )}
-                  {entry.products?.length > 0 && (
+                  {entry.orders?.length > 0 && (
+                    <div className="space-y-1.5">{entry.orders.map(orderCard)}</div>
+                  )}
+                  {(entry.products?.length > 0 || entry.orders?.length > 0) && (
                     <p className="text-[10.5px] text-ink/40">
-                      {entry.degraded ? 'Plain search results. ' : ''}AI can make mistakes — check the
-                      listing.
+                      {entry.degraded ? 'Plain search results. ' : ''}AI can make mistakes — check the{' '}
+                      {entry.orders?.length > 0 ? 'order' : 'listing'} before acting.
                     </p>
                   )}
                 </div>
@@ -226,7 +296,7 @@ export default function AssistantPanel() {
             {busy && (
               <div className="flex items-center gap-2 text-[12px] text-ink/50" aria-live="polite">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-forest" />
-                Thinking…
+                {active.key === 'order' ? 'Checking your orders…' : 'Thinking…'}
               </div>
             )}
             <div ref={endRef} />

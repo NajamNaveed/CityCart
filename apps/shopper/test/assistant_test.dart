@@ -29,13 +29,44 @@ const _reply = ShopAssistantReply(
   ],
 );
 
+const _orderReply = OrderAssistantReply(
+  reply: 'Your order is still waiting for the shop to confirm.',
+  orders: [
+    AssistantOrder(
+      id: 'o1',
+      orderNumber: 'CC-2026-000101',
+      orderStatus: 'PENDING',
+      total: 1550,
+      itemCount: 3,
+      brandName: 'Roshan Home Care',
+      actions: [
+        OrderAssistantAction(
+          type: 'cancel_order',
+          orderId: 'o1',
+          label: 'Cancel order',
+        ),
+        OrderAssistantAction(
+          type: 'view_order',
+          orderId: 'o1',
+          label: 'View order',
+        ),
+      ],
+    ),
+  ],
+);
+
 class _FakeRepository extends ShopperRepository {
-  _FakeRepository({this.reply = _reply, this.failures = 0})
-    : super(ApiClient(SessionStore()));
+  _FakeRepository({
+    this.reply = _reply,
+    this.orderReply = _orderReply,
+    this.failures = 0,
+  }) : super(ApiClient(SessionStore()));
 
   final ShopAssistantReply reply;
+  final OrderAssistantReply orderReply;
   int failures;
   final List<String> asked = [];
+  final List<String> ordersAsked = [];
 
   @override
   Future<ShopAssistantReply> askShopAssistant({
@@ -54,6 +85,12 @@ class _FakeRepository extends ShopperRepository {
       );
     }
     return reply;
+  }
+
+  @override
+  Future<OrderAssistantReply> askOrderHelper({required String message}) async {
+    ordersAsked.add(message);
+    return orderReply;
   }
 }
 
@@ -158,6 +195,45 @@ void main() {
       expect(find.text('Plain search results.'), findsOneWidget);
       expect(find.text('Sunflower Oil 1L'), findsOneWidget);
       expect(find.text('Rs 520'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('answers questions about the customer’s own orders', (
+      tester,
+    ) async {
+      final prefs = await SharedPreferences.getInstance();
+      final repository = _FakeRepository();
+      final controller = AssistantController(repository, _area);
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        _app(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(prefs),
+            assistantProvider.overrideWith((ref) => controller),
+          ],
+        ),
+      );
+
+      await tester.tap(find.text('My orders'));
+      await tester.pump();
+      expect(find.text('Ask about your orders'), findsOneWidget);
+
+      await tester.tap(find.text('Where is my order?'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        find.text('Your order is still waiting for the shop to confirm.'),
+        findsOneWidget,
+      );
+      expect(find.text('CC-2026-000101'), findsOneWidget);
+      expect(find.text('Waiting for the store'), findsOneWidget);
+      expect(find.text('Rs 1,550'), findsOneWidget);
+      expect(find.text('Cancel order'), findsOneWidget);
+      expect(find.text('View order'), findsOneWidget);
+      expect(repository.ordersAsked, ['Where is my order?']);
+      expect(repository.asked, isEmpty);
       expect(tester.takeException(), isNull);
     });
 

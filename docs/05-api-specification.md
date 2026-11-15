@@ -2889,7 +2889,7 @@ Super Admin only.
 
 ---
 
-# 23a. AI Endpoints (Phase 0–2a)
+# 23a. AI Endpoints (Phase 0–2b)
 
 Base:
 
@@ -3123,6 +3123,90 @@ Failure codes:
 ```
 
 Each provider call inside the loop is logged in `AiUsage` and counts against the daily allowance; the burst limiter counts the request once.
+
+## Order helper
+
+```text
+POST /api/v1/ai/order-helper
+```
+
+Role: `CUSTOMER` only. The **My orders** mode of the web `Ask CityCart` panel and of the shopper app's assistant screen. It runs the same tool loop as the shopping assistant, but every tool reads only the signed-in customer's own orders.
+
+Request:
+
+```json
+{ "message": "where is my rice order?" }
+```
+
+`message` is 2–500 characters, sanitized and treated as data. No `cityId` or coordinates are accepted: an order is not tied to the chosen shopping area.
+
+Tools (read-only, strict zod arguments):
+
+```text
+list_my_orders { status?, limit? }   the caller's own orders, newest first; status is one of ORDER_STATUSES, limit 1–10
+get_order { orderId }                one of the caller's own orders, with its last status changes
+```
+
+The caller's id comes from the authenticated request, never from the model, and the tool schemas are `.strict()`, so a model that tries to pass `userId` or another field is refused and the tool is not run. `get_order` goes through `getOrderForUser`, which scopes `customerId` for a `CUSTOMER`: an order that belongs to someone else answers `found: false`, the same as a malformed id, so the endpoint cannot be used to probe other customers' orders.
+
+Cards and actions are built by the server, from the status and payment it already enforces. The model only chooses which cards to show (at most 3, resolved against the ids seen in tool results):
+
+```text
+Cancel order   only while the order is PENDING and not PAID, the rule cancelMyOrder enforces
+View order     always
+```
+
+There is no **Start return** action: v2 has no customer-initiated return after delivery (docs/22 §F). The answer explains the door-return rule instead. The assistant never changes an order; the buttons open the normal order page where the customer performs the action.
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "reply": "Your order CC-2026-000101 is still waiting for the store to confirm it.",
+    "orders": [
+      {
+        "orderId": "66f1a0c2b3d4e5f60718293a",
+        "orderNumber": "CC-2026-000101",
+        "orderStatus": "PENDING",
+        "paymentStatus": "PENDING",
+        "paymentMethod": "COD",
+        "total": 1550,
+        "netTotal": null,
+        "currency": "PKR",
+        "itemCount": 3,
+        "brandName": "Roshan Home Care",
+        "placedAt": "2026-11-14T09:30:00.000Z",
+        "items": [
+          { "name": "Super Kernel Rice 5kg", "quantity": 1, "totalPrice": 2450 }
+        ],
+        "actions": [
+          { "type": "cancel_order", "orderId": "66f1a0c2b3d4e5f60718293a", "label": "Cancel order" },
+          { "type": "view_order", "orderId": "66f1a0c2b3d4e5f60718293a", "label": "View order" }
+        ]
+      }
+    ],
+    "degraded": false,
+    "steps": 1
+  }
+}
+```
+
+When every provider fails (`AI_UNAVAILABLE`) or the loop never produces a usable answer (`AI_BAD_OUTPUT`), the endpoint does not fail: it answers with the caller's latest 3 orders from `list_my_orders` and says so:
+
+```json
+{ "success": true, "data": { "reply": null, "orders": [ ... ], "degraded": true, "steps": 0 } }
+```
+
+Failure codes:
+
+```text
+400 (zod)              message missing/shorter than 2/longer than 500
+403 ROLE_NOT_ALLOWED   caller is not a customer
+429 AI_DAILY_LIMIT / rate limiter
+503 AI_UNAVAILABLE     kill switch is off
+```
 
 Agent endpoints and their role checks are specified in `docs/27-ai-agents-and-automation-plan.md` and `docs/29-ai-phase-roadmap.md`.
 

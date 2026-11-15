@@ -361,6 +361,101 @@ class ShopAssistantReply {
   }
 }
 
+class OrderAssistantAction {
+  const OrderAssistantAction({
+    required this.type,
+    required this.orderId,
+    required this.label,
+  });
+
+  /// `cancel_order` or `view_order`; the server decides which are allowed.
+  final String type;
+  final String orderId;
+  final String label;
+
+  factory OrderAssistantAction.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return OrderAssistantAction(
+      type: text(map['type']),
+      orderId: text(map['orderId']),
+      label: text(map['label']),
+    );
+  }
+}
+
+/// A server-built card for one of the signed-in customer's own orders. The
+/// assistant never builds these itself, so no other customer's order can appear.
+class AssistantOrder {
+  const AssistantOrder({
+    required this.id,
+    required this.orderNumber,
+    this.orderStatus = 'PENDING',
+    this.total = 0,
+    this.netTotal,
+    this.currency = 'PKR',
+    this.itemCount = 0,
+    this.brandName,
+    this.placedAt,
+    this.actions = const <OrderAssistantAction>[],
+  });
+
+  final String id;
+  final String orderNumber;
+  final String orderStatus;
+  final double total;
+  final double? netTotal;
+  final String currency;
+  final int itemCount;
+  final String? brandName;
+  final DateTime? placedAt;
+  final List<OrderAssistantAction> actions;
+
+  double get payableTotal => netTotal ?? total;
+
+  bool get canCancel => actions.any((action) => action.type == 'cancel_order');
+
+  factory AssistantOrder.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return AssistantOrder(
+      id: text(map['orderId']),
+      orderNumber: text(map['orderNumber']),
+      orderStatus: text(map['orderStatus'], 'PENDING'),
+      total: asDouble(map['total']),
+      netTotal: optionalDouble(map['netTotal']),
+      currency: text(map['currency'], 'PKR'),
+      itemCount: (map['itemCount'] as num?)?.toInt() ?? 0,
+      brandName: optionalText(map['brandName']),
+      placedAt: asDate(map['placedAt']),
+      actions: asList(
+        map['actions'],
+      ).map(OrderAssistantAction.fromJson).toList(growable: false),
+    );
+  }
+}
+
+class OrderAssistantReply {
+  const OrderAssistantReply({
+    this.reply,
+    this.orders = const <AssistantOrder>[],
+    this.degraded = false,
+  });
+
+  final String? reply;
+  final List<AssistantOrder> orders;
+  final bool degraded;
+
+  factory OrderAssistantReply.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return OrderAssistantReply(
+      reply: optionalText(map['reply']),
+      orders: asList(
+        map['orders'],
+      ).map(AssistantOrder.fromJson).toList(growable: false),
+      degraded: map['degraded'] == true,
+    );
+  }
+}
+
 class DiscoverBranch {
   const DiscoverBranch({
     required this.id,

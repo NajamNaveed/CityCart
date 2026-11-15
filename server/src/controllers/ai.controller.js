@@ -6,6 +6,7 @@ const { draftListing, NOTES_LIMIT } = require('../services/ai/agents/listing.age
 const { draftReviewSummary, ReviewSummaryError } = require('../services/ai/agents/reviewSummary.agent');
 const { translateMessage, TranslateError, TARGET_LANGS } = require('../services/ai/agents/translate.agent');
 const { askShopAssistant, MESSAGE_LIMIT: ASSISTANT_MESSAGE_LIMIT } = require('../services/ai/agents/shopAssistant.agent');
+const { askOrderHelper, MESSAGE_LIMIT: ORDER_MESSAGE_LIMIT } = require('../services/ai/agents/orderHelper.agent');
 const { formatZodError } = require('../utils/formatZodError');
 
 /**
@@ -160,4 +161,38 @@ async function shopAssistant(req, res, next) {
   }
 }
 
-module.exports = { ping, listingDraft, reviewSummary, translate, shopAssistant };
+const orderHelperSchema = z.object({
+  message: z
+    .string()
+    .trim()
+    .min(2, 'Ask a question first.')
+    .max(ORDER_MESSAGE_LIMIT, `Keep the question under ${ORDER_MESSAGE_LIMIT} characters.`),
+});
+
+/**
+ * Phase 2b: the order helper. Its tools read only the signed-in customer's own
+ * orders, and the suggested actions are built by the server rules, never by the
+ * model. The customer still performs the action on the normal order page.
+ */
+async function orderHelper(req, res, next) {
+  const parsed = orderHelperSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsed.error),
+    });
+  }
+
+  try {
+    const data = await askOrderHelper({
+      message: parsed.data.message,
+      ctx: { userId: req.user._id, role: req.user.role },
+    });
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+module.exports = { ping, listingDraft, reviewSummary, translate, shopAssistant, orderHelper };

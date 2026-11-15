@@ -1,6 +1,7 @@
 const productTool = require('./product.tool');
 const categoryTool = require('./category.tool');
 const storeTool = require('./store.tool');
+const { listOrdersTool, getOrderTool } = require('./order.tools');
 
 /**
  * Read-only tool layer for the customer assistants (docs/27 §3.4).
@@ -22,8 +23,13 @@ function createToolContext({ userId, role, cityId = null, lat = null, lng = null
     lat,
     lng,
     products: new Map(),
+    orders: new Map(),
     rememberProduct(card) {
       this.products.set(String(card._id), card);
+      return card;
+    },
+    rememberOrder(card) {
+      this.orders.set(String(card.orderId), card);
       return card;
     },
   };
@@ -33,9 +39,12 @@ const TOOLS = {
   [productTool.name]: productTool,
   [categoryTool.name]: categoryTool,
   [storeTool.name]: storeTool,
+  [listOrdersTool.name]: listOrdersTool,
+  [getOrderTool.name]: getOrderTool,
 };
 
 const SHOP_TOOLS = [productTool, categoryTool, storeTool];
+const ORDER_TOOLS = [listOrdersTool, getOrderTool];
 
 /** The tool list as it appears in the system prompt. */
 function describeTools(tools) {
@@ -53,4 +62,5 @@ module.exports = {
   describeTools,
   findTool,
   SHOP_TOOLS,
+  ORDER_TOOLS,
 };

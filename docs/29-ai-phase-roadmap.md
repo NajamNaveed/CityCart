@@ -38,7 +38,7 @@ Build once; every agent depends on it.
 
 **Gate 0:** jest tests green with mocked `fetch`; app starts and works with **no** AI keys set. Tag `ai-phase-0`.
 
-> **Status:** Phase 0 tagged `ai-phase-0` (2026-11-13). Phases 1a, 1b and 1c committed (1c in `a69fca0`, 2026-11-14). Phase 2a is built on `main` (2026-11-15): tool layer (`search_products`, `list_categories`, `find_stores`), the 3-step agent loop, `POST /ai/shop-assistant`, the web `Ask CityCart` panel and the shopper app assistant screen. `AI_ENABLED` ships closed; set it to `true` with provider keys to turn the AI layer on.
+> **Status:** Phase 0 tagged `ai-phase-0` (2026-11-13). Phases 1a, 1b and 1c committed (1c in `a69fca0`, 2026-11-14). Phase 2a is built on `main` (2026-11-15): tool layer (`search_products`, `list_categories`, `find_stores`), the 3-step agent loop, `POST /ai/shop-assistant`, the web `Ask CityCart` panel and the shopper app assistant screen. Phase 2b is built on `main` (2026-11-15): `list_my_orders` / `get_order` scoped to the signed-in customer, `POST /ai/order-helper`, a **My orders** mode in the same web panel and app screen. `AI_ENABLED` ships closed; set it to `true` with provider keys to turn the AI layer on.
 
 ---
 
@@ -93,7 +93,7 @@ Before 2a: build the **tool layer** (`tools/*.tool.js`, read-only, `(ctx, args)`
 - **What:** "where is my order?", explains status, cancellation and return rules.
 - **Endpoint:** `POST /api/v1/ai/order-helper`.
 - **Tools:** the caller's own orders (`ctx.userId` only), return/cancel policy text from settings.
-- **Rule:** can *suggest* "Cancel order" or "Start return" buttons; the user performs them via the normal API.
+- **Rule:** can *suggest* **View order** and **Cancel order** buttons; the user performs the action on the normal order page. Cancel is offered only for an unpaid `PENDING` order, the rule the backend enforces. There is **no "Start return"** button: v2 has no customer-initiated return after delivery (docs/22 §F), so the answer explains the door-return rule instead.
 - **Tests:** **user A can never read user B's order** (explicit test); unknown order returns a polite "not found".
 - **Done when:** correct status answers for orders in each state.
 

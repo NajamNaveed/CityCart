@@ -53,7 +53,7 @@ server/src/services/ai/
     product.tool.js         // Phase 2a: public product search
     category.tool.js        // Phase 2a: active category tree
     store.tool.js           // Phase 2a: nearby stores
-    order.tool.js           // Phase 2b (planned): the caller's own orders only
+    order.tools.js         // Phase 2b: the caller's own orders only (list + one by id)
     service.tool.js         // Phase 2c (planned): providers, offerings and availability
   agentLoop.js              // Phase 2a: one JSON decision per turn, max 3 tool steps
   agents/
@@ -61,6 +61,7 @@ server/src/services/ai/
     reviewSummary.agent.js
     translate.agent.js
     shopAssistant.agent.js
+    orderHelper.agent.js    // Phase 2b: explains the caller's own orders and the policy
     sellerAdvisor.agent.js  // Phase 3a (planned)
     moderation.agent.js     // Phase 4c (planned)
     adminTriage.agent.js    // Phase 4b (planned)
