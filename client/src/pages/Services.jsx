@@ -172,7 +172,10 @@ export default function Services() {
   })
 
   const navigate = useNavigate()
-  const { city, cityId, cities } = useCity()
+  const { city, cityId: chosenCityId, cities } = useCity()
+  // No saved city is not "nowhere": with live cities the first one is the feed,
+  // same as the home page, so a first visit still shows the block map.
+  const cityId = chosenCityId || cities[0]?._id || ''
   const { selectedBlocks, blockIds, blocks, areaName, coords, pinned, origin, range, setRange, blocksReady, detect, setPin, status } = useNearby()
   const { focus, chooseCity } = useMapFocus(blocks)
   const [view, setView] = useState('list')
@@ -272,9 +275,17 @@ export default function Services() {
   const bigger = nextRange(range)
   const blockSet = new Set(blockIds.map(String))
   const inMyBlock = (provider) => blockSet.has(String(provider.block?._id))
-  const zones = blockLayer === 'all' ? blocks : blockLayer === 'mine' ? selectedBlocks : []
+  // "Mine" needs a block. Until one is known it falls back to everything rather
+  // than emptying the map, and a note explains how to narrow it down.
+  const blockKnown = selectedBlocks.length > 0
+  const mineWanted = blockLayer === 'mine' || providerLayer === 'mine'
+  const zones = blockLayer === 'off' ? [] : blockLayer === 'mine' && blockKnown ? selectedBlocks : blocks
   const mapProviders =
-    providerLayer === 'all' ? (cityProviders ?? items) : providerLayer === 'mine' ? items.filter(inMyBlock) : []
+    providerLayer === 'off'
+      ? []
+      : providerLayer === 'mine' && blockKnown
+        ? items.filter(inMyBlock)
+        : (cityProviders ?? items)
 
   function onSearch(e) {
     e.preventDefault()
@@ -368,6 +379,15 @@ export default function Services() {
             <span>Choose your area to search only your block. Showing the whole city for now.</span>
             <button type="button" onClick={openMapPicker} className="font-semibold underline">
               Choose on the map
+            </button>
+          </p>
+        )}
+
+        {mineWanted && !blockKnown && view === 'map' && (
+          <p className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-tile border border-clay/20 bg-clay/5 px-3.5 py-2.5 text-[12.5px] text-clay">
+            <span>We don't know your block yet, so “Mine” shows everything. Set your spot to narrow it to your block.</span>
+            <button type="button" onClick={openMapPicker} className="font-semibold underline">
+              Choose your area
             </button>
           </p>
         )}

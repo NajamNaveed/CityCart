@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CalendarClock, LocateFixed, MapPin } from 'lucide-react'
 import api, { getErrorMessage, getFieldErrors } from '../../services/api'
 import { useAuth } from '../../hooks/useAuth'
 import { Field, Skeleton, btn, fieldLabel } from '../../design'
 import { formatPrice } from '../../ui'
-import { getDevicePosition, parseLatLng } from '../../utils/geo'
+import { getDevicePosition } from '../../utils/geo'
 import { availableSlots, karachiInputToIso, minuteLabel } from '../../utils/serviceSlots'
 import { durationLabel, toPaisa } from '../../utils/serviceBookings'
+
+// The map is only downloaded when the customer types a new address.
+const NearbyMap = lazy(() => import('../nearby/NearbyMap'))
 
 function SignedOut() {
   return (
@@ -36,7 +39,8 @@ export default function BookingRequest({ provider }) {
   const [addresses, setAddresses] = useState({ loaded: user?.role !== 'CUSTOMER', list: [], error: '' })
   const [mode, setMode] = useState('saved')
   const [addressId, setAddressId] = useState('')
-  const [manual, setManual] = useState({ fullName: '', phone: '', addressLine: '', coordinates: '' })
+  const [manual, setManual] = useState({ fullName: '', phone: '', addressLine: '' })
+  const [pin, setPin] = useState(null)
   const [locating, setLocating] = useState(false)
   const [pinNote, setPinNote] = useState('')
   const [slot, setSlot] = useState('')
@@ -62,6 +66,22 @@ export default function BookingRequest({ provider }) {
   }, [user])
 
   const blockId = provider.block?._id
+  // The provider's service block, drawn on the picker so the customer drops the
+  // pin inside it. GeoJSON rings arrive as [lng, lat]; Leaflet wants [lat, lng].
+  const blockRing = useMemo(() => {
+    const ring = provider.block?.area?.coordinates?.[0]
+    return Array.isArray(ring) && ring.length >= 3 ? ring.map(([lng, lat]) => [lat, lng]) : null
+  }, [provider.block])
+  const mapZones = useMemo(() => (blockRing ? [{ polygon: blockRing }] : []), [blockRing])
+  // A block without a drawn boundary still needs framing: open on its centre.
+  const mapFocus = useMemo(() => {
+    const centre = provider.block?.center
+    if (blockRing || !centre) return null
+    return {
+      key: `block:${provider.block._id}`,
+      bounds: { south: centre.lat - 0.01, west: centre.lng - 0.01, north: centre.lat + 0.01, east: centre.lng + 0.01 },
+    }
+  }, [blockRing, provider.block])
   const eligible = useMemo(
     () => addresses.list.filter((a) => a.blocks?.some((b) => b._id === blockId)),
     [addresses.list, blockId],
@@ -147,12 +167,17 @@ export default function BookingRequest({ provider }) {
     setPinNote('')
     try {
       const { lat, lng } = await getDevicePosition({ maximumAge: 0 })
-      setManual((m) => ({ ...m, coordinates: `${lat}, ${lng}` }))
+      setPin({ lat, lng })
     } catch (err) {
       setPinNote(err.message)
     } finally {
       setLocating(false)
     }
+  }
+
+  function pickOnMap(lat, lng) {
+    setPinNote('')
+    setPin({ lat: Math.round(lat * 1e5) / 1e5, lng: Math.round(lng * 1e5) / 1e5 })
   }
 
   async function onSubmit(event) {
@@ -184,10 +209,9 @@ export default function BookingRequest({ provider }) {
       if (manual.fullName.trim().length < 2) errors.fullName = 'Enter the name of the person to meet.'
       if (!/^[0-9+()\-\s]{7,20}$/.test(manual.phone.trim())) errors.phone = 'Enter a phone number the provider can call.'
       if (manual.addressLine.trim().length < 5) errors.addressLine = 'Enter the full address.'
-      const parsed = parseLatLng(manual.coordinates)
-      if (!parsed) errors.coordinates = 'Enter the pin as latitude, longitude.'
+      if (!pin) errors.coordinates = 'Drop the pin on the map so the provider knows where to come.'
       address = { fullName: manual.fullName.trim(), phone: manual.phone.trim(), addressLine: manual.addressLine.trim() }
-      location = parsed
+      location = pin
     }
 
     if (Object.keys(errors).length > 0) {
@@ -405,28 +429,43 @@ export default function BookingRequest({ provider }) {
             required
           />
           <div>
-            <Field
-              label="Pin"
-              id="booking-coordinates"
-              name="booking-coordinates"
-              inputMode="decimal"
-              autoComplete="off"
-              placeholder="31.4186, 73.0790"
-              value={manual.coordinates}
-              onChange={(e) => setManual((m) => ({ ...m, coordinates: e.target.value }))}
-              error={fieldErrors.coordinates || pinNote}
-              hint="The exact spot is shared with the provider only after they accept."
-              required
-            />
-            <button
-              type="button"
-              onClick={useMyLocation}
-              disabled={locating}
-              className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-medium text-clay transition hover:text-clay-dark disabled:opacity-50"
-            >
-              <LocateFixed className={`h-3.5 w-3.5 ${locating ? 'animate-spin' : ''}`} aria-hidden="true" />
-              {locating ? 'Finding location…' : 'Use my current location'}
-            </button>
+            <p className={fieldLabel}>Where exactly?</p>
+            <div className="overflow-hidden rounded-tile border border-line-warm">
+              <Suspense fallback={<Skeleton className="h-[280px] w-full rounded-none" />}>
+                <NearbyMap
+                  items={[]}
+                  zones={mapZones}
+                  pin={pin}
+                  pickable
+                  onPick={pickOnMap}
+                  focus={mapFocus}
+                  heightClass="h-[280px] sm:h-[320px]"
+                />
+              </Suspense>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={useMyLocation}
+                disabled={locating}
+                className="inline-flex items-center gap-1.5 text-[12px] font-medium text-clay transition hover:text-clay-dark disabled:opacity-50"
+              >
+                <LocateFixed className={`h-3.5 w-3.5 ${locating ? 'animate-spin' : ''}`} aria-hidden="true" />
+                {locating ? 'Finding location…' : 'Use my current location'}
+              </button>
+              <p className="text-[11.5px] text-ink/55" aria-live="polite">
+                {pin ? `Pin at ${pin.lat.toFixed(5)}, ${pin.lng.toFixed(5)}` : 'No pin yet — tap the map'}
+              </p>
+            </div>
+            {(fieldErrors.coordinates || pinNote) && (
+              <p className="mt-1.5 text-[11.5px] text-clay">{fieldErrors.coordinates || pinNote}</p>
+            )}
+            <p className="mt-1.5 text-[11.5px] leading-relaxed text-ink/45">
+              {provider.block?.name
+                ? `Tap the map inside ${provider.block.name} to drop the pin.`
+                : 'Tap the map to drop the pin at the job.'}{' '}
+              The exact spot is shared with the provider only after they accept.
+            </p>
           </div>
         </div>
       )}

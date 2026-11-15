@@ -53,7 +53,10 @@ const markAsked = () => {
 //   inside an overlap    -> every block there, all ticked; the shopper may untick
 //   between/outside zones -> nothing yet; the nearest blocks are offered to choose from
 export function NearbyProvider({ children }) {
-  const { cityId, setCityId } = useCity()
+  const { cityId: chosenCityId, cities, setCityId } = useCity()
+  // No saved city is not "no blocks": with live cities the first one is the
+  // default feed, same as the home page, so the map still has zones to draw.
+  const cityId = chosenCityId || cities[0]?._id || ''
   const [stored, setStored] = useState(readStored)
   const [blocksState, setBlocksState] = useState({ cityId: '', list: [] })
   // The last "which blocks am I in?" answer: the blocks holding the position, and the nearest others.

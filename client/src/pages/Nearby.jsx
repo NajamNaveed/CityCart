@@ -97,7 +97,10 @@ export default function Nearby() {
   const [picking, setPicking] = useState(false)
   const openBrand = useCallback((brand) => navigate(`/store/${brand._id}`), [navigate])
   const q = params.get('q') || ''
-  const { city, cityId, cities } = useCity()
+  const { city, cityId: chosenCityId, cities } = useCity()
+  // No saved city is not "nowhere": with live cities the first one is the feed,
+  // same as the home page, so a first visit still shows the block map.
+  const cityId = chosenCityId || cities[0]?._id || ''
   const { selectedBlocks, blockIds, blocks, areaName, coords, pinned, origin, range, setRange, blocksReady, detect, setPin, status } = useNearby()
   const { focus, chooseCity } = useMapFocus(blocks)
   // "All stores" on the map means the whole city, even while the list keeps
@@ -193,8 +196,17 @@ export default function Nearby() {
   const items = data?.items || []
   const blockSet = new Set(blockIds.map(String))
   const inBlock = (store) => (store.branches || []).some((branch) => blockSet.has(String(branch.blockId)))
-  const zones = blockLayer === 'all' ? blocks : blockLayer === 'mine' ? selectedBlocks : []
-  const mapStores = storeLayer === 'all' ? (cityStores ?? items) : storeLayer === 'mine' ? items.filter(inBlock) : []
+  // "Mine" needs a block. Until one is known it falls back to everything rather
+  // than emptying the map, and a note explains how to narrow it down.
+  const blockKnown = selectedBlocks.length > 0
+  const mineWanted = blockLayer === 'mine' || storeLayer === 'mine'
+  const zones = blockLayer === 'off' ? [] : blockLayer === 'mine' && blockKnown ? selectedBlocks : blocks
+  const mapStores =
+    storeLayer === 'off'
+      ? []
+      : storeLayer === 'mine' && blockKnown
+        ? items.filter(inBlock)
+        : (cityStores ?? items)
 
   return (
     <div className="bg-canvas">
@@ -261,6 +273,15 @@ export default function Nearby() {
             <span>With several blocks there is no single point to measure {range} km from, so showing all their shops. Set your exact spot to apply the range.</span>
             <button type="button" onClick={openMapPicker} className="font-semibold underline">
               Set my spot
+            </button>
+          </p>
+        )}
+
+        {mineWanted && !blockKnown && view === 'map' && (
+          <p className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-tile border border-clay/20 bg-clay/5 px-3.5 py-2.5 text-[12.5px] text-clay">
+            <span>We don't know your block yet, so “Mine” shows everything. Set your spot to narrow it to your block.</span>
+            <button type="button" onClick={openMapPicker} className="font-semibold underline">
+              Choose your area
             </button>
           </p>
         )}
@@ -391,6 +412,7 @@ export default function Nearby() {
                       key={store._id}
                       store={cover ? { ...store, cover } : store}
                       inBlock={inBlock(store)}
+                      showProducts
                     />
                   )
                 })}

@@ -65,6 +65,7 @@ export default function NearbyMap({
   pickable = false,
   onPick,
   focus = null,
+  heightClass = 'h-[460px]',
 }) {
   const container = useRef(null)
   const mapRef = useRef(null)
@@ -163,7 +164,7 @@ export default function NearbyMap({
       ref={container}
       role="region"
       aria-label={pickable ? 'Map for choosing your location' : 'Map of nearby shops'}
-      className="isolate z-0 h-[460px] w-full overflow-hidden rounded-lg border border-line"
+      className={`isolate z-0 w-full overflow-hidden rounded-lg border border-line ${heightClass}`}
     />
   )
 }

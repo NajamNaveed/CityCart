@@ -14,7 +14,7 @@ function initials(name = '') {
     .join('')
 }
 
-export default function StoreCard({ store, inBlock }) {
+export default function StoreCard({ store, inBlock, showProducts = false }) {
   const products = Array.isArray(store.products) ? store.products : []
   const branches = Array.isArray(store.branches) ? store.branches : []
   const cover = store.cover || products.find((product) => product.image)?.image || store.logo
@@ -70,10 +70,35 @@ export default function StoreCard({ store, inBlock }) {
           </div>
         </div>
 
-        {popular.length > 0 && (
-          <p className="mt-3 line-clamp-2 text-[12.5px] leading-relaxed text-ink/60">
-            <span className="font-medium text-ink/75">Popular here:</span> {popular.join(', ')}
-          </p>
+        {showProducts && products.length > 0 ? (
+          <div className="mt-3 grid grid-cols-4 gap-1.5">
+            {products.slice(0, 4).map((product) => (
+              <Link
+                key={product._id}
+                to={`/product/${product._id}`}
+                aria-label={`${product.name} — ${formatPrice(product.price)}`}
+                className="group/tile min-w-0 rounded-tile focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"
+              >
+                <span className="block overflow-hidden rounded-tile border border-line-warm bg-sand">
+                  <ProductImage
+                    src={product.image}
+                    name={product.name}
+                    className="aspect-square w-full transition-transform duration-300 group-hover/tile:scale-105"
+                    width={200}
+                  />
+                </span>
+                <span className="mt-1 block truncate text-[10.5px] font-medium text-ink/65">
+                  {formatPrice(product.price)}
+                </span>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          popular.length > 0 && (
+            <p className="mt-3 line-clamp-2 text-[12.5px] leading-relaxed text-ink/60">
+              <span className="font-medium text-ink/75">Popular here:</span> {popular.join(', ')}
+            </p>
+          )
         )}
 
         <div className="mt-auto flex items-end justify-between gap-3 border-t border-line-warm pt-3.5">
