@@ -229,6 +229,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               const SizedBox(height: 18),
               if (snapshot.loading && !snapshot.hasAnything)
                 const LoadingList(count: 3)
+              else if (!access.hasRecords)
+                const _NoAccessCard()
               else ...[
                 if (snapshot.error != null) ...[
                   ErrorNotice(message: snapshot.error!, onRetry: _refresh),
@@ -257,6 +259,62 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// A signed-in team member with no permissions has nothing to count, so the
+/// usual "nothing needs you" card would wrongly suggest the work is done.
+class _NoAccessCard extends StatelessWidget {
+  const _NoAccessCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return SurfaceCard(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.amber,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.lock_outline_rounded,
+                  color: AppColors.amberInk,
+                ),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Text(
+                  'Your account has no access yet',
+                  style: Theme.of(context).textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Your brand manager grants access from Team in the brand dashboard. '
+            'Ask them to turn on Orders, Deliveries, Returns and Money for this '
+            'account, then sign out and back in here.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 14),
+          AppButton(
+            label: 'Check my access',
+            variant: AppButtonVariant.outline,
+            height: 46,
+            onPressed: () => context.go('/account'),
+          ),
+        ],
       ),
     );
   }

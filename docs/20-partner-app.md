@@ -31,7 +31,7 @@ integration suite (`npm run test:integration`, which needs a MongoDB binary).
 The programme grew it from 940 to 1,503 by Phase 6; the v3 phases since then
 added the rest. The Staff app (`partner/`) has 191 tests in 17 suites, the
 Delivery app (`delivery/`) 160 in 9, and the shopper app (`mobile/`) 507 in 48.
-The Flutter Staff app (`apps/staff/`) adds 47 offline tests in 9 suites, and the
+The Flutter Staff app (`apps/staff/`) adds 48 offline tests in 10 suites, and the
 Flutter Delivery app (`apps/delivery/`) 50. All pass; the Staff app's lint is
 clean. `test:apps` in the root package runs the staff and delivery suites.
 
@@ -572,10 +572,11 @@ Built in November 2026:
   (legacy and adaptive), iOS and web; it is rendered by
   `tool/generate_icons.dart`. Layout tests render the shared pieces and sign-in
   at 320 px with a 1.3 text scale and assert no overflow.
-* **Tests:** 47 offline tests in 9 suites (models, permissions, redirect rules,
-  formatting, sign-in, shared-component layout, and the payment card on order
-  and delivery records); `flutter analyze` clean. Not yet run on a phone; no
-  push notifications. See `apps/staff/README.md`.
+* **Tests:** 48 offline tests in 10 suites (models, permissions, redirect rules,
+  formatting, sign-in, shared-component layout, the payment card on order and
+  delivery records, and the no-permissions home state); `flutter analyze`
+  clean. Not yet run on a phone; no push notifications. See
+  `apps/staff/README.md`.
 
 ### 5.13 Flutter Business app (v3 Phase 9)
 
@@ -733,11 +734,12 @@ picker" label, and the delivered/returned quantities with the final total. Root
 `npm run test:apps` runs the staff and delivery suites; `npm run test:staff` and
 `npm run test:delivery` run one each.
 
-Flutter Staff app (`apps/staff/`): `flutter test` runs **47 offline tests** in 9
+Flutter Staff app (`apps/staff/`): `flutter test` runs **48 offline tests** in 10
 suites: `models_test` (pick orders and shortfall, returns and summary, proofs,
 door-payment states, receipts, cash, permissions), `records_payment_test` (the
 payment card on order and delivery records, a held delivery and a failed money
-lookup), `access_test` (which permission opens which area, rider assignment),
+lookup), `home_test` (a member with no permissions is told why the app is
+empty), `access_test` (which permission opens which area, rider assignment),
 `redirect_test` (role landing and closed routes), `format_test` (money, dates,
 plain-words status labels), `widget_test` and `layout_test` (sign-in and the
 shared components at 320 px with a 1.3 text scale, asserting no overflow),

@@ -59,11 +59,13 @@ flutter analyze
 flutter test
 ```
 
-47 offline tests in 9 suites:
+48 offline tests in 10 suites:
 
 * `models_test` — pick orders and shortfall, returns and their summary, proof
   duplicates, door-payment states, receipts, cash collectors and the permission
   list.
+* `home_test` — a team member whose account carries no permissions is told why
+  the app is empty instead of "Nothing needs you right now".
 * `records_payment_test` — the payment card on orders and delivery records,
   including a held delivery whose payment is still waiting for a check and a
   failed payment lookup that must not hide the delivery.
