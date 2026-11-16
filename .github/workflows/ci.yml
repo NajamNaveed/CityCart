@@ -82,11 +82,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The apps pin Dart ^3.13.7 in their pubspecs, so stable is the channel
-      # that satisfies them today.
+      # Pinned on purpose. The apps target Flutter 3.47.9 / Dart 3.13.7 and
+      # their lockfiles were resolved with it; following `stable` turned main
+      # red the day 3.50.0 shipped. Bump this number only after running
+      # `flutter analyze` and `flutter test` in every app with the new SDK.
       - uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version: 3.47.9
           cache: true
 
       - name: Install dependencies

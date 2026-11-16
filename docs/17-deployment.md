@@ -307,8 +307,14 @@ GitHub Actions runs CI in `.github/workflows/ci.yml`:
 |---|---|
 | `server` | `npm ci`, lint, full unit suite in `server/` |
 | `client` | `npm ci`, lint, production build in `client/` |
-| `apps` | a matrix over the four Flutter apps — `apps/shopper`, `apps/staff`, `apps/delivery`, `apps/business` — each `flutter pub get`, `flutter analyze`, `flutter test` |
+| `apps` | a matrix over the four Flutter apps — `apps/shopper`, `apps/staff`, `apps/delivery`, `apps/business` — each `flutter pub get`, `flutter analyze`, `flutter test` on the pinned Flutter 3.47.9 |
 | `integration` | the real-database suite (`mongodb-memory-server`) in `server/` |
+
+The apps job pins Flutter 3.47.9 instead of following `stable`. New stable
+releases change analyzer diagnostics — 3.50.0 did so on 11 November 2026 and
+turned every apps job red without a code change. To move the pin, run
+`flutter analyze` and `flutter test` in all four apps with the new SDK first,
+then change the version in `ci.yml`.
 
 The website and the API deploy through the gated `deploy` job (Render and
 Vercel hooks). The Flutter apps are built and released from their own
