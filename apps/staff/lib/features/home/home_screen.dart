@@ -161,11 +161,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             physics: const AlwaysScrollableScrollPhysics(
               parent: BouncingScrollPhysics(),
             ),
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 30),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 30),
             children: [
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  const BrandMark(size: 42),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -176,9 +178,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.headlineMedium
-                              ?.copyWith(fontSize: 25),
+                              ?.copyWith(fontSize: 22),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 3),
                         Text(
                           '${friendlyRole(user?.role ?? '')} · '
                           '${formatShortDate(DateTime.now())}',
@@ -232,6 +234,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ErrorNotice(message: snapshot.error!, onRetry: _refresh),
                   const SizedBox(height: 14),
                 ],
+                if (access.money) ...[
+                  _PaymentHero(
+                    waiting: snapshot.proofsWaiting,
+                    loading: snapshot.loading,
+                    onTap: () => context.go('/money'),
+                  ),
+                  const SizedBox(height: 18),
+                ],
+                const SectionLabel('At a glance'),
+                const SizedBox(height: 10),
                 _GlanceGrid(snapshot: snapshot, access: access),
                 const SizedBox(height: 24),
                 const SectionLabel('Needs attention'),
@@ -245,6 +257,114 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The record keeper's headline job: non-cash money taken at the door that is
+/// still holding deliveries open. It stays on the home screen even at zero so
+/// the answer to "is any money waiting?" is always visible.
+class _PaymentHero extends StatelessWidget {
+  const _PaymentHero({
+    required this.waiting,
+    required this.loading,
+    required this.onTap,
+  });
+
+  final int? waiting;
+  final bool loading;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final count = waiting ?? 0;
+    final clear = waiting != null && count == 0;
+
+    return SurfaceCard(
+      color: AppColors.forest,
+      borderColor: AppColors.forestDeep,
+      onTap: onTap,
+      padding: const EdgeInsets.fromLTRB(16, 15, 14, 15),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: clear ? AppColors.sage : AppColors.amber,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              clear ? Icons.task_alt_rounded : Icons.fact_check_outlined,
+              size: 22,
+              color: clear ? AppColors.sageInk : AppColors.amberInk,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'ONLINE PAYMENT CHECKS',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.1,
+                    color: AppColors.sage.withValues(alpha: 0.85),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  waiting == null
+                      ? (loading
+                            ? 'Checking the payment queue…'
+                            : 'Payment checks')
+                      : clear
+                      ? 'Everything is checked'
+                      : '$count ${count == 1 ? 'payment needs' : 'payments need'} a check',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 17.5,
+                    height: 1.2,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.white,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  waiting == null
+                      ? 'Open the queue to see what needs a check.'
+                      : clear
+                      ? 'New door payments will show up here.'
+                      : 'These non-cash payments are holding their deliveries open.',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    height: 1.35,
+                    color: AppColors.sage.withValues(alpha: 0.9),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Padding(
+            padding: EdgeInsets.only(top: 12),
+            child: Icon(
+              Icons.arrow_forward_rounded,
+              size: 20,
+              color: AppColors.sage,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -291,17 +411,7 @@ class _GlanceGrid extends StatelessWidget {
           icon: Icons.keyboard_return_rounded,
           onTap: () => context.go('/returns'),
         ),
-      if (access.money) ...[
-        MetricTile(
-          label: 'TO CHECK',
-          value: snapshot.proofsWaiting == null
-              ? '—'
-              : '${snapshot.proofsWaiting}',
-          caption: 'payments',
-          tone: StatusTone.clay,
-          icon: Icons.verified_outlined,
-          onTap: () => context.go('/money'),
-        ),
+      if (access.money)
         MetricTile(
           label: 'CASH HELD',
           value: snapshot.cashHeld == null
@@ -314,7 +424,6 @@ class _GlanceGrid extends StatelessWidget {
           icon: Icons.payments_outlined,
           onTap: () => context.go('/money'),
         ),
-      ],
     ];
 
     return LayoutBuilder(
@@ -356,9 +465,9 @@ class _AttentionList extends StatelessWidget {
     if (access.money && (snapshot.proofsWaiting ?? 0) > 0) {
       rows.add(
         _AttentionRow(
-          icon: Icons.verified_outlined,
+          icon: Icons.fact_check_outlined,
           title: '${plural(snapshot.proofsWaiting!, 'payment')} to check',
-          detail: 'Riders sent proof of a bank or wallet transfer.',
+          detail: 'Check the proof photo to release the delivery.',
           tone: StatusTone.amber,
           onTap: () => context.go('/money'),
         ),
@@ -495,7 +604,7 @@ class _ShortcutList extends StatelessWidget {
         (
           Icons.payments_outlined,
           'Money',
-          'Receipts, payment checks and cash',
+          'Payment checks, receipts and cash',
           '/money',
         ),
     ];

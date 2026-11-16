@@ -238,6 +238,15 @@ class StaffRepository {
     return ProofRecord.fromJson(body['proof']);
   }
 
+  /// The money record for one order. A door payment stays PENDING while its
+  /// proof is unchecked, so this is the only way a delivery record can show
+  /// what the customer said they paid.
+  Future<PaymentRecord?> paymentForOrder(String orderId) async {
+    final body = await _api.get('/payments/order/$orderId');
+    final payment = body['payment'];
+    return payment == null ? null : PaymentRecord.fromJson(payment);
+  }
+
   Future<ProofRecord> decideProof({
     required String paymentId,
     required String verification,

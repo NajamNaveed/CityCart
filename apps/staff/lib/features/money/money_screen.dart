@@ -28,6 +28,24 @@ class MoneyScreen extends ConsumerStatefulWidget {
 
 class _MoneyScreenState extends ConsumerState<MoneyScreen> {
   int _tab = 0;
+  int? _checksCount;
+  int? _cashCount;
+  int? _receiptsCount;
+
+  void _setChecksCount(int value) {
+    if (!mounted || _checksCount == value) return;
+    setState(() => _checksCount = value);
+  }
+
+  void _setCashCount(int value) {
+    if (!mounted || _cashCount == value) return;
+    setState(() => _cashCount = value);
+  }
+
+  void _setReceiptsCount(int value) {
+    if (!mounted || _receiptsCount == value) return;
+    setState(() => _receiptsCount = value);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,8 +58,9 @@ class _MoneyScreenState extends ConsumerState<MoneyScreen> {
           children: [
             PageHeader(
               eyebrow: 'Money',
-              title: 'Receipts & cash',
-              subtitle: 'What was paid, what to check, and who holds cash.',
+              title: 'Payments & cash',
+              subtitle:
+                  'Check door payments, settle cash and find every receipt.',
               trailing: GestureDetector(
                 onTap: () => context.push('/account'),
                 child: Avatar(name: user?.name ?? 'Team'),
@@ -54,9 +73,14 @@ class _MoneyScreenState extends ConsumerState<MoneyScreen> {
                 child: SegmentedControl<int>(
                   values: const [0, 1, 2],
                   labelOf: (value) => switch (value) {
-                    0 => 'Receipts',
-                    1 => 'To verify',
-                    _ => 'Cash',
+                    0 => 'To check',
+                    1 => 'Cash',
+                    _ => 'Receipts',
+                  },
+                  countOf: (value) => switch (value) {
+                    0 => _checksCount,
+                    1 => _cashCount,
+                    _ => _receiptsCount,
                   },
                   value: _tab,
                   onChanged: (value) => setState(() => _tab = value),
@@ -66,7 +90,11 @@ class _MoneyScreenState extends ConsumerState<MoneyScreen> {
             Expanded(
               child: IndexedStack(
                 index: _tab,
-                children: const [_ReceiptsTab(), _ProofsTab(), _CashTab()],
+                children: [
+                  _ProofsTab(onCountChanged: _setChecksCount),
+                  _CashTab(onCountChanged: _setCashCount),
+                  _ReceiptsTab(onCountChanged: _setReceiptsCount),
+                ],
               ),
             ),
           ],
@@ -79,7 +107,9 @@ class _MoneyScreenState extends ConsumerState<MoneyScreen> {
 // --- Receipts --------------------------------------------------------------
 
 class _ReceiptsTab extends ConsumerStatefulWidget {
-  const _ReceiptsTab();
+  const _ReceiptsTab({required this.onCountChanged});
+
+  final ValueChanged<int> onCountChanged;
 
   @override
   ConsumerState<_ReceiptsTab> createState() => _ReceiptsTabState();
@@ -105,7 +135,11 @@ class _ReceiptsTabState extends ConsumerState<_ReceiptsTab> {
   }
 
   void _onChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {});
+    if (!_controller.loading) {
+      widget.onCountChanged(_controller.pagination.total);
+    }
   }
 
   @override
@@ -274,7 +308,9 @@ class _ReceiptCard extends StatelessWidget {
 // --- Payments to verify ----------------------------------------------------
 
 class _ProofsTab extends ConsumerStatefulWidget {
-  const _ProofsTab();
+  const _ProofsTab({required this.onCountChanged});
+
+  final ValueChanged<int> onCountChanged;
 
   @override
   ConsumerState<_ProofsTab> createState() => _ProofsTabState();
@@ -289,10 +325,14 @@ class _ProofsTabState extends ConsumerState<_ProofsTab> {
   void initState() {
     super.initState();
     _bind();
-    // Keeps the confirmation countdown truthful while the waiting list is open.
-    _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-      final items = _controller?.items ?? const <ProofRecord>[];
-      if (_status == 'SUBMITTED' && items.isNotEmpty) _controller?.refresh();
+    // Pick up a proof the moment a rider sends one, even while the queue is
+    // empty, and keep the confirmation countdown truthful.
+    _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      final controller = _controller;
+      if (_status != 'SUBMITTED' || controller == null || controller.loading) {
+        return;
+      }
+      controller.refresh();
     });
   }
 
@@ -315,7 +355,12 @@ class _ProofsTabState extends ConsumerState<_ProofsTab> {
   }
 
   void _onChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {});
+    final controller = _controller;
+    if (controller != null && !controller.loading && _status == 'SUBMITTED') {
+      widget.onCountChanged(controller.pagination.total);
+    }
   }
 
   void _filter(String status) {
@@ -367,20 +412,42 @@ class _ProofsTabState extends ConsumerState<_ProofsTab> {
                       ),
                     ),
                   ),
+                if (_status == 'SUBMITTED' && items.isNotEmpty)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                      child: _CheckSummary(
+                        total: controller?.pagination.total ?? items.length,
+                        oldest: items.first.submittedAt,
+                      ),
+                    ),
+                  ),
                 if (controller == null || (controller.loading && items.isEmpty))
                   const SliverToBoxAdapter(child: LoadingList(count: 3))
                 else if (items.isEmpty)
                   SliverFillRemaining(
                     hasScrollBody: false,
                     child: EmptyState(
-                      icon: Icons.verified_outlined,
+                      icon: _status == 'SUBMITTED'
+                          ? Icons.task_alt_rounded
+                          : Icons.verified_outlined,
                       title: _status == 'SUBMITTED'
-                          ? 'Nothing to check'
+                          ? 'No payments to check'
                           : 'No payments here',
                       message: _status == 'SUBMITTED'
-                          ? 'Non-cash payments taken at the door wait here '
-                                'until someone checks the proof.'
+                          ? 'Non-cash money taken at the door appears here the '
+                                'moment a rider sends the proof. The list '
+                                'refreshes by itself every 15 seconds.'
                           : 'No payment proof has this result.',
+                      action: _status == 'SUBMITTED'
+                          ? AppButton(
+                              label: 'Check again',
+                              variant: AppButtonVariant.outline,
+                              expand: false,
+                              height: 46,
+                              onPressed: () => controller.refresh(),
+                            )
+                          : null,
                     ),
                   )
                 else ...[
@@ -433,6 +500,76 @@ class _ProofsTabState extends ConsumerState<_ProofsTab> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The one-line answer to "is any money waiting for me?": how many door
+/// payments need a check and how long the oldest one has been waiting.
+class _CheckSummary extends StatelessWidget {
+  const _CheckSummary({required this.total, required this.oldest});
+
+  final int total;
+  final DateTime? oldest;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 13, 14, 13),
+      decoration: BoxDecoration(
+        color: AppColors.amber,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: const Icon(
+              Icons.fact_check_outlined,
+              size: 20,
+              color: AppColors.amberInk,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${plural(total, 'payment')} waiting for a check',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 14.5,
+                    height: 1.3,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.amberInk,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Each check marks the order paid and closes its delivery.'
+                  '${oldest == null ? '' : ' Oldest sent ${formatAge(oldest)}.'}',
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    height: 1.35,
+                    color: AppColors.amberInk.withValues(alpha: 0.9),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -505,6 +642,15 @@ class _ProofCard extends StatelessWidget {
                   foreground: AppColors.inkSoft,
                   icon: Icons.tag_rounded,
                 ),
+              if (proof.isPending &&
+                  proof.deliveryPending &&
+                  !proof.isWindowClosed)
+                const Pill(
+                  text: 'Delivery held',
+                  background: AppColors.claySoft,
+                  foreground: AppColors.clay,
+                  icon: Icons.pause_circle_outline_rounded,
+                ),
               if (proof.submittedAt != null)
                 Pill(
                   text: 'Sent ${formatAge(proof.submittedAt)}',
@@ -568,7 +714,9 @@ class _ProofCard extends StatelessWidget {
 // --- Cash in hand ----------------------------------------------------------
 
 class _CashTab extends ConsumerStatefulWidget {
-  const _CashTab();
+  const _CashTab({required this.onCountChanged});
+
+  final ValueChanged<int> onCountChanged;
 
   @override
   ConsumerState<_CashTab> createState() => _CashTabState();
@@ -596,6 +744,9 @@ class _CashTabState extends ConsumerState<_CashTab> {
         _collectors = collectors;
         _loading = false;
       });
+      widget.onCountChanged(
+        collectors.fold<int>(0, (sum, collector) => sum + collector.count),
+      );
     } on ApiException catch (error) {
       if (!mounted) return;
       setState(() {

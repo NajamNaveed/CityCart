@@ -754,12 +754,14 @@ class SegmentedControl<T> extends StatelessWidget {
     required this.labelOf,
     required this.value,
     required this.onChanged,
+    this.countOf,
   });
 
   final List<T> values;
   final String Function(T value) labelOf;
   final T value;
   final ValueChanged<T> onChanged;
+  final int? Function(T value)? countOf;
 
   @override
   Widget build(BuildContext context) {
@@ -777,6 +779,7 @@ class SegmentedControl<T> extends StatelessWidget {
             for (final option in values)
               _Segment(
                 label: labelOf(option),
+                count: countOf?.call(option),
                 active: option == value,
                 onTap: () => onChanged(option),
               ),
@@ -790,11 +793,13 @@ class SegmentedControl<T> extends StatelessWidget {
 class _Segment extends StatelessWidget {
   const _Segment({
     required this.label,
+    required this.count,
     required this.active,
     required this.onTap,
   });
 
   final String label;
+  final int? count;
   final bool active;
   final VoidCallback onTap;
 
@@ -819,13 +824,38 @@ class _Segment extends StatelessWidget {
                 ]
               : null,
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13.5,
-            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-            color: active ? AppColors.ink : AppColors.muted,
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                color: active ? AppColors.ink : AppColors.muted,
+              ),
+            ),
+            if (count != null && count! > 0) ...[
+              const SizedBox(width: 6),
+              Container(
+                constraints: const BoxConstraints(minWidth: 18),
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: active ? AppColors.forest : AppColors.paperDeep,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                ),
+                child: Text(
+                  '$count',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: active ? AppColors.white : AppColors.inkSoft,
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );

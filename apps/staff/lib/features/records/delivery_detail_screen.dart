@@ -10,6 +10,7 @@ import '../../core/widgets.dart';
 import '../../data/api_exception.dart';
 import '../../data/models.dart';
 import '../../providers.dart';
+import 'door_payment_card.dart';
 
 class DeliveryDetailScreen extends ConsumerStatefulWidget {
   const DeliveryDetailScreen({super.key, required this.deliveryId});
@@ -23,6 +24,7 @@ class DeliveryDetailScreen extends ConsumerStatefulWidget {
 
 class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
   DeliveryRecord? _delivery;
+  PaymentRecord? _payment;
   bool _loading = true;
   bool _working = false;
   String? _error;
@@ -37,12 +39,25 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
     if (!quiet) setState(() => _loading = true);
     setState(() => _error = null);
     try {
-      final delivery = await ref
-          .read(staffRepositoryProvider)
-          .delivery(widget.deliveryId);
+      final repository = ref.read(staffRepositoryProvider);
+      final delivery = await repository.delivery(widget.deliveryId);
+
+      // A door payment lives on the order, and money is optional here: a
+      // member without payments.view still gets the delivery record.
+      PaymentRecord? payment;
+      final orderId = delivery.orderId;
+      if (orderId != null && ref.read(accessProvider).money) {
+        try {
+          payment = await repository.paymentForOrder(orderId);
+        } on ApiException {
+          payment = null;
+        }
+      }
+
       if (!mounted) return;
       setState(() {
         _delivery = delivery;
+        _payment = payment;
         _loading = false;
       });
     } on ApiException catch (error) {
@@ -223,6 +238,20 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
                             ),
                           ],
                           const SizedBox(height: 16),
+                          if (_payment != null) ...[
+                            SurfaceCard(
+                              child: DoorPaymentDetails(
+                                heading: 'Customer payment',
+                                payment: _payment!,
+                                paymentsManage: access.paymentsManage,
+                                onReviewProof: () async {
+                                  await context.push('/verify/${_payment!.id}');
+                                  if (mounted) await _load(quiet: true);
+                                },
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
                           _RiderCard(
                             delivery: delivery,
                             canAssign: access.canAssignRider,

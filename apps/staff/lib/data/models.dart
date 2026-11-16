@@ -528,6 +528,11 @@ class PaymentRecord {
     this.collectionReference,
     this.verification,
     this.proofAvailable = false,
+    this.collectionSubmittedAt,
+    this.collectionConfirmBy,
+    this.collectionVerifiedAt,
+    this.collectionExpiredAt,
+    this.collectionNote,
   });
 
   final String id;
@@ -543,6 +548,40 @@ class PaymentRecord {
   final String? collectionReference;
   final String? verification;
   final bool proofAvailable;
+
+  /// When the rider sent this door collection for checking.
+  final DateTime? collectionSubmittedAt;
+
+  /// Deadline for the brand to confirm the collection (docs/10 §31.3).
+  final DateTime? collectionConfirmBy;
+
+  final DateTime? collectionVerifiedAt;
+  final DateTime? collectionExpiredAt;
+  final String? collectionNote;
+
+  /// Recorded at the door, as cash or a transfer/wallet/card answer.
+  bool get hasCollection =>
+      collectionMethod != null && collectionMethod!.trim().isNotEmpty;
+
+  bool get isCashCollection => collectionMethod == 'CASH';
+
+  /// Non-cash answers wait for the brand to check the proof photo.
+  bool get isNonCashCollection => hasCollection && !isCashCollection;
+
+  bool get awaitingCheck => verification == 'SUBMITTED';
+
+  bool get checkVerified => verification == 'VERIFIED';
+
+  bool get checkRejected => verification == 'REJECTED';
+
+  /// The server may not have rejected a late attempt yet, so screens stop
+  /// offering a decision once the deadline has passed.
+  bool get confirmationWindowClosed {
+    final deadline = collectionConfirmBy;
+    return awaitingCheck &&
+        deadline != null &&
+        !DateTime.now().isBefore(deadline);
+  }
 
   factory PaymentRecord.fromJson(dynamic raw) {
     final map = asMap(raw);
@@ -562,6 +601,11 @@ class PaymentRecord {
       collectionReference: optionalText(collection['reference']),
       verification: optionalText(collection['verification']),
       proofAvailable: optionalText(proof['publicId']) != null,
+      collectionSubmittedAt: asDate(collection['submittedAt']),
+      collectionConfirmBy: asDate(collection['confirmBy']),
+      collectionVerifiedAt: asDate(collection['verifiedAt']),
+      collectionExpiredAt: asDate(collection['expiredAt']),
+      collectionNote: optionalText(collection['note']),
     );
   }
 }
@@ -1061,7 +1105,8 @@ class ProofRecord {
   /// A pending record whose confirmation window has passed. The server may
   /// not have flipped it to rejected yet, so the screen stops offering a
   /// decision here.
-  bool get isWindowClosed => isPending && secondsLeft != null && secondsLeft! <= 0;
+  bool get isWindowClosed =>
+      isPending && secondsLeft != null && secondsLeft! <= 0;
 
   factory ProofRecord.fromJson(dynamic raw) {
     final map = asMap(raw);
@@ -1084,7 +1129,9 @@ class ProofRecord {
       url: optionalText(map['url']),
       expiresAt: asDate(map['expiresAt']),
       confirmBy: asDate(map['confirmBy']),
-      secondsLeft: map['secondsLeft'] == null ? null : asInt(map['secondsLeft']),
+      secondsLeft: map['secondsLeft'] == null
+          ? null
+          : asInt(map['secondsLeft']),
       expiredAt: asDate(map['expiredAt']),
     );
   }

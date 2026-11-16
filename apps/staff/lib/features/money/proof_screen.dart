@@ -318,7 +318,8 @@ class _ProofScreenState extends ConsumerState<ProofScreen> {
                                           ? AppColors.clay
                                           : AppColors.amberInk,
                                       prefix: 'Confirm within ',
-                                      zeroText: 'The confirmation window has closed.',
+                                      zeroText:
+                                          'The confirmation window has closed.',
                                     ),
                                   ],
                                 ],

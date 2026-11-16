@@ -31,7 +31,7 @@ integration suite (`npm run test:integration`, which needs a MongoDB binary).
 The programme grew it from 940 to 1,503 by Phase 6; the v3 phases since then
 added the rest. The Staff app (`partner/`) has 191 tests in 17 suites, the
 Delivery app (`delivery/`) 160 in 9, and the shopper app (`mobile/`) 507 in 48.
-The Flutter Staff app (`apps/staff/`) adds 30 offline tests in 5 suites, and the
+The Flutter Staff app (`apps/staff/`) adds 47 offline tests in 9 suites, and the
 Flutter Delivery app (`apps/delivery/`) 50. All pass; the Staff app's lint is
 clean. `test:apps` in the root package runs the staff and delivery suites.
 
@@ -543,27 +543,39 @@ Built in November 2026:
   permissions (`orders.view`; `delivery.view` for deliveries and returns;
   `payments.view` for money). Tabs and detail routes that lack a permission are
   closed by the router, and the server still refuses the call.
-* **Home:** orders, deliveries, goods coming back, proofs waiting and cash held
-  by riders in one day board, with plain shortcuts to the screen that needs
-  attention.
+* **Home:** a headline **online payment checks** card answers "is any money
+  waiting?" before the count tiles; it stays visible at zero so a record keeper
+  never has to open the money tab to find out. Orders, deliveries, goods coming
+  back and cash held by riders sit below it, with attention rows for returns,
+  proofs and cash hand-over.
 * **Records:** orders and deliveries with filters, detail, money and rider
-  assignment (only where `delivery.manage` + `riders.view` allow it); returned
-  goods with reasons, signed photos, and **Receive goods** choosing restock or
+  assignment (only where `delivery.manage` + `riders.view` allow it). The order
+  and delivery records show the door payment even while the delivery is still
+  open: method, wallet, reference, the five-minute check window and a
+  **Review proof** button. A delivery record loads its payment separately, so a
+  failed money lookup never hides the delivery. Returned goods keep their
+  reasons, signed photos and **Receive goods** step choosing restock or
   write-off per line, defaulting to write-off.
-* **Money:** Receipts, To verify and Cash in one screen, so the bottom bar stays
-  short. Receipt detail prints the full receipt paper; a proof shows duplicate
-  and reference warnings and needs a written reason to reject; cash settlement
-  is all-or-nothing and read-only without `payments.manage`.
+* **Money:** opens on **To check**, with counts on each segment. A summary
+  strip says how many payments are waiting and how old the oldest one is; the
+  queue refreshes every 15 seconds even when empty, so a new rider proof
+  appears without pulling. Receipt detail prints the full receipt paper; a
+  proof shows duplicate and reference warnings and needs a written reason to
+  reject; cash settlement is all-or-nothing and read-only without
+  `payments.manage`. A waiting proof is labelled **Delivery held**, because
+  verifying it is what completes the delivery.
 * **Picker:** queue, claim, per-line Picked / Short / Unavailable, substitutes
   and pack, with the same three plain-answer rows as the React Native screen.
 * **UI:** the same paper/forest palette as CityCart, one primary action per
   screen, and bounded text everywhere (ellipsis, `FittedBox`, `Wrap`, flexible
-  pills). Layout tests render the shared pieces and sign-in at 320 px with a 1.3
-  text scale and assert no overflow.
-* **Tests:** 30 offline tests in 5 suites (models, permissions, redirect rules,
-  formatting, sign-in and shared-component layout); `flutter analyze` clean.
-  Not yet run on a phone; no push notifications; the launcher icon is still the
-  Flutter default. See `apps/staff/README.md`.
+  pills). A forest box-mark icon matches the in-app brand mark on Android
+  (legacy and adaptive), iOS and web; it is rendered by
+  `tool/generate_icons.dart`. Layout tests render the shared pieces and sign-in
+  at 320 px with a 1.3 text scale and assert no overflow.
+* **Tests:** 47 offline tests in 9 suites (models, permissions, redirect rules,
+  formatting, sign-in, shared-component layout, and the payment card on order
+  and delivery records); `flutter analyze` clean. Not yet run on a phone; no
+  push notifications. See `apps/staff/README.md`.
 
 ### 5.13 Flutter Business app (v3 Phase 9)
 
@@ -721,13 +733,16 @@ picker" label, and the delivered/returned quantities with the final total. Root
 `npm run test:apps` runs the staff and delivery suites; `npm run test:staff` and
 `npm run test:delivery` run one each.
 
-Flutter Staff app (`apps/staff/`): `flutter test` runs **30 offline tests** in 5
+Flutter Staff app (`apps/staff/`): `flutter test` runs **47 offline tests** in 9
 suites: `models_test` (pick orders and shortfall, returns and summary, proofs,
-receipts, cash, permissions), `access_test` (which permission opens which area,
-rider assignment), `redirect_test` (role landing and closed routes),
-`format_test` (money, dates, plain-words status labels), `widget_test` and
-`layout_test` (sign-in and the shared components at 320 px with a 1.3 text
-scale, asserting no overflow). `flutter analyze` is clean.
+door-payment states, receipts, cash, permissions), `records_payment_test` (the
+payment card on order and delivery records, a held delivery and a failed money
+lookup), `access_test` (which permission opens which area, rider assignment),
+`redirect_test` (role landing and closed routes), `format_test` (money, dates,
+plain-words status labels), `widget_test` and `layout_test` (sign-in and the
+shared components at 320 px with a 1.3 text scale, asserting no overflow),
+`account_screen_test` and `pick_screen_test` (account, and the picker's
+claim/substitute flow). `flutter analyze` is clean.
 
 Programme test files (`server/tests/`): `appAuth.test.js` (three-app sign-in and
 token rules; it was `partnerAuth.test.js`), `riders.test.js` (rider management

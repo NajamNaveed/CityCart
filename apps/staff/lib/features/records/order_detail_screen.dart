@@ -10,6 +10,7 @@ import '../../core/widgets.dart';
 import '../../data/api_exception.dart';
 import '../../data/models.dart';
 import '../../providers.dart';
+import 'door_payment_card.dart';
 
 class OrderDetailScreen extends ConsumerStatefulWidget {
   const OrderDetailScreen({super.key, required this.orderId});
@@ -81,6 +82,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final bundle = _bundle;
+    final access = ref.watch(accessProvider);
 
     return Scaffold(
       body: SafeArea(
@@ -146,6 +148,15 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                           _MoneyCard(
                             order: bundle.order,
                             payment: bundle.payment,
+                            paymentsManage: access.paymentsManage,
+                            onReviewProof: bundle.payment == null
+                                ? null
+                                : () async {
+                                    await context.push(
+                                      '/verify/${bundle.payment!.id}',
+                                    );
+                                    if (mounted) await _load(quiet: true);
+                                  },
                             onReceipt: () => context.push(
                               '/receipts/order/${bundle.order.id}',
                             ),
@@ -392,11 +403,15 @@ class _MoneyCard extends StatelessWidget {
   const _MoneyCard({
     required this.order,
     required this.payment,
+    required this.paymentsManage,
+    required this.onReviewProof,
     required this.onReceipt,
   });
 
   final OrderRecord order;
   final PaymentRecord? payment;
+  final bool paymentsManage;
+  final VoidCallback? onReviewProof;
   final VoidCallback onReceipt;
 
   @override
@@ -412,7 +427,7 @@ class _MoneyCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SectionLabel('Payment'),
+          const SectionLabel('Money'),
           const SizedBox(height: 9),
           InfoRow(label: 'Subtotal', value: formatMoney(order.subtotal)),
           InfoRow(label: 'Delivery', value: formatMoney(order.deliveryFee)),
@@ -432,27 +447,15 @@ class _MoneyCard extends StatelessWidget {
           ),
           if (payment != null) ...[
             const Divider(height: 20, color: AppColors.line),
-            InfoRow(
-              label: 'Payment',
-              value: friendlyPayment(payment!.status),
-              valueColor: switch (toneForPayment(payment!.status)) {
-                StatusTone.sage => AppColors.sageInk,
-                StatusTone.danger => AppColors.danger,
-                StatusTone.amber => AppColors.amberInk,
-                _ => AppColors.muted,
-              },
-              strong: true,
+            DoorPaymentDetails(
+              payment: payment!,
+              paymentsManage: paymentsManage,
+              onReviewProof: onReviewProof,
+              showAmount: false,
             ),
-            if (payment!.method != null)
-              InfoRow(
-                label: 'Method',
-                value: friendlyCollectionMethod(payment!.method!),
-              ),
-            if (payment!.collectionReference != null)
-              InfoRow(label: 'Reference', value: payment!.collectionReference!),
           ],
           if (paid) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             AppButton(
               label: 'View receipt',
               icon: Icons.receipt_long_outlined,

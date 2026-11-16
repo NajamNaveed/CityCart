@@ -553,6 +553,12 @@ describe('demo dataset', () => {
         expect(p.status).toBe('PENDING');
       }
     });
+    // The records keeper needs one attempt whose five-minute window is still
+    // open, otherwise the expiry job rejects it before it can be reviewed.
+    const waiting = door.find((p) => p.collection.verification === 'SUBMITTED');
+    expect(waiting.collection.submittedAt.getTime()).toBeLessThanOrEqual(NOW.getTime());
+    expect(waiting.collection.confirmBy.getTime()).toBeGreaterThan(NOW.getTime());
+
     expect(door.some((p) => p.collection.wallet)).toBe(true);
     const attempts = ds.payments.flatMap((p) => [p.collection, ...(p.collectionHistory || [])]).filter(Boolean);
     expect(attempts.some((c) => c.duplicateReference && c.duplicateProof)).toBe(true);

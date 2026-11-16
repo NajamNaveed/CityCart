@@ -125,19 +125,24 @@ Full wording is in `19-mobile-app.md` §14 (15 numbered checks). The P0 run:
 
 ---
 
-## 4. Staff P0 (`partner/`)
+## 4. Staff P0 (`apps/staff/`)
 
 **Records keeper** (`hira.anwar@citycart.demo`):
 
-1. **Overview** — To pick up, On the road, Failed and Delivered counts load, and
-   cash still with riders matches the seeded demo.
+1. **Home** — the online-payment-checks card shows the seeded waiting proof,
+   the glance tiles match the seeded orders, deliveries, returns and cash, and
+   the attention rows open the right screens.
 2. **Orders and deliveries** — filters work, an order's proposal history is
    read-only, and a delivery can be reassigned to the seeded rider (needs
-   `delivery.manage` + `riders.view`).
-3. **Money** — a receipt opens; **To verify** loads a door-payment photo through
-   the signed link (open it twice: the second after ~5 minutes should offer
-   "Show photo again"); Verify asks for confirmation; Reject demands a reason;
-   a read-only person sees no decision buttons.
+   `delivery.manage` + `riders.view`). Open the held delivery: **Customer
+   payment** shows the method, reference and remaining check time, and
+   **Review proof** opens the same decision screen as the Money queue.
+3. **Money** — opens on **To check** by default, with counts on the tabs; a
+   receipt opens; **To check** loads a door-payment photo through the signed
+   link (open it twice: the second after ~5 minutes should offer "Show photo
+   again"); Verify asks for confirmation; Reject demands a reason; a read-only
+   person sees no decision buttons. Leave the queue empty for a minute: a new
+   rider proof appears without pulling to refresh.
 4. **Cash hand-over** — tick the rider's payments, confirm, and see them leave
    the outstanding list. Try a stale list to see the `CASH_CHANGED` message.
 5. **Returns** — the returned-goods inbox lists the seeded return; **Mark

@@ -1129,7 +1129,7 @@ function buildDataset({ now = new Date(), hashes, data = DEMO }) {
   const refusedEntry = (waitingEntry && awaitingCheck.find((e) => String(e.order.brandId) !== String(waitingEntry.order.brandId)))
     || awaitingCheck[1];
 
-  const stageDoorPayment = (entry, { method, reference, verification, reject, timedOut }) => {
+  const stageDoorPayment = (entry, { method, reference, verification, reject, timedOut, openWindow }) => {
     const { order, payment, brand } = entry;
     const delivery = deliveryOf(order);
     // A delivery without a rider gets one of the brand's, so this rider's screen
@@ -1141,7 +1141,11 @@ function buildDataset({ now = new Date(), hashes, data = DEMO }) {
       delivery.assignedAt = new Date(delivery.createdAt.getTime() + 30 * (HOUR / 60));
     }
     const folder = `citycart/brands/${brand.doc._id}/deliveries/${delivery._id}`;
-    const at = new Date(Math.min(now.getTime() - 20 * (HOUR / 60), delivery.updatedAt.getTime() + 20 * (HOUR / 60)));
+    // A waiting attempt must still be inside its five-minute window, or the server's
+    // expiry job rejects it before anyone can look at the records keeper's queue.
+    const at = openWindow
+      ? new Date(now.getTime() - 90 * 1000)
+      : new Date(Math.min(now.getTime() - 20 * (HOUR / 60), delivery.updatedAt.getTime() + 20 * (HOUR / 60)));
     const closedAt = new Date(at.getTime() + 5 * (HOUR / 60)); // the confirmation window
     const decidedAt = new Date(at.getTime() + 10 * (HOUR / 60));
     const first = order.items[0];
@@ -1191,7 +1195,7 @@ function buildDataset({ now = new Date(), hashes, data = DEMO }) {
   };
 
   if (waitingEntry) {
-    const at = stageDoorPayment(waitingEntry, { method: 'BANK_TRANSFER', reference: 'FT-771204', verification: 'SUBMITTED' });
+    const at = stageDoorPayment(waitingEntry, { method: 'BANK_TRANSFER', reference: 'FT-771204', verification: 'SUBMITTED', openWindow: true });
     const { brand } = waitingEntry;
     const folder = `citycart/brands/${brand.doc._id}/deliveries/${deliveryOf(waitingEntry.order)._id}`;
     // Two earlier attempts: one whose window closed unchecked, one refused by

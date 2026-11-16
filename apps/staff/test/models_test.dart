@@ -160,6 +160,79 @@ void main() {
     });
   });
 
+  group('PaymentRecord', () {
+    test('reads a door collection that is waiting for a check', () {
+      final payment = PaymentRecord.fromJson({
+        '_id': 'pay-1',
+        'status': 'PENDING',
+        'amount': 4850,
+        'method': 'BANK_TRANSFER',
+        'collection': {
+          'method': 'BANK_TRANSFER',
+          'reference': 'FT-771204',
+          'submittedAt': '2026-11-16T09:00:00.000Z',
+          'confirmBy': '2999-01-01T00:00:00.000Z',
+          'verification': 'SUBMITTED',
+          'proof': {'publicId': 'proofs/abc'},
+        },
+      });
+
+      expect(payment.hasCollection, isTrue);
+      expect(payment.isCashCollection, isFalse);
+      expect(payment.isNonCashCollection, isTrue);
+      expect(payment.awaitingCheck, isTrue);
+      expect(payment.checkVerified, isFalse);
+      expect(payment.confirmationWindowClosed, isFalse);
+      expect(payment.collectionReference, 'FT-771204');
+      expect(payment.proofAvailable, isTrue);
+      expect(payment.collectionSubmittedAt, DateTime.utc(2026, 11, 16, 9));
+    });
+
+    test('a submitted attempt past its deadline reads as closed', () {
+      final payment = PaymentRecord.fromJson({
+        '_id': 'pay-2',
+        'status': 'PENDING',
+        'amount': 1200,
+        'collection': {
+          'method': 'WALLET',
+          'wallet': 'JAZZCASH',
+          'verification': 'SUBMITTED',
+          'confirmBy': '2000-01-01T00:00:00.000Z',
+        },
+      });
+
+      expect(payment.confirmationWindowClosed, isTrue);
+      expect(payment.collectionWallet, 'JAZZCASH');
+    });
+
+    test('cash and a checked transfer read their own state', () {
+      final cash = PaymentRecord.fromJson({
+        '_id': 'pay-3',
+        'status': 'PAID',
+        'amount': 3000,
+        'method': 'COD',
+        'collection': {'method': 'CASH'},
+        'paidAt': '2026-11-16T10:00:00.000Z',
+      });
+      final checked = PaymentRecord.fromJson({
+        '_id': 'pay-4',
+        'status': 'PAID',
+        'amount': 5000,
+        'collection': {
+          'method': 'CARD_MACHINE',
+          'verification': 'VERIFIED',
+          'verifiedAt': '2026-11-16T10:01:00.000Z',
+        },
+      });
+
+      expect(cash.isCashCollection, isTrue);
+      expect(cash.isNonCashCollection, isFalse);
+      expect(cash.awaitingCheck, isFalse);
+      expect(checked.checkVerified, isTrue);
+      expect(checked.collectionVerifiedAt, DateTime.utc(2026, 11, 16, 10, 1));
+    });
+  });
+
   group('AppUser', () {
     test('parses permissions and a restricted flag', () {
       final user = AppUser.fromJson({

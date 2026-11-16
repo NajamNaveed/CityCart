@@ -108,6 +108,9 @@ $RECYCLE.BIN/
 .LSOverride
 Icon
 ._*
+# Launcher-icon sources are real assets, not macOS Finder metadata.
+!apps/*/assets/icon/
+!apps/*/assets/icon/**
 
 # -------------------------
 # IDE / Editors
