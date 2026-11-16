@@ -82,6 +82,15 @@ void main() {
       expect(nextActionFor('FAILED')?.status, 'OUT_FOR_DELIVERY');
     });
 
+    test('the road is drawn only while the parcel is with the rider', () {
+      expect(isOnTheWay('PICKED_UP'), isTrue);
+      expect(isOnTheWay('IN_TRANSIT'), isTrue);
+      expect(isOnTheWay('OUT_FOR_DELIVERY'), isTrue);
+      expect(isOnTheWay('READY_FOR_PICKUP'), isFalse);
+      expect(isOnTheWay('FAILED'), isFalse);
+      expect(isOnTheWay('DELIVERED'), isFalse);
+    });
+
     test('closed jobs have no next action', () {
       expect(isClosedStatus('DELIVERED'), isTrue);
       expect(isClosedStatus('RETURNED'), isTrue);

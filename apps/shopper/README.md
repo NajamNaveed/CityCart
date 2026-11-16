@@ -13,7 +13,7 @@ presents and collects.
 
 | Tab | What it does |
 |---|---|
-| **Home** | The shops around the chosen block, each showing a few real products and prices, plus a row of nearby service categories. Pull to refresh. |
+| **Home** | A search entry, the area and a neighbourhood banner, then the shops around the chosen block, each showing a few real products and prices. Two quick actions open home services and the assistant. Pull to refresh. |
 | **Explore** | Search shops and items in the area. An empty search explains what to try instead of showing a blank list. |
 | **Services** | Approved providers around the block: cleaning, repairs, tuition and more, with search, category chips and sorting. |
 | **Basket** | Lines grouped by shop, quantity changes, removal, and one clear checkout action. |
@@ -76,7 +76,7 @@ flutter analyze
 flutter test
 ```
 
-70 offline tests in 9 suites. Every screen suite runs at 320 × 900 with a 1.3
+77 offline tests in 10 suites. Every screen suite runs at 320 × 640 with a 1.3
 text scale and asserts no layout overflow:
 
 * `widget_test` — the router guard (splash, sign-in, area, home), sign-in
@@ -95,6 +95,8 @@ text scale and asserts no layout overflow:
   help contacts, the inbox merge, and password recovery.
 * `account_test` — the account screen at a narrow width, its unread badge and
   the notification row's route.
+* `assistant_test` — questions and cards in all three modes, the degraded
+  label, retry without asking twice, and the mode chips at 320 px.
 * `core_format_test` — money, distance, initials, greeting and plural helpers.
 
 The tests make no network calls.

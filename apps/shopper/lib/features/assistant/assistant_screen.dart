@@ -70,43 +70,44 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
   Widget build(BuildContext context) {
     final controller = ref.watch(assistantProvider);
     final areaLabel = ref.read(areaProvider).area?.label ?? 'your area';
-    final mode = controller.mode;
 
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
+        final mode = controller.mode;
         return Scaffold(
           body: SafeArea(
             child: Column(
               children: [
-                ScreenTopBar(
-                  title: 'Ask CityCart',
-                  subtitle: _modeTitle(mode),
-                ),
+                ScreenTopBar(title: 'Ask CityCart', subtitle: _modeTitle(mode)),
                 const Divider(height: 1),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                  child: Row(
                     children: [
-                      _ModeChip(
-                        label: 'Find products',
-                        active: mode == AssistantMode.shop,
-                        onTap: () =>
-                            controller.setMode(AssistantMode.shop),
+                      Expanded(
+                        child: _ModeChip(
+                          label: 'Find products',
+                          active: mode == AssistantMode.shop,
+                          onTap: () => controller.setMode(AssistantMode.shop),
+                        ),
                       ),
-                      _ModeChip(
-                        label: 'My orders',
-                        active: mode == AssistantMode.orders,
-                        onTap: () =>
-                            controller.setMode(AssistantMode.orders),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _ModeChip(
+                          label: 'My orders',
+                          active: mode == AssistantMode.orders,
+                          onTap: () => controller.setMode(AssistantMode.orders),
+                        ),
                       ),
-                      _ModeChip(
-                        label: 'Services',
-                        active: mode == AssistantMode.services,
-                        onTap: () =>
-                            controller.setMode(AssistantMode.services),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _ModeChip(
+                          label: 'Services',
+                          active: mode == AssistantMode.services,
+                          onTap: () =>
+                              controller.setMode(AssistantMode.services),
+                        ),
                       ),
                     ],
                   ),
@@ -139,11 +140,10 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
                               );
                             }
                             final offset = controller.sending ? 1 : 0;
-                            final turn = controller.turns[controller
-                                    .turns
-                                    .length -
-                                1 -
-                                (index - offset)];
+                            final turn =
+                                controller.turns[controller.turns.length -
+                                    1 -
+                                    (index - offset)];
                             return _Turn(turn: turn);
                           },
                         ),
@@ -153,9 +153,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
                     padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
                     child: ErrorNotice(
                       message: controller.error!,
-                      onRetry: controller.hasFailed
-                          ? controller.retry
-                          : null,
+                      onRetry: controller.hasFailed ? controller.retry : null,
                     ),
                   ),
                 BottomActionBar(
@@ -272,36 +270,30 @@ class _Starter extends StatelessWidget {
     };
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 40, 20, 24),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
       children: [
         Center(
           child: Container(
-            width: 64,
-            height: 64,
+            width: 52,
+            height: 52,
             decoration: const BoxDecoration(
               color: AppColors.sage,
               shape: BoxShape.circle,
             ),
             child: const Icon(
               Icons.auto_awesome_rounded,
-              size: 28,
+              size: 24,
               color: AppColors.sageInk,
             ),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
         Text(
           title,
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.headlineSmall,
         ),
-        const SizedBox(height: 8),
-        Text(
-          body,
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
-        const SizedBox(height: 22),
+        const SizedBox(height: 14),
         Wrap(
           alignment: WrapAlignment.center,
           spacing: 8,
@@ -314,13 +306,18 @@ class _Starter extends StatelessWidget {
               ),
           ],
         ),
-        const SizedBox(height: 26),
+        const SizedBox(height: 18),
+        Text(
+          body,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 18),
         Text(
           footer,
           textAlign: TextAlign.center,
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
+          style: Theme.of(context).textTheme.bodySmall
+              ?.copyWith(color: AppColors.muted),
         ),
       ],
     );
@@ -344,9 +341,7 @@ class _ModeChip extends StatelessWidget {
       color: active ? AppColors.forest : AppColors.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadius.pill),
-        side: BorderSide(
-          color: active ? AppColors.forest : AppColors.line,
-        ),
+        side: BorderSide(color: active ? AppColors.forest : AppColors.line),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(AppRadius.pill),
@@ -355,6 +350,9 @@ class _ModeChip extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           child: Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 12.5,
               fontWeight: FontWeight.w600,
@@ -428,9 +426,8 @@ class _Turn extends StatelessWidget {
               ),
               child: Text(
                 turn.text,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.white,
-                ),
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(color: AppColors.white),
               ),
             ),
           ),
@@ -452,13 +449,17 @@ class _Turn extends StatelessWidget {
                 color: AppColors.sageInk,
               ),
               SizedBox(width: 6),
-              Text(
-                'CityCart assistant',
-                style: TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.1,
-                  color: AppColors.sageInk,
+              Flexible(
+                child: Text(
+                  'CityCart assistant',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.1,
+                    color: AppColors.sageInk,
+                  ),
                 ),
               ),
             ],
@@ -496,23 +497,30 @@ class _Turn extends StatelessWidget {
                           color: AppColors.muted,
                         ),
                         const SizedBox(width: 5),
-                        Text(
-                          turn.orders.isNotEmpty
-                              ? 'Latest orders without the assistant.'
-                              : turn.providers.isNotEmpty
-                              ? 'Providers without the assistant.'
-                              : 'Plain search results.',
-                          style: const TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.muted,
+                        Flexible(
+                          child: Text(
+                            turn.orders.isNotEmpty
+                                ? 'Latest orders without the assistant.'
+                                : turn.providers.isNotEmpty
+                                ? 'Providers without the assistant.'
+                                : 'Plain search results.',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.muted,
+                            ),
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 6),
                   ],
-                  Text(turn.text, style: Theme.of(context).textTheme.bodyMedium),
+                  Text(
+                    turn.text,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
                   for (final product in turn.products) ...[
                     const SizedBox(height: 10),
                     _AssistantProductCard(product: product),
@@ -661,24 +669,38 @@ class _AssistantOrderCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  StatusPill(
-                    text: friendlyOrder(order.orderStatus),
-                    tone: toneForOrder(order.orderStatus),
-                    compact: true,
-                  ),
+                  if (detail.isEmpty) ...[
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: StatusPill(
+                        text: friendlyOrder(order.orderStatus),
+                        tone: toneForOrder(order.orderStatus),
+                        compact: true,
+                      ),
+                    ),
+                  ],
                 ],
               ),
               if (detail.isNotEmpty) ...[
-                const SizedBox(height: 3),
-                Text(
-                  detail,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    color: AppColors.muted,
-                  ),
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    StatusPill(
+                      text: friendlyOrder(order.orderStatus),
+                      tone: toneForOrder(order.orderStatus),
+                      compact: true,
+                    ),
+                    Text(
+                      detail,
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ],
                 ),
               ],
               const SizedBox(height: 6),
@@ -848,10 +870,15 @@ class _AssistantOffering extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 6),
-            Text(
-              '${offering.durationMinutes} min · '
-              '${formatMoney(offering.startingAtPrice)}',
-              style: const TextStyle(fontSize: 10.5, color: AppColors.muted),
+            Flexible(
+              child: Text(
+                '${offering.durationMinutes} min · '
+                '${formatMoney(offering.startingAtPrice)}',
+                textAlign: TextAlign.end,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 10.5, color: AppColors.muted),
+              ),
             ),
           ],
         ),

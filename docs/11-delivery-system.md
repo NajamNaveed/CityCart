@@ -712,21 +712,31 @@ A terminated brand's riders may still share (they are finishing deliveries on th
 ## 30.3 Screens
 
 * Delivery app, rider: Account, "Share my location while I deliver".
-* Delivery app, delivery detail: **Open in map** shows the customer's checkout pin on an OpenStreetMap
-  preview inside the screen (no key, no Google Maps SDK); **Navigate** hands the coordinates to the
-  phone's own maps app.
+* Delivery app, delivery detail: the **Deliver to** card holds an OpenStreetMap preview of the
+  customer's checkout pin. Once the parcel is with the rider (`PICKED_UP`, `IN_TRANSIT`,
+  `OUT_FOR_DELIVERY`) it adds this phone's own position and the road still left to ride. **Map**
+  opens the same view full-screen with a centre-on-me and a fit-both control. No coordinates are
+  handed to an external maps app, and the phone position is read only while that screen is open.
 * Staff app, records: the delivery's detail shows "Rider location" (last seen, Open in Maps, Refresh).
-* Shopper app, saved address and checkout forms: **Delivery spot** is a free OpenStreetMap
-  (`flutter_map`, no key) with the city's active blocks shaded. Tapping the map drops the pin;
-  the blocks that hold it are named under the map. The app only hints — saving or ordering is
-  the server's decision (`OUTSIDE_DELIVERY_ZONE` when the pin is outside every active block).
+* Shopper app, saved address, checkout and the area screen: **Delivery spot** is a free
+  OpenStreetMap (`flutter_map`, no key) with the city's active blocks shaded. Tapping the map
+  drops the pin; the blocks that hold it are named under the map. The server only hints — saving
+  or ordering is the server's decision (`OUTSIDE_DELIVERY_ZONE` when the pin is outside every
+  active block). The area screen reuses the same map, so a block can be chosen by name or by
+  tapping the spot.
 * Shopper app and customer website: while the order is out for delivery, "Your rider" shows an
   **internal map** (OpenStreetMap) with the checkout pin and the rider as a moped badge that
-  turns to face the way they are travelling. A line draws the way travelled since the
+  turns to face the way they are travelling. A warm line draws the way travelled since the
   screen/tab opened; it is built on the device from the polls and is never uploaded, because the
-  server deliberately keeps no history. Positions are polled about every 15 seconds while the
-  screen/tab is visible. The wording notes that the rider may have other orders to deliver
-  before this one. Nothing is drawn when the rider is not sharing.
+  server deliberately keeps no history. A green line follows the roads still left to the door,
+  and a corner target re-centres and zooms on the rider. Positions are polled about every 15
+  seconds while the screen/tab is visible. The wording notes that the rider may have other
+  orders to deliver before this one. Nothing is drawn when the rider is not sharing.
+
+Both road lines come from the public OSRM demo router (`router.project-osrm.org`, keyless) over
+HTTPS with the two endpoints only. It is a third-party courtesy service with no SLA; when it is
+slow or unavailable the apps draw the direct leg dashed instead, so the map never waits on it.
+The web map asks again only after the rider has moved about 60 m or the destination changes.
 
 The rider's delivery view includes the customer's checkout pin as `deliveryLocation`
 (`{ latitude, longitude }`, only while the delivery is open); it never leaks the raw GeoJSON
@@ -736,5 +746,9 @@ Related code: `models/riderLocation.model.js`, `services/riderLocation.service.j
 `controllers/riderDelivery.controller.js`, `controllers/delivery.controller.js`, `partner/src/services/location.js`,
 `delivery/src/components/DestinationMap.jsx`, `mobile/src/components/NearbyMap.jsx`,
 `mobile/src/hooks/useRiderLocation.js`, `client/src/components/DeliveryMap.jsx`,
-`apps/shopper/lib/features/location/maps.dart` (spot picker, live rider map, trail and moped marker).
+`apps/shopper/lib/features/location/maps.dart` (spot picker, live rider map, trail and moped marker),
+`apps/shopper/lib/features/location/route.dart` (OSRM road route),
+`apps/delivery/lib/features/deliveries/live_map.dart` (rider map with route and phone position),
+`apps/delivery/lib/features/deliveries/rider_map_screen.dart` (full-screen map),
+`apps/delivery/lib/features/deliveries/route.dart`.
 

@@ -11,6 +11,7 @@ import 'features/cash/cash_screen.dart';
 import 'features/deliveries/delivery_screen.dart';
 import 'features/deliveries/door_flow_screen.dart';
 import 'features/deliveries/history_screen.dart';
+import 'features/deliveries/rider_map_screen.dart';
 import 'features/deliveries/today_screen.dart';
 import 'providers.dart';
 
@@ -80,6 +81,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/delivery/:id/complete',
         builder: (context, state) =>
             DoorFlowScreen(deliveryId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/delivery/:id/map',
+        builder: (context, state) =>
+            RiderMapScreen(deliveryId: state.pathParameters['id']!),
       ),
       GoRoute(
         path: '/history',

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -11,6 +12,7 @@ import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/models.dart';
 import 'geo.dart';
+import 'route.dart';
 
 /// Used only when there is nothing else to centre on.
 const _fallbackCenter = LatLng(31.4504, 73.135);
@@ -106,9 +108,8 @@ class DeliverySpotMap extends StatelessWidget {
                 interactionOptions: _interaction,
                 onTap: onPick == null
                     ? null
-                    : (_, point) => onPick!(
-                        roundedPin(point.latitude, point.longitude),
-                      ),
+                    : (_, point) =>
+                          onPick!(roundedPin(point.latitude, point.longitude)),
               ),
               children: [
                 _tiles(),
@@ -223,9 +224,7 @@ class DeliverySpotMap extends StatelessWidget {
         maxZoom: 15,
       );
     }
-    final points = [
-      for (final block in outlines) ...block.outline,
-    ];
+    final points = [for (final block in outlines) ...block.outline];
     if (points.isEmpty) return null;
     return CameraFit.bounds(
       bounds: LatLngBounds.fromPoints(points),
@@ -299,7 +298,10 @@ class DeliverySpotPicker extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 if (onRetry != null)
-                  TextButton(onPressed: onRetry, child: const Text('Try again')),
+                  TextButton(
+                    onPressed: onRetry,
+                    child: const Text('Try again'),
+                  ),
               ],
             ),
           )
@@ -399,17 +401,30 @@ class RiderTrackingMap extends StatefulWidget {
 class _RiderTrackingMapState extends State<RiderTrackingMap> {
   final _controller = MapController();
   bool _fitted = false;
+  List<LatLng>? _road;
+  bool _routeFailed = false;
+  LatLng? _routeFrom;
+  LatLng? _routeTo;
+  int _routeGeneration = 0;
 
   @override
   void initState() {
     super.initState();
     _fitAfterLayout();
+    unawaited(_loadRoute());
   }
 
   @override
   void didUpdateWidget(RiderTrackingMap oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!_fitted) _fitAfterLayout();
+    final destination = widget.destination;
+    final routeStale =
+        destination != null &&
+        (_routeTo != destination ||
+            _routeFrom == null ||
+            hasMoved(_routeFrom!, widget.rider, metres: 60));
+    if (routeStale) unawaited(_loadRoute());
   }
 
   void _fitAfterLayout() {
@@ -431,8 +446,30 @@ class _RiderTrackingMapState extends State<RiderTrackingMap> {
     });
   }
 
+  /// Asks the router for the road still ahead. The trail stays the truth of
+  /// where the rider has been; this line is only the way left to the door.
+  Future<void> _loadRoute() async {
+    final destination = widget.destination;
+    if (destination == null) return;
+    final from = widget.rider;
+    final generation = ++_routeGeneration;
+    _routeFrom = from;
+    _routeTo = destination;
+    final points = await roadRoute(from, destination);
+    if (!mounted || generation != _routeGeneration) return;
+    setState(() {
+      _road = points;
+      _routeFailed = points == null;
+    });
+  }
+
+  void _centreOnRider() {
+    _controller.move(widget.rider, 16.5);
+  }
+
   @override
   void dispose() {
+    _routeGeneration++;
     _controller.dispose();
     super.dispose();
   }
@@ -445,49 +482,133 @@ class _RiderTrackingMapState extends State<RiderTrackingMap> {
       child: Container(
         height: widget.height,
         decoration: BoxDecoration(border: Border.all(color: AppColors.line)),
-        child: FlutterMap(
-          mapController: _controller,
-          options: MapOptions(
-            initialCenter: widget.rider,
-            initialZoom: 15,
-            interactionOptions: _interaction,
-          ),
+        child: Stack(
           children: [
-            _tiles(),
-            if (widget.trail.length >= 2)
-              PolylineLayer(
-                polylines: [
-                  Polyline(
-                    points: widget.trail,
-                    strokeWidth: 4.5,
-                    color: AppColors.clay.withValues(alpha: 0.55),
-                    borderColor: AppColors.white.withValues(alpha: 0.75),
-                    borderStrokeWidth: 1.2,
+            Positioned.fill(
+              child: FlutterMap(
+                mapController: _controller,
+                options: MapOptions(
+                  initialCenter: widget.rider,
+                  initialZoom: 15,
+                  interactionOptions: _interaction,
+                ),
+                children: [
+                  _tiles(),
+                  if (_road != null)
+                    PolylineLayer(
+                      polylines: [
+                        Polyline(
+                          points: _road!,
+                          strokeWidth: 7,
+                          color: AppColors.white.withValues(alpha: 0.9),
+                        ),
+                        Polyline(
+                          points: _road!,
+                          strokeWidth: 4.5,
+                          color: AppColors.forest.withValues(alpha: 0.72),
+                        ),
+                      ],
+                    ),
+                  if (_routeFailed && destination != null)
+                    PolylineLayer(
+                      polylines: [
+                        Polyline(
+                          points: [widget.rider, destination],
+                          strokeWidth: 3,
+                          color: AppColors.muted.withValues(alpha: 0.6),
+                          pattern: StrokePattern.dashed(segments: const [6, 9]),
+                        ),
+                      ],
+                    ),
+                  if (widget.trail.length >= 2)
+                    PolylineLayer(
+                      polylines: [
+                        Polyline(
+                          points: widget.trail,
+                          strokeWidth: 4.5,
+                          color: AppColors.clay.withValues(alpha: 0.55),
+                          borderColor: AppColors.white.withValues(alpha: 0.75),
+                          borderStrokeWidth: 1.2,
+                        ),
+                      ],
+                    ),
+                  MarkerLayer(
+                    markers: [
+                      if (destination != null)
+                        Marker(
+                          point: destination,
+                          width: 38,
+                          height: 38,
+                          alignment: Alignment.topCenter,
+                          child: const IgnorePointer(
+                            child: _DeliveryPin(size: 38),
+                          ),
+                        ),
+                      Marker(
+                        point: widget.rider,
+                        width: 48,
+                        height: 48,
+                        child: IgnorePointer(
+                          child: _RiderMarker(bearing: widget.bearing),
+                        ),
+                      ),
+                    ],
                   ),
+                  _attribution(),
                 ],
               ),
-            MarkerLayer(
-              markers: [
-                if (destination != null)
-                  Marker(
-                    point: destination,
-                    width: 38,
-                    height: 38,
-                    alignment: Alignment.topCenter,
-                    child: const IgnorePointer(child: _DeliveryPin(size: 38)),
-                  ),
-                Marker(
-                  point: widget.rider,
-                  width: 48,
-                  height: 48,
-                  child: IgnorePointer(
-                    child: _RiderMarker(bearing: widget.bearing),
-                  ),
-                ),
-              ],
             ),
-            _attribution(),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: _MapControl(
+                icon: Icons.my_location_rounded,
+                label: 'Centre the map on your rider',
+                onTap: _centreOnRider,
+              ),
+            ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One round control that floats over a map, big enough for a thumb.
+class _MapControl extends StatelessWidget {
+  const _MapControl({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: Material(
+        color: AppColors.surface,
+        elevation: 2,
+        shadowColor: const Color(0x33000000),
+        shape: const CircleBorder(
+          side: BorderSide(color: AppColors.line, width: 1.2),
+        ),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: Tooltip(
+            message: label,
+            child: SizedBox(
+              width: 42,
+              height: 42,
+              child: Icon(icon, size: 20, color: AppColors.forest),
+            ),
+          ),
         ),
       ),
     );

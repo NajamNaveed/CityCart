@@ -249,15 +249,18 @@ Built in November 2026:
 * Three tabs — Today (one next job, the rest of the route), Cash (amount held,
   honest no-settlement guidance) and Account (rider, location sharing, server
   address, sign-out).
-* Delivery detail with maps, dialler and trip controls; a four-step door flow
+* Delivery detail with an internal map, dialler and trip controls; a four-step door flow
   (code, per-line accept/refuse with reason and optional photo, payment method
-  and proof, review); day-grouped history.
+  and proof, review); day-grouped history. The **Deliver to** card shows the
+  customer's pin, this phone's position and, once the parcel is with the rider,
+  the road still left to ride; **Map** opens it full-screen with centre-on-me and
+  fit-both controls. Nothing is handed to an external maps app.
 * Riverpod for dependency injection, go_router for navigation, secure storage
   for the token, camera/library for proof photos, foreground location only.
 * Same rules enforced in the UI: no delivery without the customer's code, no
   non-cash completion without a reference and photo, fee refund only when every
   line is refused for a store-side reason, and no invented settlement action.
-* 49 offline unit and widget tests (the test bootstrap initialises the `intl`
+* 50 offline unit and widget tests (the test bootstrap initialises the `intl`
   date data, as `main()` does); `flutter analyze` clean; a web build compiles.
   Launcher icons are generated from the in-app brand mark with
   `flutter test tool/generate_icons.dart`.
@@ -285,6 +288,12 @@ once parity is proven on a phone. See `apps/delivery/README.md`.
   `apps/delivery/` with a three-tab layout designed around one next job and one
   primary action, plus the full door flow, day-grouped history and generated
   launcher icons. Same server, same rules; device pass and push still open.
+* **2026-11 In-app rider map and road routes:** the delivery detail draws the customer pin, the
+  rider's phone position and the road to the door inside the app; **Map** opens it full-screen
+  with centre-on-me and fit-both controls, replacing the hand-off to an external maps app. The
+  shopper's area screen can now pick a block by tapping the map, and the shopper/website rider
+  map draws the remaining road with a re-centre target. Routing uses the public OSRM demo service
+  with a dashed direct-line fallback. 50 tests.
 * **2026-11 Release check fixes:** web builds now initialise the `intl` date
   data before the first screen (without it the Today screen stayed blank); the
   whole next-job card opens the job, the card chip names the stage instead of

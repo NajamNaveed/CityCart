@@ -75,14 +75,15 @@ class HomeScreen extends ConsumerWidget {
                       name: session.user?.name,
                       areaLabel: area?.label,
                     ),
+                    _QuickActions(
+                      onServices: () => context.go('/services'),
+                      onAssistant: () => context.push('/assistant'),
+                    ),
+                    const SizedBox(height: 16),
                     _NeighbourhoodBanner(
                       areaLabel: area?.label,
                       storeCount: result.pagination.total,
                     ),
-                    const SizedBox(height: 12),
-                    _ServicesTeaser(onTap: () => context.go('/services')),
-                    const SizedBox(height: 12),
-                    _AssistantTeaser(onTap: () => context.push('/assistant')),
                     const SizedBox(height: 24),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -91,6 +92,21 @@ class HomeScreen extends ConsumerWidget {
                         subtitle: result.items.isEmpty
                             ? null
                             : '${storeCountLabel(result.pagination.total)} • closest first',
+                        action: result.items.isEmpty
+                            ? null
+                            : TextButton(
+                                onPressed: () => context.go('/explore'),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: AppColors.forest,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                  ),
+                                  minimumSize: const Size(0, 36),
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: const Text('See all'),
+                              ),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -160,10 +176,24 @@ class _HomeHeader extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              Text(
-                'CityCart',
-                style: Theme.of(context).textTheme.titleLarge
-                    ?.copyWith(fontWeight: FontWeight.w700),
+              Expanded(
+                child: Text(
+                  'CityCart',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+              IconButton(
+                onPressed: () => context.push('/notifications'),
+                icon: const Icon(Icons.notifications_none_rounded, size: 21),
+                tooltip: 'Notifications',
+                style: IconButton.styleFrom(
+                  backgroundColor: AppColors.surface,
+                  side: const BorderSide(color: AppColors.line),
+                  minimumSize: const Size(42, 42),
+                ),
               ),
             ],
           ),
@@ -175,11 +205,62 @@ class _HomeHeader extends StatelessWidget {
             style: Theme.of(context).textTheme.headlineMedium,
           ),
           const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: LocationPill(
-              label: areaLabel ?? 'Choose your area',
-              onTap: () => context.push('/area'),
+          Row(
+            children: [
+              Flexible(
+                child: LocationPill(
+                  label: areaLabel ?? 'Choose your area',
+                  onTap: () => context.push('/area'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          const _SearchEntry(),
+        ],
+      ),
+    );
+  }
+}
+
+/// The search entry on home: it looks like a field but opens Explore, where
+/// the real search lives.
+class _SearchEntry extends StatelessWidget {
+  const _SearchEntry();
+
+  @override
+  Widget build(BuildContext context) {
+    return SurfaceCard(
+      onTap: () => context.go('/explore'),
+      radius: AppRadius.field,
+      padding: const EdgeInsets.fromLTRB(14, 13, 12, 13),
+      child: Row(
+        children: [
+          const Icon(Icons.search_rounded, size: 21, color: AppColors.muted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Search shops and items',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodyMedium
+                  ?.copyWith(color: AppColors.muted),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: AppColors.sage,
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+            ),
+            child: const Text(
+              'Go',
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: AppColors.sageInk,
+              ),
             ),
           ),
         ],
@@ -188,66 +269,40 @@ class _HomeHeader extends StatelessWidget {
   }
 }
 
-class _ServicesTeaser extends StatelessWidget {
-  const _ServicesTeaser({required this.onTap});
+class _QuickActions extends StatelessWidget {
+  const _QuickActions({required this.onServices, required this.onAssistant});
 
-  final VoidCallback onTap;
+  final VoidCallback onServices;
+  final VoidCallback onAssistant;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: SurfaceCard(
-        onTap: onTap,
-        padding: const EdgeInsets.all(16),
-        color: AppColors.claySoft,
-        borderColor: AppColors.claySoft,
+      child: IntrinsicHeight(
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(13),
-              ),
-              child: const Icon(
-                Icons.home_repair_service_outlined,
-                size: 22,
-                color: AppColors.clay,
+            Expanded(
+              child: _ActionTile(
+                icon: Icons.home_repair_service_outlined,
+                title: 'Home services',
+                subtitle: 'Cleaning, repairs and more',
+                background: AppColors.claySoft,
+                accent: AppColors.clay,
+                onTap: onServices,
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Home services',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: AppColors.clay,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Cleaning, repairs and more from people nearby',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.clay.withValues(alpha: 0.85),
-                    ),
-                  ),
-                ],
+              child: _ActionTile(
+                icon: Icons.auto_awesome_rounded,
+                title: 'Ask CityCart',
+                subtitle: 'Find a product or a gift',
+                background: AppColors.sage,
+                accent: AppColors.sageInk,
+                onTap: onAssistant,
               ),
-            ),
-            const SizedBox(width: 6),
-            const Icon(
-              Icons.arrow_forward_rounded,
-              size: 19,
-              color: AppColors.clay,
             ),
           ],
         ),
@@ -256,75 +311,66 @@ class _ServicesTeaser extends StatelessWidget {
   }
 }
 
-class _AssistantTeaser extends StatelessWidget {
-  const _AssistantTeaser({required this.onTap});
+class _ActionTile extends StatelessWidget {
+  const _ActionTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.background,
+    required this.accent,
+    required this.onTap,
+  });
 
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color background;
+  final Color accent;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: SurfaceCard(
-        onTap: onTap,
-        padding: const EdgeInsets.all(16),
-        color: AppColors.sage,
-        borderColor: AppColors.sage,
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(13),
-              ),
-              child: const Icon(
-                Icons.auto_awesome_rounded,
-                size: 21,
-                color: AppColors.sageInk,
-              ),
+    return SurfaceCard(
+      onTap: onTap,
+      padding: const EdgeInsets.all(14),
+      color: background,
+      borderColor: background,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(12),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Ask CityCart',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: AppColors.sageInk,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Find a product, a gift or a shop nearby',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.sageInk.withValues(alpha: 0.85),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 6),
-            const Icon(
-              Icons.arrow_forward_rounded,
-              size: 19,
-              color: AppColors.sageInk,
-            ),
-          ],
-        ),
+            child: Icon(icon, size: 20, color: accent),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleMedium
+                ?.copyWith(color: accent, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            subtitle,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: accent.withValues(alpha: 0.85)),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _NeighbourhoodBanner extends StatelessWidget {  const _NeighbourhoodBanner({this.areaLabel, required this.storeCount});
+class _NeighbourhoodBanner extends StatelessWidget {
+  const _NeighbourhoodBanner({this.areaLabel, required this.storeCount});
 
   final String? areaLabel;
   final int storeCount;
@@ -334,50 +380,147 @@ class _NeighbourhoodBanner extends StatelessWidget {  const _NeighbourhoodBanner
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Container(
-        padding: const EdgeInsets.all(18),
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: AppColors.forest,
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [AppColors.forest, AppColors.forestDeep],
+          ),
           borderRadius: BorderRadius.circular(AppRadius.card),
         ),
-        child: Row(
+        child: Stack(
           children: [
-            Expanded(
+            Positioned(
+              right: -34,
+              top: -40,
+              child: Container(
+                width: 150,
+                height: 150,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.surface.withValues(alpha: 0.05),
+                ),
+              ),
+            ),
+            Positioned(
+              right: 30,
+              bottom: -50,
+              child: Container(
+                width: 110,
+                height: 110,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.surface.withValues(alpha: 0.04),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Your neighbourhood, delivered',
-                    style: Theme.of(context).textTheme.titleLarge
-                        ?.copyWith(color: AppColors.surface),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SectionLabel(
+                              'Your neighbourhood',
+                              color: AppColors.surface.withValues(alpha: 0.6),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Everything nearby, delivered',
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(color: AppColors.surface),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              storeCount == 0
+                                  ? 'Fresh shops and services around ${areaLabel ?? 'you'}.'
+                                  : '$storeCount shops around ${areaLabel ?? 'you'} are taking orders.',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: AppColors.surface.withValues(
+                                      alpha: 0.78,
+                                    ),
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          color: AppColors.surface.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Icon(
+                          Icons.local_mall_outlined,
+                          size: 25,
+                          color: AppColors.surface,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    storeCount == 0
-                        ? 'Fresh shops and services around ${areaLabel ?? 'you'}.'
-                        : '$storeCount shops around ${areaLabel ?? 'you'} are taking orders.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.surface.withValues(alpha: 0.78),
-                    ),
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: const [
+                      _HeroBadge(
+                        icon: Icons.storefront_rounded,
+                        label: 'Local shops',
+                      ),
+                      _HeroBadge(
+                        icon: Icons.delivery_dining_outlined,
+                        label: 'At your door',
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 12),
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: AppColors.surface.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(
-                Icons.local_mall_outlined,
-                size: 25,
-                color: AppColors.surface,
-              ),
-            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _HeroBadge extends StatelessWidget {
+  const _HeroBadge({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.surface.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: AppColors.surface),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: AppColors.surface,
+            ),
+          ),
+        ],
       ),
     );
   }

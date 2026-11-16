@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/format.dart';
@@ -13,6 +14,7 @@ import '../../data/api_exception.dart';
 import '../../data/models.dart';
 import '../../providers.dart';
 import 'delivery_rules.dart';
+import 'live_map.dart';
 import 'payment_capture.dart';
 
 class DeliveryScreen extends ConsumerStatefulWidget {
@@ -68,8 +70,7 @@ class _DeliveryScreenState extends ConsumerState<DeliveryScreen> {
             _notice = 'Payment confirmed. This delivery is complete.';
             _noticeIsError = false;
           } else if (delivery.paymentExpired) {
-            _notice =
-                'The store did not confirm in time. Collect the payment again or ask for cash.';
+            _notice = 'The store did not confirm in time. Collect the payment again or ask for cash.';
             _noticeIsError = false;
           }
         }
@@ -247,8 +248,7 @@ class _DeliveryScreenState extends ConsumerState<DeliveryScreen> {
                             const SizedBox(height: 12),
                             _WaitingCard(
                               title: 'Waiting for the store',
-                              message:
-                                  'The store is checking the payment you sent. It must confirm within 5 minutes, or the customer can try again or pay cash. Nothing more to collect for now.',
+                              message: 'The store is checking the payment you sent. It must confirm within 5 minutes, or the customer can try again or pay cash. Nothing more to collect for now.',
                               secondsLeft: delivery.paymentSecondsLeft,
                               onRefresh: () => _load(silent: true),
                             ),
@@ -612,7 +612,9 @@ class _CustomerCard extends StatelessWidget {
     final address = delivery.address!;
     final phone = address.phone;
     final pin = delivery.deliveryLocation;
-    final mapUrl = pin != null ? locationMapUrl(pin) : mapsUrl(address);
+    final destination = pin == null
+        ? null
+        : LatLng(pin.latitude, pin.longitude);
 
     return SurfaceCard(
       child: Column(
@@ -628,6 +630,22 @@ class _CustomerCard extends StatelessWidget {
           if (address.line.isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(address.line, style: Theme.of(context).textTheme.bodyMedium),
+          ],
+          if (destination != null) ...[
+            const SizedBox(height: 14),
+            RiderLiveMap(
+              destination: destination,
+              routeToCustomer: isOnTheWay(delivery.status),
+              height: 220,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              isOnTheWay(delivery.status)
+                  ? 'The green line follows the roads still left to the door.'
+                  : "The customer's pin. Your position appears while this screen is open.",
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: AppColors.muted),
+            ),
           ],
           if (address.additionalInstructions?.trim().isNotEmpty == true) ...[
             const SizedBox(height: 12),
@@ -681,17 +699,15 @@ class _CustomerCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 10),
               ],
-              if (mapUrl != null)
+              if (destination != null)
                 Expanded(
                   child: AppButton(
-                    label: 'Navigate',
+                    label: 'Map',
                     variant: AppButtonVariant.outline,
-                    icon: Icons.near_me_outlined,
+                    icon: Icons.map_outlined,
                     height: 48,
-                    onPressed: () => onCall(
-                      mapUrl,
-                      failure: 'A map app could not be opened.',
-                    ),
+                    onPressed: () =>
+                        context.push('/delivery/${delivery.id}/map'),
                   ),
                 ),
             ],

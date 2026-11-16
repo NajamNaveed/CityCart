@@ -15,9 +15,11 @@ every permission; this app only presents and collects.
 | **Cash** | The cash the rider has collected and not yet handed to the store, plus a plain explanation of how settlement works. |
 | **Account** | Rider details, opt-in foreground location sharing, server address, sign-out. |
 
-Outside the tabs: delivery detail (open in maps, call the customer, start the
-trip) and the door flow (six-digit code, per-line accept/refuse with reason and
-optional photo, payment method and proof, final review).
+Outside the tabs: delivery detail (an in-app map of the customer's pin and the
+rider, the road still left to the door once the parcel is with the rider, call
+the customer, start the trip), a full-screen map with re-centre and fit-both
+controls, and the door flow (six-digit code, per-line accept/refuse with reason
+and optional photo, payment method and proof, final review).
 
 Only the server decides what happens next. A delivery cannot be marked delivered
 without the customer's code, a non-cash payment waits for the store to verify
@@ -78,8 +80,7 @@ Defined in `android/app/src/main/AndroidManifest.xml` and `ios/Runner/Info.plist
 * Internet (API), camera (payment proof and return photos), photo library (iOS).
 * Fine and coarse location, used only while the rider turns on sharing and only
   while a delivery is out.
-* `<queries>` for the dialler and https links so "Call customer" and "Open in
-  maps" work on Android 11+.
+* `<queries>` for the dialler so "Call customer" works on Android 11+.
 * Debug and profile builds allow cleartext HTTP for local development; release
   builds do not.
 

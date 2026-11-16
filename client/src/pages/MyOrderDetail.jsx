@@ -92,7 +92,7 @@ function ReceiptNote({ orderId }) {
 // refresh keeps the last dot on screen instead of blanking the map (docs/11 §30).
 const RIDER_POLL_MS = 15000
 
-function RiderLocation({ deliveryId, destination }) {
+function RiderLocation({ deliveryId, destination, height = 380 }) {
   const [state, setState] = useState({ location: null, minutes: 0, error: '', everShown: false })
   useEffect(() => {
     let active = true
@@ -133,16 +133,18 @@ function RiderLocation({ deliveryId, destination }) {
 
   const rider = location ? { lat: location.latitude, lng: location.longitude } : null
   return (
-    <div className="mt-3.5 rounded-tile border border-line-warm bg-paper-warm p-4">
+    <div className="rounded-panel border border-line-warm bg-paper-warm p-4 sm:p-5">
       <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-ink/45">Your rider</p>
       {rider ? (
         <>
           <p className="mt-1 text-[13px] text-ink">Last seen {minutes < 1 ? 'just now' : `${minutes} min ago`}.</p>
           <div className="mt-3 overflow-hidden rounded-tile">
-            <DeliveryMap destination={latLngOfGeoPoint(destination)} rider={rider} />
+            <DeliveryMap destination={latLngOfGeoPoint(destination)} rider={rider} height={height} />
           </div>
           <p className="mt-2 text-[12px] leading-relaxed text-ink/50">
-            The dot moves while your rider shares their location. They may have other orders to deliver before yours.
+            The button in the corner brings your rider back into view at street level. The green road line
+            shows what is still left to your door; the warm line is where your rider has already been.
+            They may have other orders to deliver before yours.
           </p>
         </>
       ) : (
@@ -545,6 +547,12 @@ export default function MyOrderDetail() {
             )}
             {payment?.status === 'PAID' && <ReceiptNote orderId={order._id} />}
 
+            {delivery?.status === 'OUT_FOR_DELIVERY' && (
+              <div className="mt-6">
+                <RiderLocation deliveryId={delivery._id} destination={order.deliveryLocation} />
+              </div>
+            )}
+
             {delivery?.paymentPending && (
               <div className="mt-6 rounded-tile border border-line-warm bg-cream/40 p-4 sm:p-5">
                 <p className="text-[13px] font-semibold text-ink">Payment being checked</p>
@@ -642,10 +650,6 @@ export default function MyOrderDetail() {
                   </p>
                 )}
               </section>
-            )}
-
-            {delivery?.status === 'OUT_FOR_DELIVERY' && (
-              <RiderLocation deliveryId={delivery._id} destination={order.deliveryLocation} />
             )}
 
             {delivery && ON_THE_ROAD.includes(delivery.status) && <DeliveryCode deliveryId={delivery._id} />}

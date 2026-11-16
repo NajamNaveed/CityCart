@@ -32,7 +32,7 @@ The programme grew it from 940 to 1,503 by Phase 6; the v3 phases since then
 added the rest. The Staff app (`partner/`) has 191 tests in 17 suites, the
 Delivery app (`delivery/`) 160 in 9, and the shopper app (`mobile/`) 507 in 48.
 The Flutter Staff app (`apps/staff/`) adds 30 offline tests in 5 suites, and the
-Flutter Delivery app (`apps/delivery/`) 49. All pass; the Staff app's lint is
+Flutter Delivery app (`apps/delivery/`) 50. All pass; the Staff app's lint is
 clean. `test:apps` in the root package runs the staff and delivery suites.
 
 The physical-device pass these mocked suites cannot replace — push delivery,

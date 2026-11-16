@@ -56,7 +56,8 @@ const _orderReply = OrderAssistantReply(
 );
 
 const _serviceReply = ServiceAssistantReply(
-  reply: 'Cool Air Services can come on Monday evening. Open their page to book.',
+  reply:
+      'Cool Air Services can come on Monday evening. Open their page to book.',
   providers: [
     AssistantServiceProvider(
       providerId: 'sp1',
@@ -90,13 +91,12 @@ const _serviceReply = ServiceAssistantReply(
 class _FakeRepository extends ShopperRepository {
   _FakeRepository({
     this.reply = _reply,
-    this.orderReply = _orderReply,
     this.serviceReply = _serviceReply,
     this.failures = 0,
   }) : super(ApiClient(SessionStore()));
 
   final ShopAssistantReply reply;
-  final OrderAssistantReply orderReply;
+  final OrderAssistantReply orderReply = _orderReply;
   final ServiceAssistantReply serviceReply;
   int failures;
   final List<String> asked = [];
@@ -183,7 +183,10 @@ void main() {
       expect(find.text('What are you looking for?'), findsOneWidget);
       expect(find.text('Cheap rice'), findsOneWidget);
 
-      await tester.enterText(find.byType(TextField), 'rice for a family of five');
+      await tester.enterText(
+        find.byType(TextField),
+        'rice for a family of five',
+      );
       await tester.pump();
       await tester.tap(find.byIcon(Icons.arrow_upward_rounded));
       await tester.pump();
@@ -391,7 +394,9 @@ void main() {
       await tester.pump();
 
       expect(
-        find.text('You have reached today’s assistant limit. Try again tomorrow.'),
+        find.text(
+          'You have reached today’s assistant limit. Try again tomorrow.',
+        ),
         findsOneWidget,
       );
       expect(find.text('Try again'), findsOneWidget);

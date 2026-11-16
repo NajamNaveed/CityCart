@@ -975,8 +975,7 @@ class _RiderTrackingSection extends ConsumerStatefulWidget {
       _RiderTrackingSectionState();
 }
 
-class _RiderTrackingSectionState
-    extends ConsumerState<_RiderTrackingSection> {
+class _RiderTrackingSectionState extends ConsumerState<_RiderTrackingSection> {
   static const _poll = Duration(seconds: 15);
 
   Timer? _timer;
@@ -1043,9 +1042,7 @@ class _RiderTrackingSectionState
     final at = _position?.recordedAt;
     if (at == null) return 'Last seen just now.';
     final minutes = DateTime.now().difference(at).inMinutes;
-    return minutes < 1
-        ? 'Last seen just now.'
-        : 'Last seen $minutes min ago.';
+    return minutes < 1 ? 'Last seen just now.' : 'Last seen $minutes min ago.';
   }
 
   @override
@@ -1072,6 +1069,7 @@ class _RiderTrackingSectionState
                   destination: widget.destination,
                   trail: List<LatLng>.unmodifiable(_trail),
                   bearing: _bearing,
+                  height: 280,
                 ),
                 const SizedBox(height: 10),
                 Text(
@@ -1084,13 +1082,19 @@ class _RiderTrackingSectionState
                   'They may have other orders to deliver before yours.',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
+                const SizedBox(height: 3),
+                Text(
+                  'The green line follows the roads still left to your door; '
+                  'the warm line is where your rider has already been.',
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: AppColors.muted),
+                ),
                 if (_trail.length >= 2) ...[
                   const SizedBox(height: 3),
                   Text(
                     'The line shows the way since you opened this page.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.muted,
-                    ),
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(color: AppColors.muted),
                   ),
                 ],
               ] else
@@ -1103,9 +1107,8 @@ class _RiderTrackingSectionState
                 const SizedBox(height: 6),
                 Text(
                   _error!,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: AppColors.muted),
                 ),
               ],
             ],

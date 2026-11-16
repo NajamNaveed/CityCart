@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart' hide Block;
+import 'package:latlong2/latlong.dart';
 
 import '../../core/format.dart';
 import '../../core/theme.dart';
@@ -10,6 +11,8 @@ import '../../data/models.dart';
 import '../../providers.dart';
 import '../cart/cart_controller.dart';
 import '../explore/explore_controller.dart';
+import '../location/geo.dart';
+import '../location/maps.dart';
 import '../services/services_controller.dart';
 
 /// Chooses the city and, optionally, the block the shopper wants to browse.
@@ -202,7 +205,7 @@ class _AreaScreenState extends ConsumerState<AreaScreen> {
   }
 }
 
-class _AreaBody extends ConsumerWidget {
+class _AreaBody extends ConsumerStatefulWidget {
   const _AreaBody({
     required this.cities,
     required this.selectedCity,
@@ -220,8 +223,22 @@ class _AreaBody extends ConsumerWidget {
   final VoidCallback onSignOut;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final blocks = ref.watch(blocksProvider(selectedCity.id));
+  ConsumerState<_AreaBody> createState() => _AreaBodyState();
+}
+
+class _AreaBodyState extends ConsumerState<_AreaBody> {
+  LatLng? _pin;
+
+  @override
+  void didUpdateWidget(_AreaBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A pin belongs to the city whose blocks drew it.
+    if (oldWidget.selectedCity.id != widget.selectedCity.id) _pin = null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final blocks = ref.watch(blocksProvider(widget.selectedCity.id));
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
@@ -240,10 +257,10 @@ class _AreaBody extends ConsumerWidget {
         const SectionLabel('City'),
         const SizedBox(height: 10),
         FilterChips<City>(
-          values: cities,
+          values: widget.cities,
           labelOf: (city) => city.name,
-          value: selectedCity,
-          onChanged: busy ? (_) {} : onCity,
+          value: widget.selectedCity,
+          onChanged: widget.busy ? (_) {} : widget.onCity,
         ),
         const SizedBox(height: 22),
         blocks.when(
@@ -260,19 +277,49 @@ class _AreaBody extends ConsumerWidget {
           error: (error, stack) => ErrorNotice(
             message: error is ApiException
                 ? error.message
-                : 'We could not load the blocks for ${selectedCity.name}.',
-            onRetry: () => ref.invalidate(blocksProvider(selectedCity.id)),
+                : 'We could not load the blocks for ${widget.selectedCity.name}.',
+            onRetry: () =>
+                ref.invalidate(blocksProvider(widget.selectedCity.id)),
           ),
           data: (list) => Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SectionLabel('In ${selectedCity.name}'),
+              SectionLabel('In ${widget.selectedCity.name}'),
               const SizedBox(height: 10),
               _WholeCityCard(
-                city: selectedCity,
-                busy: busy,
-                onChoose: onChoose,
+                city: widget.selectedCity,
+                busy: widget.busy,
+                onChoose: widget.onChoose,
               ),
+              if (list.any((block) => block.outline.length >= 3)) ...[
+                const SizedBox(height: 24),
+                const SectionLabel('Or tap the map'),
+                const SizedBox(height: 8),
+                Text(
+                  'Tap where you are. We name the block that holds your spot.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 10),
+                DeliverySpotMap(
+                  blocks: list,
+                  pin: _pin,
+                  onPick: widget.busy
+                      ? null
+                      : (point) => setState(() => _pin = point),
+                  height: 300,
+                ),
+                if (_pin != null) ...[
+                  const SizedBox(height: 10),
+                  _PinnedBlock(
+                    pin: _pin!,
+                    blocks: list,
+                    city: widget.selectedCity,
+                    busy: widget.busy,
+                    onChoose: widget.onChoose,
+                    onClear: () => setState(() => _pin = null),
+                  ),
+                ],
+              ],
               if (list.isNotEmpty) ...[
                 const SizedBox(height: 20),
                 const SectionLabel('Pick your block'),
@@ -281,10 +328,10 @@ class _AreaBody extends ConsumerWidget {
                   Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: _BlockCard(
-                      city: selectedCity,
+                      city: widget.selectedCity,
                       block: block,
-                      busy: busy,
-                      onChoose: onChoose,
+                      busy: widget.busy,
+                      onChoose: widget.onChoose,
                     ),
                   ),
               ],
@@ -294,11 +341,118 @@ class _AreaBody extends ConsumerWidget {
         const SizedBox(height: 22),
         Center(
           child: TextButton(
-            onPressed: busy ? null : onSignOut,
+            onPressed: widget.busy ? null : widget.onSignOut,
             child: const Text('Use a different account'),
           ),
         ),
       ],
+    );
+  }
+}
+
+/// What the tapped point means, in the app's words. The server still decides
+/// whether an order can be delivered there.
+class _PinnedBlock extends StatelessWidget {
+  const _PinnedBlock({
+    required this.pin,
+    required this.blocks,
+    required this.city,
+    required this.busy,
+    required this.onChoose,
+    required this.onClear,
+  });
+
+  final LatLng pin;
+  final List<Block> blocks;
+  final City city;
+  final bool busy;
+  final ValueChanged<AreaSelection> onChoose;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final inside = blocksContainingPoint(blocks, pin);
+
+    if (inside.isEmpty) {
+      return SurfaceCard(
+        color: AppColors.goldSoft,
+        borderColor: AppColors.gold.withValues(alpha: 0.4),
+        padding: const EdgeInsets.all(15),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(
+              Icons.location_off_outlined,
+              size: 20,
+              color: AppColors.goldInk,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'That spot is outside our shaded areas',
+                    style: Theme.of(context).textTheme.titleSmall
+                        ?.copyWith(color: AppColors.goldInk),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Tap inside a shaded block, or choose the whole city above.',
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(color: AppColors.goldInk),
+                  ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      onPressed: onClear,
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.goldInk,
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(0, 40),
+                      ),
+                      child: const Text('Clear the pin'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final block = inside.first;
+    return SurfaceCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            inside.length == 1
+                ? 'Your spot is in ${block.name}'
+                : 'Your spot is in ${block.name} and ${inside.length - 1} '
+                      'more block${inside.length > 2 ? 's' : ''}',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 3),
+          Text(
+            'Choose this block to see the shops that deliver here.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 12),
+          AppButton(
+            label: 'Deliver to ${block.name}',
+            icon: Icons.place_rounded,
+            height: 48,
+            loading: busy,
+            onPressed: busy
+                ? null
+                : () => onChoose(
+                    AreaSelection.fromBlock(city: city, block: block),
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }

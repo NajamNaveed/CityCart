@@ -15,6 +15,12 @@ bool isClosedStatus(String status) =>
 
 bool canStartDoorFlow(String status) => status == 'OUT_FOR_DELIVERY';
 
+/// The parcel is with the rider, so the road to the customer is worth drawing.
+bool isOnTheWay(String status) =>
+    status == 'PICKED_UP' ||
+    status == 'IN_TRANSIT' ||
+    status == 'OUT_FOR_DELIVERY';
+
 bool isWaitingOnStore(RiderDelivery delivery) =>
     delivery.paymentPending ||
     delivery.status == 'PENDING' ||
@@ -379,17 +385,3 @@ const failureReasons = [
 
 String telUrl(String? phone) =>
     'tel:${(phone ?? '').replaceAll(RegExp(r'[^\d+]'), '')}';
-
-String? mapsUrl(DeliveryAddress? address) {
-  if (address == null) return null;
-  final query = [
-    address.address,
-    address.city,
-    address.postalCode,
-  ].where((part) => (part ?? '').trim().isNotEmpty).join(', ');
-  if (query.isEmpty) return null;
-  return 'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(query)}';
-}
-
-String locationMapUrl(GeoPoint point) =>
-    'https://www.google.com/maps/search/?api=1&query=${point.latitude},${point.longitude}';
