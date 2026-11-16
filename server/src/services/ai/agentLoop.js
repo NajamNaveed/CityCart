@@ -115,7 +115,7 @@ async function runAgent({
           result
         )}\n\nUse only these results. Do not invent items or ids.`,
       });
-    } catch (err) {
+    } catch {
       trace.push({ tool: tool.name, ok: false });
       messages.push({ role: 'assistant', content: JSON.stringify({ tool: tool.name, args: parsedArgs.data }) });
       messages.push({ role: 'user', content: `TOOL ERROR: ${tool.name} could not run. Try another search.` });

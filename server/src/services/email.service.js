@@ -30,6 +30,7 @@ async function sendEmail({ to, subject, html, text }) {
     }
     // Development convenience: show the message (and its link) in the server
     // log instead of silently dropping it. Never done in production.
+    // eslint-disable-next-line no-console
     console.info(`[email] BREVO_API_KEY/EMAIL_FROM not set; would send to ${to}: ${subject}\n${text || html}`);
     return { delivered: false, reason: 'not_configured' };
   }
