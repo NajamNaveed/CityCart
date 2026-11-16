@@ -75,7 +75,11 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
             ScreenTopBar(
               title: 'Account',
               onBack: () {
-                if (context.canPop()) context.pop();
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go(user?.isPicker == true ? '/queue' : '/home');
+                }
               },
             ),
             if (user == null)
@@ -151,10 +155,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                   padding: EdgeInsets.zero,
                   child: Column(
                     children: [
-                      InfoRow(
-                        label: 'Signed in as',
-                        value: user.email.isEmpty ? 'No email' : user.email,
-                      ),
+                      _EmailRow(email: user.email),
                       const Divider(height: 1, color: AppColors.line),
                       InfoRow(label: 'Version', value: AppConfig.appVersion),
                       const Divider(height: 1, color: AppColors.line),
@@ -241,6 +242,54 @@ class _ProfileCard extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// An address has no spaces to break on, so it gets the full card width and
+/// reads left to right instead of being squeezed into the right-hand column.
+class _EmailRow extends StatelessWidget {
+  const _EmailRow({required this.email});
+
+  final String email;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 13),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Signed in as',
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: AppColors.muted),
+          ),
+          const SizedBox(height: 2),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(top: 2),
+                child: Icon(
+                  Icons.alternate_email_rounded,
+                  size: 16,
+                  color: AppColors.muted,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  email.isEmpty ? 'No email' : email,
+                  key: const Key('account-email'),
+                  style: Theme.of(context).textTheme.bodyMedium
+                      ?.copyWith(fontWeight: FontWeight.w600, height: 1.35),
+                ),
+              ),
+            ],
           ),
         ],
       ),

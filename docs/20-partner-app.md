@@ -442,6 +442,17 @@ Rules, data and API are in `08-order-management.md` §41.9 and
   lines lock and the screen says so; when the customer answers, "Check again"
   reloads. A packed order shows "Packed and ready for a rider" and returns to
   the queue.
+* **Flutter staff app pick screen (Nov 2026):** one pinned action dock replaces
+  the old situational bottom buttons. It shows the current step ("This order is
+  not claimed", "Waiting for the customer", "Ready to pack", "Change needed",
+  "2 of 3 checked", "Order packed") above exactly one primary button, and keeps
+  the safe-area inset once. The top bar's back button falls back to `/queue`
+  when there is nothing to pop, and a packed order stays visible with a single
+  "Back to queue" action instead of a dialog. **Choose a substitute** now opens
+  the store's catalogue itself (`GET /picker/products` without `q`, paged), with
+  search as an optional filter; a search with no results still offers "Show all
+  products". Account stacks "Signed in as" above a left-aligned, wrapping email
+  so long addresses no longer break mid-word against the right edge.
 * **Brand admin:** the web Team page has a **Picker** account type; pickers are
   created with no permission checklist and are listed as "Picker · Staff app
   only". The server refuses an employee creating one (`PICKER_CREATE_FORBIDDEN`)

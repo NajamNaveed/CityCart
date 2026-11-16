@@ -2217,7 +2217,7 @@ POST  /picker/:id/claim             take the order: CONFIRMED -> PROCESSING
 PATCH /picker/:id/items/:itemId     { pickStatus: PICKED|SHORT|UNAVAILABLE, pickedQty? }
 POST  /picker/:id/propose           { note, restockRemoved?, substitutes? } -> 201 adjustment
 POST  /picker/:id/pack              PROCESSING -> READY_FOR_SHIPMENT (creates the delivery)
-GET   /picker/products?q=           same-brand active listings to offer as a substitute -> { products, pagination }
+GET   /picker/products?q=           same-brand active listings to offer as a substitute (?q, ?page, ?limit) -> { products, pagination }
 ```
 
 The queue holds accepted orders (`CONFIRMED`) and orders in picking
@@ -2227,6 +2227,9 @@ view contains the order number, status, `createdAt`, pick times, the customer's
 `claimedByMe`, and the waiting proposal's note/expiry. It never contains the
 customer's phone, delivery address, prices, totals or payment details, and
 `GET /picker/products` returns only `_id`, `name`, `sku` and `image` (no price).
+`q` is optional: without it the brand's active listings come back in name order,
+so the app can show the store's catalogue and let the picker browse instead of
+guessing a search word.
 
 `PATCH .../items/:itemId`: `PICKED` (whole quantity), `SHORT` (integer
 `pickedQty` from 1 to quantity − 1) or `UNAVAILABLE` (`pickedQty` 0). The picker

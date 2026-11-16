@@ -97,12 +97,19 @@ class StaffRepository {
     return PickOrder.fromJson(body['order']);
   }
 
-  Future<List<ProductOption>> searchProducts(String query) async {
+  /// The brand's active listings, in name order. An empty query lists the
+  /// store's catalogue so a picker can browse instead of guessing a name.
+  Future<Page<ProductOption>> searchProducts(
+    String query, {
+    int page = 1,
+    int limit = 20,
+  }) async {
+    final term = query.trim();
     final body = await _api.get(
       '/picker/products',
-      query: {'q': query, 'limit': 20},
+      query: {if (term.isNotEmpty) 'q': term, 'page': page, 'limit': limit},
     );
-    return asList(body['products']).map(ProductOption.fromJson).toList();
+    return Page.fromJson(body, key: 'products', parse: ProductOption.fromJson);
   }
 
   // --- Orders and deliveries ----------------------------------------------

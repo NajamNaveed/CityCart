@@ -181,27 +181,10 @@ class _PickScreenState extends ConsumerState<PickScreen> {
       _error = null;
     });
     try {
-      await _repository.packOrder(widget.orderId);
+      final packed = await _repository.packOrder(widget.orderId);
       if (!mounted) return;
-      setState(() {
-        _working = false;
-      });
-      await showDialog<void>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Order packed'),
-          content: const Text(
-            'The order is ready. A rider can now be assigned to deliver it.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Back to queue'),
-            ),
-          ],
-        ),
-      );
-      if (mounted && context.canPop()) context.pop();
+      setState(() => _order = packed);
+      showAppSnack(context, 'Order packed. It is ready for a rider.');
     } on ApiException catch (error) {
       if (!mounted) return;
       setState(() => _error = error.message);
@@ -216,20 +199,37 @@ class _PickScreenState extends ConsumerState<PickScreen> {
     }
   }
 
+  bool get _packed {
+    final order = _order;
+    return order != null &&
+        (order.orderStatus == 'READY_FOR_SHIPMENT' || order.packedAt != null);
+  }
+
+  void _leave() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/queue');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final order = _order;
     final active = order?.activeAdjustment;
+    final packed = _packed;
     final hasShort =
         order?.lines.any((line) => line.isShort || line.isUnavailable) ?? false;
     final canPack =
         order != null &&
+        !packed &&
         order.claimedByMe &&
         order.isComplete &&
         order.lines.every((line) => line.isPicked) &&
         active == null;
     final canPropose =
         order != null &&
+        !packed &&
         order.claimedByMe &&
         order.isComplete &&
         hasShort &&
@@ -238,10 +238,19 @@ class _PickScreenState extends ConsumerState<PickScreen> {
     return Scaffold(
       bottomNavigationBar: order == null
           ? null
-          : SafeArea(
-              top: false,
-              child: BottomActionBar(
-                child: _buildBottomAction(order, canPack, canPropose),
+          : BottomActionBar(
+              child: _PickActionDock(
+                order: order,
+                active: active,
+                packed: packed,
+                working: _working,
+                canPack: canPack,
+                canPropose: canPropose,
+                onClaim: _claim,
+                onPack: _pack,
+                onPropose: _propose,
+                onRefresh: () => _load(quiet: true),
+                onLeave: _leave,
               ),
             ),
       body: SafeArea(
@@ -251,6 +260,7 @@ class _PickScreenState extends ConsumerState<PickScreen> {
             ScreenTopBar(
               title: 'Pick order',
               subtitle: order?.orderNumber,
+              onBack: _leave,
               trailing: IconButton(
                 onPressed: _loading ? null : () => _load(quiet: true),
                 tooltip: 'Reload order',
@@ -281,20 +291,19 @@ class _PickScreenState extends ConsumerState<PickScreen> {
                             ),
                             const SizedBox(height: 14),
                           ],
-                          if (!order.claimedByMe)
-                            NoticeCard(
+                          if (packed)
+                            const NoticeCard(
+                              title: 'Packed and ready for a rider',
+                              message: 'This order has left your queue. Go back to the queue for your next one.',
+                              icon: Icons.inventory_2_outlined,
+                              tone: StatusTone.sage,
+                            )
+                          else if (!order.claimedByMe)
+                            const NoticeCard(
                               title: 'This order is free',
                               message: 'Claim it so another picker cannot take it while you work.',
                               icon: Icons.front_hand_outlined,
                               tone: StatusTone.info,
-                              action: AppButton(
-                                label: 'Claim this order',
-                                icon: Icons.pan_tool_alt_outlined,
-                                expand: false,
-                                height: 46,
-                                loading: _working,
-                                onPressed: _working ? null : _claim,
-                              ),
                             )
                           else if (active != null)
                             _WaitingNotice(adjustment: active)
@@ -319,7 +328,10 @@ class _PickScreenState extends ConsumerState<PickScreen> {
                               child: _PickLineCard(
                                 line: line,
                                 busy: _lineBusyId == line.id,
-                                locked: !order.claimedByMe || active != null,
+                                locked:
+                                    !order.claimedByMe ||
+                                    active != null ||
+                                    packed,
                                 onTap: () => _chooseLine(line),
                               ),
                             ),
@@ -335,59 +347,186 @@ class _PickScreenState extends ConsumerState<PickScreen> {
       ),
     );
   }
+}
 
-  Widget _buildBottomAction(PickOrder order, bool canPack, bool canPropose) {
-    if (!order.claimedByMe) {
-      return Text(
-        'Claim this order before you start picking.',
-        textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.bodySmall,
+/// One pinned action at a time, with the reason it is the next step. The dock
+/// replaces the old row of situational buttons so the picker never has to
+/// guess which of several controls starts the order moving.
+class _PickActionDock extends StatelessWidget {
+  const _PickActionDock({
+    required this.order,
+    required this.active,
+    required this.packed,
+    required this.working,
+    required this.canPack,
+    required this.canPropose,
+    required this.onClaim,
+    required this.onPack,
+    required this.onPropose,
+    required this.onRefresh,
+    required this.onLeave,
+  });
+
+  final PickOrder order;
+  final ActiveAdjustment? active;
+  final bool packed;
+  final bool working;
+  final bool canPack;
+  final bool canPropose;
+  final VoidCallback onClaim;
+  final VoidCallback onPack;
+  final VoidCallback onPropose;
+  final VoidCallback onRefresh;
+  final VoidCallback onLeave;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = order.lines.length;
+    final decided = order.decidedCount;
+    final pending = total - decided;
+    final shortCount = order.lines
+        .where((line) => line.isShort || line.isUnavailable)
+        .length;
+
+    final IconData icon;
+    final Color iconBackground;
+    final Color iconColor;
+    final String title;
+    final String detail;
+    final Widget button;
+
+    if (packed) {
+      icon = Icons.inventory_2_outlined;
+      iconBackground = AppColors.sage;
+      iconColor = AppColors.sageInk;
+      title = 'Order packed';
+      detail = 'It is ready for a rider. Your queue has the next order.';
+      button = AppButton(
+        label: 'Back to queue',
+        icon: Icons.arrow_back_rounded,
+        height: 50,
+        onPressed: onLeave,
       );
-    }
-    if (order.activeAdjustment != null) {
-      return Row(
-        children: [
-          const Expanded(
-            child: Text(
-              'Waiting for the customer to answer.',
-              style: TextStyle(fontSize: 13, color: AppColors.muted),
-            ),
-          ),
-          const SizedBox(width: 10),
-          AppButton(
-            label: 'Refresh',
-            variant: AppButtonVariant.outline,
-            expand: false,
-            height: 46,
-            onPressed: () => _load(quiet: true),
-          ),
-        ],
+    } else if (!order.claimedByMe) {
+      icon = Icons.front_hand_outlined;
+      iconBackground = AppColors.infoSoft;
+      iconColor = AppColors.info;
+      title = 'This order is not claimed';
+      detail = 'Claiming stops another picker from taking it.';
+      button = AppButton(
+        label: 'Claim this order',
+        icon: Icons.pan_tool_alt_outlined,
+        height: 50,
+        loading: working,
+        onPressed: working ? null : onClaim,
       );
-    }
-    if (canPack) {
-      return AppButton(
+    } else if (active != null) {
+      icon = Icons.hourglass_top_rounded;
+      iconBackground = AppColors.amber;
+      iconColor = AppColors.amberInk;
+      title = 'Waiting for the customer';
+      detail = 'They are answering your change request.';
+      button = AppButton(
+        label: 'Check again',
+        icon: Icons.refresh_rounded,
+        height: 50,
+        onPressed: onRefresh,
+      );
+    } else if (canPack) {
+      icon = Icons.inventory_2_outlined;
+      iconBackground = AppColors.sage;
+      iconColor = AppColors.sageInk;
+      title = 'Ready to pack';
+      detail = 'All ${plural(total, 'line')} are picked.';
+      button = AppButton(
         label: 'Pack order',
         icon: Icons.inventory_2_outlined,
-        loading: _working,
-        onPressed: _working ? null : _pack,
-        helper: 'Every line is picked. Packing makes it ready for a rider.',
+        height: 50,
+        loading: working,
+        onPressed: working ? null : onPack,
       );
-    }
-    if (canPropose) {
-      return AppButton(
+    } else if (canPropose) {
+      icon = Icons.swap_horiz_rounded;
+      iconBackground = AppColors.amber;
+      iconColor = AppColors.amberInk;
+      title = 'Change needed';
+      detail =
+          '${plural(shortCount, 'line')} cannot be supplied in full. '
+          'The customer decides before packing.';
+      button = AppButton(
         label: 'Send change request',
         icon: Icons.swap_horiz_rounded,
-        loading: _working,
-        onPressed: _working ? null : _propose,
-        helper: 'The customer must accept the short or missing items before packing.',
+        height: 50,
+        loading: working,
+        onPressed: working ? null : onPropose,
+      );
+    } else {
+      icon = Icons.playlist_add_check_circle_outlined;
+      iconBackground = AppColors.paperDeep;
+      iconColor = AppColors.muted;
+      title = '$decided of $total checked';
+      detail =
+          'Mark the remaining ${plural(pending, 'line')} as picked, short or not found.';
+      // The disabled button previews the step that unlocks when checking ends.
+      button = AppButton(
+        label: shortCount > 0 ? 'Send change request' : 'Pack order',
+        icon: shortCount > 0
+            ? Icons.swap_horiz_rounded
+            : Icons.inventory_2_outlined,
+        height: 50,
+        onPressed: null,
       );
     }
-    return Text(
-      order.isComplete
-          ? 'Packing waits for the customer’s answer.'
-          : 'Record every item as picked, short or not found.',
-      textAlign: TextAlign.center,
-      style: Theme.of(context).textTheme.bodySmall,
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: iconBackground,
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Icon(icon, size: 19, color: iconColor),
+            ),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14.5,
+                      height: 1.3,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.ink,
+                    ),
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    detail,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(height: 1.35),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 11),
+        button,
+      ],
     );
   }
 }
@@ -916,9 +1055,9 @@ class _ProposalSheetState extends State<_ProposalSheet> {
     setState(() => _adding = true);
     final product = await showAppSheet<ProductOption>(
       context,
-      title: 'Find a substitute',
-      subtitle: 'Search this brand’s products for “${line.productName}”.',
-      child: _ProductSearchSheet(initialQuery: line.productName),
+      title: 'Add a substitute',
+      subtitle: 'Choose an item already listed in this store, or search for it by name.',
+      child: _ProductPickerSheet(suggestedName: line.productName),
     );
     if (!mounted) return;
     setState(() => _adding = false);
@@ -999,8 +1138,8 @@ class _ProposalSheetState extends State<_ProposalSheet> {
                     Align(
                       alignment: Alignment.centerLeft,
                       child: AppButton(
-                        label: 'Add substitute',
-                        icon: Icons.add_rounded,
+                        label: 'Choose a substitute',
+                        icon: Icons.search_rounded,
                         variant: AppButtonVariant.outline,
                         expand: false,
                         height: 42,
@@ -1137,29 +1276,33 @@ class _SubstituteRow extends StatelessWidget {
   }
 }
 
-class _ProductSearchSheet extends ConsumerStatefulWidget {
-  const _ProductSearchSheet({required this.initialQuery});
+/// The store's catalogue, not only a search box: a picker can scroll what the
+/// brand actually lists and pick a visible item without knowing its name.
+class _ProductPickerSheet extends ConsumerStatefulWidget {
+  const _ProductPickerSheet({required this.suggestedName});
 
-  final String initialQuery;
+  final String suggestedName;
 
   @override
-  ConsumerState<_ProductSearchSheet> createState() =>
-      _ProductSearchSheetState();
+  ConsumerState<_ProductPickerSheet> createState() =>
+      _ProductPickerSheetState();
 }
 
-class _ProductSearchSheetState extends ConsumerState<_ProductSearchSheet> {
-  late final TextEditingController _query = TextEditingController(
-    text: widget.initialQuery,
-  );
+class _ProductPickerSheetState extends ConsumerState<_ProductPickerSheet> {
+  final _query = TextEditingController();
   Timer? _debounce;
-  List<ProductOption> _results = const [];
+  int _generation = 0;
+  String _term = '';
+  List<ProductOption> _items = const [];
+  Pagination _pagination = const Pagination();
   bool _loading = false;
+  bool _loadingMore = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    _search(widget.initialQuery);
+    _search('');
   }
 
   @override
@@ -1176,30 +1319,32 @@ class _ProductSearchSheetState extends ConsumerState<_ProductSearchSheet> {
     });
   }
 
+  void _showAll() {
+    _debounce?.cancel();
+    _query.clear();
+    _search('');
+  }
+
   Future<void> _search(String value) async {
     final term = value.trim();
-    if (term.isEmpty) {
-      setState(() {
-        _results = const [];
-        _loading = false;
-      });
-      return;
-    }
+    final generation = ++_generation;
     setState(() {
       _loading = true;
+      _loadingMore = false;
       _error = null;
     });
     try {
-      final results = await ref
-          .read(staffRepositoryProvider)
-          .searchProducts(term);
-      if (!mounted) return;
+      final page = await ref.read(staffRepositoryProvider).searchProducts(term);
+      if (!mounted || generation != _generation) return;
       setState(() {
-        _results = results;
+        _term = term;
+        _items = page.items;
+        _pagination = page.pagination;
         _loading = false;
+        _loadingMore = false;
       });
     } on ApiException catch (error) {
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       setState(() {
         _error = error.message;
         _loading = false;
@@ -1207,61 +1352,128 @@ class _ProductSearchSheetState extends ConsumerState<_ProductSearchSheet> {
     }
   }
 
+  Future<void> _loadMore() async {
+    if (_loadingMore || !_pagination.hasMore) return;
+    final generation = _generation;
+    setState(() => _loadingMore = true);
+    try {
+      final page = await ref
+          .read(staffRepositoryProvider)
+          .searchProducts(_term, page: _pagination.page + 1);
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _items = [..._items, ...page.items];
+        _pagination = page.pagination;
+        _loadingMore = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _error = error.message;
+        _loadingMore = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final remaining = _pagination.total - _items.length;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         AppSearchField(
           controller: _query,
-          hint: 'Search products',
+          hint: 'Search this store’s products',
           onChanged: _onChanged,
-          onClear: () => _search(''),
+          onClear: _showAll,
         ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                _term.isEmpty
+                    ? 'Products in this store'
+                    : 'Results for “$_term”',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall
+                    ?.copyWith(color: AppColors.muted, letterSpacing: 0.6),
+              ),
+            ),
+            if (_term.isNotEmpty)
+              TextButton(onPressed: _showAll, child: const Text('Show all')),
+          ],
+        ),
+        if (_term.isEmpty && !_loading)
+          Text(
+            'Everything this brand lists for sale. Use search to narrow it, '
+            'such as “${widget.suggestedName}”.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
         const SizedBox(height: 10),
         if (_loading)
           const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(
-              child: SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.2,
-                  color: AppColors.forest,
-                ),
-              ),
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              children: [
+                SkeletonBox(height: 54, radius: 12),
+                SizedBox(height: 8),
+                SkeletonBox(height: 54, radius: 12),
+                SizedBox(height: 8),
+                SkeletonBox(height: 54, radius: 12),
+              ],
             ),
           )
         else if (_error != null)
+          ErrorNotice(message: _error!, onRetry: () => _search(_term))
+        else if (_items.isEmpty)
           Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: ErrorNotice(
-              message: _error!,
-              onRetry: () => _search(_query.text),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            child: Column(
+              children: [
+                Text(
+                  _term.isEmpty
+                      ? 'This store has no listed products yet.'
+                      : 'No products match “$_term”.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                if (_term.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'You can still browse everything this store lists.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 12),
+                  AppButton(
+                    label: 'Show all products',
+                    variant: AppButtonVariant.outline,
+                    expand: false,
+                    height: 44,
+                    onPressed: _showAll,
+                  ),
+                ],
+              ],
             ),
           )
-        else if (_results.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 18),
-            child: Text(
-              'No products match that search. Try a shorter word.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          )
-        else
+        else ...[
           ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 330),
+            constraints: const BoxConstraints(maxHeight: 340),
             child: ListView.separated(
               shrinkWrap: true,
-              itemCount: _results.length,
+              padding: EdgeInsets.zero,
+              itemCount: _items.length,
               separatorBuilder: (context, index) =>
                   const Divider(height: 1, color: AppColors.line),
               itemBuilder: (context, index) {
-                final product = _results[index];
+                final product = _items[index];
                 return ListTile(
-                  contentPadding: const EdgeInsets.symmetric(vertical: 2),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 2,
+                    vertical: 2,
+                  ),
                   leading: ProductThumb(url: product.image, size: 40),
                   title: Text(
                     product.name,
@@ -1275,12 +1487,31 @@ class _ProductSearchSheetState extends ConsumerState<_ProductSearchSheet> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                  trailing: const Icon(Icons.add_circle_outline_rounded),
+                  trailing: const Text(
+                    'Use',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.sageInk,
+                    ),
+                  ),
                   onTap: () => Navigator.of(context).pop(product),
                 );
               },
             ),
           ),
+          if (remaining > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: AppButton(
+                label: 'Show $remaining more',
+                variant: AppButtonVariant.outline,
+                height: 44,
+                loading: _loadingMore,
+                onPressed: _loadingMore ? null : _loadMore,
+              ),
+            ),
+        ],
       ],
     );
   }
