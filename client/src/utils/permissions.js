@@ -49,8 +49,15 @@ export const PERMISSION_GROUPS = [
   {
     title: 'Deliveries',
     items: [
-      ['delivery.view', 'See deliveries'],
-      ['delivery.manage', 'Update delivery progress'],
+      ['delivery.view', 'See deliveries and returned goods'],
+      ['delivery.manage', 'Update delivery progress and receive returns'],
+    ],
+  },
+  {
+    title: 'Payments & cash',
+    items: [
+      ['payments.view', 'See payments, receipts and who holds cash'],
+      ['payments.manage', 'Check door payments and settle cash hand-overs'],
     ],
   },
   {
@@ -75,6 +82,17 @@ export const PERMISSION_GROUPS = [
 
 // Quick starting points; the owner can still tick or untick anything afterwards.
 export const PRESETS = [
+  [
+    'Records keeper',
+    [
+      'orders.view',
+      'delivery.view',
+      'delivery.manage',
+      'riders.view',
+      'payments.view',
+      'payments.manage',
+    ],
+  ],
   ['Order handler', ['orders.view', 'orders.manage', 'delivery.view', 'delivery.manage', 'riders.view']],
   [
     'Catalogue manager',

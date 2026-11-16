@@ -360,7 +360,7 @@ Behaviour worth knowing:
 * **Returns:** the returned-goods inbox is built (§5.11). The `Returned` chips on the
   order and delivery filters now have data, because a fully refused delivery becomes
   `RETURNED`. The older customer-request chain in decision 8 is still not built.
-* **Demo:** `npm run seed:demo` adds a Loom & Co. team member, `hira.anwar@citycart.demo` ("Records Keeper"), with exactly the permissions the records tabs use (`orders.view`, `delivery.view`, `delivery.manage`, `riders.view`, `payments.view`, `payments.manage`).
+* **Demo:** `npm run seed:demo` adds a Loom & Co. team member, `hira.anwar@citycart.demo` ("Records Keeper"), with exactly the permissions the records tabs use (`orders.view`, `delivery.view`, `delivery.manage`, `riders.view`, `payments.view`, `payments.manage`). The brand dashboard's Team page offers the same set as the **Records keeper** preset, and payment permissions are ticked under *Payments & cash*.
 * Not verified: running on a physical phone (same as Phase C), and the server's
   real-MongoDB integration tests.
 
