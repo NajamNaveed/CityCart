@@ -588,6 +588,13 @@ describe('demo dataset', () => {
     });
   });
 
+  it('leaves the booking counter after every seeded service booking', () => {
+    const year = NOW.getUTCFullYear();
+    const counter = ds.counters.find((c) => c._id === `service-booking-${year}`);
+    expect(counter).toBeTruthy();
+    expect(counter.seq).toBe(ds.serviceBookings.length);
+  });
+
   it('shows every brand status, every order status that matters, and every notification type', () => {
     const present = (list) => new Set(list);
     expect(present(ds.brands.map((b) => b.status))).toEqual(present(['ACTIVE', 'PENDING', 'SUSPENDED', 'TERMINATED', 'REJECTED']));

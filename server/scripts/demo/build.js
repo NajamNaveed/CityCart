@@ -420,6 +420,10 @@ function buildDataset({ now = new Date(), hashes, data = DEMO }) {
     },
   });
 
+  // Booking numbers were written straight into the seed, so the yearly counter
+  // must start after the last one or the first live booking would collide.
+  ds.counters.push({ _id: `service-booking-${now.getUTCFullYear()}`, seq: serviceBookingSeq });
+
   const serviceConversation = {
     _id: new ObjectId(), bookingId: acceptedService._id, customerId: acceptedService.customerId,
     providerId: provider._id, lastMessageAt: ago(3 * HOUR),

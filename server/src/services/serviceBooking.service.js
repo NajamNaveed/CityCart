@@ -93,6 +93,27 @@ async function nextBookingNumber() {
   return `SB-${year}-${String(counter.seq).padStart(6, '0')}`;
 }
 
+/**
+ * A database seeded with booking numbers but without this yearly counter makes
+ * the first live booking collide. Move the counter past the highest stored
+ * number for the year so the next allocation is free.
+ */
+async function syncBookingCounter() {
+  const year = Number(karachiMonthKey(new Date()).slice(0, 4));
+  const prefix = `SB-${year}-`;
+  const latest = await ServiceBooking.findOne({ bookingNumber: new RegExp(`^${prefix}\\d+$`) })
+    .sort({ bookingNumber: -1 })
+    .select('bookingNumber')
+    .lean();
+  const highest = latest ? Number.parseInt(latest.bookingNumber.slice(prefix.length), 10) : 0;
+  if (highest > 0) {
+    await Counter.updateOne(
+      { _id: `service-booking-${year}`, seq: { $lt: highest } },
+      { $set: { seq: highest } }
+    );
+  }
+}
+
 function providerPublic(provider, { includePhone = false } = {}) {
   if (!provider) return null;
   return {
@@ -282,6 +303,7 @@ async function createBooking(customerId, data) {
       });
     } catch (err) {
       if (err.code !== 11000 || attempt === 1) throw err;
+      await syncBookingCounter();
     }
   }
 

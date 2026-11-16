@@ -336,6 +336,23 @@ describe('booking creation and slot rules (real MongoDB)', () => {
     expect(await Notification.countDocuments({ userId: owner._id, type: 'SERVICE_BOOKING_REQUESTED' })).toBe(1);
   });
 
+  it('allocates the next booking number when seed data holds one but no counter', async () => {
+    const { provider } = await makeProvider();
+    const offering = await makeOffering(provider);
+    const customer = await makeCustomer();
+    const year = karachiMonthKey(new Date()).slice(0, 4);
+
+    // The demo seeds write booking numbers without creating the yearly counter.
+    await seedBooking(customer, provider, {
+      status: 'CONFIRMED',
+      over: { bookingNumber: `SB-${year}-000001` },
+    });
+
+    const created = await createBooking(customer, provider, offering, slot(5).start);
+    expect(created.status).toBe(201);
+    expect(created.body.booking.bookingNumber).toBe(`SB-${year}-000002`);
+  });
+
   it('refuses past, too-far, out-of-block and foreign-offering requests', async () => {
     const { provider } = await makeProvider();
     const { provider: other } = await makeProvider({ block: blockB });
