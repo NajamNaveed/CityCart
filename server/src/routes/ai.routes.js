@@ -8,6 +8,7 @@ const {
   shopAssistant,
   orderHelper,
   serviceHelper,
+  recipeList,
 } = require('../controllers/ai.controller');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
@@ -91,6 +92,19 @@ router.post(
   aiUserLimiter,
   aiDailyLimit,
   serviceHelper,
+);
+
+// Phase 2d: recipe -> shopping list. The model only extracts ingredients; the
+// products in the list come from the ordinary public search, and the shopper
+// adds them through the normal cart.
+router.post(
+  '/recipe-list',
+  authenticate,
+  requireRole(ROLES.CUSTOMER),
+  requireAiEnabled,
+  aiUserLimiter,
+  aiDailyLimit,
+  recipeList,
 );
 
 module.exports = router;

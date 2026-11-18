@@ -80,4 +80,4 @@ async function askShopAssistant({ message, ctx, cityId, lat, lng }) {
   }
 }
 
-module.exports = { askShopAssistant, fallbackQueries, MESSAGE_LIMIT };
+module.exports = { askShopAssistant, fallbackQueries, plainSearch, MESSAGE_LIMIT };

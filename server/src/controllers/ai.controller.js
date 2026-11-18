@@ -11,6 +11,10 @@ const {
   askServiceHelper,
   MESSAGE_LIMIT: SERVICE_MESSAGE_LIMIT,
 } = require('../services/ai/agents/serviceHelper.agent');
+const {
+  buildRecipeList,
+  TEXT_LIMIT: RECIPE_TEXT_LIMIT,
+} = require('../services/ai/agents/recipe.agent');
 const { formatZodError } = require('../utils/formatZodError');
 
 /**
@@ -244,6 +248,52 @@ async function serviceHelper(req, res, next) {
   }
 }
 
+const recipeListSchema = z
+  .object({
+    message: z
+      .string()
+      .trim()
+      .min(3, 'Describe the dish or paste a recipe.')
+      .max(RECIPE_TEXT_LIMIT, `Keep the recipe under ${RECIPE_TEXT_LIMIT} characters.`),
+    cityId: z.string().regex(/^[0-9a-f]{24}$/i, 'Choose a valid city.').optional(),
+    lat: z.number().min(-90).max(90).optional(),
+    lng: z.number().min(-180).max(180).optional(),
+  })
+  .refine((value) => (value.lat === undefined) === (value.lng === undefined), {
+    message: 'Send both coordinates or neither.',
+    path: ['lat'],
+  });
+
+/**
+ * Phase 2d: recipe -> shopping list. The model extracts the dish name and its
+ * ingredients only; every product, price and shop in the list comes from the
+ * ordinary public product search. Adding the list to the cart is still the
+ * customer's action through the normal cart endpoints.
+ */
+async function recipeList(req, res, next) {
+  const parsed = recipeListSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsed.error),
+    });
+  }
+
+  try {
+    const data = await buildRecipeList({
+      message: parsed.data.message,
+      ctx: { userId: req.user._id, role: req.user.role },
+      cityId: parsed.data.cityId || null,
+      lat: parsed.data.lat ?? null,
+      lng: parsed.data.lng ?? null,
+    });
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    return next(err);
+  }
+}
+
 module.exports = {
   ping,
   listingDraft,
@@ -252,4 +302,5 @@ module.exports = {
   shopAssistant,
   orderHelper,
   serviceHelper,
+  recipeList,
 };

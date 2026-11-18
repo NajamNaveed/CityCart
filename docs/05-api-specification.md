@@ -3296,6 +3296,76 @@ Failure codes:
 503 AI_UNAVAILABLE     kill switch is off
 ```
 
+## Recipe shopping list
+
+```text
+POST /api/v1/ai/recipe-list
+```
+
+Role: `CUSTOMER` only. The **Cook** mode of the web `Ask CityCart` panel. The customer describes a dish; the endpoint returns its ingredients, each matched to a real product nearby by ordinary code.
+
+Request:
+
+```json
+{ "message": "Chicken biryani for 6 people", "cityId": "66f1a0c2b3d4e5f60718293a", "lat": 31.4187, "lng": 73.0791 }
+```
+
+`message` is 3–500 characters, sanitized and treated as data. `cityId` and the coordinate pair are optional and scope the match the same way the public Stores search does; `lat` and `lng` must be sent together.
+
+How it works (docs/29 Phase 2d):
+
+1. The model sees only the dish text and returns a JSON object `{ title, ingredients[{ name, quantity? }] }`, at most 15 ingredients. Its prompt forbids brands, prices, shops and cooking steps: it extracts, it does not answer.
+2. Each ingredient name is run through `search_products`, the same read-only public tool the shopping assistant uses, scoped to the chosen city/coordinates. Out-of-stock listings are dropped. The first matching product is attached.
+3. Ingredients that share one product ("oil" and "cooking oil") merge into one row, so "Add all to cart" cannot add the same product twice.
+
+The model never returns a product id, price or shop: those fields are built by the server from the tool result. The endpoint writes nothing; adding the list to the cart is the normal `POST /cart/items` call made by the customer's click.
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "reply": "Found 2 of 3 ingredients for Chicken biryani nearby.",
+    "title": "Chicken biryani",
+    "items": [
+      {
+        "ingredient": "chicken",
+        "quantity": "1 kg",
+        "product": {
+          "_id": "66f1a0c2b3d4e5f60718293a",
+          "name": "Chicken, Fresh Whole, 1 kg",
+          "price": 650,
+          "image": "https://res.cloudinary.com/.../chicken.jpg",
+          "brandName": "Sabzi Mandi Grocers",
+          "availability": "IN_STOCK"
+        }
+      },
+      { "ingredient": "saffron", "quantity": null, "product": null }
+    ],
+    "products": [],
+    "degraded": false
+  }
+}
+```
+
+`quantity` is the shopper's own wording when the request gave an amount, otherwise `null`. `product: null` means nothing nearby matched; the card shows "Not found nearby" rather than inventing an item. `items` covers every ingredient; `reply` counts the rows, not the requested ingredients, because merged rows count once.
+
+Only the extraction is cached (by the recipe text, 24 hours). Matching runs live on every request, so a stock change shows on the next call. When every provider fails (`AI_UNAVAILABLE`) or the model output is unusable (`AI_BAD_OUTPUT`), the endpoint still answers, degraded to a plain product search over the shopper's words:
+
+```json
+{ "success": true, "data": { "reply": null, "title": null, "items": [], "products": [ ... ], "degraded": true } }
+```
+
+Failure codes:
+
+```text
+400 (zod)              message shorter than 3/longer than 500, bad cityId, only one of lat/lng
+403 ROLE_NOT_ALLOWED   caller is not a customer
+429 AI_DAILY_LIMIT / rate limiter
+503 AI_UNAVAILABLE     kill switch is off
+```
+
 Agent endpoints and their role checks are specified in `docs/27-ai-agents-and-automation-plan.md` and `docs/29-ai-phase-roadmap.md`.
 
 ---

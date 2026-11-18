@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Send, Sparkles } from 'lucide-react'
+import { Minus, Plus, Send, ShoppingBag, Sparkles } from 'lucide-react'
 
 import api, { getErrorMessage } from '../../services/api'
 import { useCity } from '../../hooks/useCity'
+import { useCart } from '../../hooks/useCart'
 import { useNearby } from '../../hooks/useNearby'
 import { Badge } from '../../design'
 import StatusPill from '../StatusPill'
@@ -24,6 +25,17 @@ const MODES = [
     withArea: true,
     busy: 'Thinking…',
     fallback: 'Showing matches without the assistant.',
+  },
+  {
+    key: 'recipe',
+    label: 'Cook',
+    endpoint: '/ai/recipe-list',
+    placeholder: 'e.g. Chicken biryani for 6 people',
+    intro: 'Describe a dish and get its ingredients matched to real products nearby. Edit the list, then add it all to your cart.',
+    suggestions: ['Chicken biryani for 6', 'Aloo gosht for 4', 'Vegetable pulao'],
+    withArea: true,
+    busy: 'Writing your shopping list…',
+    fallback: 'Here are products matching your words.',
   },
   {
     key: 'order',
@@ -195,6 +207,156 @@ function providerCard(provider) {
   )
 }
 
+// The recipe shopping list (Phase 2d). Every row with a product came from a
+// real product search; nothing is added until the customer presses the button,
+// and it goes through the normal cart API.
+function RecipeCard({ entry }) {
+  const { addItem } = useCart()
+  const matched = entry.items.filter((item) => item.product)
+  const [quantities, setQuantities] = useState(() =>
+    Object.fromEntries(matched.map((item) => [item.product._id, 1])),
+  )
+  const [adding, setAdding] = useState(false)
+  const [result, setResult] = useState(null)
+
+  const estimate = matched.reduce(
+    (sum, item) => sum + item.product.price * (quantities[item.product._id] || 1),
+    0,
+  )
+
+  function step(productId, delta) {
+    setQuantities((current) => ({
+      ...current,
+      [productId]: Math.min(10, Math.max(1, (current[productId] || 1) + delta)),
+    }))
+  }
+
+  async function addAll() {
+    if (adding || matched.length === 0) return
+    setAdding(true)
+    setResult(null)
+    let added = 0
+    const failed = []
+    for (const item of matched) {
+      try {
+        await addItem(item.product._id, quantities[item.product._id] || 1)
+        added += 1
+      } catch {
+        failed.push(item.ingredient)
+      }
+    }
+    setAdding(false)
+    setResult({ added, failed })
+  }
+
+  return (
+    <div className="rounded-tile border border-line-warm bg-paper">
+      <div className="border-b border-line-warm px-3 py-2.5">
+        <p className="text-[12.5px] font-semibold text-ink">
+          Shopping list{entry.title ? ` · ${entry.title}` : ''}
+        </p>
+        <p className="mt-0.5 text-[11px] text-ink/50">
+          {matched.length} of {entry.items.length} ingredients matched to products nearby
+        </p>
+      </div>
+
+      <div className="divide-y divide-line-warm/70">
+        {entry.items.map((item) => (
+          <div key={`${item.ingredient}-${item.product?._id || 'none'}`} className="flex items-center gap-2.5 px-3 py-2">
+            {item.product ? (
+              <>
+                {item.product.image ? (
+                  <img
+                    src={item.product.image}
+                    alt=""
+                    className="h-10 w-10 shrink-0 rounded-md object-cover"
+                    loading="lazy"
+                  />
+                ) : (
+                  <span className="h-10 w-10 shrink-0 rounded-md bg-canvas" aria-hidden="true" />
+                )}
+                <span className="min-w-0 flex-1">
+                  <Link
+                    to={`/product/${item.product._id}`}
+                    className="block truncate text-[12.5px] font-medium text-ink transition hover:text-forest"
+                  >
+                    {item.product.name}
+                  </Link>
+                  <span className="block truncate text-[11px] text-ink/50">
+                    {[item.ingredient, item.quantity, item.product.brandName].filter(Boolean).join(' · ')}
+                  </span>
+                  <span className="block text-[11.5px] font-semibold text-ink">
+                    {formatPrice(item.product.price)}
+                  </span>
+                </span>
+                <span className="flex shrink-0 items-center rounded-full border border-line-warm">
+                  <button
+                    type="button"
+                    onClick={() => step(item.product._id, -1)}
+                    disabled={adding}
+                    aria-label={`Less ${item.product.name}`}
+                    className="px-2 py-1 text-ink/60 transition hover:text-ink disabled:opacity-40"
+                  >
+                    <Minus className="h-3 w-3" aria-hidden="true" />
+                  </button>
+                  <span className="min-w-4 text-center text-[11.5px] font-semibold text-ink">
+                    {quantities[item.product._id] || 1}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => step(item.product._id, 1)}
+                    disabled={adding}
+                    aria-label={`More ${item.product.name}`}
+                    className="px-2 py-1 text-ink/60 transition hover:text-ink disabled:opacity-40"
+                  >
+                    <Plus className="h-3 w-3" aria-hidden="true" />
+                  </button>
+                </span>
+              </>
+            ) : (
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[12.5px] text-ink/55">
+                  {[item.ingredient, item.quantity].filter(Boolean).join(' · ')}
+                </span>
+                <span className="block text-[11px] text-ink/40">Not found nearby</span>
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center justify-between gap-2 border-t border-line-warm px-3 py-2.5">
+        <span className="text-[11.5px] text-ink/55">{formatPrice(estimate)} estimated</span>
+        <button
+          type="button"
+          onClick={addAll}
+          disabled={adding || matched.length === 0}
+          className="flex items-center gap-1.5 rounded-full bg-forest px-3 py-1.5 text-[11.5px] font-semibold text-cream transition hover:bg-forest/90 disabled:opacity-40"
+        >
+          <ShoppingBag className="h-3.5 w-3.5" aria-hidden="true" />
+          {adding ? 'Adding…' : 'Add all to cart'}
+        </button>
+      </div>
+
+      {result && (
+        <p className="border-t border-line-warm px-3 py-2 text-[11px] leading-relaxed text-ink/55" role="status">
+          {result.added > 0 && `Added ${result.added} ${result.added === 1 ? 'item' : 'items'} to your cart. `}
+          {result.failed.length > 0 && `Could not add: ${result.failed.join(', ')}. `}
+          {result.added > 0 && (
+            <Link to="/cart" className="font-semibold text-forest underline-offset-4 hover:underline">
+              View cart
+            </Link>
+          )}
+        </p>
+      )}
+
+      <p className="px-3 pb-2 text-[10.5px] text-ink/40">
+        AI can make mistakes — check each item before ordering.
+      </p>
+    </div>
+  )
+}
+
 /**
  * The customer assistant (docs/29 Phase 2). It stays hidden when AI is off:
  * a signed-in customer's first visit probes /ai/ping, which never spends the
@@ -255,6 +417,8 @@ export default function AssistantPanel() {
           products: answer.products || [],
           orders: answer.orders || [],
           providers: answer.providers || [],
+          title: answer.title || null,
+          items: answer.items || [],
           degraded: Boolean(answer.degraded),
         },
       ])
@@ -358,6 +522,7 @@ export default function AssistantPanel() {
                   >
                     {entry.text}
                   </p>
+                  {entry.items?.length > 0 && <RecipeCard entry={entry} />}
                   {entry.products?.length > 0 && (
                     <div className="space-y-1.5">{entry.products.map(productCard)}</div>
                   )}
