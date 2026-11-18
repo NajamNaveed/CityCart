@@ -1,4 +1,5 @@
 const productTool = require('./product.tool');
+const compareTool = require('./compare.tool');
 const categoryTool = require('./category.tool');
 const storeTool = require('./store.tool');
 const { listOrdersTool, getOrderTool } = require('./order.tools');
@@ -52,6 +53,7 @@ function createToolContext({ userId, role, cityId = null, lat = null, lng = null
 
 const TOOLS = {
   [productTool.name]: productTool,
+  [compareTool.name]: compareTool,
   [categoryTool.name]: categoryTool,
   [storeTool.name]: storeTool,
   [listOrdersTool.name]: listOrdersTool,
@@ -62,6 +64,7 @@ const TOOLS = {
 };
 
 const SHOP_TOOLS = [productTool, categoryTool, storeTool];
+const COMPARE_TOOLS = [compareTool];
 const ORDER_TOOLS = [listOrdersTool, getOrderTool];
 const SERVICE_TOOLS = [findProvidersTool, listCategoriesTool, providerSlotsTool];
 
@@ -81,6 +84,7 @@ module.exports = {
   describeTools,
   findTool,
   SHOP_TOOLS,
+  COMPARE_TOOLS,
   ORDER_TOOLS,
   SERVICE_TOOLS,
 };

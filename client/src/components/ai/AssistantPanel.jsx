@@ -11,6 +11,7 @@ import StatusPill from '../StatusPill'
 import Drawer from '../ui/Drawer'
 import { formatDate, formatPrice } from '../../ui'
 import { formatDistance } from '../../utils/geo'
+import { ASSISTANT_OPEN_EVENT, setAssistantAvailable } from './assistantBus'
 
 // Each mode posts the same body to its own endpoint; the server decides what a
 // mode may read (docs/29 Phase 2).
@@ -25,6 +26,17 @@ const MODES = [
     withArea: true,
     busy: 'Thinking…',
     fallback: 'Showing matches without the assistant.',
+  },
+  {
+    key: 'compare',
+    label: 'Compare',
+    endpoint: '/ai/compare',
+    placeholder: 'e.g. Compare two rice packs',
+    intro: 'Put two or three products side by side — price, stock, rating and the listing’s own details. Only real listings appear.',
+    suggestions: ['Compare rice brands', 'Compare cooking oil 1L packs', 'Compare milk cartons'],
+    withArea: true,
+    busy: 'Comparing…',
+    fallback: 'Showing the closest matches.',
   },
   {
     key: 'recipe',
@@ -357,6 +369,125 @@ function RecipeCard({ entry }) {
   )
 }
 
+function availabilityLabel(value) {
+  if (value === 'OUT_OF_STOCK') return 'Sold out'
+  if (value === 'LOW_STOCK') return 'Low stock'
+  return 'In stock'
+}
+
+function ratingLabel(rating) {
+  if (!rating || !rating.count) return '—'
+  return `${Number(rating.average).toFixed(1)} ★ (${rating.count})`
+}
+
+function CompareRow({ label, children }) {
+  return (
+    <tr>
+      <th
+        scope="row"
+        className="p-2 text-left align-top text-[10.5px] font-medium uppercase tracking-[0.06em] text-ink/45"
+      >
+        {label}
+      </th>
+      {children}
+    </tr>
+  )
+}
+
+// Side-by-side comparison (Phase 2e). Every value comes from the server's
+// enriched tool results; the only thing computed here is the lowest price.
+function CompareCard({ products }) {
+  const lowest = Math.min(...products.map((product) => product.price))
+  const attributeKeys = [
+    ...new Set(products.flatMap((product) => Object.keys(product.attributes || {}))),
+  ].slice(0, 8)
+
+  return (
+    <div>
+      <div className="overflow-x-auto rounded-tile border border-line-warm bg-paper">
+        <table className="w-full min-w-[340px] border-collapse text-left text-[11.5px]">
+          <thead>
+            <tr>
+              <th scope="col" className="w-14" aria-label="Detail" />
+              {products.map((product) => (
+                <th
+                  key={product._id}
+                  scope="col"
+                  className="border-l border-line-warm p-2 align-top font-normal"
+                >
+                  <Link to={`/product/${product._id}`} className="block">
+                    {product.image ? (
+                      <img
+                        src={product.image}
+                        alt=""
+                        className="mb-1.5 h-14 w-14 rounded-md object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <span className="mb-1.5 block h-14 w-14 rounded-md bg-canvas" aria-hidden="true" />
+                    )}
+                    <span className="line-clamp-2 block text-[11.5px] font-semibold leading-snug text-ink transition hover:text-forest">
+                      {product.name}
+                    </span>
+                  </Link>
+                  <span className="mt-0.5 block truncate text-[10.5px] text-ink/50">
+                    {product.brandName}
+                  </span>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line-warm/70">
+            <CompareRow label="Price">
+              {products.map((product) => (
+                <td key={product._id} className="border-l border-line-warm p-2 align-top">
+                  <span className="block font-semibold text-ink">{formatPrice(product.price)}</span>
+                  {product.compareAtPrice > product.price && (
+                    <span className="block text-[10.5px] text-muted line-through">
+                      {formatPrice(product.compareAtPrice)}
+                    </span>
+                  )}
+                  {products.length > 1 && product.price === lowest && (
+                    <span className="mt-0.5 inline-block rounded-full bg-sage px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.06em] text-forest">
+                      Lowest
+                    </span>
+                  )}
+                </td>
+              ))}
+            </CompareRow>
+            <CompareRow label="Stock">
+              {products.map((product) => (
+                <td key={product._id} className="border-l border-line-warm p-2 align-top text-ink/75">
+                  {availabilityLabel(product.availability)}
+                </td>
+              ))}
+            </CompareRow>
+            <CompareRow label="Rating">
+              {products.map((product) => (
+                <td key={product._id} className="border-l border-line-warm p-2 align-top text-ink/75">
+                  {ratingLabel(product.rating)}
+                </td>
+              ))}
+            </CompareRow>
+            {attributeKeys.map((key) => (
+              <CompareRow key={key} label={key}>
+                {products.map((product) => (
+                  <td key={product._id} className="border-l border-line-warm p-2 align-top text-ink/75">
+                    {product.attributes?.[key] ?? '—'}
+                  </td>
+                ))}
+              </CompareRow>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-1 text-[10.5px] text-ink/40">
+        Live listings — prices and stock can change. Open a product to check before ordering.
+      </p>
+    </div>
+  )
+}
+
 /**
  * The customer assistant (docs/29 Phase 2). It stays hidden when AI is off:
  * a signed-in customer's first visit probes /ai/ping, which never spends the
@@ -380,12 +511,39 @@ export default function AssistantPanel() {
     let activeProbe = true
     api
       .post('/ai/ping')
-      .then(() => activeProbe && setAvailable(true))
-      .catch(() => activeProbe && setAvailable(false))
+      .then(() => {
+        if (!activeProbe) return
+        setAvailable(true)
+        setAssistantAvailable(true)
+      })
+      .catch(() => {
+        if (!activeProbe) return
+        setAvailable(false)
+        setAssistantAvailable(false)
+      })
     return () => {
       activeProbe = false
     }
   }, [])
+
+  // A page (for example the product page's Compare button) can open the
+  // drawer in a mode with a prefilled question; sending stays the customer's
+  // action. When AI is off the drawer is not rendered, so there is no button
+  // to reach this either.
+  useEffect(() => {
+    function onOpen(event) {
+      if (!available) return
+      const { mode: wanted, message } = event.detail || {}
+      if (wanted && MODES.some((item) => item.key === wanted)) {
+        setMode(wanted)
+        setMessages([])
+      }
+      if (message) setInput(message)
+      setOpen(true)
+    }
+    window.addEventListener(ASSISTANT_OPEN_EVENT, onOpen)
+    return () => window.removeEventListener(ASSISTANT_OPEN_EVENT, onOpen)
+  }, [available])
 
   useEffect(() => {
     if (open) inputRef.current?.focus()
@@ -413,6 +571,7 @@ export default function AssistantPanel() {
         {
           id: nextId++,
           role: 'assistant',
+          mode: active.key,
           text: answer.reply || active.fallback,
           products: answer.products || [],
           orders: answer.orders || [],
@@ -523,8 +682,12 @@ export default function AssistantPanel() {
                     {entry.text}
                   </p>
                   {entry.items?.length > 0 && <RecipeCard entry={entry} />}
-                  {entry.products?.length > 0 && (
-                    <div className="space-y-1.5">{entry.products.map(productCard)}</div>
+                  {entry.mode === 'compare' && entry.products?.length > 0 ? (
+                    <CompareCard products={entry.products} />
+                  ) : (
+                    entry.products?.length > 0 && (
+                      <div className="space-y-1.5">{entry.products.map(productCard)}</div>
+                    )
                   )}
                   {entry.orders?.length > 0 && (
                     <div className="space-y-1.5">{entry.orders.map(orderCard)}</div>

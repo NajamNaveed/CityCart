@@ -9,6 +9,7 @@ const {
   orderHelper,
   serviceHelper,
   recipeList,
+  compare,
 } = require('../controllers/ai.controller');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
@@ -105,6 +106,18 @@ router.post(
   aiUserLimiter,
   aiDailyLimit,
   recipeList,
+);
+
+// Phase 2e: side-by-side comparison. The response cards come from the
+// comparison tool only; the model picks which of them to show.
+router.post(
+  '/compare',
+  authenticate,
+  requireRole(ROLES.CUSTOMER),
+  requireAiEnabled,
+  aiUserLimiter,
+  aiDailyLimit,
+  compare,
 );
 
 module.exports = router;

@@ -15,6 +15,10 @@ const {
   buildRecipeList,
   TEXT_LIMIT: RECIPE_TEXT_LIMIT,
 } = require('../services/ai/agents/recipe.agent');
+const {
+  compareProducts,
+  MESSAGE_LIMIT: COMPARE_MESSAGE_LIMIT,
+} = require('../services/ai/agents/compare.agent');
 const { formatZodError } = require('../utils/formatZodError');
 
 /**
@@ -294,6 +298,52 @@ async function recipeList(req, res, next) {
   }
 }
 
+const compareSchema = z
+  .object({
+    message: z
+      .string()
+      .trim()
+      .min(3, 'Say which products to compare.')
+      .max(COMPARE_MESSAGE_LIMIT, `Keep the question under ${COMPARE_MESSAGE_LIMIT} characters.`),
+    cityId: z.string().regex(/^[0-9a-f]{24}$/i, 'Choose a valid city.').optional(),
+    lat: z.number().min(-90).max(90).optional(),
+    lng: z.number().min(-180).max(180).optional(),
+  })
+  .refine((value) => (value.lat === undefined) === (value.lng === undefined), {
+    message: 'Send both coordinates or neither.',
+    path: ['lat'],
+  });
+
+/**
+ * Phase 2e: a side-by-side product comparison. The cards come from the
+ * comparison tool's results only, enriched with the listing's own attributes
+ * and its approved-review rating. The model may describe the differences but
+ * cannot add a product, price or attribute of its own.
+ */
+async function compare(req, res, next) {
+  const parsed = compareSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsed.error),
+    });
+  }
+
+  try {
+    const data = await compareProducts({
+      message: parsed.data.message,
+      ctx: { userId: req.user._id, role: req.user.role },
+      cityId: parsed.data.cityId || null,
+      lat: parsed.data.lat ?? null,
+      lng: parsed.data.lng ?? null,
+    });
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    return next(err);
+  }
+}
+
 module.exports = {
   ping,
   listingDraft,
@@ -303,4 +353,5 @@ module.exports = {
   orderHelper,
   serviceHelper,
   recipeList,
+  compare,
 };

@@ -3366,6 +3366,69 @@ Failure codes:
 503 AI_UNAVAILABLE     kill switch is off
 ```
 
+## Product comparison
+
+```text
+POST /api/v1/ai/compare
+```
+
+Role: `CUSTOMER` only. The **Compare** mode of the web `Ask CityCart` panel, also opened from the product page's "Compare with similar products" button (which prefills the question and never sends it). The endpoint returns a side-by-side comparison of real listings.
+
+Request:
+
+```json
+{ "message": "Compare two rice packs", "cityId": "66f1a0c2b3d4e5f60718293a", "lat": 31.4187, "lng": 73.0791 }
+```
+
+`message` is 3–500 characters, sanitized and treated as data. `cityId` and the coordinate pair are optional and scope the search the same way the public Stores search does; `lat` and `lng` must be sent together.
+
+How it works (docs/29 Phase 2e):
+
+1. The model may call one read-only tool, `compare_products { query, limit? }` (strict zod arguments). It runs the same public discovery query as `search_products`, drops out-of-stock listings, and keeps at most 6.
+2. Ordinary code then enriches the cards: up to **8 attribute pairs** per listing (key 40 / value 60 characters, non-scalar values skipped) and the listing's approved-review `{ average, count }` rating.
+3. The model answers with `productIds` (at most 3, strict schema). The server keeps only ids it actually returned, in the tool's order, and drops everything else.
+
+The model never supplies a price, attribute or rating: every cell is read by the server from the listing. The endpoint writes nothing and the card is read-only; ordering happens on the normal product page.
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "reply": "The 5 kg pack is cheaper per kilo and both are in stock; the smaller pack has a better rating.",
+    "products": [
+      {
+        "_id": "66f1a0c2b3d4e5f60718293a",
+        "name": "Basmati Rice, 5 kg",
+        "price": 1450,
+        "compareAtPrice": 1600,
+        "image": "https://res.cloudinary.com/.../rice-5kg.jpg",
+        "availability": "IN_STOCK",
+        "brandName": "Sahar Lifestyle",
+        "brandSlug": "sahar-lifestyle",
+        "availableAt": null,
+        "attributes": { "Weight": "5 kg", "Variety": "Basmati" },
+        "rating": { "average": 4.5, "count": 12 }
+      }
+    ],
+    "degraded": false,
+    "steps": 2
+  }
+}
+```
+
+`rating` is `null` when the listing has no approved reviews; `attributes` is `{}` when the listing has none. When every provider fails (`AI_UNAVAILABLE`) or the loop never produces a usable answer (`AI_BAD_OUTPUT`), the endpoint falls back to a plain product search over the shopper's words and answers `reply: null`, real products, `degraded: true`, `steps: 0`; the comparison table then shows price, stock and rating only.
+
+Failure codes:
+
+```text
+400 (zod)              message shorter than 3/longer than 500, bad cityId, only one of lat/lng
+403 ROLE_NOT_ALLOWED   caller is not a customer
+429 AI_DAILY_LIMIT / rate limiter
+503 AI_UNAVAILABLE     kill switch is off
+```
+
 Agent endpoints and their role checks are specified in `docs/27-ai-agents-and-automation-plan.md` and `docs/29-ai-phase-roadmap.md`.
 
 ---

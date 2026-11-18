@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
+  ArrowLeftRight,
   Banknote,
   ChevronLeft,
   ChevronRight,
@@ -23,6 +24,8 @@ import ReviewsSection from '../components/ReviewsSection'
 import AlsoSoldBy from '../components/nearby/AlsoSoldBy'
 import Stars from '../components/Stars'
 import { useProductReviews } from '../hooks/useProductReviews'
+import { useAssistantAvailability } from '../hooks/useAssistantAvailability'
+import { openAssistant } from '../components/ai/assistantBus'
 import { EmptyState } from '../design'
 import { Modal, Reveal } from '../components/ui'
 import { loginUrl } from '../utils/nav'
@@ -98,6 +101,7 @@ function ProductView({ product, brand }) {
   const [zooming, setZooming] = useState(false)
   const [origin, setOrigin] = useState('50% 50%')
   const resumed = useRef(false)
+  const assistantAvailable = useAssistantAvailability()
 
   const isCustomer = user?.role === 'CUSTOMER'
   const soldOut = product.availability === 'OUT_OF_STOCK'
@@ -425,6 +429,25 @@ function ProductView({ product, brand }) {
                   <MessageCircle className="h-4 w-4" aria-hidden="true" />
                   Chat with seller
                 </Link>
+              )}
+
+              {/* Opens the assistant in Compare mode with the question already
+                  typed; sending stays the customer's choice. Hidden while AI
+                  is off, when the drawer is not mounted either. */}
+              {isCustomer && assistantAvailable && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    openAssistant({
+                      mode: 'compare',
+                      message: `Compare ${product.name} with similar products nearby`,
+                    })
+                  }
+                  className={`mt-3 w-full ${btn('outline', 'lg')}`}
+                >
+                  <ArrowLeftRight className="h-4 w-4" aria-hidden="true" />
+                  Compare with similar products
+                </button>
               )}
 
               {notice.text && (
