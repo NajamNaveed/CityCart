@@ -113,7 +113,12 @@ export default function ZoneEditor({ ring, onChange, others = [] }) {
 
   return (
     <div>
-      <div ref={container} className="h-[420px] w-full rounded-card border border-line-warm" role="application" aria-label="Map for drawing the block's outline" />
+      <div
+        ref={container}
+        className="relative isolate z-0 h-[420px] w-full overflow-hidden rounded-card border border-line-warm"
+        role="application"
+        aria-label="Map for drawing the block's outline"
+      />
       <div className="mt-2.5 flex flex-wrap items-center gap-3 text-[12.5px]">
         <span className="text-ink/55">
           {ring.length === 0
