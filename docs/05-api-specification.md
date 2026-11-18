@@ -3429,6 +3429,50 @@ Failure codes:
 503 AI_UNAVAILABLE     kill switch is off
 ```
 
+## Chat reply draft
+
+```text
+POST /api/v1/ai/chat-draft
+```
+
+Role: `CUSTOMER` only. The **Draft with AI** helper in the web `ChatPanel`, shown only on a direct provider thread or a booking thread. It writes the customer's next message; it never sends anything.
+
+Request:
+
+```json
+{ "kind": "provider", "id": "66f1a0c2b3d4e5f60718293a", "intent": "ask if they can come tomorrow morning" }
+```
+
+`kind` is `provider` (direct chat) or `booking` (booking chat, `id` is the booking id). `intent` is 3–300 characters, sanitized and treated as data.
+
+How it works:
+
+1. The server loads the thread itself from `kind` + `id`; the client never supplies the history, the provider or the customer. A thread belonging to another customer answers **404**, the same anti-probing answer the chat services use.
+2. The last 8 messages are read, oldest first, with the sender side (`customer` / `provider`); `SYSTEM` messages are dropped, attachments become `[sent a photo]` and each message is cut to 500 characters. Text is marked as data in the prompt.
+3. The model answers `{ draft }` (1–1000 characters, the same cap as a real message), validated with zod. Nothing is written to the database.
+
+A booking chat that is not open answers **409 `CHAT_NOT_OPEN`** before any provider call, because a draft there could not be sent. A store chat has no draft: it has Translate instead.
+
+Response:
+
+```json
+{ "success": true, "data": { "draft": "Hello, could you let me know if you are available for a deep clean tomorrow morning and what it would cost?" } }
+```
+
+The client puts the draft in the message box and the customer edits and sends it; there is no auto-send and no card.
+
+Failure codes:
+
+```text
+400 (zod)              unknown kind, missing id, intent shorter than 3/longer than 300
+403 ROLE_NOT_ALLOWED   caller is not a customer
+404                    malformed id, unknown thread, or a thread of another customer
+409 CHAT_NOT_OPEN      booking chat is not in an open status
+429 AI_DAILY_LIMIT / rate limiter
+502 AI_BAD_OUTPUT      the model did not return a usable draft
+503 AI_UNAVAILABLE     kill switch is off or every provider failed
+```
+
 Agent endpoints and their role checks are specified in `docs/27-ai-agents-and-automation-plan.md` and `docs/29-ai-phase-roadmap.md`.
 
 ---

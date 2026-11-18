@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Languages, MessageCircle, Paperclip, Send, Wrench, X } from 'lucide-react'
+import { ArrowLeft, Languages, MessageCircle, Paperclip, Send, Sparkles, Wrench, X } from 'lucide-react'
 import api, { getErrorMessage } from '../../services/api'
 import { useChat } from '../../hooks/useChat'
 import ProductImage from '../ProductImage'
@@ -10,6 +10,17 @@ import { clockTime, dayLabel, initialOf, isObjectId, listTime, MAX_MESSAGE_LENGT
 import { CHAT_OPEN_STATUSES } from '../../utils/serviceBookings'
 
 const PAGE = 30
+const DRAFT_INTENT_MAX = 300
+
+// Phase 2f: the customer describes what they want to say and the AI fills the
+// composer. It never sends: the customer edits the text and presses Send.
+function draftErrorMessage(err) {
+  const code = err.response?.data?.code
+  if (code === 'AI_UNAVAILABLE') return 'Drafting is unavailable right now.'
+  if (code === 'AI_DAILY_LIMIT') return 'You have used today’s AI requests. Try again tomorrow.'
+  if (code === 'CHAT_NOT_OPEN') return 'This booking’s chat is closed.'
+  return getErrorMessage(err)
+}
 
 // Phase 1c: store chat only (customer and brand). The server re-checks that
 // the signed-in user is part of the message's conversation.
@@ -233,14 +244,27 @@ export default function ChatPanel({ mode = 'customer', source, canReply = true }
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState('')
+  const [draftOpen, setDraftOpen] = useState(false)
+  const [draftIntent, setDraftIntent] = useState('')
+  const [drafting, setDrafting] = useState(false)
+  const [draftError, setDraftError] = useState('')
   const [loadingEarlier, setLoadingEarlier] = useState(false)
 
   const selectedRef = useRef(selectedKey)
   const scroller = useRef(null)
+  const textareaRef = useRef(null)
   const scrollPlan = useRef({ mode: 'bottom', height: 0 })
 
   useEffect(() => {
     selectedRef.current = selectedKey
+  }, [selectedKey])
+
+  // The helper belongs to the open thread; switching threads closes it so a
+  // draft for one provider never lands in another thread's composer.
+  useEffect(() => {
+    setDraftOpen(false)
+    setDraftIntent('')
+    setDraftError('')
   }, [selectedKey])
 
   // ---- conversation lists --------------------------------------------------
@@ -484,6 +508,7 @@ export default function ChatPanel({ mode = 'customer', source, canReply = true }
   const bookingOpen = current?.kind !== 'booking' || CHAT_OPEN_STATUSES.includes(current.status)
   const counterpart = current?.with || (starting ? { name: context.brand.name, image: context.brand.logo } : null)
   const canSend = canReply && bookingOpen && (starting || (current ? current.canSend !== false : true))
+  const showDraft = isCustomer && (selected?.kind === 'provider' || selected?.kind === 'booking') && canSend
 
   async function onSend(event) {
     event.preventDefault()
@@ -521,6 +546,46 @@ export default function ChatPanel({ mode = 'customer', source, canReply = true }
   function onKeyDown(event) {
     // Enter sends; Shift+Enter adds a line. Never while an IME is composing.
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) onSend(event)
+  }
+
+  function openDraft() {
+    setDraftIntent(draft.trim())
+    setDraftError('')
+    setDraftOpen(true)
+  }
+
+  function closeDraft() {
+    setDraftOpen(false)
+    setDraftError('')
+  }
+
+  async function writeDraft() {
+    const intent = draftIntent.trim()
+    if (!intent || drafting || !selected) return
+    const key = selectedKey
+    setDrafting(true)
+    setDraftError('')
+    try {
+      const res = await api.post('/ai/chat-draft', { kind: selected.kind, id: selected.id, intent })
+      // A thread switch while the request ran: leave the new composer alone.
+      if (selectedRef.current !== key) return
+      setDraft(res.data.data.draft)
+      setDraftOpen(false)
+      setDraftIntent('')
+      textareaRef.current?.focus()
+    } catch (err) {
+      setDraftError(draftErrorMessage(err))
+    } finally {
+      setDrafting(false)
+    }
+  }
+
+  function onDraftKeyDown(event) {
+    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+      event.preventDefault()
+      writeDraft()
+    }
+    if (event.key === 'Escape') closeDraft()
   }
 
   const open = (id, kind) => patchParams({ c: id, k: kind })
@@ -712,6 +777,64 @@ export default function ChatPanel({ mode = 'customer', source, canReply = true }
                       </div>
                     </div>
                   )}
+                  {showDraft && (
+                    <div className="mb-2">
+                      {draftOpen ? (
+                        <div className="rounded-tile border border-line-warm bg-canvas/50 p-2">
+                          <div className="flex items-center gap-1.5">
+                            <label htmlFor="chat-draft-intent" className="sr-only">
+                              What do you want to say?
+                            </label>
+                            <input
+                              id="chat-draft-intent"
+                              type="text"
+                              value={draftIntent}
+                              onChange={(e) => setDraftIntent(e.target.value)}
+                              onKeyDown={onDraftKeyDown}
+                              maxLength={DRAFT_INTENT_MAX}
+                              autoFocus
+                              placeholder="What do you want to say? e.g. ask when they can come"
+                              className="h-9 min-w-0 flex-1 rounded-md border border-line-warm bg-white px-2.5 text-[12.5px] text-ink outline-none transition placeholder:text-muted/60 focus:border-ink/40 focus:ring-2 focus:ring-ink/10"
+                            />
+                            <button
+                              type="button"
+                              onClick={writeDraft}
+                              disabled={!draftIntent.trim() || drafting}
+                              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md bg-noir px-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-cream transition-colors hover:bg-noir-soft disabled:pointer-events-none disabled:opacity-40"
+                            >
+                              <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                              {drafting ? 'Writing…' : 'Write'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={closeDraft}
+                              aria-label="Close draft helper"
+                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-ink/45 transition hover:bg-canvas hover:text-ink"
+                            >
+                              <X className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                          </div>
+                          {draftError && (
+                            <p role="alert" className="mt-1.5 px-0.5 text-[11px] text-clay">
+                              {draftError}
+                            </p>
+                          )}
+                          <p className="mt-1 px-0.5 text-[10.5px] text-ink/40">
+                            The draft fills the message box — edit it before sending.
+                          </p>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={openDraft}
+                          className="inline-flex items-center gap-1.5 rounded-full px-1.5 py-1 text-[11px] font-medium text-ink/45 transition hover:bg-canvas hover:text-clay"
+                        >
+                          <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                          Draft with AI
+                        </button>
+                      )}
+                    </div>
+                  )}
                   {sendError && (
                     <p role="alert" className="mb-2 rounded-tile border border-clay/30 bg-clay/5 px-3 py-2 text-[12.5px] text-clay">
                       {sendError}
@@ -723,6 +846,7 @@ export default function ChatPanel({ mode = 'customer', source, canReply = true }
                     </label>
                     <textarea
                       id="chat-message"
+                      ref={textareaRef}
                       value={draft}
                       onChange={(e) => setDraft(e.target.value)}
                       onKeyDown={onKeyDown}

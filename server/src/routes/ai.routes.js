@@ -10,6 +10,7 @@ const {
   serviceHelper,
   recipeList,
   compare,
+  chatDraft,
 } = require('../controllers/ai.controller');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
@@ -118,6 +119,19 @@ router.post(
   aiUserLimiter,
   aiDailyLimit,
   compare,
+);
+
+// Phase 2f: draft the customer's next message in a provider or booking thread.
+// The agent loads the thread itself and checks the caller owns it, so the body
+// carries only the kind, the id and the customer's intent.
+router.post(
+  '/chat-draft',
+  authenticate,
+  requireRole(ROLES.CUSTOMER),
+  requireAiEnabled,
+  aiUserLimiter,
+  aiDailyLimit,
+  chatDraft,
 );
 
 module.exports = router;

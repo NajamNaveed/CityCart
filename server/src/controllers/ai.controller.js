@@ -19,6 +19,12 @@ const {
   compareProducts,
   MESSAGE_LIMIT: COMPARE_MESSAGE_LIMIT,
 } = require('../services/ai/agents/compare.agent');
+const {
+  draftChatMessage,
+  ChatDraftError,
+  KINDS: DRAFT_KINDS,
+  INTENT_LIMIT: DRAFT_INTENT_LIMIT,
+} = require('../services/ai/agents/chatDraft.agent');
 const { formatZodError } = require('../utils/formatZodError');
 
 /**
@@ -344,6 +350,49 @@ async function compare(req, res, next) {
   }
 }
 
+const chatDraftSchema = z.object({
+  kind: z.enum(DRAFT_KINDS, { error: 'Choose a conversation type.' }),
+  id: z.string().trim().min(1, 'Choose a conversation.').max(64),
+  intent: z
+    .string()
+    .trim()
+    .min(3, 'Say what you want to ask.')
+    .max(DRAFT_INTENT_LIMIT, `Keep it under ${DRAFT_INTENT_LIMIT} characters.`),
+});
+
+/**
+ * Phase 2f: draft the next message in a provider or booking thread. The client
+ * sends the thread kind and id plus a short intent; the agent loads the
+ * conversation itself, so the request can never inject someone else's messages
+ * or a fake history. The draft is only text in the composer until the customer
+ * sends it through the ordinary chat endpoint.
+ */
+async function chatDraft(req, res, next) {
+  const parsed = chatDraftSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsed.error),
+    });
+  }
+
+  try {
+    const data = await draftChatMessage({
+      ...parsed.data,
+      ctx: { userId: req.user._id, role: req.user.role },
+    });
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    if (err instanceof ChatDraftError) {
+      return res
+        .status(err.status)
+        .json({ success: false, message: err.message, ...(err.code && { code: err.code }) });
+    }
+    return next(err);
+  }
+}
+
 module.exports = {
   ping,
   listingDraft,
@@ -354,4 +403,5 @@ module.exports = {
   serviceHelper,
   recipeList,
   compare,
+  chatDraft,
 };
