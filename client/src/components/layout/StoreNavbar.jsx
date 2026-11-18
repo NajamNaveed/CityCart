@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { Bell, CalendarCheck, ChevronDown, LayoutDashboard, LogOut, Menu as MenuIcon, MessageCircle, Package, Search, ShoppingBag } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
@@ -8,6 +8,7 @@ import useNotifications from '../../hooks/useNotifications'
 import NotificationBell from '../NotificationBell'
 import Drawer from '../ui/Drawer'
 import Menu from '../ui/Menu'
+import VoiceSearchButton from '../ui/VoiceSearchButton'
 import { homeFor } from '../../utils/nav'
 
 const navLink = ({ isActive }) =>
@@ -26,6 +27,7 @@ function initials(name = '') {
 
 function SearchForm({ className = '', autoFocus = false, onSubmitted }) {
   const navigate = useNavigate()
+  const inputRef = useRef(null)
 
   function onSubmit(e) {
     e.preventDefault()
@@ -48,9 +50,19 @@ function SearchForm({ className = '', autoFocus = false, onSubmitted }) {
           id="site-search"
           name="q"
           type="search"
+          ref={inputRef}
           autoFocus={autoFocus}
           placeholder="Search products…"
-          className="h-9.5 w-full rounded-tile border border-line-warm bg-canvas pl-9 pr-3.5 text-[13px] text-ink placeholder-muted/50 outline-none transition focus:border-ink focus:bg-white focus:ring-2 focus:ring-ink/10"
+          className="h-9.5 w-full rounded-tile border border-line-warm bg-canvas pl-9 pr-10 text-[13px] text-ink placeholder-muted/50 outline-none transition focus:border-ink focus:bg-white focus:ring-2 focus:ring-ink/10"
+        />
+        <VoiceSearchButton
+          className="absolute right-1 top-1/2 -translate-y-1/2"
+          label="Search products by voice"
+          onResult={(text) => {
+            if (!inputRef.current) return
+            inputRef.current.value = text
+            inputRef.current.focus()
+          }}
         />
       </div>
     </form>

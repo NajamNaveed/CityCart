@@ -821,6 +821,13 @@ Phase 4 progress (customer web):
 * Customer navigation is **Home · Stores · Services**. The separate Brands tab
   is retired; a brand is reached through its storefront, and the public brand
   and storefront APIs are unchanged.
+* Customer search boxes — the home hero, the navbar, Stores, Services and the
+  `Ask CityCart` composer — offer browser speech-to-text where the Web Speech
+  API exists (Chrome, Edge, Safari). The mic fills the field (or appends to the
+  assistant draft) and never submits: the customer still presses Search or Send.
+  Browsers without the API keep the plain search box, and a blocked microphone
+  shows an inline explanation instead of failing silently. Recognition runs in
+  the browser, so no audio reaches the server and no provider quota is spent.
 * The customer footer carries a call to action, a trust strip and four link
   columns: marketplace, your account, sell with us (both application forms and
   both portal logins) and support. The account column swaps for visitors and

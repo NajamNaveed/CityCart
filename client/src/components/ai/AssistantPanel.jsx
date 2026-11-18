@@ -9,6 +9,7 @@ import { useNearby } from '../../hooks/useNearby'
 import { Badge } from '../../design'
 import StatusPill from '../StatusPill'
 import Drawer from '../ui/Drawer'
+import VoiceSearchButton from '../ui/VoiceSearchButton'
 import { formatDate, formatPrice } from '../../ui'
 import { formatDistance } from '../../utils/geo'
 import { ASSISTANT_OPEN_EVENT, setAssistantAvailable } from './assistantBus'
@@ -743,6 +744,14 @@ export default function AssistantPanel() {
               }}
               placeholder={active.placeholder}
               className="max-h-28 min-h-[42px] flex-1 resize-none rounded-tile border border-line-warm bg-paper px-3 py-2.5 text-[13px] text-ink outline-none focus:border-forest/50"
+            />
+            <VoiceSearchButton
+              className="relative self-center"
+              label="Ask by voice"
+              onResult={(text) => {
+                setInput((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text))
+                inputRef.current?.focus()
+              }}
             />
             <button
               type="submit"

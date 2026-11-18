@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, Layers, LayoutList, LocateFixed, Map as MapIcon, MapPin, Search, Star, Wrench } from 'lucide-react'
 import api, { getErrorMessage } from '../services/api'
@@ -12,6 +12,7 @@ import { nextLayerState } from '../utils/layerState'
 import MapLayers from '../components/nearby/MapLayers'
 import RangeSelector from '../components/nearby/RangeSelector'
 import ProductImage from '../components/ProductImage'
+import VoiceSearchButton from '../components/ui/VoiceSearchButton'
 import { EmptyState, ErrorState, PageHeader, Skeleton, btn, card, cardLift, fieldClass, shell } from '../design'
 import { formatDistance } from '../utils/geo'
 import { formatPrice } from '../ui'
@@ -183,6 +184,7 @@ export default function Services() {
   const [providerLayer, setProviderLayer] = useState('all') // 'all' | 'mine' | 'off'
   const [picking, setPicking] = useState(false)
   const [draft, setDraft] = useState('')
+  const inputRef = useRef(null)
   const [q, setQ] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [sort, setSort] = useState('rank')
@@ -312,9 +314,18 @@ export default function Services() {
               id="services-search"
               type="search"
               value={draft}
+              ref={inputRef}
               onChange={(e) => setDraft(e.target.value)}
               placeholder="Search a service or provider…"
-              className={fieldClass({ className: 'h-12 pl-10' })}
+              className={fieldClass({ className: 'h-12 pl-10 pr-12' })}
+            />
+            <VoiceSearchButton
+              className="absolute right-1.5 top-1/2 -translate-y-1/2"
+              label="Search services by voice"
+              onResult={(text) => {
+                setDraft(text)
+                inputRef.current?.focus()
+              }}
             />
           </div>
           <button type="submit" className={btn('noir', 'md')}>

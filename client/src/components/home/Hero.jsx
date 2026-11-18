@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, HandCoins, MapPin, Search, ShieldCheck } from 'lucide-react'
+import VoiceSearchButton from '../ui/VoiceSearchButton'
 import { formatPrice } from '../../ui'
 
 const TICKER = ['Bakery', 'Coffee', 'Groceries', 'Ceramics', 'Lighting', 'Linen', 'Cleaning', 'Plumbing', 'Electrical']
@@ -131,6 +132,11 @@ export default function Hero({ products }) {
               onChange={(event) => setTerm(event.target.value)}
               placeholder="Search bread, a lamp, an electrician…"
               className="h-11 min-w-0 flex-1 bg-transparent text-[14px] text-ink outline-none placeholder:text-muted/70"
+            />
+            <VoiceSearchButton
+              className="relative shrink-0"
+              label="Search by voice"
+              onResult={(text) => setTerm(text)}
             />
             <button
               type="submit"

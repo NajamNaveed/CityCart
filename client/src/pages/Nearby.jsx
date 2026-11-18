@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Layers, LayoutGrid, LocateFixed, Map as MapIcon, MapPin, Search, Store as StoreIcon } from 'lucide-react'
 import api, { getErrorMessage } from '../services/api'
@@ -12,6 +12,7 @@ import { nextLayerState } from '../utils/layerState'
 import MapLayers from '../components/nearby/MapLayers'
 import RangeSelector from '../components/nearby/RangeSelector'
 import StoreCard from '../components/home/StoreCard'
+import VoiceSearchButton from '../components/ui/VoiceSearchButton'
 import { EmptyState, ErrorState, PageHeader, Skeleton, btn, fieldClass, shell } from '../design'
 
 // Leaflet is only downloaded when the shopper opens the map view.
@@ -113,6 +114,7 @@ export default function Nearby() {
   })
 
   const [draft, setDraft] = useState(q)
+  const inputRef = useRef(null)
   // A search sent from the navbar arrives as a new query string; show it in the box.
   const [seenQuery, setSeenQuery] = useState(q)
   if (q !== seenQuery) {
@@ -228,9 +230,18 @@ export default function Nearby() {
               id="nearby-search"
               type="search"
               value={draft}
+              ref={inputRef}
               onChange={(e) => setDraft(e.target.value)}
               placeholder="Search a store, a product or a service…"
-              className={fieldClass({ className: 'h-12 pl-10' })}
+              className={fieldClass({ className: 'h-12 pl-10 pr-12' })}
+            />
+            <VoiceSearchButton
+              className="absolute right-1.5 top-1/2 -translate-y-1/2"
+              label="Search stores or products by voice"
+              onResult={(text) => {
+                setDraft(text)
+                inputRef.current?.focus()
+              }}
             />
           </div>
           <button type="submit" className={btn('noir', 'md')}>
