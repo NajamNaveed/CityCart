@@ -128,6 +128,19 @@
   animation-play-state: paused;
 }
 
+/* The store tray counts its own items: every quantity change replays this on
+   the freshly mounted badge, so a number never swaps in silence. */
+@keyframes cart-badge {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
 /* Footer wordmark: the base sits almost invisible; the overlay is the same
    text with a cursor-tracked radial light clipped to the letterforms. */
 .foot-watermark {

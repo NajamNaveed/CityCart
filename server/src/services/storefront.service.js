@@ -7,6 +7,13 @@ const { withAvailability } = require('./product.service');
 const { toPublicBrand } = require('./brand.service');
 
 const FEATURED_LIMIT = 8;
+// A shelf is a scrolling row on the store page; 30 covers a full catalogue
+// without turning one brand's products into a multi-hundred-item payload.
+const SHELF_LIMIT = 30;
+
+// Only the fields the public store page renders — never descriptions, SKUs,
+// branch targeting or other internal listing data.
+const SHELF_FIELDS = 'name slug categoryId images price compareAtPrice';
 
 class StorefrontError extends Error {
   constructor(status, message) {
@@ -36,10 +43,54 @@ async function categoriesWithParents(ids) {
 }
 
 /**
+ * One horizontal row per category. Products are already newest-first, so each
+ * shelf keeps the newest items; `count` stays the full shelf size so the page
+ * can say "31 items" even when it only receives SHELF_LIMIT of them.
+ * Products whose category is missing (e.g. deactivated) share a final
+ * "More from this store" shelf instead of one unnamed shelf per category.
+ */
+function buildShelves(products, categories) {
+  const categoryById = new Map(categories.map((c) => [String(c._id), c]));
+  const shelves = new Map();
+  const orderById = new Map();
+  const uncategorised = [];
+
+  for (const product of products) {
+    const category = categoryById.get(String(product.categoryId));
+    if (!category) {
+      uncategorised.push(product);
+      continue;
+    }
+    const key = String(category._id);
+    if (!shelves.has(key)) {
+      shelves.set(key, { categoryId: category._id, name: category.name, count: 0, products: [] });
+      orderById.set(key, category.order ?? 0);
+    }
+    const shelf = shelves.get(key);
+    shelf.count += 1;
+    if (shelf.products.length < SHELF_LIMIT) shelf.products.push(product);
+  }
+
+  const ordered = [...shelves.values()].sort(
+    (a, b) =>
+      orderById.get(String(a.categoryId)) - orderById.get(String(b.categoryId)) || a.name.localeCompare(b.name),
+  );
+  if (uncategorised.length > 0) {
+    ordered.push({
+      categoryId: null,
+      name: 'More from this store',
+      count: uncategorised.length,
+      products: uncategorised.slice(0, SHELF_LIMIT),
+    });
+  }
+  return ordered;
+}
+
+/**
  * Public brand storefront (docs/07 §7): header (brand), store info,
- * categories, featured products. "All products" is the existing
- * GET /products?brandId=. Everything is scoped to this one brand, so a
- * storefront can never show another brand's products, and a non-ACTIVE
+ * categories, featured products, category shelves. "All products" is the
+ * existing GET /products?brandId=. Everything is scoped to this one brand, so
+ * a storefront can never show another brand's products, and a non-ACTIVE
  * brand is a 404.
  *
  * There is no `featured` flag in the schema yet, so "featured" = the
@@ -52,21 +103,23 @@ async function getBrandStorefront(brandId) {
     throw new StorefrontError(404, 'Brand not found.');
   }
 
-  const [store, usedCategoryIds, featured] = await Promise.all([
+  const [store, usedCategoryIds, products] = await Promise.all([
     Store.findOne({ brandId, isActive: true }),
     Product.distinct('categoryId', { brandId, status: 'ACTIVE', isActive: true }),
     Product.find({ brandId, status: 'ACTIVE', isActive: true })
-      .sort({ createdAt: -1 })
-      .limit(FEATURED_LIMIT),
+      .select(SHELF_FIELDS)
+      .sort({ createdAt: -1 }),
   ]);
   const categories = await categoriesWithParents(usedCategoryIds);
+  const withStock = await withAvailability(products);
 
   return {
     brand: toPublicBrand(brand),
     store,
     categories: buildCategoryTree(categories),
-    featuredProducts: await withAvailability(featured),
+    featuredProducts: withStock.slice(0, FEATURED_LIMIT),
+    shelves: buildShelves(withStock, categories),
   };
 }
 
-module.exports = { getBrandStorefront, StorefrontError, FEATURED_LIMIT };
+module.exports = { getBrandStorefront, buildShelves, StorefrontError, FEATURED_LIMIT, SHELF_LIMIT };

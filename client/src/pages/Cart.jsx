@@ -20,7 +20,7 @@ const issueText = (item) =>
   item.issue === 'INSUFFICIENT_STOCK' ? `Only ${item.availableQuantity} available` : ISSUES[item.issue]
 
 export default function Cart() {
-  const { setCount } = useCart()
+  const { sync } = useCart()
   const [state, setState] = useState({ loading: true, cart: null, error: '' })
   const [busyId, setBusyId] = useState(null)
   const [notice, setNotice] = useState('')
@@ -35,13 +35,13 @@ export default function Cart() {
       .then((res) => {
         if (!active) return
         setState({ loading: false, cart: res.data.cart, error: '' })
-        setCount(res.data.cart.itemCount)
+        sync(res.data.cart)
       })
       .catch((err) => active && setState({ loading: false, cart: null, error: getErrorMessage(err) }))
     return () => {
       active = false
     }
-  }, [setCount])
+  }, [sync])
 
   // One place for every cart change: show the server's fresh cart, or its error.
   async function change(productId, request) {
@@ -50,7 +50,7 @@ export default function Cart() {
     try {
       const res = await request()
       setState({ loading: false, cart: res.data.cart, error: '' })
-      setCount(res.data.cart.itemCount)
+      sync(res.data.cart)
     } catch (err) {
       setNotice(getErrorMessage(err))
     } finally {
@@ -88,7 +88,7 @@ export default function Cart() {
       for (const item of undeliverable) res = await api.delete(`/cart/items/${item.productId}`)
       if (res) {
         setState({ loading: false, cart: res.data.cart, error: '' })
-        setCount(res.data.cart.itemCount)
+        sync(res.data.cart)
       }
     } catch (err) {
       setNotice(getErrorMessage(err))

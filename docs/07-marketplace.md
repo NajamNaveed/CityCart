@@ -151,11 +151,27 @@ Brand Store
 ├── Description
 ├── Categories
 ├── Featured Products
+├── Category Shelves
 ├── All Products
 └── Store Information
 ```
 
 Customers can browse products belonging to that brand.
+
+The storefront shows its products as one scrolling shelf per category, newest
+first, with the category's full item count. `GET /api/v1/brands/:id/storefront`
+answers with `shelves` for this: each shelf carries the category (or `null` for
+products whose category is no longer active, grouped under "More from this
+store"), its total `count`, and up to 30 products with only the public card
+fields (name, slug, category, images, price, compare-at price) plus their
+availability. `featuredProducts` remains the eight newest products.
+
+A shelf tile adds straight to the cart from its `+` control, and the cart the
+customer is filling stays at the bottom of the page as a tray of the items it
+holds — photo, quantity and subtotal — so nothing on the shelf needs a trip to
+the cart page. Removing the last unit takes the item out of that tray again.
+The tray is a view of the customer's own cart only; it never shows another
+customer's lines.
 
 A brand storefront must never display products belonging to another brand.
 

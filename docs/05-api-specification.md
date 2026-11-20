@@ -560,6 +560,24 @@ endpoint. The storefront response reuses it for its `brand` object.
 
 ---
 
+## Get Brand Storefront
+
+```text
+GET /api/v1/brands/:id/storefront
+```
+
+Public and read-only; 404 when the brand is not ACTIVE. Returns the public
+`brand`, its `store` record, the `categories` this brand actually sells in, the
+eight newest `featuredProducts` and `shelves` — the brand's products grouped by
+category for the store page (docs/07 §7). Each shelf is `{ categoryId, name,
+count, products }`; `categoryId` is `null` only for the final "More from this
+store" shelf holding products whose category is no longer active. Shelf products
+carry just the public card fields (`name`, `slug`, `categoryId`, `images`,
+`price`, `compareAtPrice`) plus computed `availability`, and a shelf lists at
+most 30 of them while `count` reports the whole category.
+
+---
+
 ## Create Brand
 
 ```text

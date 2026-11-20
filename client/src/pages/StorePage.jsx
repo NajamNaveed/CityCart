@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ChevronRight, Clock, Mail, MapPin, Phone, Store as StoreIcon } from 'lucide-react'
 import api, { getErrorMessage } from '../services/api'
-import ProductCard from '../components/ProductCard'
 import ProductImage from '../components/ProductImage'
-import { EmptyState, ErrorState, Skeleton, badge, btn, panel, shell } from '../design'
+import CartTray from '../components/store/CartTray'
+import ProductShelf from '../components/store/ProductShelf'
+import { useCart } from '../hooks/useCart'
+import { EmptyState, ErrorState, Skeleton, btn, panel, shell } from '../design'
 import { usePageMeta } from '../hooks/usePageMeta'
 import { breadcrumbLd, storeLd } from '../utils/seo'
 
@@ -37,9 +39,16 @@ function StoreSkeleton() {
       <Skeleton className="h-4 w-40" />
       <Skeleton className="mt-6 aspect-[3/1] w-full rounded-panel" />
       <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_320px]">
-        <div className="grid gap-5 sm:grid-cols-2">
-          {[0, 1, 2, 3].map((key) => (
-            <Skeleton key={key} className="aspect-[4/5] w-full rounded-card" />
+        <div className="space-y-9">
+          {[0, 1].map((row) => (
+            <div key={row}>
+              <Skeleton className="h-5 w-44" />
+              <div className="mt-4 flex gap-3 overflow-hidden">
+                {[0, 1, 2, 3, 4, 5].map((key) => (
+                  <Skeleton key={key} className="h-[248px] w-[164px] shrink-0 rounded-card sm:w-[178px]" />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
         <Skeleton className="h-72 w-full rounded-panel" />
@@ -50,6 +59,7 @@ function StoreSkeleton() {
 
 export default function StorePage() {
   const { id } = useParams()
+  const { itemCount } = useCart()
   const [state, setState] = useState({ id: null, data: null, error: '' })
   const [reload, setReload] = useState(0)
 
@@ -129,7 +139,7 @@ export default function StorePage() {
     )
   }
 
-  const { brand, store, categories = [], featuredProducts = [] } = state.data
+  const { brand, store, featuredProducts = [], shelves = [] } = state.data
   const name = store?.name || brand?.name || 'Store'
   const banner = store?.banner || brand?.coverImage
   const description = store?.description || brand?.description
@@ -139,10 +149,18 @@ export default function StorePage() {
   const email = contactValue(store?.contact, ['email'])
   const hours = store?.businessHours && typeof store.businessHours === 'object' ? store.businessHours : null
   const openDays = hours ? DAYS.filter(([key]) => hours[key] && hours[key].toLowerCase() !== 'closed') : []
+  // An older API build answers without shelves; the newest products then
+  // simply form one row instead of the page showing an empty shop.
+  const rows =
+    shelves.length > 0
+      ? shelves
+      : featuredProducts.length > 0
+        ? [{ categoryId: null, name, count: featuredProducts.length, products: featuredProducts }]
+        : []
 
   return (
     <div className="bg-canvas">
-      <div className={`${shell} pb-16 pt-6 sm:pt-8`}>
+      <div className={`${shell} pt-6 sm:pt-8 ${itemCount > 0 ? 'pb-32' : 'pb-16'}`}>
         <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1.5 text-[12px] text-ink/45">
           <Link to="/" className="transition hover:text-ink">
             Home
@@ -196,19 +214,9 @@ export default function StorePage() {
               <p className="max-w-2xl text-[14px] leading-relaxed text-ink/65">{description}</p>
             )}
 
-            {categories.length > 0 && (
-              <div className="mt-6 flex flex-wrap gap-1.5">
-                {categories.flatMap((category) => [category, ...(category.children || [])]).slice(0, 10).map((category) => (
-                  <span key={category._id} className={badge('soft')}>
-                    {category.name}
-                  </span>
-                ))}
-              </div>
-            )}
-
             <div className="mt-10 flex flex-wrap items-end justify-between gap-3 border-b border-line-warm pb-4">
               <div>
-                <p className="text-[10.5px] font-semibold uppercase tracking-[0.22em] text-ink/45">On the shelf</p>
+                <p className="text-[10.5px] font-semibold uppercase tracking-[0.22em] text-ink/45">On the shelves</p>
                 <h2 className="font-display mt-2 text-[24px] font-semibold tracking-tight text-ink sm:text-[28px]">
                   Fresh from this store
                 </h2>
@@ -218,7 +226,7 @@ export default function StorePage() {
               </Link>
             </div>
 
-            {featuredProducts.length === 0 ? (
+            {rows.length === 0 ? (
               <EmptyState
                 icon={StoreIcon}
                 title="The shelves are being stocked"
@@ -226,9 +234,9 @@ export default function StorePage() {
                 className="mt-6"
               />
             ) : (
-              <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {featuredProducts.map((product) => (
-                  <ProductCard key={product._id} product={product} brandName={brand.name} />
+              <div className="-mb-3">
+                {rows.map((shelf) => (
+                  <ProductShelf key={String(shelf.categoryId ?? shelf.name)} shelf={shelf} brandName={brand.name} />
                 ))}
               </div>
             )}
@@ -285,6 +293,8 @@ export default function StorePage() {
           </aside>
         </div>
       </div>
+
+      <CartTray />
     </div>
   )
 }

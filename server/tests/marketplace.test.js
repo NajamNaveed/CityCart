@@ -29,7 +29,7 @@ const Inventory = require('../src/models/inventory.model');
 const app = require('../src/app');
 const { buildCategoryTree } = require('../src/services/category.service');
 const { getPublicAvailability } = require('../src/services/inventory.service');
-const { FEATURED_LIMIT } = require('../src/services/storefront.service');
+const { FEATURED_LIMIT, SHELF_LIMIT } = require('../src/services/storefront.service');
 
 const oid = () => new mongoose.Types.ObjectId();
 const inv = (productId, o = {}) => ({
@@ -93,22 +93,26 @@ describe('GET /api/v1/categories/tree', () => {
 });
 
 describe('GET /api/v1/brands/:id/storefront', () => {
-  function mockStorefront(brandId) {
-    const productId = oid();
+  function mockStorefront(brandId, { products = [{ _id: oid(), name: 'Air', categoryId: oid() }], categories = [] } = {}) {
     Brand.findOne.mockResolvedValue({ _id: brandId, name: 'Nike' });
     Store.findOne.mockResolvedValue({ name: 'Nike Store' });
-    const categoryId = oid();
-    Product.distinct.mockResolvedValue([categoryId]);
-    Category.find.mockReturnValue({ sort: jest.fn().mockResolvedValue([{ _id: categoryId, name: 'Shoes' }]) });
-    const limit = jest.fn().mockResolvedValue([{ _id: productId, name: 'Air' }]);
-    Product.find.mockReturnValue({ sort: () => ({ limit }) });
-    Inventory.find.mockResolvedValue([inv(productId)]);
-    return limit;
+    Product.distinct.mockResolvedValue([...new Set(products.map((p) => String(p.categoryId)))]);
+    Category.find.mockReturnValue({ sort: jest.fn().mockResolvedValue(categories) });
+    const sort = jest.fn().mockResolvedValue(products);
+    const select = jest.fn().mockReturnValue({ sort });
+    Product.find.mockReturnValue({ select });
+    Inventory.find.mockResolvedValue(products.map((p) => inv(p._id)));
+    return { select, sort };
   }
 
-  it('returns brand, store, category tree and featured products with availability', async () => {
+  const category = (o = {}) => ({ _id: oid(), name: 'Shoes', order: 0, ...o });
+  const product = (categoryId, o = {}) => ({ _id: oid(), name: 'Item', categoryId, ...o });
+
+  it('returns brand, store, category tree, featured products and shelves with availability', async () => {
     const brandId = oid();
-    const limit = mockStorefront(brandId);
+    const shoes = category({ name: 'Shoes' });
+    const air = product(shoes._id, { name: 'Air' });
+    const { select, sort } = mockStorefront(brandId, { products: [air], categories: [shoes] });
 
     const res = await request(app).get(`/api/v1/brands/${brandId}/storefront`);
 
@@ -117,7 +121,56 @@ describe('GET /api/v1/brands/:id/storefront', () => {
     expect(res.body.store.name).toBe('Nike Store');
     expect(res.body.categories[0].name).toBe('Shoes');
     expect(res.body.featuredProducts[0].availability).toBe('IN_STOCK');
-    expect(limit).toHaveBeenCalledWith(FEATURED_LIMIT);
+    expect(res.body.shelves).toEqual([
+      expect.objectContaining({ name: 'Shoes', count: 1 }),
+    ]);
+    expect(res.body.shelves[0].products[0]).toMatchObject({ name: 'Air', availability: 'IN_STOCK' });
+    // Only public card fields are selected, newest first, no DB-side featured cap.
+    expect(select).toHaveBeenCalledWith('name slug categoryId images price compareAtPrice');
+    expect(sort).toHaveBeenCalledWith({ createdAt: -1 });
+  });
+
+  it('keeps featured at FEATURED_LIMIT but shelves count every product', async () => {
+    const brandId = oid();
+    const shoes = category();
+    const products = Array.from({ length: FEATURED_LIMIT + 4 }, () => product(shoes._id));
+    mockStorefront(brandId, { products, categories: [shoes] });
+
+    const res = await request(app).get(`/api/v1/brands/${brandId}/storefront`);
+
+    expect(res.body.featuredProducts).toHaveLength(FEATURED_LIMIT);
+    expect(res.body.shelves[0].count).toBe(FEATURED_LIMIT + 4);
+  });
+
+  it('groups by category, orders shelves by category order and caps each row at SHELF_LIMIT', async () => {
+    const brandId = oid();
+    const dairy = category({ name: 'Milk', order: 2 });
+    const bakery = category({ name: 'Bakery', order: 1 });
+    const products = [
+      ...Array.from({ length: 3 }, () => product(dairy._id)),
+      ...Array.from({ length: SHELF_LIMIT + 5 }, () => product(bakery._id)),
+    ];
+    mockStorefront(brandId, { products, categories: [bakery, dairy] });
+
+    const res = await request(app).get(`/api/v1/brands/${brandId}/storefront`);
+
+    expect(res.body.shelves.map((s) => s.name)).toEqual(['Bakery', 'Milk']);
+    expect(res.body.shelves[0]).toMatchObject({ count: SHELF_LIMIT + 5 });
+    expect(res.body.shelves[0].products).toHaveLength(SHELF_LIMIT);
+    expect(res.body.shelves[1].products).toHaveLength(3);
+  });
+
+  it('collects products with no active category into one final shelf', async () => {
+    const brandId = oid();
+    const shoes = category();
+    const active = product(shoes._id);
+    const orphans = [product(oid()), product(oid())];
+    mockStorefront(brandId, { products: [active, ...orphans], categories: [shoes] });
+
+    const res = await request(app).get(`/api/v1/brands/${brandId}/storefront`);
+
+    expect(res.body.shelves.map((s) => s.name)).toEqual(['Shoes', 'More from this store']);
+    expect(res.body.shelves[1]).toMatchObject({ categoryId: null, count: 2 });
   });
 
   it('never exposes private brand fields on the storefront', async () => {
@@ -133,12 +186,12 @@ describe('GET /api/v1/brands/:id/storefront', () => {
     Store.findOne.mockResolvedValue(null);
     Product.distinct.mockResolvedValue([]);
     Category.find.mockReturnValue({ sort: jest.fn().mockResolvedValue([]) });
-    const limit = jest.fn().mockResolvedValue([]);
-    Product.find.mockReturnValue({ sort: () => ({ limit }) });
+    Product.find.mockReturnValue({ select: () => ({ sort: jest.fn().mockResolvedValue([]) }) });
 
     const res = await request(app).get(`/api/v1/brands/${brandId}/storefront`);
 
     expect(res.body.brand).toEqual({ _id: String(brandId), name: 'Nike', slug: 'nike' });
+    expect(res.body.shelves).toEqual([]);
   });
 
   it('only ever queries this brand and ACTIVE data', async () => {

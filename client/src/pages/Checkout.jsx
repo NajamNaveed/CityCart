@@ -27,7 +27,7 @@ const addressCard = (on, align = 'items-start') =>
 
 export default function Checkout() {
   const { user } = useAuth()
-  const { setCount } = useCart()
+  const { sync } = useCart()
   const { city } = useCity()
   const { blocks, blocksReady, coords: areaCoords } = useNearby()
   const navigate = useNavigate()
@@ -147,7 +147,9 @@ export default function Checkout() {
         deliveryLocation: { latitude: deliveryPin.lat, longitude: deliveryPin.lng },
         ...(useSaved ? { addressId: chosen._id } : saveIt && { saveAddress: { label: label.trim() || 'Home' } }),
       })
-      setCount(0)
+      // The server emptied the cart with the order; drop the local view too,
+      // so the badge and the shelf steppers go to zero together.
+      sync(null)
       navigate('/order-placed', { replace: true, state: { orders: res.data.orders } })
     } catch (err) {
       setFieldErrors(getFieldErrors(err))
