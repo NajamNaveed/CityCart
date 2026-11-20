@@ -1,4 +1,5 @@
 const Brand = require('../models/brand.model');
+const Category = require('../models/category.model');
 const Branch = require('../models/branch.model');
 const Block = require('../models/block.model');
 const Product = require('../models/product.model');
@@ -242,8 +243,19 @@ async function discover({ q, scope, cityId, blockId, blockIds, radiusKm, lat, ln
     const withStock = await withAvailability(flat.map((entry) => entry.product));
     const stockById = new Map(withStock.map((p) => [String(p._id), p.availability]));
 
+    // The shelf most of a brand's shown products sit on, which is what a
+    // shopper reads as what that shop is. Only names on this page's products.
+    const categoryIds = [...new Set(flat.map((entry) => String(entry.product.categoryId || '')))].filter(
+      (id) => id
+    );
+    const categoryDocs = categoryIds.length
+      ? await Category.find({ _id: { $in: categoryIds }, isActive: true }, 'name')
+      : [];
+    const categoryById = new Map(categoryDocs.map((c) => [String(c._id), c.name]));
+
     for (const item of pageItems) {
-      item.products = (picked.get(String(item._id)) || []).map(({ product, matched, availableAt }) => ({
+      const list = picked.get(String(item._id)) || [];
+      item.products = list.map(({ product, matched, availableAt }) => ({
         _id: product._id,
         name: product.name,
         price: product.price,
@@ -253,6 +265,14 @@ async function discover({ q, scope, cityId, blockId, blockIds, radiusKm, lat, ln
         matched,
         availableAt,
       }));
+
+      const counts = new Map();
+      for (const { product } of list) {
+        const name = categoryById.get(String(product.categoryId || ''));
+        if (name) counts.set(name, (counts.get(name) || 0) + 1);
+      }
+      item.category =
+        [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] || null;
     }
   }
 

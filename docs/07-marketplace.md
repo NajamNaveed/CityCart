@@ -326,6 +326,17 @@ Discovery must respect:
 * Tenant relationships
 * A reasonable maximum page size
 
+Each item is one shop and carries only what a shopper needs to choose it:
+
+```text
+{ _id, name, slug, logo, acceptingNewOrders, nearestKm, branchCount,
+  category, branches[], products[] }
+```
+
+`category` is the name of the active category most of that shop's shown
+products sit on, or `null` when none of them has one. It is derived from the
+products on the page, never stored on the brand.
+
 There is **no public product or catalogue listing endpoint**. Product details are
 fetched individually with `GET /api/v1/products/:id`; offers for one catalogue
 item ("also sold by") come from `GET /api/v1/catalog/browse/:catalogProductId`.

@@ -141,6 +141,51 @@
   }
 }
 
+/* Colour Bloom store cards. A shop's category picks --bloom-h, so the wash is
+   the artwork and the only photos a card needs are the products' own. The
+   stops stay dark enough for white type at any hue, and the off-canvas rings
+   are what keep a wall of saturated cards from reading as flat colour blocks. */
+.store-bloom {
+  background: linear-gradient(
+    150deg,
+    hsl(var(--bloom-h, 34) 50% 44%) 0%,
+    hsl(var(--bloom-h, 34) 55% 31%) 52%,
+    hsl(var(--bloom-h, 34) 60% 20%) 100%
+  );
+}
+.store-bloom-ring {
+  position: absolute;
+  z-index: 0;
+  border-radius: 50%;
+  width: 300px;
+  height: 300px;
+  right: -110px;
+  top: -130px;
+  border: 1.5px solid rgba(255, 255, 255, 0.26);
+  pointer-events: none;
+}
+.store-bloom-ring.is-wide {
+  width: 420px;
+  height: 420px;
+  right: -170px;
+  top: -190px;
+  border-color: rgba(255, 255, 255, 0.13);
+}
+.store-bloom-chip {
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 9.5px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(6px);
+}
+.store-bloom-chip.is-alert {
+  background: rgba(21, 20, 15, 0.5);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
 /* Footer wordmark: the base sits almost invisible; the overlay is the same
    text with a cursor-tracked radial light clipped to the letterforms. */
 .foot-watermark {

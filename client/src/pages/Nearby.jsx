@@ -416,17 +416,9 @@ export default function Nearby() {
                 {fromBlockCentre && range !== 'block' && <>Measured from the centre of {areaName}</>}
               </p>
               <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                {items.map((store) => {
-                  const cover = store.products?.find((product) => product.image)?.image
-                  return (
-                    <StoreCard
-                      key={store._id}
-                      store={cover ? { ...store, cover } : store}
-                      inBlock={inBlock(store)}
-                      showProducts
-                    />
-                  )
-                })}
+                {items.map((store) => (
+                  <StoreCard key={store._id} store={store} inBlock={inBlock(store)} />
+                ))}
               </div>
               {data.pagination.pages > 1 && (
                 <div className="mt-8 flex items-center justify-between gap-3 text-[12.5px]">

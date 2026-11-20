@@ -10,12 +10,12 @@ function initials(name = '') {
     .join('')
 }
 
-function FallbackTile({ name, className }) {
+function FallbackTile({ name, className, textClass = 'text-4xl font-light tracking-[0.15em] text-clay/40' }) {
   return (
     <div
       role="img"
       aria-label={name}
-      className={`flex items-center justify-center overflow-hidden bg-sand text-4xl font-light tracking-[0.15em] text-clay/40 ${className}`}
+      className={`flex items-center justify-center overflow-hidden bg-sand ${textClass} ${className}`}
     >
       {initials(name)}
     </div>
@@ -27,12 +27,12 @@ function FallbackTile({ name, className }) {
  * component, so loading state resets without any effect. A shimmer shows
  * until the photo has decoded, so grids never flash empty while loading.
  */
-function LoadedImage({ src, name, className, width }) {
+function LoadedImage({ src, name, className, width, fallbackClassName }) {
   const [failed, setFailed] = useState(false)
   const [loaded, setLoaded] = useState(false)
 
   if (failed) {
-    return <FallbackTile name={name} className={className} />
+    return <FallbackTile name={name} className={className} textClass={fallbackClassName} />
   }
   return (
     <div className={`relative overflow-hidden bg-sand ${className}`}>
@@ -56,11 +56,20 @@ function LoadedImage({ src, name, className, width }) {
 /**
  * The product photo — or a quiet typographic tile when there is none. The
  * sizing/aspect classes passed via `className` land on the frame; the image
- * fills it.
+ * fills it. `fallbackClassName` resizes the letters for small frames.
  */
-export default function ProductImage({ src, name, className = '', width = 900 }) {
+export default function ProductImage({ src, name, className = '', width = 900, fallbackClassName }) {
   if (!src) {
-    return <FallbackTile name={name} className={className} />
+    return <FallbackTile name={name} className={className} textClass={fallbackClassName} />
   }
-  return <LoadedImage key={src} src={src} name={name} className={className} width={width} />
+  return (
+    <LoadedImage
+      key={src}
+      src={src}
+      name={name}
+      className={className}
+      width={width}
+      fallbackClassName={fallbackClassName}
+    />
+  )
 }

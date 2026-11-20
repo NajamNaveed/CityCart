@@ -55,17 +55,7 @@ export function useHomeFeed(blockIds = []) {
       ordered = [...list].sort((a, b) => Number(inBlock(b)) - Number(inBlock(a)))
     }
 
-    // Shops often reuse the same product photo; walk the list so each card gets
-    // a different cover while one is available.
-    const usedCovers = new Set()
-    return ordered.map((store) => {
-      const images = (Array.isArray(store.products) ? store.products : [])
-        .map((product) => product.image)
-        .filter(Boolean)
-      const cover = images.find((src) => !usedCovers.has(src)) || images[0]
-      if (cover) usedCovers.add(cover)
-      return cover ? { ...store, cover } : store
-    })
+    return ordered
   }, [data, blockIds])
 
   // One item from each shop per round, so the shelf shows the breadth of the

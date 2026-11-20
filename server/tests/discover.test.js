@@ -5,6 +5,7 @@ jest.mock('../src/models/user.model');
 jest.mock('../src/models/brand.model');
 jest.mock('../src/models/block.model');
 jest.mock('../src/models/branch.model');
+jest.mock('../src/models/category.model');
 // Factory mock: product.validator.js (loaded via app) needs Product.STATUSES.
 jest.mock('../src/models/product.model', () => {
   const actual = jest.requireActual('../src/models/product.model');
@@ -29,6 +30,7 @@ const { withAvailability } = require('../src/services/product.service');
 const Brand = require('../src/models/brand.model');
 const Block = require('../src/models/block.model');
 const Branch = require('../src/models/branch.model');
+const Category = require('../src/models/category.model');
 const Product = require('../src/models/product.model');
 const app = require('../src/app');
 const { MONGO_EARTH_RADIUS_KM } = require('../src/utils/geo');
@@ -60,8 +62,8 @@ function makeBlock(name, lat, lng) {
   return { _id: oid(), cityId, name, isActive: true, center: point(lat, lng) };
 }
 
-function makeProduct(brand, name) {
-  return { _id: oid(), brandId: brand._id, name, price: 100, images: ['a.jpg'] };
+function makeProduct(brand, name, categoryId) {
+  return { _id: oid(), brandId: brand._id, name, price: 100, images: ['a.jpg'], categoryId };
 }
 
 // Product.find is used twice: a bare .limit() for search hits, and
@@ -81,6 +83,8 @@ beforeEach(() => {
   withAvailability.mockImplementation(async (products) =>
     products.map((p) => ({ ...p, availability: 'IN_STOCK' }))
   );
+  // Tests that care about the category line give Category.find their own rows.
+  Category.find.mockResolvedValue([]);
 });
 
 describe('GET /api/v1/discover — validation', () => {
@@ -128,6 +132,49 @@ describe('GET /api/v1/discover — city scope', () => {
     expect(res.body.items[0].products[0]).toMatchObject({ name: 'Kurta', availability: 'IN_STOCK' });
     expect(res.body.meta).toMatchObject({ scope: 'city', totalBranches: 2 });
     expect(res.body.pagination.total).toBe(2);
+  });
+
+  it('names the shelf most of the shown products sit on', async () => {
+    const bakery = oid();
+    const sweets = oid();
+    const shop = makeBrand('Chughtai Bakers');
+    const block = makeBlock('Gulberg', 31.4, 73.1);
+    Brand.find.mockResolvedValue([shop]);
+    Branch.find.mockResolvedValue([makeBranch(shop, block, 31.401, 73.101)]);
+    Block.find.mockResolvedValue([block]);
+    Category.find.mockResolvedValue([
+      { _id: bakery, name: 'Bakery' },
+      { _id: sweets, name: 'Sweets' },
+    ]);
+    mockProducts({
+      fetched: [
+        makeProduct(shop, 'Patties', bakery),
+        makeProduct(shop, 'Biscuits', bakery),
+        makeProduct(shop, 'Gulab jamun', sweets),
+      ],
+    });
+
+    const res = await request(app).get(`/api/v1/discover?scope=city&cityId=${cityId}&lat=31.4&lng=73.1`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.items[0].category).toBe('Bakery');
+    // Only the categories of the products this page actually shows are read.
+    const [[filter]] = Category.find.mock.calls;
+    expect(filter).toEqual({ _id: { $in: [String(bakery), String(sweets)] }, isActive: true });
+  });
+
+  it('leaves the category off a shop whose products have none', async () => {
+    const shop = makeBrand('Corner Store');
+    const block = makeBlock('Gulberg', 31.4, 73.1);
+    Brand.find.mockResolvedValue([shop]);
+    Branch.find.mockResolvedValue([makeBranch(shop, block, 31.401, 73.101)]);
+    Block.find.mockResolvedValue([block]);
+    mockProducts({ fetched: [makeProduct(shop, 'Milk')] });
+
+    const res = await request(app).get(`/api/v1/discover?scope=city&cityId=${cityId}&lat=31.4&lng=73.1`);
+
+    expect(res.body.items[0].category).toBeNull();
+    expect(Category.find).not.toHaveBeenCalled();
   });
 
   it('only considers ACTIVE brands and active branches', async () => {
