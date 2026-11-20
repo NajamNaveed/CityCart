@@ -57,7 +57,7 @@ export default function StoreCard({ store, inBlock }) {
 
   return (
     <article
-      className="store-bloom group relative flex h-full flex-col rounded-panel p-4 text-cream shadow-[0_18px_40px_rgba(21,20,15,0.16)] transition-transform duration-300 motion-safe:hover:-translate-y-1"
+      className="store-bloom group relative flex h-full flex-col overflow-hidden rounded-panel p-4 text-cream shadow-[0_18px_40px_rgba(21,20,15,0.16)] transition-transform duration-300 motion-safe:hover:-translate-y-1"
       style={{ '--bloom-h': bloomHue(store) }}
     >
       <span className="store-bloom-ring" aria-hidden="true" />
