@@ -6,14 +6,21 @@ import { formatDistance } from '../../utils/geo'
 
 // The colour is the artwork, so it carries meaning: a shop's category decides
 // its hue, and two shops selling the same thing always wear the same colour.
-// The families with an obvious colour are named; the rest read their hue off
-// the category name itself, so a shop only changes colour when what it sells
-// does. Every hue is kept dark enough to hold white type.
+// The families cover the category names the catalogue actually uses, checked
+// most specific first so "Footwear" never borrows clothing's colour and
+// "Watches" never borrows hardware's. Anything unlisted still gets a stable
+// hue hashed from its own name. Every hue stays dark enough to hold white type.
 const BLOOM_HUES = [
-  [/fruit|veget|grocer|produce|farm|herb|salad|milk|dairy/, 148],
+  [/shoe|footwear|chappal|sandal|khussa|slipper/, 288],
+  [/jewel|necklac|earring|bangle|watch|gold|silver|plated/, 46],
+  [/kurta|shalwar|kameez|waistcoat|cloth|fabric|silk|scarf|tailor|wear|fashion|dress|shirt|jean|suit|beaut|cosmet|skincare|perfume/, 330],
+  [/home|living|bedding|cushion|decor|household|bath|towel|pottery|khes|wall|shelf|kitchen|dining|furnish|lamp/, 178],
+  [/electronic|phone|gadget|charger|laptop|audio|device|tech/, 215],
+  [/stationer|office|book|paper|pen|print|custom/, 252],
+  [/bag|travel|luggage|belt|wallet|backpack|suitcase/, 20],
+  [/fruit|veget|grocer|produce|farm|herb|salad|milk|dairy|egg/, 148],
   [/bake|bread|cake|confect|sweet|chocol|caf|coffee|tea|snack/, 34],
-  [/meat|fish|spice|masala|kitchen|food|restaur|grill|burger|pizza/, 16],
-  [/cloth|wear|fashion|shoe|bag|fabric|tailor|jewel|beaut|cosmet|skincare|perfume/, 322],
+  [/meat|fish|spice|masala|food|restaur|grill|burger|pizza/, 10],
 ]
 
 function bloomHue(store) {
