@@ -45,14 +45,18 @@ function EmptyNote({ children, to, linkLabel, className = '' }) {
   )
 }
 
-function ServiceCta() {
+function ServiceCta({ wide = false, className = '' }) {
   return (
-    <div className="relative flex h-full flex-col justify-between overflow-hidden rounded-card bg-noir p-6 text-cream">
+    <div
+      className={`relative flex h-full flex-col justify-between overflow-hidden rounded-card bg-noir p-6 text-cream ${
+        wide ? 'lg:justify-center' : ''
+      } ${className}`}
+    >
       <div
         aria-hidden="true"
         className="pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full bg-clay/25 blur-3xl"
       />
-      <div className="relative">
+      <div className={`relative ${wide ? 'lg:max-w-[430px]' : ''}`}>
         <span className="inline-flex h-9 w-9 items-center justify-center rounded-tile border border-cream/15 bg-cream/5 text-clay">
           <Sparkles className="h-4 w-4" aria-hidden="true" />
         </span>
@@ -215,7 +219,12 @@ export default function Home() {
             {visibleProviders.map((provider) => (
               <ProviderCard key={provider._id} provider={provider} />
             ))}
-            {visibleProviders.length < 3 && <ServiceCta />}
+            {visibleProviders.length < 3 && (
+              <ServiceCta
+                wide={visibleProviders.length === 1}
+                className={visibleProviders.length === 1 ? 'lg:col-span-2' : ''}
+              />
+            )}
           </div>
         )}
       </section>
