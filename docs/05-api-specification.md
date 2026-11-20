@@ -3049,6 +3049,61 @@ Failure codes:
 
 `NOT_A_PARTICIPANT` is a 403 rather than the chat endpoints' 404 anti-probing answer because the roadmap fixes 403 for this endpoint (docs/29 Phase 1c).
 
+## Unified customer chat
+
+```text
+POST /api/v1/ai/chat
+```
+
+Role: `CUSTOMER` only. This is the single surface of the web `Ask CityCart` panel (docs/29 Phase 2g). The customer types one message and the server decides which scoped agent should answer; there is no mode button to choose first.
+
+Request:
+
+```json
+{
+  "message": "where is my order?",
+  "cityId": "66f1a0c2b3d4e5f60718293a",
+  "lat": 31.4187,
+  "lng": 73.0791,
+  "lastMode": "order"
+}
+```
+
+`message` is 2–500 characters and is sanitized before routing. `cityId`, `lat` and `lng` are optional and follow the same rules as the shopping assistant. `lastMode` is optional and only a hint for short follow-ups such as `cancel it` or `tomorrow evening`; it is validated against `shop`, `order`, `service`, `recipe` and `compare`, and never selects an agent by itself. Any other client field (including a `mode`) is ignored.
+
+Routing is deterministic (docs/27 §3.4): order questions win first, then comparison, recipes, and services; everything else is a product search. Greetings and `help` / `what can you do` answer with capability hints without calling a provider or spending the daily allowance.
+
+The chosen agent is exactly the same one behind its dedicated endpoint below — same read-only tools, same customer scope, same degradation. The response adds `mode` so the client renders the right cards, and `hints` with example follow-up questions:
+
+```json
+{
+  "success": true,
+  "data": {
+    "mode": "order",
+    "reply": "Your order CC-2026-000101 is still waiting for the store to confirm it.",
+    "orders": [ ... ],
+    "products": [],
+    "providers": [],
+    "title": null,
+    "items": [],
+    "degraded": false,
+    "steps": 1,
+    "hints": ["Where is my latest order?", "How do returns work?", "Can I cancel a pending order?"]
+  }
+}
+```
+
+`mode` is one of `shop`, `order`, `service`, `recipe`, `compare` or `help`. A degraded answer (provider outage or unusable model output) keeps the agent's own plain-search / latest-orders fallback and sets `degraded: true`.
+
+Failure codes:
+
+```text
+400 (zod)              message missing/shorter than 2/longer than 500, bad cityId, only one of lat/lng, or unknown lastMode
+403 ROLE_NOT_ALLOWED   caller is not a customer
+429 AI_DAILY_LIMIT / rate limiter
+503 AI_UNAVAILABLE     kill switch is off
+```
+
 ## Shopping assistant
 
 ```text

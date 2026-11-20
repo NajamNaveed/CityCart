@@ -18,6 +18,10 @@ const MINUTE_MS = 60 * 1000;
 
 const objectIdSchema = z.string().regex(/^[0-9a-f]{24}$/i);
 
+// Provider and offering prices are stored in paisa; the model and the prompt
+// only ever see rupees, so it cannot read 350000 as Rs 350,000.
+const toRupees = (paisa) => Math.round(Number(paisa) || 0) / 100;
+
 /**
  * Phase 2c service tools (docs/27 §3.4). They only read public provider data
  * and the provider's published availability; nothing here creates or changes a
@@ -81,11 +85,16 @@ const findProvidersTool = {
           categoryName: card.categoryName,
           blockName: card.blockName,
           distanceKm: card.distanceKm,
-          startingAtPrice: card.startingAtPrice,
+          startingAtPricePkr: toRupees(card.startingAtPrice),
           ratingAvg: card.ratingAvg,
           ratingCount: card.ratingCount,
           isNew: card.isNew,
-          offerings: card.topOfferings,
+          offerings: card.topOfferings.map((offering) => ({
+            offeringId: offering.offeringId,
+            title: offering.title,
+            durationMinutes: offering.durationMinutes,
+            startingAtPricePkr: toRupees(offering.startingAtPrice),
+          })),
         };
       });
 
@@ -206,7 +215,13 @@ const providerSlotsTool = {
         slug: provider.slug,
       },
       isPublished: availability.isPublished,
-      offerings: groups,
+      offerings: groups.map((offering) => ({
+        offeringId: offering.offeringId,
+        title: offering.title,
+        durationMinutes: offering.durationMinutes,
+        startingAtPricePkr: toRupees(offering.startingAtPrice),
+        slots: offering.slots,
+      })),
     };
   },
 };

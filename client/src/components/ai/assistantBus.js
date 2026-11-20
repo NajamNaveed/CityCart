@@ -1,7 +1,7 @@
 /**
  * A tiny bridge between a page and the mounted Ask CityCart drawer (docs/29
- * Phase 2e). Pages can open the assistant in a mode with a prefilled question;
- * the customer still presses send, so nothing is ever sent for them.
+ * Phase 2e). Pages can open the assistant with a prefilled question; the
+ * customer still presses send, so nothing is ever sent for them.
  */
 const OPEN_EVENT = 'citycart:assistant-open'
 
@@ -24,8 +24,8 @@ export function subscribeAssistant(listener) {
   return () => listeners.delete(listener)
 }
 
-export function openAssistant({ mode, message } = {}) {
-  window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: { mode, message } }))
+export function openAssistant({ message } = {}) {
+  window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: { message } }))
 }
 
 export const ASSISTANT_OPEN_EVENT = OPEN_EVENT

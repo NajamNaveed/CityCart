@@ -19,6 +19,8 @@ const {
   compareProducts,
   MESSAGE_LIMIT: COMPARE_MESSAGE_LIMIT,
 } = require('../services/ai/agents/compare.agent');
+const { askCityCart } = require('../services/ai/agents/chat.agent');
+const { ROUTABLE_MODES, MAX_MESSAGE_CHARS } = require('../services/ai/intent');
 const {
   draftChatMessage,
   ChatDraftError,
@@ -350,6 +352,55 @@ async function compare(req, res, next) {
   }
 }
 
+const chatSchema = z
+  .object({
+    message: z
+      .string()
+      .trim()
+      .min(2, 'Ask a question first.')
+      .max(MAX_MESSAGE_CHARS, `Keep the question under ${MAX_MESSAGE_CHARS} characters.`),
+    cityId: z.string().regex(/^[0-9a-f]{24}$/i, 'Choose a valid city.').optional(),
+    lat: z.number().min(-90).max(90).optional(),
+    lng: z.number().min(-180).max(180).optional(),
+    // Only a hint for short follow-ups; the server still decides the mode.
+    lastMode: z.enum(ROUTABLE_MODES).optional(),
+  })
+  .refine((value) => (value.lat === undefined) === (value.lng === undefined), {
+    message: 'Send both coordinates or neither.',
+    path: ['lat'],
+  });
+
+/**
+ * Phase 2g: the single customer chat. One message is routed server-side to the
+ * shopping, order, service, recipe or comparison agent, and the answer carries
+ * its mode so the client renders the right cards. A greeting or "help" answers
+ * with the capability hints without spending a provider call.
+ */
+async function chat(req, res, next) {
+  const parsed = chatSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsed.error),
+    });
+  }
+
+  try {
+    const data = await askCityCart({
+      message: parsed.data.message,
+      ctx: { userId: req.user._id, role: req.user.role },
+      cityId: parsed.data.cityId || null,
+      lat: parsed.data.lat ?? null,
+      lng: parsed.data.lng ?? null,
+      lastMode: parsed.data.lastMode || null,
+    });
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    return next(err);
+  }
+}
+
 const chatDraftSchema = z.object({
   kind: z.enum(DRAFT_KINDS, { error: 'Choose a conversation type.' }),
   id: z.string().trim().min(1, 'Choose a conversation.').max(64),
@@ -404,4 +455,5 @@ module.exports = {
   recipeList,
   compare,
   chatDraft,
+  chat,
 };

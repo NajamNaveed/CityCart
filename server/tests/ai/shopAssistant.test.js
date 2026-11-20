@@ -164,6 +164,24 @@ describe('POST /api/v1/ai/shop-assistant', () => {
     expect(discover).toHaveBeenCalledWith(expect.objectContaining({ q: 'rice', scope: 'city', cityId }));
   });
 
+  it('never shows the same product twice, even if the model repeats its id', async () => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(modelSays({ tool: 'search_products', args: { query: 'rice' } }))
+      .mockResolvedValueOnce(
+        modelSays({
+          answer: 'This is the best rice nearby.',
+          productIds: [String(productId), String(productId), String(productId)],
+        })
+      );
+
+    const res = await ask({ message: 'cheap rice near me', cityId });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.products).toHaveLength(1);
+    expect(res.body.data.products[0]._id).toBe(String(productId));
+  });
+
   it('never forwards ownership fields to a tool', async () => {
     global.fetch = jest
       .fn()

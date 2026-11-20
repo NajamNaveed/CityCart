@@ -246,6 +246,19 @@ describe('POST /api/v1/ai/service-helper', () => {
     );
   });
 
+  it('gives the model rupee prices while the client card keeps paisa for its formatter', async () => {
+    const res = await askForSlots();
+
+    expect(res.status).toBe(200);
+    // The model sees Rs 3,500, not the raw 350000 paisa.
+    const prompt = lastPrompt();
+    expect(prompt).toContain('"startingAtPricePkr":3500');
+    expect(prompt).not.toContain('"startingAtPrice":350000');
+    // The response card is unchanged: the web and app divide by 100.
+    expect(res.body.data.providers[0].startingAtPrice).toBe(350000);
+    expect(res.body.data.providers[0].offerings[0].startingAtPrice).toBe(350000);
+  });
+
   it('never suggests a time that is already booked', async () => {
     const evening = availableSlots(availabilityFixture, 60, { days: 2, nowMs: FIXED_NOW }).filter(
       (slot) => slot.dateKey === TOMORROW_KEY && slot.startMinute >= 1020

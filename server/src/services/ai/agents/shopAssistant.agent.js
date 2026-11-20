@@ -61,7 +61,7 @@ async function askShopAssistant({ message, ctx, cityId, lat, lng }) {
       answerShape: { productIds: z.array(z.string().max(64)).max(4).optional() },
     });
 
-    const products = (decision.productIds || [])
+    const products = [...new Set(decision.productIds || [])]
       .map((id) => toolCtx.products.get(String(id)))
       .filter(Boolean)
       .slice(0, 4);

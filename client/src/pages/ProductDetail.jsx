@@ -431,15 +431,15 @@ function ProductView({ product, brand }) {
                 </Link>
               )}
 
-              {/* Opens the assistant in Compare mode with the question already
-                  typed; sending stays the customer's choice. Hidden while AI
-                  is off, when the drawer is not mounted either. */}
+              {/* Opens the assistant with the comparison question already
+                  typed; the server routes it and sending stays the customer's
+                  choice. Hidden while AI is off, when the drawer is not
+                  mounted either. */}
               {isCustomer && assistantAvailable && (
                 <button
                   type="button"
                   onClick={() =>
                     openAssistant({
-                      mode: 'compare',
                       message: `Compare ${product.name} with similar products nearby`,
                     })
                   }

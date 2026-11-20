@@ -1,6 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Minus, Plus, Send, ShoppingBag, Sparkles } from 'lucide-react'
+import {
+  ArrowLeftRight,
+  ChefHat,
+  Minus,
+  Package,
+  Plus,
+  Send,
+  ShoppingBag,
+  Sparkles,
+  Wrench,
+} from 'lucide-react'
 
 import api, { getErrorMessage } from '../../services/api'
 import { useCity } from '../../hooks/useCity'
@@ -14,65 +24,60 @@ import { formatDate, formatPrice } from '../../ui'
 import { formatDistance } from '../../utils/geo'
 import { ASSISTANT_OPEN_EVENT, setAssistantAvailable } from './assistantBus'
 
-// Each mode posts the same body to its own endpoint; the server decides what a
-// mode may read (docs/29 Phase 2).
-const MODES = [
+// One chat, one endpoint: the server reads the message and picks the same
+// scoped agent a mode button used to select (docs/29 Phase 2g). These rows are
+// hints, not filters — every example is sent to the same /ai/chat route.
+const CAPABILITIES = [
   {
-    key: 'shop',
-    label: 'Find products',
-    endpoint: '/ai/shop-assistant',
-    placeholder: 'What are you looking for? e.g. cheap rice',
-    intro: 'Ask for a product, a price or a shop around you. Answers use real listings and never invent products.',
-    suggestions: ['Cheap rice', 'Gift under 3000', 'Milk nearby'],
-    withArea: true,
-    busy: 'Thinking…',
-    fallback: 'Showing matches without the assistant.',
+    mode: 'shop',
+    label: 'Products',
+    icon: ShoppingBag,
+    example: 'Cheap rice nearby',
   },
   {
-    key: 'compare',
-    label: 'Compare',
-    endpoint: '/ai/compare',
-    placeholder: 'e.g. Compare two rice packs',
-    intro: 'Put two or three products side by side — price, stock, rating and the listing’s own details. Only real listings appear.',
-    suggestions: ['Compare rice brands', 'Compare cooking oil 1L packs', 'Compare milk cartons'],
-    withArea: true,
-    busy: 'Comparing…',
-    fallback: 'Showing the closest matches.',
+    mode: 'order',
+    label: 'Orders',
+    icon: Package,
+    example: 'Where is my order?',
   },
   {
-    key: 'recipe',
-    label: 'Cook',
-    endpoint: '/ai/recipe-list',
-    placeholder: 'e.g. Chicken biryani for 6 people',
-    intro: 'Describe a dish and get its ingredients matched to real products nearby. Edit the list, then add it all to your cart.',
-    suggestions: ['Chicken biryani for 6', 'Aloo gosht for 4', 'Vegetable pulao'],
-    withArea: true,
-    busy: 'Writing your shopping list…',
-    fallback: 'Here are products matching your words.',
-  },
-  {
-    key: 'order',
-    label: 'My orders',
-    endpoint: '/ai/order-helper',
-    placeholder: 'e.g. Where is my order?',
-    intro: 'Ask about your own orders, delivery, cancellation or returns. The assistant can only read your orders.',
-    suggestions: ['Where is my order?', 'How do I cancel an order?', 'Can I return an item?'],
-    withArea: false,
-    busy: 'Checking your orders…',
-    fallback: 'Here are your latest orders.',
-  },
-  {
-    key: 'service',
+    mode: 'service',
     label: 'Services',
-    endpoint: '/ai/service-helper',
-    placeholder: 'e.g. AC repair tomorrow evening',
-    intro: 'Ask for a service, a price or free time around you. Times come from the provider’s published hours — booking happens on their page.',
-    suggestions: ['AC repair tomorrow evening', 'Plumber near me', 'Salon for a haircut'],
-    withArea: true,
-    busy: 'Checking providers…',
-    fallback: 'Here are service providers near you.',
+    icon: Wrench,
+    example: 'AC repair tomorrow evening',
+  },
+  {
+    mode: 'recipe',
+    label: 'Recipe list',
+    icon: ChefHat,
+    example: 'Chicken biryani for 6',
+  },
+  {
+    mode: 'compare',
+    label: 'Compare',
+    icon: ArrowLeftRight,
+    example: 'Compare rice brands',
   },
 ]
+
+const MODE_LABELS = {
+  shop: 'Shopping',
+  order: 'Orders',
+  service: 'Services',
+  recipe: 'Recipe',
+  compare: 'Compare',
+  help: 'Assistant',
+}
+
+// Used only when the server could not soften a provider failure, exactly like
+// the per-mode fallbacks did before the chat was merged.
+const FALLBACKS = {
+  shop: 'Showing matches without the assistant.',
+  order: 'Here are your latest orders.',
+  service: 'Here are service providers near you.',
+  recipe: 'Here are products matching your words.',
+  compare: 'Showing the closest matches.',
+}
 
 let nextId = 1
 
@@ -499,14 +504,14 @@ export default function AssistantPanel() {
   const { coords } = useNearby()
   const [available, setAvailable] = useState(false)
   const [open, setOpen] = useState(false)
-  const [mode, setMode] = useState(MODES[0].key)
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [messages, setMessages] = useState([])
   const endRef = useRef(null)
   const inputRef = useRef(null)
-
-  const active = useMemo(() => MODES.find((item) => item.key === mode) || MODES[0], [mode])
+  // The previous tool mode is a hint for short follow-ups ("cancel it"). The
+  // server still makes the routing decision and validates this value.
+  const lastModeRef = useRef(null)
 
   useEffect(() => {
     let activeProbe = true
@@ -528,17 +533,13 @@ export default function AssistantPanel() {
   }, [])
 
   // A page (for example the product page's Compare button) can open the
-  // drawer in a mode with a prefilled question; sending stays the customer's
-  // action. When AI is off the drawer is not rendered, so there is no button
-  // to reach this either.
+  // drawer with a prefilled question; sending stays the customer's action.
+  // When AI is off the drawer is not rendered, so there is no button to reach
+  // this either.
   useEffect(() => {
     function onOpen(event) {
       if (!available) return
-      const { mode: wanted, message } = event.detail || {}
-      if (wanted && MODES.some((item) => item.key === wanted)) {
-        setMode(wanted)
-        setMessages([])
-      }
+      const { message } = event.detail || {}
       if (message) setInput(message)
       setOpen(true)
     }
@@ -561,24 +562,28 @@ export default function AssistantPanel() {
     setInput('')
     setBusy(true)
     try {
-      const { data } = await api.post(active.endpoint, {
+      const { data } = await api.post('/ai/chat', {
         message,
-        ...(active.withArea && cityId && { cityId }),
-        ...(active.withArea && coords && { lat: coords.lat, lng: coords.lng }),
+        ...(cityId && { cityId }),
+        ...(coords && { lat: coords.lat, lng: coords.lng }),
+        ...(lastModeRef.current && { lastMode: lastModeRef.current }),
       })
       const answer = data.data || {}
+      const mode = answer.mode || 'shop'
+      if (mode !== 'help') lastModeRef.current = mode
       setMessages((prev) => [
         ...prev,
         {
           id: nextId++,
           role: 'assistant',
-          mode: active.key,
-          text: answer.reply || active.fallback,
+          mode,
+          text: answer.reply || FALLBACKS[mode] || 'Sorry, I could not put that into words.',
           products: answer.products || [],
           orders: answer.orders || [],
           providers: answer.providers || [],
           title: answer.title || null,
           items: answer.items || [],
+          hints: answer.hints || [],
           degraded: Boolean(answer.degraded),
         },
       ])
@@ -591,7 +596,7 @@ export default function AssistantPanel() {
           role: 'assistant',
           error: true,
           text: off
-            ? `The assistant is off right now. You can still search from ${active.key === 'service' ? 'Services' : 'Stores'}.`
+            ? 'The assistant is off right now. You can still search from Stores or Services.'
             : getErrorMessage(err, 'The assistant could not answer just now.'),
         },
       ])
@@ -601,12 +606,6 @@ export default function AssistantPanel() {
   }
 
   if (!available) return null
-
-  function changeMode(key) {
-    if (busy || key === mode) return
-    setMode(key)
-    setMessages([])
-  }
 
   return (
     <>
@@ -622,44 +621,40 @@ export default function AssistantPanel() {
 
       <Drawer open={open} onClose={() => setOpen(false)} title="Ask CityCart" width="max-w-md">
         <div className="flex h-full flex-col">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            {MODES.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => changeMode(item.key)}
-                className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition ${
-                  item.key === active.key
-                    ? 'bg-forest text-cream'
-                    : 'border border-line-warm bg-paper text-ink/70 hover:bg-paper-warm'
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-            <Badge tone="sage" className="ml-auto">
-              AI
-            </Badge>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <p className="text-[11.5px] text-ink/45">
+              One chat — I pick the right helper for your question.
+            </p>
+            <Badge tone="sage">AI</Badge>
           </div>
 
           <div className="flex-1 space-y-3 overflow-y-auto pb-3">
             {messages.length === 0 && (
               <div className="rounded-tile border border-line-warm bg-paper-warm p-4">
                 <p className="text-[13px] leading-relaxed text-ink/70">
-                  {active.intro}
+                  Ask anything about CityCart. I can:
                 </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {active.suggestions.map((suggestion) => (
-                    <button
-                      key={suggestion}
-                      type="button"
-                      onClick={() => send(suggestion)}
-                      className="rounded-full border border-line-warm bg-paper px-3 py-1.5 text-[12px] text-ink/75 transition hover:border-forest/30 hover:text-ink"
-                    >
-                      {suggestion}
-                    </button>
+                <ul className="mt-3 space-y-1.5">
+                  {CAPABILITIES.map(({ mode: key, label, icon: Icon, example }) => (
+                    <li key={key} className="flex items-center gap-2">
+                      <Icon className="h-3.5 w-3.5 shrink-0 text-forest" aria-hidden="true" />
+                      <span className="w-[74px] shrink-0 text-[11.5px] font-medium text-ink/65">
+                        {label}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => send(example)}
+                        className="min-w-0 flex-1 truncate rounded-full border border-line-warm bg-paper px-2.5 py-1 text-left text-[11.5px] text-ink/75 transition hover:border-forest/30 hover:text-ink"
+                      >
+                        {example}
+                      </button>
+                    </li>
                   ))}
-                </div>
+                </ul>
+                <p className="mt-3 text-[10.5px] leading-relaxed text-ink/40">
+                  English, Urdu or Roman Urdu — no need to pick a mode. Answers use real listings,
+                  your own orders and live availability.
+                </p>
               </div>
             )}
 
@@ -672,6 +667,11 @@ export default function AssistantPanel() {
                 </div>
               ) : (
                 <div key={entry.id} className="max-w-[92%] space-y-2">
+                  {!entry.error && MODE_LABELS[entry.mode] && (
+                    <span className="block text-[9.5px] font-semibold uppercase tracking-[0.08em] text-ink/35">
+                      {MODE_LABELS[entry.mode]}
+                    </span>
+                  )}
                   <p
                     className={`rounded-2xl rounded-bl-sm border px-3.5 py-2.5 text-[13px] leading-relaxed ${
                       entry.error
@@ -682,6 +682,20 @@ export default function AssistantPanel() {
                   >
                     {entry.text}
                   </p>
+                  {entry.mode === 'help' && entry.hints?.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {entry.hints.map((hint) => (
+                        <button
+                          key={hint}
+                          type="button"
+                          onClick={() => send(hint)}
+                          className="rounded-full border border-line-warm bg-paper px-2.5 py-1 text-[11px] text-ink/70 transition hover:border-forest/30 hover:text-ink"
+                        >
+                          {hint}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   {entry.items?.length > 0 && <RecipeCard entry={entry} />}
                   {entry.mode === 'compare' && entry.products?.length > 0 ? (
                     <CompareCard products={entry.products} />
@@ -713,7 +727,7 @@ export default function AssistantPanel() {
             {busy && (
               <div className="flex items-center gap-2 text-[12px] text-ink/50" aria-live="polite">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-forest" />
-                {active.busy}
+                Thinking…
               </div>
             )}
             <div ref={endRef} />
@@ -742,7 +756,7 @@ export default function AssistantPanel() {
                   send(input)
                 }
               }}
-              placeholder={active.placeholder}
+              placeholder="Ask about products, orders, services or recipes"
               className="max-h-28 min-h-[42px] flex-1 resize-none rounded-tile border border-line-warm bg-paper px-3 py-2.5 text-[13px] text-ink outline-none focus:border-forest/50"
             />
             <VoiceSearchButton

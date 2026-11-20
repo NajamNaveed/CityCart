@@ -74,8 +74,13 @@ async function runAgent({
 
   for (let step = 0; step < maxSteps; step += 1) {
     const decision = await ask();
-    if (decision.answer) {
+    // A model that returns both a tool and a ready answer has not seen the
+    // tool result yet, so the tool wins and the answer is discarded.
+    if (decision.answer && !decision.tool) {
       return { decision, trace };
+    }
+    if (decision.answer && decision.tool) {
+      delete decision.answer;
     }
 
     const tool = decision.tool ? findTool(decision.tool) : null;

@@ -11,6 +11,7 @@ const {
   recipeList,
   compare,
   chatDraft,
+  chat,
 } = require('../controllers/ai.controller');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
@@ -58,6 +59,19 @@ router.post(
   aiUserLimiter,
   aiDailyLimit,
   translate,
+);
+
+// Phase 2g: one chat for every customer assistant. The server routes the
+// message to the same scoped agent a mode button used to choose, so the client
+// no longer needs modes and the tool scope stays server-side.
+router.post(
+  '/chat',
+  authenticate,
+  requireRole(ROLES.CUSTOMER),
+  requireAiEnabled,
+  aiUserLimiter,
+  aiDailyLimit,
+  chat,
 );
 
 // Phase 2a: the customer shopping assistant. It may call several tools per
