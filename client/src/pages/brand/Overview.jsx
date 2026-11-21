@@ -29,6 +29,7 @@ import {
 import { Button } from '../../design'
 import { Skeleton } from '../../components/ui'
 import SellerAdvisor from '../../components/brand/SellerAdvisor'
+import RestockCalendar from '../../components/brand/RestockCalendar'
 import { formatDateTime, formatPrice } from '../../ui'
 
 const total = (res) => (res?.status === 'fulfilled' ? res.value.data.pagination.total : null)
@@ -326,6 +327,12 @@ export default function Overview() {
             </>
           )}
         </section>
+      )}
+
+      {canAnalytics && (
+        <div className="mt-9">
+          <RestockCalendar />
+        </div>
       )}
     </>
   )

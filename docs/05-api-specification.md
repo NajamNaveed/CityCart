@@ -3898,6 +3898,118 @@ Nothing is created, posted, received, restocked, refunded or rescheduled by this
 
 ---
 
+## Restock calendar
+
+```text
+POST /api/v1/ai/restock-calendar
+```
+
+Roles: `BRAND_ADMIN`, or `BRAND_EMPLOYEE` holding `analytics.view` — the same guard as the brand dashboard it sits on, because this answers the question the charts leave open. The **AI restock read** panel at the foot of `Overview.jsx` asks it.
+
+```json
+{ "weeks": 8 }
+```
+
+`weeks` is optional, 4 to 13, and defaults to 8; the panel offers 4, 8 or 13. The route rejects anything outside the range and the agent clamps it again, so no other caller can widen the window. `brandId`, `from`, `to` and any stock figure in the body are ignored: the shop comes from the session and the window is aligned to whole weeks on the server.
+
+```json
+{
+  "success": true,
+  "data": {
+    "window": {
+      "weeks": 4,
+      "from": "2026-10-19T00:00:00.000Z",
+      "to": "2026-11-16T00:00:00.000Z",
+      "weekLabels": ["19 Oct – 25 Oct", "26 Oct – 1 Nov", "2 Nov – 8 Nov", "9 Nov – 15 Nov"],
+      "weekStarts": ["2026-10-19T00:00:00.000Z", "2026-10-26T00:00:00.000Z", "2026-11-02T00:00:00.000Z", "2026-11-09T00:00:00.000Z"]
+    },
+    "coverHorizonWeeks": 2,
+    "trend": [
+      { "position": 0, "index": 2967, "label": "19 Oct – 25 Oct", "from": "2026-10-19T00:00:00.000Z", "to": "2026-10-26T00:00:00.000Z", "units": 29, "isLast": false }
+    ],
+    "products": [
+      {
+        "productId": "66f1a0c2b3d4e5f60718293f",
+        "productName": "Basmati Rice 5 kg",
+        "weekly": [10, 10, 10, 30],
+        "units": 60,
+        "weeksSold": 4,
+        "lastWeekUnits": 30,
+        "priorAvg": 10,
+        "spikePct": 200,
+        "avgWeeklyUnits": 15,
+        "tracked": true,
+        "availableQuantity": 4,
+        "lowStockThreshold": 5,
+        "stockStatus": "LOW_STOCK",
+        "coverWeeks": 0.3,
+        "suggestedUnits": 26,
+        "peakUnits": 30,
+        "peakWeekLabel": "9 Nov – 15 Nov",
+        "peakIsLastWeek": true,
+        "surge": true,
+        "attention": "RUNS_SHORT"
+      }
+    ],
+    "productCount": 6,
+    "totals": {
+      "deliveredOrders": 6,
+      "units": 166,
+      "sellingProducts": 6,
+      "rankedProducts": 6,
+      "capped": false,
+      "emptyNow": 1,
+      "runsShort": 2,
+      "spiked": 1,
+      "rushedBefore": 2,
+      "untracked": 1,
+      "suggestedUnits": 46,
+      "lastWeekUnits": 48,
+      "priorWeeklyAvg": 39.3,
+      "shopSpikePct": 22
+    },
+    "insight": {
+      "summary": "Rice is the one to act on: it tripled last week and only four bags are left.",
+      "watch": [{ "productId": "66f1a0c2b3d4e5f60718293f", "note": "Four units left against a 15-unit week." }],
+      "actions": ["Count the rice bags on the shelf before tonight's cut-off."]
+    },
+    "degraded": false,
+    "empty": false
+  }
+}
+```
+
+Every number above is arithmetic from `server/src/services/ai/restockCalendar.rules.js`, not the model's recollection:
+
+* Weeks are Monday-to-Monday and only complete ones are counted. The week in progress is left out of `trend`, `units`, `lastWeekUnits` and every product row, so a part-week bar never reads as a fall in demand. `window.weekLabels` and `weekStarts` are what the panel draws its header from, and the `trend[].label` list is the same array.
+* Demand is `DELIVERED` orders only — a pending, cancelled or rejected order buys nothing. `availableQuantity` is `quantity - reservedQuantity`, exactly the way the analytics service and the low-stock alerts read it, so a shop never sees two availability figures for one SKU. `coverWeeks` is that divided by the product's own `avgWeeklyUnits` (0 when the shelf is empty, `null` when the window holds no selling rate to divide by), and `suggestedUnits` fills `coverHorizonWeeks` at that rate, never negative.
+* `spikePct` compares the last full week with the average of the weeks before it and is `null` when there is nothing to compare with — the prompt then says "no baseline to compare against" instead of printing a fabricated 0%. `surge` is a peak of at least twice the window average; `peakWeekLabel` names the earliest week that reaches the peak, so a rush that has already passed is not relabelled as last week.
+* `attention` files each product under the one thing that matters most (`EMPTY_NOW`, `RUNS_SHORT`, `JUST_SPIKED`, `RUSH_BEFORE`, `SELLING`, `NOT_TRACKED`) and the table is ranked on that tier first. The `totals` counts deliberately do **not** use that single filing: a product can be both short of stock and jumping, and a table that said "0 products jumped" while one of them did would be a lie told by a ranking rule.
+* `products` is the at-most-12-row slice the panel prints **and** the slice the prompt is handed, so the text and the table cannot describe different lists. `productCount` is every product the shop actually delivered a unit of, and `capped` says when the catalogue was too large to measure whole — the panel says so instead of implying it saw everything.
+* No money is involved anywhere: this endpoint reads units and dates, and never a price, `netTotal`, payout or commission figure.
+
+The read is one `$facet` aggregation scoped to `ctx.brandId` and the window (per product per week, shop-wide per week, and a count of delivered orders that does not unwind line items), plus one `Inventory` read limited to the top-selling SKUs and to `quantity`, `reservedQuantity`, `lowStockThreshold` and `trackInventory`. No customer, order number, address, phone, e-mail or another shop's row can reach the prompt; product names are sanitized (markup stripped, whitespace flattened, 80 characters) and marked as data, never as instructions. `insight.watch` holds at most 4 notes and is filtered to the products actually printed, so a model cannot point a shop at a SKU it never saw; `insight.actions` holds at most 3.
+
+When the shop delivered nothing in the window, `empty` is `true`, `insight` is `null`, and no provider call is made — an empty window costs none of the shop's daily requests. If the provider is down or answers in prose, `degraded` is `true`, `insight` is `null`, and the weeks and rows are still returned, because they never needed a model.
+
+Failure codes:
+
+```text
+400 (zod)              weeks outside 4–13 or not a whole number
+401                    no session, or an employee whose membership has ended
+403 ROLE_NOT_ALLOWED   caller is not a brand admin or brand employee
+403 PERMISSION_DENIED  an employee without analytics.view (carries `permission`)
+403 NO_BRAND           the session has no brand behind it
+429 AI_DAILY_LIMIT / rate limiter
+502 AI_BAD_OUTPUT      the model answered in prose, or with a summary longer than 340 characters
+503 AI_UNAVAILABLE     kill switch is off (answered before any order is read)
+```
+
+Nothing is created, ordered, restocked, reserved, adjusted or scheduled by this endpoint. Stock still changes through `PATCH /inventory/:productId` and the `PATCH /inventory/batch` save the inventory hub uses, and a purchase order is something the shop makes with its own supplier, outside CityCart.
+
+
+---
+
 # 24. Query Parameters
 
 Collection endpoints should use predictable query parameters.

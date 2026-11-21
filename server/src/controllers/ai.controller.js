@@ -43,6 +43,13 @@ const {
   DEFAULT_DAYS: RETURNS_DEFAULT_DAYS,
   DAY_RANGE: RETURNS_DAY_RANGE,
 } = require('../services/ai/agents/returnsInsights.agent');
+const {
+  restockCalendar: readRestockCalendar,
+  RestockCalendarError,
+  DEFAULT_WEEKS: RESTOCK_DEFAULT_WEEKS,
+  MIN_WEEKS: RESTOCK_MIN_WEEKS,
+  MAX_WEEKS: RESTOCK_MAX_WEEKS,
+} = require('../services/ai/agents/restockCalendar.agent');
 const { CsvImportError } = require('../services/productCsv.service');
 const { ROUTABLE_MODES, MAX_MESSAGE_CHARS } = require('../services/ai/intent');
 const {
@@ -747,6 +754,63 @@ async function returnsInsights(req, res, next) {
   }
 }
 
+const restockCalendarSchema = z.object({
+  weeks: z
+    .number()
+    .int()
+    .min(RESTOCK_MIN_WEEKS)
+    .max(RESTOCK_MAX_WEEKS)
+    .optional()
+    .default(RESTOCK_DEFAULT_WEEKS),
+});
+
+/**
+ * Phase 3d-2: what this shop should have bought last week. The only input is a
+ * window length; the orders, the weeks and the stock rows are all read inside
+ * the tenant `requireTenant` resolved from the session, so no body can aim this
+ * at another shop's catalogue. The weekly counts, cover and suggested units come
+ * from `restockCalendar.rules`, and a watched product whose id is not in that
+ * table is dropped. Nothing here buys, restocks or reserves anything.
+ */
+async function restockCalendar(req, res, next) {
+  const parsed = restockCalendarSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsed.error),
+    });
+  }
+
+  if (!req.tenantBrandId) {
+    return res.status(403).json({ success: false, message: 'This needs a brand account.', code: 'NO_BRAND' });
+  }
+
+  if (!holdsBrandPermission(req, PERMISSIONS.ANALYTICS_VIEW)) {
+    return res.status(403).json({
+      success: false,
+      message: 'You are not authorized to perform this action.',
+      code: 'PERMISSION_DENIED',
+      permission: PERMISSIONS.ANALYTICS_VIEW,
+    });
+  }
+
+  try {
+    const data = await readRestockCalendar({
+      ...parsed.data,
+      ctx: { userId: req.user._id, role: req.user.role, brandId: req.tenantBrandId },
+    });
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    if (err instanceof RestockCalendarError) {
+      return res
+        .status(err.status)
+        .json({ success: false, message: err.message, ...(err.code && { code: err.code }) });
+    }
+    return next(err);
+  }
+}
+
 module.exports = {
   ping,
   listingDraft,
@@ -761,6 +825,7 @@ module.exports = {
   chat,
   replyDraft,
   returnsInsights,
+  restockCalendar,
   sellerAdvisor,
   catalogueMatch,
   csvClean,

@@ -14,6 +14,7 @@ const {
   chat,
   replyDraft,
   returnsInsights,
+  restockCalendar,
   sellerAdvisor,
   catalogueMatch,
   csvClean,
@@ -245,6 +246,25 @@ router.post(
   aiUserLimiter,
   aiDailyLimit,
   returnsInsights,
+);
+
+// Phase 3d-2: the restock calendar. It answers "what should I have bought last
+// week?" from this shop's own delivered weeks and its own stock rows, so it runs
+// on analytics.view — the same guard as GET /brand/analytics, the dashboard the
+// numbers have to agree with. The shop comes from requireTenant, never from the
+// body; the only input is a window length. Weekly units, weeks of cover and
+// suggested units are CityCart's arithmetic, the model only explains them, and
+// no order, inventory or product document is written.
+router.post(
+  '/restock-calendar',
+  authenticate,
+  requireRole(ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE),
+  requirePermission(PERMISSIONS.ANALYTICS_VIEW),
+  requireTenant,
+  requireAiEnabled,
+  aiUserLimiter,
+  aiDailyLimit,
+  restockCalendar,
 );
 
 module.exports = router;
