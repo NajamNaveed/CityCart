@@ -54,6 +54,13 @@ const {
   listingQuality: readListingQuality,
   ListingQualityError,
 } = require('../services/ai/agents/listingQuality.agent');
+const {
+  shopReport: readShopReport,
+  ShopReportError,
+  DEFAULT_DAYS: REPORT_DEFAULT_DAYS,
+  MIN_DAYS: REPORT_MIN_DAYS,
+  MAX_DAYS: REPORT_MAX_DAYS,
+} = require('../services/ai/agents/shopReport.agent');
 const { CsvImportError } = require('../services/productCsv.service');
 const { ROUTABLE_MODES, MAX_MESSAGE_CHARS } = require('../services/ai/intent');
 const {
@@ -867,6 +874,65 @@ async function listingQuality(req, res, next) {
   }
 }
 
+const shopReportSchema = z.object({
+  days: z
+    .number()
+    .int()
+    .min(REPORT_MIN_DAYS)
+    .max(REPORT_MAX_DAYS)
+    .optional()
+    .default(REPORT_DEFAULT_DAYS),
+});
+
+/**
+ * Phase 3d-4: how the shop's week went. The only input is a window length, and
+ * both this week and the equal week before it are read through the dashboard's
+ * own analytics service inside the tenant `requireTenant` resolved from the
+ * session — so no body can aim the report at another shop, and no rupee or
+ * order count in the answer is the model's recollection. The comparison is
+ * aligned weekday to weekday with the in-progress day left out of both sides,
+ * because a part-day measured against a finished week always reads as a decline.
+ * Nothing is stored, mailed or scheduled.
+ */
+async function shopReport(req, res, next) {
+  const parsed = shopReportSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsed.error),
+    });
+  }
+
+  if (!req.tenantBrandId) {
+    return res.status(403).json({ success: false, message: 'This needs a brand account.', code: 'NO_BRAND' });
+  }
+
+  if (!holdsBrandPermission(req, PERMISSIONS.ANALYTICS_VIEW)) {
+    return res.status(403).json({
+      success: false,
+      message: 'You are not authorized to perform this action.',
+      code: 'PERMISSION_DENIED',
+      permission: PERMISSIONS.ANALYTICS_VIEW,
+    });
+  }
+
+  try {
+    const data = await readShopReport({
+      ...parsed.data,
+      ctx: { userId: req.user._id, role: req.user.role, brandId: req.tenantBrandId },
+    });
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    if (err instanceof ShopReportError) {
+      return res
+        .status(err.status)
+        .json({ success: false, message: err.message, ...(err.code && { code: err.code }) });
+    }
+    return next(err);
+  }
+}
+
 module.exports = {
   ping,
   listingDraft,
@@ -883,6 +949,7 @@ module.exports = {
   returnsInsights,
   restockCalendar,
   listingQuality,
+  shopReport,
   sellerAdvisor,
   catalogueMatch,
   csvClean,

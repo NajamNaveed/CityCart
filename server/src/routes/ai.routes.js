@@ -16,6 +16,7 @@ const {
   returnsInsights,
   restockCalendar,
   listingQuality,
+  shopReport,
   sellerAdvisor,
   catalogueMatch,
   csvClean,
@@ -285,6 +286,25 @@ router.post(
   aiUserLimiter,
   aiDailyLimit,
   listingQuality,
+);
+
+// Phase 3d-4: the weekly shop report. It answers "how did the shop do this
+// week?" from the same getBrandAnalytics numbers the dashboard tiles and charts
+// are drawn from, over this week and the equal week before it, so the paragraph
+// cannot disagree with the chart above it. It runs on analytics.view — the same
+// guard as GET /brand/analytics. The shop comes from requireTenant, never from
+// the body; every rupee, order and unit figure is counted by CityCart, and no
+// report is stored, mailed or scheduled.
+router.post(
+  '/shop-report',
+  authenticate,
+  requireRole(ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE),
+  requirePermission(PERMISSIONS.ANALYTICS_VIEW),
+  requireTenant,
+  requireAiEnabled,
+  aiUserLimiter,
+  aiDailyLimit,
+  shopReport,
 );
 
 module.exports = router;

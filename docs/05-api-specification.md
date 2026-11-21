@@ -3890,9 +3890,10 @@ Failure codes:
 403 NO_BRAND           the session has no brand behind it
 404                    the returnId is not a return of this shop — the same 404 for another shop's row
 429 AI_DAILY_LIMIT / rate limiter
-502 AI_BAD_OUTPUT      the model answered in prose, or with a summary longer than 340 characters
 503 AI_UNAVAILABLE     kill switch is off (answered before any return is read)
 ```
+
+A model that answers in prose, or with a summary longer than 340 characters, is not an error here: the counts are CityCart's own, so the request still returns 200 with `insight: null` and `degraded: true`.
 
 Nothing is created, posted, received, restocked, refunded or rescheduled by this endpoint. The shop's real action stays `POST /returns/:id/receive` on the return's own page.
 
@@ -4001,9 +4002,10 @@ Failure codes:
 403 PERMISSION_DENIED  an employee without analytics.view (carries `permission`)
 403 NO_BRAND           the session has no brand behind it
 429 AI_DAILY_LIMIT / rate limiter
-502 AI_BAD_OUTPUT      the model answered in prose, or with a summary longer than 340 characters
 503 AI_UNAVAILABLE     kill switch is off (answered before any order is read)
 ```
+
+A model that answers in prose, or with a summary longer than 340 characters, is not an error here: the weeks and rows are CityCart's own arithmetic, so the request still returns 200 with `insight: null` and `degraded: true`.
 
 Nothing is created, ordered, restocked, reserved, adjusted or scheduled by this endpoint. Stock still changes through `PATCH /inventory/:productId` and the `PATCH /inventory/batch` save the inventory hub uses, and a purchase order is something the shop makes with its own supplier, outside CityCart.
 
@@ -4094,11 +4096,115 @@ Failure codes:
 403 NO_BRAND           the session has no brand behind it
 404                    the id is not this shop's listing, or is not a valid id
 429 AI_DAILY_LIMIT / rate limiter
-502 AI_BAD_OUTPUT      the model answered in prose, or with a summary longer than 300 characters
 503 AI_UNAVAILABLE     kill switch is off (answered before the listing is read)
 ```
 
+A model that answers in prose, or with a summary longer than 300 characters, is not an error here: the score is CityCart's own arithmetic, so the request still returns 200 with `insight: null` and `degraded: true`.
+
 Nothing is written by this endpoint. The listing keeps its old fields until the shop edits them on the ordinary form and saves with `PATCH /products/:id`; a score is a reading of the page, and the `AiUsage` row this call leaves behind is the only record it makes.
+
+
+---
+
+## Shop report
+
+```text
+POST /api/v1/ai/shop-report
+```
+
+Roles: `BRAND_ADMIN`, or `BRAND_EMPLOYEE` holding `analytics.view` — the same guard as the dashboard it sits on. The **AI week read** card at the foot of `Overview.jsx` asks it, above the restock calendar.
+
+```json
+{ "days": 7 }
+```
+
+`days` is the only field read: an integer from 7 to 30, defaulting to 7 — the panel itself offers 7, 14 and 30. A `brandId`, a `from`/`to`, a `revenue` or a `change` in the body is ignored — the tenant comes from the session, the window is computed server-side from the clock, and every figure comes from the dashboard service. A window below 7 or above 30 400s rather than being widened, because a wider window is a bigger read of the shop's own records than the shop asked for.
+
+The response is the report CityCart measured, with the model's paragraph attached to it:
+
+```json
+{
+  "success": true,
+  "data": {
+    "window": { "days": 7, "from": "2026-11-15", "to": "2026-11-21", "partialLastDay": "2026-11-21", "compare": { "from": "2026-11-08", "to": "2026-11-14" } },
+    "totals": { "orders": 30, "deliveredOrders": 24, "cancelledOrders": 4, "pendingOrders": 2, "revenue": 78600, "averageOrderValue": 3275, "customers": 19, "repeatCustomers": 6, "units": 61, "lowStockProducts": 5, "outOfStockProducts": 2 },
+    "previousTotals": { "orders": 26, "deliveredOrders": 21, "cancelledOrders": 3, "pendingOrders": 2, "revenue": 69700, "averageOrderValue": 3319, "customers": 17, "repeatCustomers": 5, "units": 55, "lowStockProducts": 4, "outOfStockProducts": 1 },
+    "aligned": {
+      "days": 6,
+      "through": "2026-11-20",
+      "deliveredOrders": { "current": 23, "previous": 17, "pct": 35 },
+      "revenue": { "current": 75200, "previous": 52900, "pct": 42 },
+      "averageOrderValue": { "current": 3270, "previous": 3112, "pct": 5 }
+    },
+    "windowChanges": {
+      "customers": { "current": 19, "previous": 17, "pct": 12 },
+      "repeatCustomers": { "current": 6, "previous": 5, "pct": 20 },
+      "units": { "current": 61, "previous": 55, "pct": 11 },
+      "pendingOrders": { "current": 2, "previous": 2, "pct": 0 },
+      "note": "Whole window, including the day still running, so these are the dashboard figures and not a like-for-like comparison."
+    },
+    "cancellation": { "orders": 4, "pct": 13, "previousPct": 12 },
+    "bestDay": { "date": "2026-11-19", "orders": 5, "revenue": 18900, "isToday": false },
+    "products": [
+      { "productId": "66f1a0c2b3d4e5f6071829aa", "productName": "Basmati Rice 5 kg Sela", "units": 18, "revenue": 26100, "previousUnits": 6, "changeUnits": 12, "changePct": 200, "movement": "UP" },
+      { "productId": "66f1a0c2b3d4e5f6071829bb", "productName": "Chakki Atta 10 kg", "units": 8, "revenue": 9440, "previousUnits": 0, "changeUnits": 8, "changePct": null, "movement": "NEW" },
+      { "productId": "66f1a0c2b3d4e5f6071829cc", "productName": "Fresh Milk 1 l", "units": 21, "revenue": 4620, "previousUnits": 24, "changeUnits": -3, "changePct": -12, "movement": "DOWN" }
+    ],
+    "soldProducts": 4,
+    "movementLabels": { "NEW": "sold for the first time this week", "UP": "sold more than last week", "DOWN": "sold less than last week", "FLAT": "sold the same as last week" },
+    "stock": {
+      "lowStockProducts": 5,
+      "outOfStockProducts": 2,
+      "alertsShown": 3,
+      "alerts": [
+        { "productId": "66f1a0c2b3d4e5f6071829cc", "productName": "Fresh Milk 1 l", "availableQuantity": 6, "lowStockThreshold": 12, "status": "LOW_STOCK" },
+        { "productId": "66f1a0c2b3d4e5f6071829ee", "productName": "Cardamom Tea 200 g", "availableQuantity": 0, "lowStockThreshold": 3, "status": "OUT_OF_STOCK" },
+        { "productId": "66f1a0c2b3d4e5f6071829bb", "productName": "Chakki Atta 10 kg", "availableQuantity": 2, "lowStockThreshold": 8, "status": "LOW_STOCK" }
+      ]
+    },
+    "empty": false,
+    "insight": {
+      "summary": "Apu's week was stronger than the one before it. Delivery of 23 orders against 17, and 75200 Pakistani rupees against 52900, both measured on the same weekdays. Rice led the rise while milk slipped by 3 units.",
+      "notes": [
+        { "productId": "66f1a0c2b3d4e5f6071829aa", "productName": "Basmati Rice 5 kg Sela", "note": "Rice tripled its units — worth checking the sack price with your supplier before the next week." },
+        { "productId": "66f1a0c2b3d4e5f6071829cc", "productName": "Fresh Milk 1 l", "note": "Milk sold 3 fewer units than last week, and only 6 are left against a warning of 12." }
+      ],
+      "actions": [
+        "Look at the rice page and see whether the last week's photo or name changed.",
+        "Check whether milk was out of stock on any day it sold last week."
+      ]
+    },
+    "degraded": false
+  }
+}
+```
+
+What the endpoint guarantees about those numbers:
+
+* They are the dashboard's own. The agent calls `getBrandAnalytics` — the same service `GET /analytics/brand` uses — twice over two equal windows, plus one `soldByProduct` units aggregate for the previous window limited to the products that sold now. It reads no `Product`, `Inventory` or `Delivery` row itself, so a figure in this card cannot disagree with the chart above it, and cannot be a second, different calculation of the same thing.
+* `aligned` is the like-for-like half. Day offsets are compared seven days apart (Sunday with Sunday, Monday with Monday), and **the day still running is dropped from both sides** — comparing today at 9am against a whole Tuesday last week would read as a decline that never happened. That is why `aligned.revenue` (75200) is below `totals.revenue` (78600): the last day is in the tiles and not in the comparison. `aligned.days` and `aligned.through` state exactly what was compared.
+* A percentage of `null` means there was nothing to divide by — a product that sold for the first time, or a first week with no previous window — and the panel prints that instead of `0%`. A product missing from last week's rows is a real zero, not a gap, because that aggregate covered the whole window.
+* `products` is the shop's own top-selling list re-ranked by the biggest unit change (then by units, then by id so the same week never re-shuffles itself), cut to the 3 rows the card has room for, with `soldProducts` saying how many actually sold. `movement` is one of `NEW`/`UP`/`DOWN`/`FLAT`, always with the words the shop reads in `movementLabels`.
+* Money is rounded to whole rupees by the server and appears in the prompt already worked out, so the model re-words figures rather than inventing them; `insight.notes` can only reference a `productId` that this response already printed, and a note about anything else is dropped before the answer is sent.
+* A window with no order at all returns `empty: true`, the zeroed counts, `insight: null` and `degraded: false`, and costs the shop none of its daily AI requests — there was nothing to compare, so nothing was sent to a provider.
+
+The prompt carries only this shop's own aggregate numbers and its own listing titles. No `customerId`, order number, phone, address or another brand's product id is put in the request body — the payload is trimmed to `summary`, `salesTrend`, `topProducts` and `inventoryAlerts` first, and a shop's own title is sanitized (markup stripped, whitespace flattened, 80 characters) and marked as data, never as an instruction. The provider is never asked to price, discount or margin anything, and a suggestion of one is refused in the system prompt.
+
+Failure codes:
+
+```text
+400 (zod)              days is not an integer between 7 and 30
+401                    no session, or an employee whose membership has ended
+403 ROLE_NOT_ALLOWED   caller is not a brand admin or brand employee
+403 PERMISSION_DENIED  an employee without analytics.view (carries `permission`)
+403 NO_BRAND           the session has no brand behind it
+429 AI_DAILY_LIMIT / rate limiter
+503 AI_UNAVAILABLE     kill switch is off (answered before a single order is read)
+```
+
+A model that answers in prose, or with a summary longer than 600 characters, is not an error here: the week is CityCart's own arithmetic, so the request still returns 200 with the full report, `insight: null` and `degraded: true`.
+
+Nothing is stored, mailed or scheduled. No report row is written, no email is queued, nothing is posted to a shop's social accounts, and the shop's own action — restocking, editing a page — stays on the inventory and product screens. The only record this call makes is its `AiUsage` row.
 
 
 ---

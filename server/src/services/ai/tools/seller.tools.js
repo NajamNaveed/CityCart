@@ -364,5 +364,6 @@ module.exports = {
   previousRange,
   changePercent,
   windowTotals,
+  soldByProduct,
   stockRow,
 };

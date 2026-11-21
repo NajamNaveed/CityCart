@@ -29,6 +29,7 @@ import {
 import { Button } from '../../design'
 import { Skeleton } from '../../components/ui'
 import SellerAdvisor from '../../components/brand/SellerAdvisor'
+import ShopReport from '../../components/brand/ShopReport'
 import RestockCalendar from '../../components/brand/RestockCalendar'
 import { formatDateTime, formatPrice } from '../../ui'
 
@@ -330,7 +331,8 @@ export default function Overview() {
       )}
 
       {canAnalytics && (
-        <div className="mt-9">
+        <div className="mt-9 space-y-6">
+          <ShopReport />
           <RestockCalendar />
         </div>
       )}
