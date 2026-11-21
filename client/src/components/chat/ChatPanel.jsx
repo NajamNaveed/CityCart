@@ -8,19 +8,10 @@ import { Spinner } from '../ui'
 import { formatPrice } from '../../ui'
 import { clockTime, dayLabel, initialOf, isObjectId, listTime, MAX_MESSAGE_LENGTH } from '../../utils/chat'
 import { CHAT_OPEN_STATUSES } from '../../utils/serviceBookings'
+import { draftErrorMessage } from '../../utils/aiDraft'
 
 const PAGE = 30
 const DRAFT_INTENT_MAX = 300
-
-// Phase 2f: the customer describes what they want to say and the AI fills the
-// composer. It never sends: the customer edits the text and presses Send.
-function draftErrorMessage(err) {
-  const code = err.response?.data?.code
-  if (code === 'AI_UNAVAILABLE') return 'Drafting is unavailable right now.'
-  if (code === 'AI_DAILY_LIMIT') return 'You have used today’s AI requests. Try again tomorrow.'
-  if (code === 'CHAT_NOT_OPEN') return 'This booking’s chat is closed.'
-  return getErrorMessage(err)
-}
 
 // Phase 1c: store chat only (customer and brand). The server re-checks that
 // the signed-in user is part of the message's conversation.
@@ -508,7 +499,12 @@ export default function ChatPanel({ mode = 'customer', source, canReply = true }
   const bookingOpen = current?.kind !== 'booking' || CHAT_OPEN_STATUSES.includes(current.status)
   const counterpart = current?.with || (starting ? { name: context.brand.name, image: context.brand.logo } : null)
   const canSend = canReply && bookingOpen && (starting || (current ? current.canSend !== false : true))
-  const showDraft = isCustomer && (selected?.kind === 'provider' || selected?.kind === 'booking') && canSend
+  // Phase 2f drafts what the customer wants to say; Phase 3c drafts the shop's
+  // answer to the customer's last message. Both stop at the composer — the
+  // person still reads it and presses Send through the ordinary endpoint.
+  const showCustomerDraft = isCustomer && (selected?.kind === 'provider' || selected?.kind === 'booking') && canSend
+  const showBrandDraft = isBrand && selected?.kind === 'store' && canSend
+  const showDraft = showCustomerDraft || showBrandDraft
 
   async function onSend(event) {
     event.preventDefault()
@@ -572,6 +568,25 @@ export default function ChatPanel({ mode = 'customer', source, canReply = true }
       setDraft(res.data.data.draft)
       setDraftOpen(false)
       setDraftIntent('')
+      textareaRef.current?.focus()
+    } catch (err) {
+      setDraftError(draftErrorMessage(err))
+    } finally {
+      setDrafting(false)
+    }
+  }
+
+  // Phase 3c: the shop needs no intent box — the message it answers is the
+  // customer's latest one, which the server reads from this very thread.
+  async function writeBrandDraft() {
+    if (!selected || drafting) return
+    const key = selectedKey
+    setDrafting(true)
+    setDraftError('')
+    try {
+      const res = await api.post('/ai/reply-draft', { type: 'chat', id: selected.id })
+      if (selectedRef.current !== key) return
+      setDraft(res.data.data.draft)
       textareaRef.current?.focus()
     } catch (err) {
       setDraftError(draftErrorMessage(err))
@@ -779,7 +794,20 @@ export default function ChatPanel({ mode = 'customer', source, canReply = true }
                   )}
                   {showDraft && (
                     <div className="mb-2">
-                      {draftOpen ? (
+                      {showBrandDraft ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={writeBrandDraft}
+                            disabled={drafting}
+                            className="inline-flex items-center gap-1.5 rounded-full px-1.5 py-1 text-[11px] font-medium text-ink/45 transition hover:bg-canvas hover:text-clay disabled:opacity-50"
+                          >
+                            <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                            {drafting ? 'Writing…' : 'Draft a reply'}
+                          </button>
+                          <span className="text-[10.5px] text-ink/40">It fills the box below — edit it before sending.</span>
+                        </div>
+                      ) : draftOpen ? (
                         <div className="rounded-tile border border-line-warm bg-canvas/50 p-2">
                           <div className="flex items-center gap-1.5">
                             <label htmlFor="chat-draft-intent" className="sr-only">
@@ -814,11 +842,6 @@ export default function ChatPanel({ mode = 'customer', source, canReply = true }
                               <X className="h-4 w-4" aria-hidden="true" />
                             </button>
                           </div>
-                          {draftError && (
-                            <p role="alert" className="mt-1.5 px-0.5 text-[11px] text-clay">
-                              {draftError}
-                            </p>
-                          )}
                           <p className="mt-1 px-0.5 text-[10.5px] text-ink/40">
                             The draft fills the message box — edit it before sending.
                           </p>
@@ -832,6 +855,11 @@ export default function ChatPanel({ mode = 'customer', source, canReply = true }
                           <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
                           Draft with AI
                         </button>
+                      )}
+                      {draftError && (
+                        <p role="alert" className="mt-1.5 px-0.5 text-[11px] text-clay">
+                          {draftError}
+                        </p>
                       )}
                     </div>
                   )}

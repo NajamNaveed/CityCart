@@ -1,11 +1,91 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Star } from 'lucide-react'
+import { Copy, Sparkles, Star } from 'lucide-react'
 import api, { getErrorMessage } from '../../services/api'
 import Stars from '../../components/Stars'
 import { PageHeader, Pager, selectClass } from '../../components/brand/Bits'
-import { EmptyState, Skeleton } from '../../components/ui'
+import { EmptyState, Skeleton, toast } from '../../components/ui'
 import { formatDate } from '../../ui'
+import { draftErrorMessage } from '../../utils/aiDraft'
+
+// docs/29 Phase 3c. The shop words its own answer; nothing here is posted,
+// because CityCart has no shop reply on a review yet — the draft is for
+// reading, editing and copying.
+function ReplyDraft({ reviewId, available }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [reply, setReply] = useState('')
+
+  if (!available) return null
+
+  async function write() {
+    setBusy(true)
+    setError('')
+    try {
+      const res = await api.post('/ai/reply-draft', { type: 'review', id: reviewId })
+      setReply(res.data.data.draft)
+    } catch (err) {
+      setError(draftErrorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function copy() {
+    navigator.clipboard?.writeText(reply).then(
+      () => toast('Copied to the clipboard.', { type: 'success' }),
+      () => toast('Could not copy. Select the text instead.', { type: 'error' }),
+    )
+  }
+
+  return (
+    <div className="mt-3">
+      {reply ? (
+        <div className="rounded-tile border border-line-warm bg-sand/40 p-3.5">
+          <p className="font-display text-[12px] font-medium uppercase tracking-[0.08em] text-ink/45">Suggested reply</p>
+          <p className="mt-1.5 text-[14px] leading-relaxed text-ink">{reply}</p>
+          <p className="mt-2 text-[11.5px] text-ink/45">
+            CityCart does not show shop replies on reviews yet, so this stays here — copy it and send it yourself.
+          </p>
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={copy}
+              className="inline-flex items-center gap-1.5 rounded-md bg-noir px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-cream transition-colors hover:bg-noir-soft"
+            >
+              <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+              Copy
+            </button>
+            <button
+              type="button"
+              onClick={write}
+              disabled={busy}
+              className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[11px] font-medium text-ink/55 transition hover:bg-canvas hover:text-clay disabled:opacity-50"
+            >
+              <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+              {busy ? 'Writing…' : 'Try again'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={write}
+          disabled={busy}
+          className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[11.5px] font-medium text-ink/45 transition hover:bg-canvas hover:text-clay disabled:opacity-50"
+        >
+          <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+          {busy ? 'Writing…' : 'Draft a reply'}
+        </button>
+      )}
+      {error && (
+        <p role="alert" className="mt-1.5 text-[11.5px] text-clay">
+          {error}
+        </p>
+      )}
+    </div>
+  )
+}
 
 export default function Reviews() {
   const [params, setParams] = useSearchParams()
@@ -13,7 +93,21 @@ export default function Reviews() {
   const page = Math.max(1, Number(params.get('page')) || 1)
 
   const [state, setState] = useState({ key: null, reviews: [], summary: null, pagination: null, error: '' })
+  const [aiAvailable, setAiAvailable] = useState(false)
   const key = JSON.stringify([rating, page])
+
+  useEffect(() => {
+    let active = true
+    api
+      .post('/ai/ping')
+      .then(() => active && setAiAvailable(true))
+      // A 503 is the kill switch (or no provider keys): keep the button hidden.
+      // Other failures still show it so the click can explain why.
+      .catch((err) => active && setAiAvailable(err?.response?.status !== 503))
+    return () => {
+      active = false
+    }
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -112,6 +206,7 @@ export default function Reviews() {
                   {r.productName}
                 </Link>
               </p>
+              <ReplyDraft reviewId={r._id} available={aiAvailable} />
             </li>
           ))}
         </ul>

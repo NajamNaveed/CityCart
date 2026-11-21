@@ -12,6 +12,7 @@ const {
   compare,
   chatDraft,
   chat,
+  replyDraft,
   sellerAdvisor,
   catalogueMatch,
   csvClean,
@@ -204,6 +205,26 @@ router.post(
   aiDailyLimit,
   express.text({ type: 'text/csv', limit: '1mb' }),
   csvClean,
+);
+
+// Phase 3c: the reply drafter. A shop asks for the words to answer one of its
+// own reviews or one of its own customer chats. Either of the two permissions
+// is enough to reach the route, and the handler then demands the one that
+// matches the requested type, so a team member who may only read reviews
+// cannot draft chat replies and one who may only chat cannot draft review
+// replies. The shop comes from requireTenant, never from the body, and the
+// draft is only text: the chat reply still goes through POST
+// /chats/:id/messages, which re-checks membership and permissions.
+router.post(
+  '/reply-draft',
+  authenticate,
+  requireRole(ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE),
+  requirePermission(PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.MESSAGES_MANAGE),
+  requireTenant,
+  requireAiEnabled,
+  aiUserLimiter,
+  aiDailyLimit,
+  replyDraft,
 );
 
 module.exports = router;

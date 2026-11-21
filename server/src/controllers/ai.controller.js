@@ -1,6 +1,8 @@
 const { z } = require('zod');
 
 const env = require('../config/env');
+const { ROLES } = require('../config/roles');
+const { PERMISSIONS } = require('../config/permissions');
 const { countUsageToday } = require('../services/ai/usage');
 const { draftListing, NOTES_LIMIT } = require('../services/ai/agents/listing.agent');
 const { draftReviewSummary, ReviewSummaryError } = require('../services/ai/agents/reviewSummary.agent');
@@ -30,6 +32,11 @@ const {
   QUERY_LIMIT: CATALOGUE_QUERY_LIMIT,
 } = require('../services/ai/agents/catalogueMatch.agent');
 const { cleanCsv, CsvCleanError } = require('../services/ai/agents/csvClean.agent');
+const {
+  draftReply,
+  ReplyDraftError,
+  TYPES: REPLY_TYPES,
+} = require('../services/ai/agents/replyDraft.agent');
 const { CsvImportError } = require('../services/productCsv.service');
 const { ROUTABLE_MODES, MAX_MESSAGE_CHARS } = require('../services/ai/intent');
 const {
@@ -608,6 +615,74 @@ async function csvClean(req, res, next) {
   }
 }
 
+const replyDraftSchema = z.object({
+  type: z.enum(REPLY_TYPES, { error: 'Choose what to reply to.' }),
+  id: z.string().trim().min(1, 'Choose a review or a conversation.').max(64),
+});
+
+// The two halves answer about two different parts of the shop's own screens,
+// so each needs the permission that screen already runs on: the review list is
+// products.view, replying to a customer is messages.manage. The route's
+// requirePermission lets a holder of either in; the requested type still has
+// to be one this person may do.
+const REPLY_PERMISSIONS = {
+  review: PERMISSIONS.PRODUCTS_VIEW,
+  chat: PERMISSIONS.MESSAGES_MANAGE,
+};
+
+function holdsBrandPermission(req, permission) {
+  if (req.user.role === ROLES.BRAND_ADMIN) return true;
+  return Boolean(req.employee?.permissions?.includes(permission));
+}
+
+/**
+ * Phase 3c: draft the shop's reply to one of its own reviews or chats. Only the
+ * id travels in the body — the review, the thread and the customer come from
+ * the caller's tenant, so a body can never name another shop's row or carry a
+ * forged history. The response is text and nothing more: the chat draft lands
+ * in the composer and the shop sends it through POST /chats/:id/messages,
+ * which re-checks membership, permissions and whether the seller is open.
+ */
+async function replyDraft(req, res, next) {
+  const parsed = replyDraftSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsed.error),
+    });
+  }
+
+  if (!req.tenantBrandId) {
+    return res.status(403).json({ success: false, message: 'This needs a brand account.', code: 'NO_BRAND' });
+  }
+
+  const permission = REPLY_PERMISSIONS[parsed.data.type];
+  if (!holdsBrandPermission(req, permission)) {
+    return res.status(403).json({
+      success: false,
+      message: 'You are not authorized to perform this action.',
+      code: 'PERMISSION_DENIED',
+      permission,
+    });
+  }
+
+  try {
+    const data = await draftReply({
+      ...parsed.data,
+      ctx: { userId: req.user._id, role: req.user.role, brandId: req.tenantBrandId },
+    });
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    if (err instanceof ReplyDraftError) {
+      return res
+        .status(err.status)
+        .json({ success: false, message: err.message, ...(err.code && { code: err.code }) });
+    }
+    return next(err);
+  }
+}
+
 module.exports = {
   ping,
   listingDraft,
@@ -620,6 +695,7 @@ module.exports = {
   compare,
   chatDraft,
   chat,
+  replyDraft,
   sellerAdvisor,
   catalogueMatch,
   csvClean,
