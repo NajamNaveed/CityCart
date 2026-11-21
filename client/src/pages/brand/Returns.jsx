@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { RotateCcw } from 'lucide-react'
 import api, { getErrorMessage } from '../../services/api'
 import { PageHeader, Pager, StatusBadge, TableScroll, selectClass, tableHead, tableRow } from '../../components/brand/Bits'
+import ReturnsInsights from '../../components/brand/ReturnsInsights'
 import { EmptyState, Skeleton } from '../../components/ui'
 import { formatDate, formatPrice, humanize } from '../../ui'
 import { isReturnOpen, returnUnits } from '../../utils/returns'
@@ -97,6 +98,8 @@ export default function Returns() {
           {summaryError}
         </p>
       )}
+
+      <ReturnsInsights />
 
       {loading ? (
         <div className="space-y-2.5">

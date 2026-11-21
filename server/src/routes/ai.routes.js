@@ -13,6 +13,7 @@ const {
   chatDraft,
   chat,
   replyDraft,
+  returnsInsights,
   sellerAdvisor,
   catalogueMatch,
   csvClean,
@@ -225,6 +226,25 @@ router.post(
   aiUserLimiter,
   aiDailyLimit,
   replyDraft,
+);
+
+// Phase 3d-1: why this shop's orders come back. It answers the returned-goods
+// inbox, so it runs on exactly that inbox's guards — delivery.view and the
+// tenant from the session (docs/29 §3e; the same chain as GET /returns). The
+// window and an optional return id are the only input, and both are read
+// inside that tenant. Nothing here changes a return, a refund or stock: the
+// counts come from the server's own arithmetic and the model only explains
+// them, and the drafted reply is text the shop copies.
+router.post(
+  '/returns-insights',
+  authenticate,
+  requireRole(ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE),
+  requirePermission(PERMISSIONS.DELIVERY_VIEW),
+  requireTenant,
+  requireAiEnabled,
+  aiUserLimiter,
+  aiDailyLimit,
+  returnsInsights,
 );
 
 module.exports = router;

@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { ChevronLeft, ExternalLink } from 'lucide-react'
 import api, { getErrorMessage } from '../../services/api'
 import { Notice, PageHeader, StatusBadge, TableScroll, tableHead, tableRow } from '../../components/brand/Bits'
+import ReturnReplyDraft from '../../components/brand/ReturnReplyDraft'
 import { useCan } from '../../hooks/useCan'
 import { Skeleton } from '../../components/ui'
 import { formatDateTime, formatPrice } from '../../ui'
@@ -201,6 +202,7 @@ export default function ReturnDetail() {
             </tbody>
           </table>
         </TableScroll>
+        <ReturnReplyDraft returnId={id} />
       </section>
 
       {open ? (

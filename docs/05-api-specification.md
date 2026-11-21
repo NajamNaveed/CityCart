@@ -3784,6 +3784,120 @@ Nothing is created, updated or sent by this endpoint: no message row, no convers
 
 ---
 
+## Returns insights
+
+```text
+POST /api/v1/ai/returns-insights
+```
+
+Roles: `BRAND_ADMIN`, or `BRAND_EMPLOYEE` holding `delivery.view` — the same guard as `GET /returns` and `GET /returns/summary`, because this answers the same inbox. The **AI returns read** panel on the brand Returns page and the **Draft a reply to this refusal** button on a return's own page ask it.
+
+```json
+{ "days": 90 }
+```
+
+`days` is optional, 7 to 365, and defaults to 90; the route rejects anything outside that range and the agent clamps it again, so no other caller can widen the window. `returnId` is optional and must be one of this shop's own returns — with it, the answer also carries a drafted reply about that one refusal. `brandId`, `customerId`, `scope` and `totals` in the body are ignored: the shop comes from the session and the window is worked out on the server.
+
+```json
+{
+  "success": true,
+  "data": {
+    "window": { "days": 90, "from": "2026-08-23T09:00:00.000Z", "to": "2026-11-21T09:00:00.000Z" },
+    "empty": false,
+    "degraded": false,
+    "totals": {
+      "returns": 5,
+      "lines": 6,
+      "units": 7,
+      "value": 12349,
+      "returnedSubtotal": 12349,
+      "refundAmount": 5800,
+      "feeRefunds": 1,
+      "storeFaultLines": 5,
+      "storeFaultValue": 11249,
+      "storeFaultPct": 83.3,
+      "restockedLines": 2,
+      "writtenOffLines": 4
+    },
+    "status": { "IN_TRANSIT": 1, "RECEIVED": 4 },
+    "reasons": [
+      {
+        "reason": "WRONG_ITEM",
+        "label": "wrong item",
+        "storeFault": true,
+        "returns": 2,
+        "lines": 2,
+        "units": 2,
+        "value": 5449,
+        "products": ["Basmati Rice 5 kg", "Saffron Oil 1 l"],
+        "productCount": 2,
+        "sharePct": 33.3
+      }
+    ],
+    "products": [
+      {
+        "productId": "66f1a0c2b3d4e5f60718293f",
+        "productName": "Basmati Rice 5 kg",
+        "returns": 2,
+        "lines": 3,
+        "units": 4,
+        "value": 5800,
+        "restocked": 1,
+        "writtenOff": 2,
+        "topReason": "DAMAGED",
+        "topReasonLabel": "arrived damaged",
+        "topReasonLines": 2,
+        "dominant": "2 of 3",
+        "storeFault": true,
+        "reasons": [{ "reason": "DAMAGED", "label": "arrived damaged", "lines": 2 }]
+      }
+    ],
+    "productCount": 4,
+    "insight": {
+      "summary": "Most of what came back was the shop's own fault, and the rice is the one item that keeps coming back.",
+      "themes": [
+        {
+          "reason": "DAMAGED",
+          "cause": "The 5 kg bags are likely splitting at the seam on the way to the door.",
+          "fix": "Tape the seam on every rice bag before it leaves the shelf."
+        }
+      ],
+      "reply": "Assalam o alaikum, thank you for telling us the bag came damaged. We are checking how we pack it and will get back to you here."
+    }
+  }
+}
+```
+
+Every figure in the response is arithmetic done in `server/src/services/ai/returnsStats.rules.js`, not the model's recollection:
+
+* `returnedSubtotal` is read straight off the return records and added the same way `GET /returns/summary` adds it — over the window asked for rather than all time, so it is the inbox's own arithmetic and not a second version of it. `value` is the per-line attribution (`quantity` × the `unitPrice` stored on the line, which is the price the order was delivered at) and is what lets the money be split by reason; in well-formed data the two agree.
+* A reason is always one of the four stored enums (`DAMAGED`, `WRONG_ITEM`, `NOT_WANTED`, `MISSING` — docs/22 §F). `storeFault` follows `STORE_FAULT_REASONS`. A theme whose reason is not in the shop's own counts is dropped before the answer is sent, and at most four themes survive, one per reason.
+* A product that appears on two lines of one refusal counts as one return, not two, and only products returned more than once are listed — one refusal is one customer, not a pattern. At most eight are sent to the model and returned.
+* A return whose lines carry no reason the enum knows contributes nothing at all, not even its money, so the model is never told about a return it cannot see in the table.
+* With `returnId`, the reply is 1–3 short sentences about that refusal only. It is text for the shop to read, edit and copy; the model is told it may not promise a refund, an amount, a replacement, a discount or a date and may not state any money figure.
+
+No customer, order, rider, address, phone, e-mail or another shop's row is ever read into the prompt: the query selects `status`, `lines`, `returnedSubtotal`, `refundAmount`, `feeRefunded` and `createdAt` only, product names are sanitized (markup stripped, newlines flattened, 80 characters) and marked as data, never as instructions.
+
+When nothing came back in the window, `empty` is `true`, `insight` is `null` and no provider call is made — so an empty window costs none of the shop's daily requests. If the provider is down or answers in prose, `degraded` is `true`, `insight` is `null` and the counts are still returned, because they never needed a model.
+
+Failure codes:
+
+```text
+400 (zod)              days outside 7–365, or a blank/over-long returnId
+401                    no session, or an employee whose membership has ended
+403 ROLE_NOT_ALLOWED   caller is not a brand admin or brand employee
+403 PERMISSION_DENIED  an employee without delivery.view (carries `permission`)
+403 NO_BRAND           the session has no brand behind it
+404                    the returnId is not a return of this shop — the same 404 for another shop's row
+429 AI_DAILY_LIMIT / rate limiter
+502 AI_BAD_OUTPUT      the model answered in prose, or with a summary longer than 340 characters
+503 AI_UNAVAILABLE     kill switch is off (answered before any return is read)
+```
+
+Nothing is created, posted, received, restocked, refunded or rescheduled by this endpoint. The shop's real action stays `POST /returns/:id/receive` on the return's own page.
+
+---
+
 # 24. Query Parameters
 
 Collection endpoints should use predictable query parameters.

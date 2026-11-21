@@ -37,6 +37,12 @@ const {
   ReplyDraftError,
   TYPES: REPLY_TYPES,
 } = require('../services/ai/agents/replyDraft.agent');
+const {
+  returnsInsights: clusterReturnsInsights,
+  ReturnsInsightsError,
+  DEFAULT_DAYS: RETURNS_DEFAULT_DAYS,
+  DAY_RANGE: RETURNS_DAY_RANGE,
+} = require('../services/ai/agents/returnsInsights.agent');
 const { CsvImportError } = require('../services/productCsv.service');
 const { ROUTABLE_MODES, MAX_MESSAGE_CHARS } = require('../services/ai/intent');
 const {
@@ -683,6 +689,64 @@ async function replyDraft(req, res, next) {
   }
 }
 
+const returnsInsightsSchema = z.object({
+  days: z
+    .number()
+    .int()
+    .min(RETURNS_DAY_RANGE.min)
+    .max(RETURNS_DAY_RANGE.max)
+    .optional()
+    .default(RETURNS_DEFAULT_DAYS),
+  returnId: z.string().trim().min(1, 'Choose a return.').max(64).optional(),
+});
+
+/**
+ * Phase 3d-1: why this shop's orders come back. Nothing identifying travels in
+ * the body but an optional return id, and that id is read inside the caller's
+ * tenant, so another shop's refusal cannot be named. The counts come from
+ * `returnsStats.rules`, never from the model, and a theme whose reason is not
+ * in those counts is dropped. The drafted reply is text only — the shop's real
+ * action stays POST /returns/:id/receive.
+ */
+async function returnsInsights(req, res, next) {
+  const parsed = returnsInsightsSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsed.error),
+    });
+  }
+
+  if (!req.tenantBrandId) {
+    return res.status(403).json({ success: false, message: 'This needs a brand account.', code: 'NO_BRAND' });
+  }
+
+  if (!holdsBrandPermission(req, PERMISSIONS.DELIVERY_VIEW)) {
+    return res.status(403).json({
+      success: false,
+      message: 'You are not authorized to perform this action.',
+      code: 'PERMISSION_DENIED',
+      permission: PERMISSIONS.DELIVERY_VIEW,
+    });
+  }
+
+  try {
+    const data = await clusterReturnsInsights({
+      ...parsed.data,
+      ctx: { userId: req.user._id, role: req.user.role, brandId: req.tenantBrandId },
+    });
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    if (err instanceof ReturnsInsightsError) {
+      return res
+        .status(err.status)
+        .json({ success: false, message: err.message, ...(err.code && { code: err.code }) });
+    }
+    return next(err);
+  }
+}
+
 module.exports = {
   ping,
   listingDraft,
@@ -696,6 +760,7 @@ module.exports = {
   chatDraft,
   chat,
   replyDraft,
+  returnsInsights,
   sellerAdvisor,
   catalogueMatch,
   csvClean,
