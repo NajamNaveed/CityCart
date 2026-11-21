@@ -3664,6 +3664,78 @@ Agent endpoints and their role checks are specified in `docs/27-ai-agents-and-au
 
 ---
 
+## CSV cleaner
+
+```text
+POST /api/v1/ai/csv-clean
+```
+
+Roles: `BRAND_ADMIN`, or `BRAND_EMPLOYEE` holding **both** `products.create` and `products.update` — the same two guards as `POST /products/import`, so a shop that cannot import is not shown a preview of an import either. The **Clean it up first** button in the CSV import dialog asks it.
+
+The file *is* the request body, sent exactly the way the import sends it:
+
+```text
+Content-Type: text/csv
+
+name,barcode,sku,price,compareAtPrice,status,quantity,lowStockThreshold,branches
+Basmati Rice 1Kg,,R-1,"Rs 2,400",,live,20 units,,Gulberg, D Ground
+```
+
+Cap 1 mb (the importer's own); a larger body is **413** before anything is parsed. Nothing is written and nothing is imported: the response carries the corrected text back, and the shop puts it through the ordinary **Check file** / **Import** buttons.
+
+How it works:
+
+1. The file is read with the importer's own rules — the same header mapping, the same required columns (`name`, `price`), the same 500-row limit, the same `CsvImportError` messages. A file the import refuses is refused here, with the same words, before any model call.
+2. Every text fix is a deterministic server rule, listed in the diff with the sentence that explains it: a currency or a `2.4k` shorthand becomes a plain number, `20 units` becomes `20`, `live`/`Hidden`/`0` become `ACTIVE`/`INACTIVE`/`INACTIVE`, `A, B` becomes `A|B`, extra spaces inside a name collapse. A cell whose meaning is not certain is left exactly as it was written, so the import reports it instead of the cleaner guessing. Columns the import does not know are kept in the file and listed under `ignoredColumns`.
+3. A row with more cells than the header (an unquoted comma) is *not* touched at all: its columns are shifted, so its price is not its price. It is reported in `warnings` and excluded from matching and from the model's prompts.
+4. Rows are resolved against the catalogue the way the importer resolves them — barcode first, then the name's slug, ACTIVE global items plus this shop's own private ones, its own private item winning over a global one of the same name. Unmatched names are the only thing a model is asked about, in chunks of 20 rows and at most 60 rows per file (`summary.asked` / `summary.notAsked`); a suggestion is written into the file **only** after a second catalogue read confirms that name exists, otherwise it is returned as a hint under `unmatched[].suggestion` and the row keeps the shop's own text. Prices, stock, statuses, SKUs and barcodes are never sent to the model.
+5. One chunk whose provider call fails costs the shop only that chunk's suggestions: the response still returns every text fix with `degraded: true`.
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "summary": { "rows": 1, "cellsChanged": 5, "rowsChanged": 1, "matched": 1, "unmatched": 0, "asked": 1, "notAsked": 0, "ragged": 0 },
+    "changes": [
+      { "line": 2, "column": "price", "from": "Rs 2,400", "to": "2400", "rule": "Prices are plain numbers — the currency and separators were removed." },
+      { "line": 2, "column": "status", "from": "live", "to": "ACTIVE", "rule": "Statuses are written ACTIVE, DRAFT, INACTIVE — \"live\" became ACTIVE." },
+      { "line": 2, "column": "quantity", "from": "20 units", "to": "20", "rule": "Stock counts are whole numbers — the unit word was removed." },
+      { "line": 2, "column": "branches", "from": "Gulberg, D Ground", "to": "Gulberg|D Ground", "rule": "Several branches are separated with a | sign." },
+      { "line": 2, "column": "name", "from": "Basmati Rice 1Kg", "to": "Basmati Rice 1 kg", "rule": "The size was written as 1Kg. CityCart has this product, so the row will import." }
+    ],
+    "unmatched": [],
+    "ignoredColumns": [],
+    "warnings": [],
+    "calls": 1,
+    "degraded": false,
+    "csv": "name,barcode,sku,price,...\r\nBasmati Rice 1 kg,,R-1,2400,...",
+    "note": "Nothing was imported. Run the normal check on this file, then import it when the diff looks right."
+  }
+}
+```
+
+`line` is the row's real line number in the uploaded file, so the shop can find it in the spreadsheet. A cell fixed by a rule and then by a confirmed name appears twice, in that order.
+
+Failure codes:
+
+```text
+400                    body is not a text/csv file ("Send the file as text/csv, the same way the import does."), or a file shorter than a header row
+400                    the importer's own refusals: empty file, missing required column(s), no product rows, over 500 rows, unclosed quote
+401                    no session, or an employee whose membership has ended
+403 ROLE_NOT_ALLOWED   caller is not a brand admin or brand employee
+403 PERMISSION_DENIED  an employee missing products.create or products.update (carries `permission`)
+403 NO_BRAND           the session has no brand to resolve catalogue items for
+413                    the file is larger than the importer accepts
+429 AI_DAILY_LIMIT / rate limiter
+503 AI_UNAVAILABLE     kill switch is off (answered before the file is read at all)
+```
+
+This endpoint has no 502: the model's absence only removes suggestions.
+
+---
+
 # 24. Query Parameters
 
 Collection endpoints should use predictable query parameters.

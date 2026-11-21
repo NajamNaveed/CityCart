@@ -14,6 +14,7 @@ const {
   chat,
   sellerAdvisor,
   catalogueMatch,
+  csvClean,
 } = require('../controllers/ai.controller');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
@@ -184,6 +185,25 @@ router.post(
   aiUserLimiter,
   aiDailyLimit,
   catalogueMatch,
+);
+
+// Phase 3b: the CSV cleaner. It reads the file exactly the way the import does
+// (text/csv body, the same 1mb cap) and needs the same two permissions, so an
+// employee who cannot import is not shown a preview of an import either. The
+// guards run before the body is read: a refusal never parses a file. Nothing
+// here writes — the brand takes the cleaned text back to POST /products/import.
+router.post(
+  '/csv-clean',
+  authenticate,
+  requireRole(ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE),
+  requirePermission(PERMISSIONS.PRODUCTS_CREATE),
+  requirePermission(PERMISSIONS.PRODUCTS_UPDATE),
+  requireTenant,
+  requireAiEnabled,
+  aiUserLimiter,
+  aiDailyLimit,
+  express.text({ type: 'text/csv', limit: '1mb' }),
+  csvClean,
 );
 
 module.exports = router;

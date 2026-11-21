@@ -29,6 +29,8 @@ const {
   CatalogueMatchError,
   QUERY_LIMIT: CATALOGUE_QUERY_LIMIT,
 } = require('../services/ai/agents/catalogueMatch.agent');
+const { cleanCsv, CsvCleanError } = require('../services/ai/agents/csvClean.agent');
+const { CsvImportError } = require('../services/productCsv.service');
 const { ROUTABLE_MODES, MAX_MESSAGE_CHARS } = require('../services/ai/intent');
 const {
   draftChatMessage,
@@ -548,6 +550,64 @@ async function catalogueMatch(req, res, next) {
   }
 }
 
+/**
+ * The limit the importer itself accepts, so a file that can be cleaned can also
+ * be imported — and a file that cannot be imported is not cleaned either.
+ */
+const CSV_CLEAN_LIMIT = 1_000_000;
+
+const csvCleanSchema = z
+  .string()
+  .trim()
+  .min(4, 'Upload the CSV file first.')
+  .max(CSV_CLEAN_LIMIT, 'This file is too large for one check. Split it into smaller files.');
+
+/**
+ * Phase 3b: the CSV cleaner. The file is the request body, exactly like
+ * POST /products/import, so the diff describes the bytes the shop is about to
+ * import rather than a copy of them, and the 1mb cap is the importer's own.
+ * Nothing is written: the shop puts the cleaned text back through the ordinary
+ * check and import buttons.
+ */
+async function csvClean(req, res, next) {
+  if (typeof req.body !== 'string') {
+    return res.status(400).json({
+      success: false,
+      message: 'Send the file as text/csv, the same way the import does.',
+    });
+  }
+  const parsed = csvCleanSchema.safeParse(req.body);
+  if (!parsed.success) {
+    // The body is the file itself, so there is no field to report — the first
+    // reason is the one the shop needs to see.
+    return res.status(400).json({
+      success: false,
+      message: parsed.error.issues[0]?.message || 'Upload the CSV file first.',
+    });
+  }
+
+  if (!req.tenantBrandId) {
+    return res.status(403).json({ success: false, message: 'This needs a brand account.', code: 'NO_BRAND' });
+  }
+
+  try {
+    const data = await cleanCsv({
+      csv: parsed.data,
+      ctx: { userId: req.user._id, role: req.user.role, brandId: req.tenantBrandId },
+    });
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    // A file the importer would refuse is refused here too, with the same words,
+    // because the cleaner reads it with the importer's own rules.
+    if (err instanceof CsvCleanError || err instanceof CsvImportError) {
+      return res
+        .status(err.status)
+        .json({ success: false, message: err.message, ...(err.code && { code: err.code }) });
+    }
+    return next(err);
+  }
+}
+
 module.exports = {
   ping,
   listingDraft,
@@ -562,4 +622,5 @@ module.exports = {
   chat,
   sellerAdvisor,
   catalogueMatch,
+  csvClean,
 };

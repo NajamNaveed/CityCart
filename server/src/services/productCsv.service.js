@@ -306,5 +306,8 @@ module.exports = {
   importBrandProducts,
   CsvImportError,
   COLUMNS,
+  REQUIRED_COLUMNS,
+  IMPORT_STATUSES,
   MAX_IMPORT_ROWS,
+  normalizeHeader,
 };
