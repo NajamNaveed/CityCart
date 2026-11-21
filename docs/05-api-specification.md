@@ -2910,7 +2910,7 @@ Super Admin only.
 
 ---
 
-# 23a. AI Endpoints (Phase 0–2c)
+# 23a. AI Endpoints (Phase 0–3a)
 
 Base:
 
@@ -3544,6 +3544,61 @@ Failure codes:
 429 AI_DAILY_LIMIT / rate limiter
 502 AI_BAD_OUTPUT      the model did not return a usable draft
 503 AI_UNAVAILABLE     kill switch is off or every provider failed
+```
+
+## Seller advisor
+
+```text
+POST /api/v1/ai/seller-advisor
+```
+
+Roles: `BRAND_ADMIN`, or `BRAND_EMPLOYEE` holding `analytics.view` — the same guard as the brand analytics charts this panel explains. The **AI advisor** card on the brand dashboard (Overview) asks it.
+
+Request:
+
+```json
+{ "message": "Which products are running out and need restocking first?" }
+```
+
+`message` is 2–1200 characters, sanitized and treated as data. Nothing else is accepted: a `brandId`, `userId` or `days` in the body is ignored, and the brand the tools read is always `req.tenantBrandId` — the caller's own brand from the session (AGENTS.md §9).
+
+How it works:
+
+1. The agent loop may call up to 4 read-only tools, each of which takes the brand from the request context and never from the model:
+   * `get_sales_summary { days? }` — this shop's last 7–90 days (default 30) beside the equal window straight before it. The current figures come from the dashboard's own `GET /brand/analytics` service call, so the advisor and the charts cannot disagree; the baseline is one adjacent-window aggregation, because analytics has no period comparison. Amounts are **rupees**, revenue is DELIVERED orders at `netTotal` (falling back to `total`), and a change is `null` when there is no earlier window.
+   * `list_stock_alerts { status?, limit?, days? }` — `GET /inventory` alerts ranked by real urgency (out of stock first, then days of cover), with units sold in the window and `daysOfCover` calculated server-side. A product that sold nothing has `daysOfCover: null`, never an infinite cover; a `lowStockThreshold` of 0 reports `thresholdSet: false`.
+   * `get_product_performance { productId, days? }` — one of this shop's own listings: its price, stock, units and revenue against the previous window, and its approved-review count with the average rating **computed in code**. A product of another brand returns `{ found: false }` and its price never enters the prompt.
+2. Every number in the answer is produced by those tools; the model only explains them. It may return `productIds`, and a card is rendered only for an id a tool actually read for this brand — an invented id, or one belonging to another shop, is dropped.
+3. Nothing writes. Restocking, prices, listings and delivery settings stay on their normal screens; the panel links to `/brand/products/:id`.
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "reply": "Restock the sunflower oil first — it sold out 3 days ago and 2 units moved this week.",
+    "products": [
+      { "productId": "66f1a0c2b3d4e5f60718293a", "productName": "Sunflower Oil, 1 L", "source": "stock", "price": 590, "stockStatus": "OUT_OF_STOCK", "availableQuantity": 0, "daysOfCover": 0, "unitsSold": 2, "revenue": null, "averageRating": null }
+    ],
+    "degraded": false,
+    "steps": 2
+  }
+}
+```
+
+When no provider answers, or the model returns something unusable, the request still succeeds with `reply: null, degraded: true` and the ranked stock alerts, because those come from the database rather than the model.
+
+Failure codes:
+
+```text
+400 (zod)              message missing, shorter than 2 or longer than 1200 characters
+401                    no session, or an employee whose membership has ended
+403 ROLE_NOT_ALLOWED   caller is not a brand admin or brand employee
+403 PERMISSION_DENIED  an employee without analytics.view (carries `permission`)
+403 NO_BRAND           the session has no brand to scope the tools to
+429 AI_DAILY_LIMIT / rate limiter
+503 AI_UNAVAILABLE     kill switch is off or every provider failed and no fallback was possible
 ```
 
 Agent endpoints and their role checks are specified in `docs/27-ai-agents-and-automation-plan.md` and `docs/29-ai-phase-roadmap.md`.

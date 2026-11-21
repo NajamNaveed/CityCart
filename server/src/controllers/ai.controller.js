@@ -20,6 +20,10 @@ const {
   MESSAGE_LIMIT: COMPARE_MESSAGE_LIMIT,
 } = require('../services/ai/agents/compare.agent');
 const { askCityCart } = require('../services/ai/agents/chat.agent');
+const {
+  askSellerAdvisor,
+  MESSAGE_LIMIT: SELLER_MESSAGE_LIMIT,
+} = require('../services/ai/agents/sellerAdvisor.agent');
 const { ROUTABLE_MODES, MAX_MESSAGE_CHARS } = require('../services/ai/intent');
 const {
   draftChatMessage,
@@ -444,6 +448,45 @@ async function chatDraft(req, res, next) {
   }
 }
 
+const sellerAdvisorSchema = z.object({
+  message: z
+    .string()
+    .trim()
+    .min(2, 'Ask a question first.')
+    .max(SELLER_MESSAGE_LIMIT, `Keep the question under ${SELLER_MESSAGE_LIMIT} characters.`),
+});
+
+/**
+ * Phase 3a: the seller advisor. requireTenant already put the caller's own
+ * brand on the request, and that — never the body — is what the tools read, so
+ * a shop cannot ask about another shop. Anything that could change a listing,
+ * a price or a stock level stays on the ordinary brand screens.
+ */
+async function sellerAdvisor(req, res, next) {
+  const parsed = sellerAdvisorSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsed.error),
+    });
+  }
+
+  if (!req.tenantBrandId) {
+    return res.status(403).json({ success: false, message: 'This needs a brand account.', code: 'NO_BRAND' });
+  }
+
+  try {
+    const data = await askSellerAdvisor({
+      message: parsed.data.message,
+      ctx: { userId: req.user._id, role: req.user.role, brandId: req.tenantBrandId },
+    });
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    return next(err);
+  }
+}
+
 module.exports = {
   ping,
   listingDraft,
@@ -456,4 +499,5 @@ module.exports = {
   compare,
   chatDraft,
   chat,
+  sellerAdvisor,
 };

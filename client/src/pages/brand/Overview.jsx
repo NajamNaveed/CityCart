@@ -28,6 +28,7 @@ import {
 } from '../../components/brand/Bits'
 import { Button } from '../../design'
 import { Skeleton } from '../../components/ui'
+import SellerAdvisor from '../../components/brand/SellerAdvisor'
 import { formatDateTime, formatPrice } from '../../ui'
 
 const total = (res) => (res?.status === 'fulfilled' ? res.value.data.pagination.total : null)
@@ -42,6 +43,8 @@ export default function Overview() {
   const canStock = can('inventory.view')
   const canReturns = can('delivery.view')
   const canMessages = can('messages.view')
+  // The advisor reads the same numbers as the charts, so it needs the same access.
+  const canAnalytics = can('analytics.view')
 
   const [reload, setReload] = useState(0)
   const [state, setState] = useState({ loaded: false, error: '', pending: null, products: null, attention: null, returns: null, recent: null })
@@ -186,7 +189,13 @@ export default function Overview() {
         </div>
       )}
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-[1.55fr_1fr]">
+      {canAnalytics && (
+        <div className="mt-8">
+          <SellerAdvisor />
+        </div>
+      )}
+
+      <div className={`grid gap-6 lg:grid-cols-[1.55fr_1fr] ${canAnalytics ? 'mt-9' : 'mt-8'}`}>
         <section aria-labelledby="attention-title">
           <SectionTitle
             title={<span id="attention-title">Needs attention</span>}

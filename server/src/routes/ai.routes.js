@@ -12,12 +12,16 @@ const {
   compare,
   chatDraft,
   chat,
+  sellerAdvisor,
 } = require('../controllers/ai.controller');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
+const requirePermission = require('../middleware/requirePermission');
+const requireTenant = require('../middleware/requireTenant');
 const validateObjectIdParam = require('../middleware/validateObjectIdParam');
 const { chatAccess } = require('../middleware/chatAccess');
 const { ROLES } = require('../config/roles');
+const { PERMISSIONS } = require('../config/permissions');
 const { requireAiEnabled, aiDailyLimit } = require('../middleware/aiAccess');
 const { aiUserLimiter } = require('../middleware/rateLimiters');
 
@@ -146,6 +150,22 @@ router.post(
   aiUserLimiter,
   aiDailyLimit,
   chatDraft,
+);
+
+// Phase 3a: the seller advisor. Same authorization chain as the brand
+// analytics charts it explains (analytics.view + the caller's own tenant), then
+// the usual AI guards. The brand is taken from requireTenant, never from the
+// body, and every tool reads only that brand.
+router.post(
+  '/seller-advisor',
+  authenticate,
+  requireRole(ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE),
+  requirePermission(PERMISSIONS.ANALYTICS_VIEW),
+  requireTenant,
+  requireAiEnabled,
+  aiUserLimiter,
+  aiDailyLimit,
+  sellerAdvisor,
 );
 
 module.exports = router;
