@@ -3,6 +3,7 @@ import api, { getErrorMessage, getFieldErrors } from '../../services/api'
 import Field from '../Field'
 import ImageUploader from './ImageUploader'
 import ProductImage from '../ProductImage'
+import CatalogueCheck from './CatalogueCheck'
 import { btnDark, inputClass } from '../../ui'
 
 const labelClass = 'mb-1.5 block text-[12px] font-medium uppercase tracking-[0.1em] text-ink/55'
@@ -79,7 +80,7 @@ function MyRequests({ refresh, onUse }) {
   )
 }
 
-function RequestForm({ categories, onDone, onCancel }) {
+function RequestForm({ categories, onDone, onCancel, onSearch }) {
   const [form, setForm] = useState({ name: '', manufacturer: '', categoryId: '', description: '', barcode: '', sizeValue: '', sizeUnit: '' })
   const [images, setImages] = useState([])
   const [isPrivate, setIsPrivate] = useState(false)
@@ -93,6 +94,7 @@ function RequestForm({ categories, onDone, onCancel }) {
   const [aiError, setAiError] = useState('')
   const [aiUsed, setAiUsed] = useState(false)
   const onChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }))
+  const chosenCategory = categories.flatMap((c) => [c, ...c.children]).find((c) => c._id === form.categoryId)?.name || null
 
   useEffect(() => {
     let active = true
@@ -241,6 +243,9 @@ function RequestForm({ categories, onDone, onCancel }) {
           <span className="block text-xs text-ink/55">Usable straight away, never shown to other stores. Leave it off to share it with every store after the CityCart admin approves it.</span>
         </span>
       </label>
+      {aiAvailable && (
+        <CatalogueCheck query={form.name} barcode={form.barcode} categoryName={chosenCategory} onSearch={onSearch} />
+      )}
       <div className="flex gap-3">
         <button type="button" onClick={submit} disabled={saving || !form.name.trim() || !form.categoryId} className={btnDark}>
           {saving ? 'Sending…' : isPrivate ? 'Create private product' : 'Send request'}
@@ -338,7 +343,14 @@ export default function CatalogPicker({ categories, onSelect }) {
           Can't find it? Request a new product
         </button>
       )}
-      {requesting && <RequestForm categories={categories} onDone={requested} onCancel={() => setRequesting(false)} />}
+      {requesting && (
+        <RequestForm
+          categories={categories}
+          onDone={requested}
+          onCancel={() => setRequesting(false)}
+          onSearch={(name) => setQ(name)}
+        />
+      )}
       <MyRequests refresh={refresh} onUse={onSelect} />
     </div>
   )

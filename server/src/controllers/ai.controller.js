@@ -24,6 +24,11 @@ const {
   askSellerAdvisor,
   MESSAGE_LIMIT: SELLER_MESSAGE_LIMIT,
 } = require('../services/ai/agents/sellerAdvisor.agent');
+const {
+  matchCatalogue,
+  CatalogueMatchError,
+  QUERY_LIMIT: CATALOGUE_QUERY_LIMIT,
+} = require('../services/ai/agents/catalogueMatch.agent');
 const { ROUTABLE_MODES, MAX_MESSAGE_CHARS } = require('../services/ai/intent');
 const {
   draftChatMessage,
@@ -487,6 +492,62 @@ async function sellerAdvisor(req, res, next) {
   }
 }
 
+const catalogueMatchSchema = z
+  .object({
+    query: z
+      .string()
+      .trim()
+      .min(2, 'Type the product name or a few words about it.')
+      .max(CATALOGUE_QUERY_LIMIT, `Keep it under ${CATALOGUE_QUERY_LIMIT} characters.`),
+    barcode: z
+      .string()
+      .trim()
+      .regex(/^[0-9A-Za-z-]{6,40}$/, 'A barcode is 6-40 digits, letters or dashes.')
+      .optional(),
+    categoryName: z.string().trim().max(80).optional(),
+  })
+  // A brand id in the body is not merely ignored, it is refused: the shop
+  // behind a search always comes from requireTenant.
+  .strict();
+
+/**
+ * Phase 3b: the catalogue matcher. The brand is taken from requireTenant, so
+ * the reads are this shop's catalogue view and this shop's own listings only.
+ * Nothing here creates or merges a product: the shop still clicks the ordinary
+ * "use this product" or "send request" buttons.
+ */
+async function catalogueMatch(req, res, next) {
+  const parsed = catalogueMatchSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsed.error),
+    });
+  }
+
+  if (!req.tenantBrandId) {
+    return res.status(403).json({ success: false, message: 'This needs a brand account.', code: 'NO_BRAND' });
+  }
+
+  try {
+    const data = await matchCatalogue({
+      query: parsed.data.query,
+      barcode: parsed.data.barcode || null,
+      categoryName: parsed.data.categoryName || null,
+      ctx: { userId: req.user._id, role: req.user.role, brandId: req.tenantBrandId },
+    });
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    if (err instanceof CatalogueMatchError) {
+      return res
+        .status(err.status)
+        .json({ success: false, message: err.message, ...(err.code && { code: err.code }) });
+    }
+    return next(err);
+  }
+}
+
 module.exports = {
   ping,
   listingDraft,
@@ -500,4 +561,5 @@ module.exports = {
   chatDraft,
   chat,
   sellerAdvisor,
+  catalogueMatch,
 };

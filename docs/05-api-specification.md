@@ -3601,6 +3601,65 @@ Failure codes:
 503 AI_UNAVAILABLE     kill switch is off or every provider failed and no fallback was possible
 ```
 
+## Catalogue duplicate checker
+
+```text
+POST /api/v1/ai/catalogue-match
+```
+
+Roles: `BRAND_ADMIN`, or `BRAND_EMPLOYEE` holding `products.create` — the same guard as the catalogue request it sits in front of. The **Is this product already in CityCart?** panel inside "Request a new product" on the catalogue picker asks it.
+
+Request:
+
+```json
+{ "query": "Basmati Rice 1 kg", "barcode": "8964000123456", "categoryName": "Rice & Grains" }
+```
+
+`query` is 2–200 characters and required; `barcode` is 6–40 digits/letters/dashes; `categoryName` is at most 80 characters and only context for the wording. The body is strict: an extra `brandId` or `scope` is a **400**, not something to ignore, so a request can never widen or shift the tenant the route already resolved from the session (AGENTS.md §9).
+
+How it works:
+
+1. Two reads always run, chosen by the server rather than offered to the model, so the duplicate check cannot be talked out of:
+   * `search_catalogue { query?, barcode?, limit? }` — the ordinary picker read, `listForBrand`: ACTIVE global items plus this shop's own private ones, never another shop's private item, a PENDING request or an ARCHIVED record. The typed phrase, each of its words and each size with its space back (`1kg` → `1 kg`) are searched, bounded to 8 phrases, and the candidates are merged.
+   * `list_shop_listings { query, limit? }` — this shop's own listings at any visibility except ARCHIVED, matched by word or by SKU. What the shop typed is escaped and used as a literal, never as a pattern.
+2. The similarity is arithmetic in code, not the model's judgement: a quantity is glued to its unit first, so `1 kg` and `1kg` are one word; `score` is the percentage of the question's words present in the row's name; `matchedTokens` / `missingTokens` say which. An item is a likely duplicate at 75% or on an identical barcode, and that rule is sent to the model with the rows so it can only repeat it. Prices are **rupees**.
+3. One model call explains the two results. The cards are built only from ids the model saw in those results — an invented id, a hidden item's id or another shop's listing is dropped, repeats collapse, and at most 3 of each are returned.
+4. Nothing writes. There is no create, merge, archive or approve path here; the panel only puts the item's name back into the picker's search box so the shop can choose it there.
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "reply": "Yes — “Basmati Rice 1 kg” is already in the catalogue and you list it yourself, so you only need a price and stock on that product.",
+    "matches": [
+      { "catalogProductId": "66f1a0c2b3d4e5f60718293a", "name": "Basmati Rice 1 kg", "manufacturer": "Guard", "category": "Rice & Grains", "size": { "value": 1, "unit": "kg" }, "barcode": "8964000123456", "scope": "GLOBAL", "imageCount": 2, "sameBarcode": true, "listedByYou": true, "likelyDuplicate": true, "score": 100, "matchedTokens": ["basmati", "rice", "1kg"], "missingTokens": [] }
+    ],
+    "duplicates": [
+      { "productId": "66f1a0c2b3d4e5f60718294b", "name": "Basmati Rice 1 kg", "price": 480, "compareAtPrice": 550, "currency": "Pakistani rupees", "status": "ACTIVE", "isActive": true, "sku": "RICE-1KG", "catalogProductId": "66f1a0c2b3d4e5f60718293a", "category": "Rice & Grains", "score": 100, "matchedTokens": ["basmati", "rice", "1kg"], "missingTokens": [] }
+    ],
+    "searched": { "catalogue": 2, "listings": 1, "words": ["basmati", "rice", "1kg"] },
+    "degraded": false
+  }
+}
+```
+
+When no provider answers, or the model returns something unusable, the request still succeeds with `reply: null, degraded: true` plus the same server-ranked rows: the matching is arithmetic, so the shop still gets the answer it came for. This endpoint has no 502.
+
+Failure codes:
+
+```text
+400 (zod)              query missing/under 2/over 200, malformed barcode, an unknown field such as brandId
+400                    query is only markup, once the text is sanitized ("Say what the product is.")
+401                    no session, or an employee whose membership has ended
+403 ROLE_NOT_ALLOWED   caller is not a brand admin or brand employee
+403 PERMISSION_DENIED  an employee without products.create (carries `permission`)
+403 NO_BRAND           the session has no brand to scope the searches to
+429 AI_DAILY_LIMIT / rate limiter
+503 AI_UNAVAILABLE     kill switch is off (answered before either read)
+```
+
 Agent endpoints and their role checks are specified in `docs/27-ai-agents-and-automation-plan.md` and `docs/29-ai-phase-roadmap.md`.
 
 ---

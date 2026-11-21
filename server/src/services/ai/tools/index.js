@@ -13,6 +13,10 @@ const {
   stockAlertsTool,
   productPerformanceTool,
 } = require('./seller.tools');
+const {
+  searchCatalogueTool,
+  listShopListingsTool,
+} = require('./catalogue.tools');
 
 /**
  * Read-only tool layer for the assistants (docs/27 §3.4).
@@ -48,6 +52,8 @@ function createToolContext({
     slots: new Map(),
     stock: new Map(),
     performance: new Map(),
+    catalogue: new Map(),
+    ownListings: new Map(),
     rememberProduct(card) {
       this.products.set(String(card._id), card);
       return card;
@@ -72,6 +78,14 @@ function createToolContext({
       this.performance.set(String(row.productId), row);
       return row;
     },
+    rememberCatalogue(row) {
+      this.catalogue.set(String(row.catalogProductId), row);
+      return row;
+    },
+    rememberOwnListing(row) {
+      this.ownListings.set(String(row.productId), row);
+      return row;
+    },
   };
 }
 
@@ -88,6 +102,8 @@ const TOOLS = {
   [salesSummaryTool.name]: salesSummaryTool,
   [stockAlertsTool.name]: stockAlertsTool,
   [productPerformanceTool.name]: productPerformanceTool,
+  [searchCatalogueTool.name]: searchCatalogueTool,
+  [listShopListingsTool.name]: listShopListingsTool,
 };
 
 const SHOP_TOOLS = [productTool, categoryTool, storeTool];
@@ -95,6 +111,7 @@ const COMPARE_TOOLS = [compareTool];
 const ORDER_TOOLS = [listOrdersTool, getOrderTool];
 const SERVICE_TOOLS = [findProvidersTool, listCategoriesTool, providerSlotsTool];
 const SELLER_TOOLS = [salesSummaryTool, stockAlertsTool, productPerformanceTool];
+const CATALOGUE_TOOLS = [searchCatalogueTool, listShopListingsTool];
 
 /** The tool list as it appears in the system prompt. */
 function describeTools(tools) {
@@ -116,4 +133,5 @@ module.exports = {
   ORDER_TOOLS,
   SERVICE_TOOLS,
   SELLER_TOOLS,
+  CATALOGUE_TOOLS,
 };

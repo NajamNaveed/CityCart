@@ -13,6 +13,7 @@ const {
   chatDraft,
   chat,
   sellerAdvisor,
+  catalogueMatch,
 } = require('../controllers/ai.controller');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
@@ -166,6 +167,23 @@ router.post(
   aiUserLimiter,
   aiDailyLimit,
   sellerAdvisor,
+);
+
+// Phase 3b: the catalogue matcher. It answers a question the catalogue picker
+// cannot: "does this already exist, and do I already sell it?" Same gates as the
+// catalogue request it replaces (products.create + the caller's own tenant), so
+// an employee who cannot request a product cannot run the check either. The
+// shop's identity comes from requireTenant, never from the body.
+router.post(
+  '/catalogue-match',
+  authenticate,
+  requireRole(ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE),
+  requirePermission(PERMISSIONS.PRODUCTS_CREATE),
+  requireTenant,
+  requireAiEnabled,
+  aiUserLimiter,
+  aiDailyLimit,
+  catalogueMatch,
 );
 
 module.exports = router;
