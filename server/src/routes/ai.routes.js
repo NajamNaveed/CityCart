@@ -15,6 +15,7 @@ const {
   replyDraft,
   returnsInsights,
   restockCalendar,
+  listingQuality,
   sellerAdvisor,
   catalogueMatch,
   csvClean,
@@ -265,6 +266,25 @@ router.post(
   aiUserLimiter,
   aiDailyLimit,
   restockCalendar,
+);
+
+// Phase 3d-3: the listing quality score. It answers "why is this page not
+// selling?" about one listing the shop names, so it runs on products.view — the
+// same guard as GET /products/mine, the screen the score has to agree with. The
+// listing is read inside the tenant requireTenant resolved from the session, so
+// another shop's page scores nothing and 404s like a missing one; the score is
+// CityCart's own arithmetic over the record's fields, the model only re-words
+// the gaps it found, and the listing is never written.
+router.post(
+  '/listing-quality',
+  authenticate,
+  requireRole(ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE),
+  requirePermission(PERMISSIONS.PRODUCTS_VIEW),
+  requireTenant,
+  requireAiEnabled,
+  aiUserLimiter,
+  aiDailyLimit,
+  listingQuality,
 );
 
 module.exports = router;

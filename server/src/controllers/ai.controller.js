@@ -50,6 +50,10 @@ const {
   MIN_WEEKS: RESTOCK_MIN_WEEKS,
   MAX_WEEKS: RESTOCK_MAX_WEEKS,
 } = require('../services/ai/agents/restockCalendar.agent');
+const {
+  listingQuality: readListingQuality,
+  ListingQualityError,
+} = require('../services/ai/agents/listingQuality.agent');
 const { CsvImportError } = require('../services/productCsv.service');
 const { ROUTABLE_MODES, MAX_MESSAGE_CHARS } = require('../services/ai/intent');
 const {
@@ -811,6 +815,58 @@ async function restockCalendar(req, res, next) {
   }
 }
 
+const listingQualitySchema = z.object({
+  productId: z.string().trim().min(1, 'Choose a listing to score.').max(64),
+});
+
+/**
+ * Phase 3d-3: why this page is not selling. One id in, one listing out — and
+ * the id is only ever read inside the tenant `requireTenant` resolved from the
+ * session, so another shop's listing scores nothing, says nothing and 404s the
+ * same way this shop's own missing listing does. The score itself is arithmetic
+ * from `listingQuality.rules`; the model only re-words the gaps that arithmetic
+ * found, and a fix naming a field with no gap is dropped here. Nothing is saved
+ * to the listing.
+ */
+async function listingQuality(req, res, next) {
+  const parsed = listingQualitySchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsed.error),
+    });
+  }
+
+  if (!req.tenantBrandId) {
+    return res.status(403).json({ success: false, message: 'This needs a brand account.', code: 'NO_BRAND' });
+  }
+
+  if (!holdsBrandPermission(req, PERMISSIONS.PRODUCTS_VIEW)) {
+    return res.status(403).json({
+      success: false,
+      message: 'You are not authorized to perform this action.',
+      code: 'PERMISSION_DENIED',
+      permission: PERMISSIONS.PRODUCTS_VIEW,
+    });
+  }
+
+  try {
+    const data = await readListingQuality({
+      ...parsed.data,
+      ctx: { userId: req.user._id, role: req.user.role, brandId: req.tenantBrandId },
+    });
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    if (err instanceof ListingQualityError) {
+      return res
+        .status(err.status)
+        .json({ success: false, message: err.message, ...(err.code && { code: err.code }) });
+    }
+    return next(err);
+  }
+}
+
 module.exports = {
   ping,
   listingDraft,
@@ -826,6 +882,7 @@ module.exports = {
   replyDraft,
   returnsInsights,
   restockCalendar,
+  listingQuality,
   sellerAdvisor,
   catalogueMatch,
   csvClean,

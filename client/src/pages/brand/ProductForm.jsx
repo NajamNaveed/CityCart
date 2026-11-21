@@ -5,6 +5,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { useCan } from '../../hooks/useCan'
 import Field from '../../components/Field'
 import CatalogPicker, { CatalogItemCard } from '../../components/brand/CatalogPicker'
+import ListingQuality from '../../components/brand/ListingQuality'
 import { categoryLabelFor } from '../../utils/categoryLabel'
 import { Notice, PageHeader } from '../../components/brand/Bits'
 import { Skeleton } from '../../components/ui'
@@ -264,6 +265,8 @@ function FormBody({ id, product, inventory, categories, branches }) {
         </fieldset>
 
         </fieldset>
+
+        {id && <ListingQuality productId={id} />}
 
         <div className="flex flex-wrap items-center gap-3">
           {canSave && (

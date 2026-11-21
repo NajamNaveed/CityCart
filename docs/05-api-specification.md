@@ -4007,6 +4007,99 @@ Failure codes:
 
 Nothing is created, ordered, restocked, reserved, adjusted or scheduled by this endpoint. Stock still changes through `PATCH /inventory/:productId` and the `PATCH /inventory/batch` save the inventory hub uses, and a purchase order is something the shop makes with its own supplier, outside CityCart.
 
+---
+
+## Listing quality score
+
+```text
+POST /api/v1/ai/listing-quality
+```
+
+Roles: `BRAND_ADMIN`, or `BRAND_EMPLOYEE` holding `products.view` — the same guard as the product page it sits on. The **AI listing check** card at the foot of `ProductForm.jsx` asks it, in edit mode only, because a listing that has never been saved has nothing to score.
+
+```json
+{ "productId": "66f1a0c2b3d4e5f60718293f" }
+```
+
+`productId` is the only field read, and it is read as a 24-character id inside this shop's own records. `brandId`, `score`, `price`, an `inventory` object or any other field in the body is ignored: the tenant comes from the session and every number comes from the database row, never from the request.
+
+```json
+{
+  "success": true,
+  "data": {
+    "product": {
+      "productId": "66f1a0c2b3d4e5f60718293f",
+      "name": "Atta 5 kg",
+      "status": "DRAFT",
+      "isActive": true
+    },
+    "score": 60,
+    "checks": [
+      {
+        "key": "name",
+        "label": "Name",
+        "weight": 15,
+        "points": 8,
+        "status": "WEAK",
+        "facts": "The name is one word (\"Atta\"). A shopper searching for the brand, the size or the pack will not find it…",
+        "gap": 7
+      },
+      {
+        "key": "description",
+        "label": "Description",
+        "weight": 25,
+        "points": 5,
+        "status": "WEAK",
+        "facts": "The description is 24 words — too short for the size, the brand or what actually arrives.",
+        "gap": 20
+      },
+      { "key": "images", "label": "Photos", "weight": 25, "points": 17, "status": "WEAK", "facts": "2 of the 3 photos a shopper likes to see…", "gap": 8 },
+      { "key": "attributes", "label": "Details filled in", "weight": 10, "points": 10, "status": "GOOD", "facts": "2 details filled in, enough to be filtered by.", "gap": 0 },
+      { "key": "price", "label": "Price shown", "weight": 10, "points": 10, "status": "GOOD", "facts": "Rs. 1,180 against a compare-at of Rs. 1,350, so the shopper sees Rs. 170 saved.", "gap": 0 },
+      { "key": "sku", "label": "SKU code", "weight": 5, "points": 5, "status": "GOOD", "facts": "SKU CHR-ATA-5.", "gap": 0 },
+      { "key": "stock", "label": "Stock on hand", "weight": 10, "points": 5, "status": "WEAK", "facts": "5 available and the shop's own warning is set at 5, so this listing is already running short.", "gap": 5 }
+    ],
+    "fixes": ["description", "images", "name", "stock"],
+    "weights": { "name": 15, "description": 25, "images": 25, "attributes": 10, "price": 10, "sku": 5, "stock": 10 },
+    "visibility": { "status": "DRAFT", "isActive": true, "note": "A draft. Only this shop can see it yet." },
+    "insight": {
+      "summary": "The page is worth 60 of 100 and 20 of those points are one paragraph. The photo row is next.",
+      "fixes": [{ "key": "description", "label": "Description", "what": "Say the pack size, the brand and what arrives in the bag." }]
+    },
+    "degraded": false
+  }
+}
+```
+
+Every number above is arithmetic from `server/src/services/ai/listingQuality.rules.js`, not the model's impression of the listing:
+
+* The weights are published in the response and always sum to exactly 100 — name 15, description 25, photos 25, details 10, price 10, SKU 5, stock 10 — and each field is graded in fixed bands (`GOOD`, `WEAK`, `MISSING`, `BROKEN`, `UNTRACKED`) with the sentence in `facts` stating the counts behind the points: words, photos, details filled in, units available.
+* A `compareAtPrice` is scored for **coherence, not for being a discount**. A listing with no strike-through price takes full marks — nothing is wrong with an honest single price — while a compare-at below the price takes 0 and is called `BROKEN`, because the page is showing a saving that does not exist. A compare-at equal to the price takes half.
+* `attributes` counts a value of `0` or `false` as an answer and a blank or `null` as unfilled; `stock` uses `quantity - reservedQuantity`, the same availability the dashboard and the low-stock alerts use, and a listing with no `Inventory` row at all scores 0 there rather than being guessed at. `trackInventory: false` takes half and is labelled `UNTRACKED`, because CityCart genuinely cannot tell whether that shelf can fill an order.
+* `fixes` is the server's own list of fields with `gap > 0`, biggest first, ties broken by the published order — so two runs of the same listing produce the same list in the same order. `insight.fixes` can only ever be a subset of it: a fix key the model invents, repeats, or points at a field already at full marks is dropped before the response is sent.
+* `visibility` is reported and **deliberately not scored**. A draft is an unfinished listing, not a bad one, and charging for it would push a shop to publish half-written copy.
+* Money is printed as text (`Rs. 1,180`) for the shop's own listing and is never recalculated, compared with another shop's price, or used to suggest a new one — re-pricing is 3d-7 and needs its own approval.
+
+The read is exactly two queries, both scoped by `brandId` in the same filter: one `Product` limited to `name description images attributes price compareAtPrice sku status isActive`, and one `Inventory` limited to `quantity reservedQuantity lowStockThreshold trackInventory`. Photo URLs stay in the arithmetic — the prompt is told how many photos there are, never where they are. Names, descriptions and SKUs are sanitized (markup stripped, whitespace flattened, 80/320/40 characters) and marked as data, never as instructions; no customer, order, payout, commission or another shop's row can reach the provider. A listing that belongs to another shop 404s with the same message and status as a listing that does not exist.
+
+If the provider is down or answers in prose, `degraded` is `true`, `insight` is `null`, and the score, the `checks` and the `fixes` are still returned — the counting never needed a model.
+
+Failure codes:
+
+```text
+400 (zod)              productId missing, blank or longer than 64 characters
+401                    no session, or an employee whose membership has ended
+403 ROLE_NOT_ALLOWED   caller is not a brand admin or brand employee
+403 PERMISSION_DENIED  an employee without products.view (carries `permission`)
+403 NO_BRAND           the session has no brand behind it
+404                    the id is not this shop's listing, or is not a valid id
+429 AI_DAILY_LIMIT / rate limiter
+502 AI_BAD_OUTPUT      the model answered in prose, or with a summary longer than 300 characters
+503 AI_UNAVAILABLE     kill switch is off (answered before the listing is read)
+```
+
+Nothing is written by this endpoint. The listing keeps its old fields until the shop edits them on the ordinary form and saves with `PATCH /products/:id`; a score is a reading of the page, and the `AiUsage` row this call leaves behind is the only record it makes.
+
 
 ---
 
