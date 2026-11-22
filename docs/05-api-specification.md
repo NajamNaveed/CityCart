@@ -4510,6 +4510,170 @@ Nothing is written. No invoice is edited, no commission entry is reversed, no pa
 
 ---
 
+## Deadstock re-pricing
+
+```text
+POST /api/v1/ai/deadstock-pricing
+```
+
+Roles: `BRAND_ADMIN` and a `BRAND_EMPLOYEE` holding `products.view` — the same guard as `GET /products/mine`, because this is the product list read a different way. The **AI price read** panel at the foot of `Products.jsx` asks it.
+
+A shop's question is "what is sitting on my shelf, and what should it cost". `Inventory` says how many units are still there and the shop's own delivered `Order` lines say whether any of them left; the answer — including every suggested price — is worked out from those two records and nothing else. This is the one brand endpoint allowed to put a new price in front of a shop (`/ai/listing-quality` is told not to and points here), so the whole ladder lives in `services/ai/deadstockPricing.rules.js` rather than in a model's judgement.
+
+```json
+{ "days": 30 }
+```
+
+`days` is the only field accepted: an integer from 30 to 90, default 30, clamped in code as well as refused by zod. The schema is strict, so a `brandId`, a `productIds` list, a `from`/`to` range, a `price` or a `markdownPct` in the body is a 400, not an ignored field. The shop is the one `requireTenant` resolved from the session, so a caller can neither aim the read at another shop's shelf nor talk it into a deeper cut.
+
+The response is the shelf CityCart measured, with a suggestion attached to each listing that qualifies:
+
+```json
+{
+  "success": true,
+  "data": {
+    "window": {
+      "days": 30,
+      "from": "2026-10-23T09:00:00.000Z",
+      "to": "2026-11-22T09:00:00.000Z",
+      "lookbackDays": 365,
+      "lookbackFrom": "2025-11-22T09:00:00.000Z"
+    },
+    "totals": {
+      "scanned": 11,
+      "sitting": 6,
+      "priced": 6,
+      "blocked": 0,
+      "units": 108,
+      "valueTiedUp": { "paisa": 13630400, "text": "PKR 136,304.00" },
+      "released": { "paisa": 2335540, "text": "PKR 23,355.40" }
+    },
+    "scanned": 11,
+    "scanLimit": 240,
+    "sampled": false,
+    "skipped": { "missing": 1, "untracked": 1, "notLive": 1, "noStock": 1, "selling": 1 },
+    "suggestedRows": 6,
+    "ladder": [
+      { "fromDays": 180, "bps": 2000, "text": "20%" },
+      { "fromDays": 90, "bps": 1500, "text": "15%" },
+      { "fromDays": 30, "bps": 1000, "text": "10%" }
+    ],
+    "maxMarkdown": "20%",
+    "margin": null,
+    "marginNote": "CityCart stores no cost or supplier price for a listing, so it cannot tell you what you still earn after a markdown. It never guesses one.",
+    "moneyNote": "Prices and totals are Pakistani rupees, written exactly as CityCart stores them. Amounts come from a listing's own price multiplied by units on the shelf — never from a cost, because CityCart does not store one.",
+    "empty": false,
+    "currency": "PKR",
+    "shown": [
+      {
+        "productId": "66f1a0c2b3d4e5f6071829a4",
+        "productName": "Basmati Rice 5 kg",
+        "sku": "RICE-5",
+        "quantity": 40,
+        "reservedQuantity": 5,
+        "availableQuantity": 35,
+        "skip": null,
+        "sales": {
+          "unitsInWindow": 0,
+          "unitsInLookback": 12,
+          "revenueInLookback": { "paisa": 120000, "text": "PKR 1,200.00" }
+        },
+        "lastSoldOn": "2026-08-14",
+        "daysSinceSale": 100,
+        "beyondLookback": false,
+        "sittingText": "100 days since it last sold",
+        "suggested": {
+          "current": { "paisa": 150000, "text": "PKR 1,500.00" },
+          "compare": { "paisa": 180000, "text": "PKR 1,800.00" },
+          "bps": 1500,
+          "bpsText": "15%",
+          "clamped": false,
+          "clampNote": null,
+          "suggested": { "paisa": 127500, "text": "PKR 1,275.00" },
+          "blocked": false,
+          "blockReason": null,
+          "value": { "paisa": 5250000, "text": "PKR 52,500.00" },
+          "released": { "paisa": 787500, "text": "PKR 7,875.00" },
+          "atSuggested": { "paisa": 4462500, "text": "PKR 44,625.00" }
+        }
+      },
+      {
+        "productId": "66f1a0c2b3d4e5f6071829b1",
+        "productName": "Sidr Honey 500 g",
+        "sku": "HONEY-500",
+        "quantity": 10,
+        "reservedQuantity": 0,
+        "availableQuantity": 10,
+        "skip": null,
+        "sales": {
+          "unitsInWindow": 0,
+          "unitsInLookback": 0,
+          "revenueInLookback": { "paisa": 0, "text": "PKR 0.00" }
+        },
+        "lastSoldOn": null,
+        "daysSinceSale": null,
+        "beyondLookback": true,
+        "sittingText": "no sale in 365 days",
+        "suggested": {
+          "current": { "paisa": 100000, "text": "PKR 1,000.00" },
+          "compare": { "paisa": 90000, "text": "PKR 900.00" },
+          "bps": 1000,
+          "bpsText": "10%",
+          "clamped": true,
+          "clampNote": "The ladder reached 20%, but CityCart stopped at PKR 900.00, the lowest figure this listing already shows.",
+          "suggested": { "paisa": 90000, "text": "PKR 900.00" },
+          "blocked": false,
+          "blockReason": null,
+          "value": { "paisa": 1000000, "text": "PKR 10,000.00" },
+          "released": { "paisa": 100000, "text": "PKR 1,000.00" },
+          "atSuggested": { "paisa": 900000, "text": "PKR 9,000.00" }
+        }
+      }
+    ],
+    "insight": {
+      "summary": "Six of your live listings hold 108 units worth PKR 136,304.00 and sold nothing in the last 30 days. The largest is Basmati Rice 5 kg: 35 units, 100 days since it last sold, so CityCart suggests PKR 1,275.00 against the PKR 1,500.00 it carries today. Sidr Honey 500 g has no sale in the 365-day look-back, but its own strike-through price of PKR 900.00 stops the ladder there. What to check yourself is whether the honey jar is worth cutting at all before you agree to any of these.",
+      "notes": [
+        { "productId": "66f1a0c2b3d4e5f6071829a4", "note": "Thirty-five units, and the last order for them was 100 days ago." }
+      ],
+      "actions": ["Open the rice listing and set the price yourself if you agree with it."]
+    },
+    "degraded": false
+  }
+}
+```
+
+What the endpoint guarantees about those numbers:
+
+* **Every figure is CityCart's arithmetic.** The ladder is fixed in code — 10% after 30 days, 15% after 90, 20% after 180, and **nothing past 20%**, because beyond that a shop is not being advised but being told to give its stock away. Prices are rupees on `Product` and integer paisa everywhere after `pricePaisa`, so a suggested price is never a float rounding: `PKR 350.50` at 10% is `PKR 315.45`, exactly.
+* **The only floor is the shop's own recorded lower figure.** When a listing displays a `compareAtPrice` *below* its price — the same broken pair `/ai/listing-quality` scores zero — the suggestion stops at that number and says so in `clampNote`. `bpsText` then reports the markdown that **actually happened** (`10%`), never the rung the ladder reached (`20%`), and `clamped: true` records that the two differ.
+* **No margin is claimed, because none can be computed.** `Product` stores no cost and no supplier price, and docs/07 §454 keeps supplier costs out of a shop's own catalogue view, so `margin` is `null`, `marginNote` prints the reason in the shop's language, and the model is told never to use the words margin, profit, loss or supplier price. `released` and `atSuggested` are the difference between two of the shop's **own** prices if every unit on the shelf sold — never a statement about what an item cost or what the shop still earns.
+* **A zero is measured, not assumed.** `sales.unitsInWindow`, `sales.unitsInLookback`, `sales.revenueInLookback` and the last sale date all come out of one bounded `$group` over this shop's `DELIVERED` order lines, so a listing that sold inside the window is classified `selling` and never priced, and a listing with nothing in the look-back is reported as the bound it is — `beyondLookback: true`, `sittingText: "no sale in 365 days"` — never as "never sold".
+* **Only live pages with units actually free are priced.** A listing must be `status: 'ACTIVE'` and not `isActive: false`, its stock must be tracked, and `quantity - reservedQuantity` must be positive; everything else is dropped with a counted reason in `skipped` (`missing`, `untracked`, `notLive`, `noStock`, `selling`). A row whose `price` is not a positive number is kept in the money counts with `blocked: true` and a `blockReason`, never suggested at `PKR 0.00`.
+* **Both reads are bounded and say so.** The stock scan takes at most 240 positions, largest first; when a shop has more than that, `sampled: true` and `scanLimit` are returned and the prompt is told never to present the list as the whole catalogue. At most 8 rows are printed, ranked by the money sitting on them (`totals.valueTiedUp` counts all sitting listings, not just the printed ones), and the order walk is date-bounded to 365 days and restricted to the listing ids actually read.
+* **Tenant isolation is in the query, not the code path.** `Inventory` and `Product` are filtered by the session brand in their filters and the aggregation matches `brandId` from the session, so another shop's enormous unsold pile cannot reach the counts, the ranking, the response or the provider body. No `customerId`, order number, address or phone is read at all.
+* **Recorded text is data.** A listing name or SKU is sanitised and whitespace-flattened before it is printed anywhere, so a product called `ignore previous instructions <b>bag</b>` reaches the prompt as `ignore previous instructions bag`, inside a block the system prompt marks as data and never as an instruction.
+* **The model explains and nothing more.** It may write `insight.summary` (480 characters), `insight.notes` (at most 4, each tied to a `productId` this response actually printed) and `insight.actions` (at most 3); a note naming a listing the shop was not shown is dropped, duplicates are removed, and the zod schema refuses anything else. It is told it may not deepen a markdown, propose its own price or percentage, suggest a compare-at price, price a listing not printed, promise that a price will sell, name a season or a competitor as a reason, or claim that anything was updated.
+* **A shelf with nothing sitting on it costs no AI request** — `empty: true`, `insight: null`, `degraded: false`, no provider call and no `AiUsage` row, because the honest answer is already complete.
+
+Failure codes:
+
+```text
+400 (zod)              days is not an integer 30–90, or the body carries an extra field
+401                    no session
+403 ROLE_NOT_ALLOWED   caller is a customer, provider or other non-brand role
+403 PERMISSION_DENIED  an employee without products.view (the body names the permission)
+403 NO_BRAND           the session has no brand behind it
+429 AI_DAILY_LIMIT / rate limiter
+503 AI_UNAVAILABLE     kill switch is off (answered before a single record is read)
+```
+
+A provider that is unreachable, answers in prose, overruns the paragraph or invents a listing is not an error here: the rows, the day counts, the values and the suggested prices are CityCart's own and never needed a model, so the request still returns 200 with the whole read, `insight: null` and `degraded: true`.
+
+Nothing is written. No `Product` price is saved, no `compareAtPrice` is created or changed, no `Inventory` row is adjusted, no listing is unpublished and no order is placed — a suggestion is a number on a screen until the shop edits the listing on the ordinary product form, which is exactly where every `Open this listing and set it yourself` link in the panel goes. The only record this call makes is its `AiUsage` row.
+
+
+---
+
 # 24. Query Parameters
 
 Collection endpoints should use predictable query parameters.

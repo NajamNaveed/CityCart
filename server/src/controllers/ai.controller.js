@@ -72,6 +72,13 @@ const {
   billingExplain: readBillingExplain,
   BillingExplainError,
 } = require('../services/ai/agents/billingExplain.agent');
+const {
+  deadstockPricing: readDeadstockPricing,
+  DeadstockPricingError,
+  DEFAULT_DAYS: DEADSTOCK_DEFAULT_DAYS,
+  MIN_DAYS: DEADSTOCK_MIN_DAYS,
+  MAX_DAYS: DEADSTOCK_MAX_DAYS,
+} = require('../services/ai/agents/deadstockPricing.agent');
 const { CsvImportError } = require('../services/productCsv.service');
 const { ROUTABLE_MODES, MAX_MESSAGE_CHARS } = require('../services/ai/intent');
 const {
@@ -1053,6 +1060,73 @@ async function billingExplain(req, res, next) {
   }
 }
 
+const deadstockPricingSchema = z
+  .object({
+    days: z
+      .number()
+      .int()
+      .min(DEADSTOCK_MIN_DAYS)
+      .max(DEADSTOCK_MAX_DAYS)
+      .optional()
+      .default(DEADSTOCK_DEFAULT_DAYS),
+  })
+  // A caller may choose how long a listing must have sat; it may not choose
+  // whose stock is read, which window ends it, or what the shop's prices are.
+  .strict();
+
+/**
+ * Phase 3d-7: what is sitting, and what CityCart suggests it should cost. The
+ * only inputs are a window length and nothing else; the stock, the listings and
+ * the delivered orders are all read inside the tenant `requireTenant` resolved
+ * from the session. It runs on products.view — the same guard as the product
+ * pages whose prices it reads.
+ *
+ * This is the one brand feature allowed to put a new price in front of a shop,
+ * so the suggestion is a fixed ladder in `deadstockPricing.rules.js`, clamped by
+ * the shop's own compare-at price, and never deeper than 20%. CityCart stores no
+ * cost or supplier price, so it states no margin and the model is refused the
+ * subject. Nothing is written: the listing keeps its price until the shop edits
+ * it on the ordinary product form.
+ */
+async function deadstockPricing(req, res, next) {
+  const parsed = deadstockPricingSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsed.error),
+    });
+  }
+
+  if (!req.tenantBrandId) {
+    return res.status(403).json({ success: false, message: 'This needs a brand account.', code: 'NO_BRAND' });
+  }
+
+  if (!holdsBrandPermission(req, PERMISSIONS.PRODUCTS_VIEW)) {
+    return res.status(403).json({
+      success: false,
+      message: 'You are not authorized to perform this action.',
+      code: 'PERMISSION_DENIED',
+      permission: PERMISSIONS.PRODUCTS_VIEW,
+    });
+  }
+
+  try {
+    const data = await readDeadstockPricing({
+      days: parsed.data.days,
+      ctx: { userId: req.user._id, role: req.user.role, brandId: req.tenantBrandId },
+    });
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    if (err instanceof DeadstockPricingError) {
+      return res
+        .status(err.status)
+        .json({ success: false, message: err.message, ...(err.code && { code: err.code }) });
+    }
+    return next(err);
+  }
+}
+
 module.exports = {
   ping,
   listingDraft,
@@ -1072,6 +1146,7 @@ module.exports = {
   shopReport,
   promiseCheck,
   billingExplain,
+  deadstockPricing,
   sellerAdvisor,
   catalogueMatch,
   csvClean,

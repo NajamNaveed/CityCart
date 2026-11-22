@@ -19,6 +19,7 @@ const {
   shopReport,
   promiseCheck,
   billingExplain,
+  deadstockPricing,
   sellerAdvisor,
   catalogueMatch,
   csvClean,
@@ -348,6 +349,28 @@ router.post(
   aiUserLimiter,
   aiDailyLimit,
   billingExplain,
+);
+
+// Phase 3d-7: the deadstock read. It answers "what is sitting, and what should
+// it cost?" about this shop's own stock, so it runs on products.view — the same
+// guard as GET /products/mine and the listing form a shop uses to change a price.
+// The shop comes from requireTenant, never from the body, and only a window
+// length travels in it. This is the one brand feature allowed to show a new
+// price, so the markdown is CityCart's own fixed ladder, clamped by the shop's
+// own compare-at price and capped at 20%; the model repeats it or says nothing.
+// CityCart stores no cost or supplier price (docs/07 §454 keeps supplier costs
+// away from a shop's own catalogue view), so no margin is ever stated. Nothing is
+// written: the listing keeps its price until the shop saves the ordinary form.
+router.post(
+  '/deadstock-pricing',
+  authenticate,
+  requireRole(ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE),
+  requirePermission(PERMISSIONS.PRODUCTS_VIEW),
+  requireTenant,
+  requireAiEnabled,
+  aiUserLimiter,
+  aiDailyLimit,
+  deadstockPricing,
 );
 
 module.exports = router;

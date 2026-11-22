@@ -7,6 +7,7 @@ import { Notice, PageHeader, Pager, StatusBadge, TableScroll, selectClass, table
 import { useCan } from '../../hooks/useCan'
 import { EmptyState, Skeleton } from '../../components/ui'
 import ProductImportModal from '../../components/brand/ProductImportModal'
+import DeadstockPricing from '../../components/brand/DeadstockPricing'
 import { downloadFile } from '../../utils/download'
 import { btnOutline, btnPine, formatPrice } from '../../ui'
 
@@ -241,6 +242,7 @@ export default function Products() {
         </>
       )}
       <Pager pagination={state.pagination} onPage={(p) => update({ page: p > 1 ? String(p) : '' })} />
+      <DeadstockPricing />
     </>
   )
 }
