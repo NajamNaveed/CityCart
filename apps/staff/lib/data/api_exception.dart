@@ -62,6 +62,10 @@ const _codeMessages = <String, String>{
   'CASH_CHANGED': 'The cash list changed. Pull down to reload it.',
   'NO_PAYMENTS_SELECTED': 'Tick at least one payment to settle.',
   'RECEIPT_NOT_READY': 'The receipt appears once the payment is complete.',
+  'AI_UNAVAILABLE':
+      'Suggestions are unavailable right now. Choose from the store catalogue instead.',
+  'AI_DAILY_LIMIT':
+      'The suggestion limit for today is used up. Choose from the store catalogue instead.',
 };
 
 ApiException fromDio(DioException error) {

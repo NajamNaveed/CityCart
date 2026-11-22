@@ -375,6 +375,76 @@ class ProductOption {
   }
 }
 
+/// One item in the same aisle that is actually on the shelf, offered when a
+/// line comes up short. It carries no price, matching what a picker may see.
+class SubstitutionSuggestion {
+  const SubstitutionSuggestion({
+    required this.productId,
+    required this.name,
+    this.sku,
+    this.image,
+    this.availableQuantity,
+    this.why,
+  });
+
+  final String productId;
+  final String name;
+  final String? sku;
+  final String? image;
+  final int? availableQuantity;
+  final String? why;
+
+  factory SubstitutionSuggestion.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    return SubstitutionSuggestion(
+      productId: text(map['productId']),
+      name: text(map['name'], 'Product'),
+      sku: optionalText(map['sku']),
+      image: optionalText(map['image']),
+      availableQuantity: map['availableQuantity'] == null
+          ? null
+          : asInt(map['availableQuantity']),
+      why: optionalText(map['why']),
+    );
+  }
+}
+
+class SubstitutionPlan {
+  const SubstitutionPlan({
+    required this.itemId,
+    required this.productName,
+    required this.needQuantity,
+    required this.suggestions,
+    this.note,
+    this.degraded = false,
+  });
+
+  final String itemId;
+  final String productName;
+  final int needQuantity;
+  final List<SubstitutionSuggestion> suggestions;
+  final String? note;
+
+  /// True when the model could not answer and the server's own ranked list is
+  /// shown instead. The suggestions are still valid; the wording is plainer.
+  final bool degraded;
+
+  factory SubstitutionPlan.fromJson(dynamic raw) {
+    final map = asMap(raw);
+    final item = asMap(map['item']);
+    return SubstitutionPlan(
+      itemId: text(item['itemId']),
+      productName: text(item['name'], 'Item'),
+      needQuantity: asInt(item['needQuantity'], 1),
+      suggestions: asList(map['suggestions'])
+          .map(SubstitutionSuggestion.fromJson)
+          .toList(growable: false),
+      note: optionalText(map['note']),
+      degraded: map['degraded'] == true,
+    );
+  }
+}
+
 // --- Orders ----------------------------------------------------------------
 
 class ShippingAddress {

@@ -23,6 +23,7 @@ const {
   sellerAdvisor,
   catalogueMatch,
   csvClean,
+  substitutions,
 } = require('../controllers/ai.controller');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
@@ -371,6 +372,24 @@ router.post(
   aiUserLimiter,
   aiDailyLimit,
   deadstockPricing,
+);
+
+// Phase 4a: the picker substitution list. A picker is one brand's shelf
+// worker, so the order, the catalogue and the stock all come from
+// requireTenant's brand and from the picker's own claimed work — never from the
+// body. The response is names, stock and a short reason: a picker sees no
+// prices anywhere in the Staff app, and this route keeps that true. It only
+// suggests; the ordinary POST /picker/:id/propose still sends the change to the
+// customer, who still accepts or refuses it.
+router.post(
+  '/substitutions',
+  authenticate,
+  requireRole(ROLES.PICKER),
+  requireTenant,
+  requireAiEnabled,
+  aiUserLimiter,
+  aiDailyLimit,
+  substitutions,
 );
 
 module.exports = router;

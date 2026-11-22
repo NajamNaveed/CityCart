@@ -79,6 +79,10 @@ const {
   MIN_DAYS: DEADSTOCK_MIN_DAYS,
   MAX_DAYS: DEADSTOCK_MAX_DAYS,
 } = require('../services/ai/agents/deadstockPricing.agent');
+const {
+  suggestSubstitutes,
+  SubstitutionsError,
+} = require('../services/ai/agents/substitution.agent');
 const { CsvImportError } = require('../services/productCsv.service');
 const { ROUTABLE_MODES, MAX_MESSAGE_CHARS } = require('../services/ai/intent');
 const {
@@ -1127,6 +1131,63 @@ async function deadstockPricing(req, res, next) {
   }
 }
 
+const substitutionsSchema = z
+  .object({
+    orderId: z
+      .string()
+      .trim()
+      .regex(/^[0-9a-fA-F]{24}$/, 'Choose an order.'),
+    itemId: z
+      .string()
+      .trim()
+      .regex(/^[0-9a-fA-F]{24}$/, 'Choose an item.'),
+  })
+  // The order and the picker both come from the session and the URL the app
+  // already opened; a brand id or another picker id in the body is refused.
+  .strict();
+
+/**
+ * Phase 4a: the picker substitution suggestions. The order is read inside the
+ * picker's own brand and their own claimed work, and every candidate is an
+ * active, in-stock listing in the same category of that same shop. The picker
+ * never sees money, so neither the ranked rows nor the model's wording may
+ * carry an amount; the handler returns only names, stock and a short reason.
+ * Nothing is written — the picker still sends the ordinary change request, and
+ * the customer still accepts or refuses it.
+ */
+async function substitutions(req, res, next) {
+  const parsed = substitutionsSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsed.error),
+    });
+  }
+
+  if (!req.tenantBrandId) {
+    return res.status(403).json({ success: false, message: 'This needs a brand account.', code: 'NO_BRAND' });
+  }
+
+  try {
+    const data = await suggestSubstitutes({
+      brandId: req.tenantBrandId,
+      pickerId: req.user._id,
+      orderId: parsed.data.orderId,
+      itemId: parsed.data.itemId,
+      ctx: { userId: req.user._id, role: req.user.role },
+    });
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    if (err instanceof SubstitutionsError) {
+      return res
+        .status(err.status)
+        .json({ success: false, message: err.message, ...(err.code && { code: err.code }) });
+    }
+    return next(err);
+  }
+}
+
 module.exports = {
   ping,
   listingDraft,
@@ -1150,4 +1211,5 @@ module.exports = {
   sellerAdvisor,
   catalogueMatch,
   csvClean,
+  substitutions,
 };

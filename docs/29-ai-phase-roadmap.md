@@ -281,6 +281,7 @@ These came out of the two "what else can the brand side do with AI" reviews (the
 - **Rule:** suggestion only; customer approval rules of your order flow stay unchanged.
 - **Tests:** suggestions are in stock, same store; empty result handled.
 - **Done when:** picker screen shows 2-3 valid alternatives.
+- **Status:** built (2026-11-23). `substitutions.rules.js` does every filter and the ranking (same brand + `categoryId`, active, `quantity - reservedQuantity > 0`, not the original, price band rather than an amount); `substitution.prompt.js` + `substitution.agent.js` read only the picker's own brand and never send a price, a customer or another shop; the route sits behind `requireRole(PICKER)` + `requireTenant` + the AI kill switch and daily limit, and answers 404 the same way for another brand's order and another picker's order. `same store` is this brand's catalogue because `Product` has no per-store row — the brand is the tenant. The Staff app shows a **Suggest substitutes** action beside the existing manual **Choose a substitute** on every short line (`apps/staff/lib/features/picker/pick_screen.dart`); choosing a suggestion pre-fills the ordinary change request, so the customer still approves it, and an unavailable assistant says so in place with a retry. `tests/ai/substitutions.test.js` covers it in 24 cases, plus two widget tests in `apps/staff/test/pick_screen_test.dart`.
 
 ### 4b — Admin triage (billing help + support)
 - **What:** classifies `BillingHelpRequest` items (type, urgency) and drafts an answer.

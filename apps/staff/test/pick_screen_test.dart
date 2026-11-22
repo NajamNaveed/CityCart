@@ -1,6 +1,7 @@
 import 'package:citycart_staff/core/theme.dart';
 import 'package:citycart_staff/core/widgets.dart';
 import 'package:citycart_staff/data/api_client.dart';
+import 'package:citycart_staff/data/api_exception.dart';
 import 'package:citycart_staff/data/models.dart';
 import 'package:citycart_staff/data/repository.dart';
 import 'package:citycart_staff/data/session_store.dart';
@@ -55,6 +56,20 @@ class _FakeRepository extends StaffRepository {
     ProductOption(id: 'p1', name: 'Basmati Rice 5 kg', sku: 'RICE-5'),
     ProductOption(id: 'p2', name: 'Sunflower Oil 1 L', sku: 'OIL-1'),
   ];
+  int suggestionCalls = 0;
+  ApiException? suggestionError;
+  SubstitutionPlan suggestionPlan = const SubstitutionPlan(
+    itemId: 'l2',
+    productName: 'White Bread',
+    needQuantity: 2,
+    suggestions: [
+      SubstitutionSuggestion(
+        productId: 'p9',
+        name: 'Wholemeal Bread',
+        why: 'Similar price band · 14 available',
+      ),
+    ],
+  );
 
   @override
   Future<PickOrder> pickerOrder(String orderId) async => order;
@@ -85,6 +100,17 @@ class _FakeRepository extends StaffRepository {
     List<Map<String, dynamic>> substitutes = const [],
   }) async {
     proposals.add(substitutes);
+  }
+
+  @override
+  Future<SubstitutionPlan> suggestSubstitutes({
+    required String orderId,
+    required String itemId,
+  }) async {
+    suggestionCalls++;
+    final failure = suggestionError;
+    if (failure != null) throw failure;
+    return suggestionPlan;
   }
 
   @override
@@ -292,6 +318,81 @@ void main() {
 
     expect(find.text('Products in this store'), findsOneWidget);
     expect(find.text('Basmati Rice 5 kg'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a short line can take a suggested item from the same aisle', (
+    tester,
+  ) async {
+    final repository = _FakeRepository(
+      _order(
+        lines: [
+          _line('l1', 'Basmati Rice 5 kg', status: 'PICKED'),
+          _line(
+            'l2',
+            'White Bread',
+            quantity: 3,
+            status: 'SHORT',
+            pickedQty: 1,
+          ),
+        ],
+      ),
+    );
+    await _pumpPick(tester, repository);
+
+    await tester.tap(find.text('Send change request'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Suggest substitutes'));
+    await tester.tap(find.text('Suggest substitutes'));
+    await tester.pumpAndSettle();
+
+    expect(repository.suggestionCalls, 1);
+    expect(find.text('Wholemeal Bread'), findsOneWidget);
+    expect(find.textContaining('14 available'), findsOneWidget);
+
+    await tester.tap(find.text('Wholemeal Bread'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Substitute'), findsOneWidget);
+    await tester.ensureVisible(find.text('Send to customer'));
+    await tester.tap(find.text('Send to customer'));
+    await tester.pumpAndSettle();
+
+    expect(repository.proposals, hasLength(1));
+    expect(repository.proposals.single.single['productId'], 'p9');
+    expect(repository.proposals.single.single['orderItemId'], 'l2');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an unavailable assistant says so and offers a retry', (
+    tester,
+  ) async {
+    final repository = _FakeRepository(
+      _order(
+        lines: [_line('l1', 'White Bread', quantity: 2, status: 'UNAVAILABLE')],
+      ),
+    );
+    repository.suggestionError = ApiException(
+      'Suggestions are unavailable right now. Choose from the store catalogue instead.',
+      status: 503,
+      code: 'AI_UNAVAILABLE',
+    );
+    await _pumpPick(tester, repository);
+
+    await tester.tap(find.text('Send change request'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Suggest substitutes'));
+    await tester.tap(find.text('Suggest substitutes'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('unavailable right now'), findsOneWidget);
+    expect(find.text('Try again'), findsOneWidget);
+
+    repository.suggestionError = null;
+    await tester.tap(find.text('Try again'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Wholemeal Bread'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

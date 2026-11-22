@@ -1028,17 +1028,17 @@ class _ProposalResult {
   final List<Map<String, dynamic>> substitutes;
 }
 
-class _ProposalSheet extends StatefulWidget {
+class _ProposalSheet extends ConsumerStatefulWidget {
   const _ProposalSheet({required this.order, required this.shortLines});
 
   final PickOrder order;
   final List<PickLine> shortLines;
 
   @override
-  State<_ProposalSheet> createState() => _ProposalSheetState();
+  ConsumerState<_ProposalSheet> createState() => _ProposalSheetState();
 }
 
-class _ProposalSheetState extends State<_ProposalSheet> {
+class _ProposalSheetState extends ConsumerState<_ProposalSheet> {
   final _note = TextEditingController();
   final List<_SubstituteEntry> _entries = [];
   bool _restock = false;
@@ -1048,6 +1048,33 @@ class _ProposalSheetState extends State<_ProposalSheet> {
   void dispose() {
     _note.dispose();
     super.dispose();
+  }
+
+  Future<void> _addSuggested(PickLine line) async {
+    if (_adding) return;
+    setState(() => _adding = true);
+    final suggestion = await showAppSheet<SubstitutionSuggestion>(
+      context,
+      title: 'Suggest a substitute',
+      subtitle: 'The closest items in this aisle that are on the shelf now.',
+      child: _SuggestionSheet(
+        load: () => ref
+            .read(staffRepositoryProvider)
+            .suggestSubstitutes(orderId: widget.order.id, itemId: line.id),
+      ),
+    );
+    if (!mounted) return;
+    setState(() => _adding = false);
+    if (suggestion == null) return;
+    _takeSubstitute(
+      line,
+      ProductOption(
+        id: suggestion.productId,
+        name: suggestion.name,
+        sku: suggestion.sku,
+        image: suggestion.image,
+      ),
+    );
   }
 
   Future<void> _addSubstitute(PickLine line) async {
@@ -1062,6 +1089,11 @@ class _ProposalSheetState extends State<_ProposalSheet> {
     if (!mounted) return;
     setState(() => _adding = false);
     if (product == null) return;
+    _takeSubstitute(line, product);
+  }
+
+  void _takeSubstitute(PickLine line, ProductOption product) {
+    if (!mounted) return;
     if (_entries.any((entry) => entry.line.id == line.id)) {
       showAppSnack(context, 'This line already has a substitute.');
       return;
@@ -1137,13 +1169,27 @@ class _ProposalSheetState extends State<_ProposalSheet> {
                   if (entry == null)
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: AppButton(
-                        label: 'Choose a substitute',
-                        icon: Icons.search_rounded,
-                        variant: AppButtonVariant.outline,
-                        expand: false,
-                        height: 42,
-                        onPressed: _adding ? null : () => _addSubstitute(line),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          AppButton(
+                            label: 'Suggest substitutes',
+                            icon: Icons.auto_awesome_rounded,
+                            variant: AppButtonVariant.cream,
+                            expand: false,
+                            height: 42,
+                            onPressed: _adding ? null : () => _addSuggested(line),
+                          ),
+                          AppButton(
+                            label: 'Choose a substitute',
+                            icon: Icons.search_rounded,
+                            variant: AppButtonVariant.outline,
+                            expand: false,
+                            height: 42,
+                            onPressed: _adding ? null : () => _addSubstitute(line),
+                          ),
+                        ],
                       ),
                     )
                   else
@@ -1272,6 +1318,141 @@ class _SubstituteRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Asks the server for the closest in-stock items in the same aisle and lets
+/// the picker take one. It only suggests: the picker still sends the change
+/// request, and the customer still decides. When suggestions are unavailable
+/// the sheet says so plainly and leaves the catalogue search one tap away.
+class _SuggestionSheet extends StatefulWidget {
+  const _SuggestionSheet({required this.load});
+
+  final Future<SubstitutionPlan> Function() load;
+
+  @override
+  State<_SuggestionSheet> createState() => _SuggestionSheetState();
+}
+
+class _SuggestionSheetState extends State<_SuggestionSheet> {
+  bool _loading = true;
+  String? _error;
+  SubstitutionPlan? _plan;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetch();
+  }
+
+  Future<void> _fetch() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final plan = await widget.load();
+      if (!mounted) return;
+      setState(() {
+        _plan = plan;
+        _loading = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error.message;
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 28),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final plan = _plan;
+    if (_error != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(_error!, style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 12),
+          AppButton(
+            label: 'Try again',
+            icon: Icons.refresh_rounded,
+            variant: AppButtonVariant.outline,
+            height: 46,
+            onPressed: _fetch,
+          ),
+        ],
+      );
+    }
+
+    if (plan == null || plan.suggestions.isEmpty) {
+      return Text(
+        plan?.note ?? 'Nothing else in this category is on the shelf right now.',
+        style: Theme.of(context).textTheme.bodyMedium,
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (plan.note != null) ...[
+          Text(plan.note!, style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 10),
+        ],
+        for (final suggestion in plan.suggestions)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: SurfaceCard(
+              padding: const EdgeInsets.all(12),
+              color: AppColors.surfaceMuted,
+              onTap: () => Navigator.of(context).pop(suggestion),
+              child: Row(
+                children: [
+                  ProductThumb(url: suggestion.image, size: 40),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          suggestion.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                        if (suggestion.why != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            suggestion.why!,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  const Icon(Icons.add_circle_outline_rounded, size: 22),
+                ],
+              ),
+            ),
+          ),
+        Text(
+          plan.degraded
+              ? 'Ranked from what is on this aisle right now.'
+              : 'Choose one, or close this to search the catalogue.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
     );
   }
 }

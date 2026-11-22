@@ -112,6 +112,19 @@ class StaffRepository {
     return Page.fromJson(body, key: 'products', parse: ProductOption.fromJson);
   }
 
+  /// The closest in-stock items in the same category, offered when a line is
+  /// short. This only suggests: nothing is added to the order here.
+  Future<SubstitutionPlan> suggestSubstitutes({
+    required String orderId,
+    required String itemId,
+  }) async {
+    final body = await _api.post(
+      '/ai/substitutions',
+      data: {'orderId': orderId, 'itemId': itemId},
+    );
+    return SubstitutionPlan.fromJson(body['data']);
+  }
+
   // --- Orders and deliveries ----------------------------------------------
 
   Future<Page<OrderRecord>> brandOrders({String? status, int page = 1}) async {

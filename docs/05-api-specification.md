@@ -4674,6 +4674,84 @@ Nothing is written. No `Product` price is saved, no `compareAtPrice` is created 
 
 ---
 
+## Picker substitution suggestions
+
+```text
+POST /api/v1/ai/substitutions
+```
+
+Roles: `PICKER` only — the staff app's **Suggest substitutes** action on a short line in the picker screen. This is the one AI endpoint a picker may call, and it is built around the picker's own privacy rule: a picker never sees money, so neither the response nor the prompt carries a price amount.
+
+```json
+{ "orderId": "66f1a0c2b3d4e5f6071829a4", "itemId": "66f1a0c2b3d4e5f607182aa1" }
+```
+
+The schema is strict and both ids must be 24-character hex, so a `brandId`, a `productId`, a `price`, a `categoryId` or any extra field is a 400 before a record is read. The tenant is the one `requireTenant` resolved from the session, and the order must belong to that brand **and** be claimed by this picker or unclaimed — another brand's order and another picker's order answer the same 404.
+
+The answer is the closest items in the same aisle that are actually on the shelf:
+
+```json
+{
+  "success": true,
+  "data": {
+    "item": {
+      "itemId": "66f1a0c2b3d4e5f607182aa1",
+      "productId": "66f1a0c2b3d4e5f607182a01",
+      "name": "White Bread",
+      "quantity": 3,
+      "needQuantity": 2
+    },
+    "suggestions": [
+      {
+        "productId": "66f1a0c2b3d4e5f607182a02",
+        "name": "Wholemeal Bread",
+        "sku": "BREAD-WM",
+        "image": "wholemeal-bread.jpg",
+        "availableQuantity": 14,
+        "why": "Similar price band · 14 available"
+      },
+      {
+        "productId": "66f1a0c2b3d4e5f607182a03",
+        "name": "Garlic Bread",
+        "sku": "BREAD-GAR",
+        "image": "garlic-bread.jpg",
+        "availableQuantity": 5,
+        "why": "Higher price band · 5 available"
+      }
+    ],
+    "note": null,
+    "degraded": false
+  }
+}
+```
+
+What the endpoint guarantees:
+
+* **Same shop, same aisle, in stock.** Candidates are read with `brandId` from the session and the original listing's `categoryId`, must be `status: 'ACTIVE'` and not `isActive: false`, and must have `quantity - reservedQuantity > 0`. The original listing is excluded. `same store` in this schema means the brand's catalogue: a `Product` has no per-store row, and the brand is the tenant. A listing whose stock is not tracked is treated as available, never as empty.
+* **A price band, never a price.** The ranking uses the original's own price only to group candidates as `similar` (within 15%), `lower`/`higher` (within 50%) or dropped as `far`; the response carries no amount at all and the model is sent the band as a word. A picker can therefore read the whole answer aloud without revealing a price.
+* **The model only chooses.** It receives the pre-filtered rows as data, may pick at most three by `productId` and word a `why`, and its picks are filtered back to the server's list; an invented id, a duplicate, an out-of-stock item or a now-removed item is dropped and the server keeps its own order. A reason that carries a money amount or a link is replaced with the server's own wording; a note that does is discarded. If the model picks nothing useful, the server's ranked list is returned instead.
+* **Empty is honest, and costs no AI request.** No candidate in the category, or an original listing that has left the catalogue, returns `suggestions: []` with a plain `note` and makes no provider call. A provider that is down returns the server's ranked list with `degraded: true`; that list never needed a model.
+* **Picking state is checked.** An order that is packed, no longer `CONFIRMED`/`PROCESSING`, or a line already `PICKED` answers 409 (`NOT_PICKING`, `LINE_ALREADY_PICKED`) before any catalogue read.
+* **Nothing moves.** No `Order`, `Product` or `Inventory` write is made. The picker still sends the ordinary change request (`POST /picker/:orderId/propose`) and the customer still approves it; the suggestion sheet's chosen item merely pre-fills that request.
+
+Failure codes:
+
+```text
+400 (zod)              orderId or itemId is not a 24-character id, or the body carries an extra field
+401                    no session or an ended one
+403 ROLE_NOT_ALLOWED   caller is a brand owner, employee, customer or other non-picker role
+403 NO_BRAND           the session has no brand behind it
+404 ORDER_NOT_FOUND    no such order for this shop, or it belongs to another picker
+404 ITEM_NOT_FOUND     that order has no such line
+409 NOT_PICKING        the order is packed or has left the picking statuses
+409 LINE_ALREADY_PICKED the line is already marked picked
+429 AI_DAILY_LIMIT / rate limiter
+503 AI_UNAVAILABLE     kill switch is off (answered before a single record is read)
+```
+
+
+---
+
 # 24. Query Parameters
 
 Collection endpoints should use predictable query parameters.
