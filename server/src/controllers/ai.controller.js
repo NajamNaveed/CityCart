@@ -83,6 +83,10 @@ const {
   suggestSubstitutes,
   SubstitutionsError,
 } = require('../services/ai/agents/substitution.agent');
+const {
+  adminTriage: triageBillingRequest,
+  AdminTriageError,
+} = require('../services/ai/agents/adminTriage.agent');
 const { CsvImportError } = require('../services/productCsv.service');
 const { ROUTABLE_MODES, MAX_MESSAGE_CHARS } = require('../services/ai/intent');
 const {
@@ -1188,6 +1192,48 @@ async function substitutions(req, res, next) {
   }
 }
 
+const adminTriageSchema = z
+  .object({
+    helpId: z
+      .string()
+      .trim()
+      .regex(/^[0-9a-fA-F]{24}$/, 'Choose a request.'),
+  })
+  .strict();
+
+/**
+ * Phase 4b: classify one seller billing question and draft an answer for the
+ * platform team. The request, the seller's billing status, the unpaid invoices
+ * and the waiting claims are read from the database; the draft is a suggestion
+ * and is never sent. The administrator still edits it and presses the ordinary
+ * answer button, so nothing here writes to a request, an invoice or a claim.
+ */
+async function adminTriage(req, res, next) {
+  const parsed = adminTriageSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsed.error),
+    });
+  }
+
+  try {
+    const data = await triageBillingRequest({
+      helpId: parsed.data.helpId,
+      ctx: { userId: req.user._id, role: req.user.role },
+    });
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    if (err instanceof AdminTriageError) {
+      return res
+        .status(err.status)
+        .json({ success: false, message: err.message, ...(err.code && { code: err.code }) });
+    }
+    return next(err);
+  }
+}
+
 module.exports = {
   ping,
   listingDraft,
@@ -1212,4 +1258,5 @@ module.exports = {
   catalogueMatch,
   csvClean,
   substitutions,
+  adminTriage,
 };

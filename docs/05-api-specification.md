@@ -4749,6 +4749,67 @@ Failure codes:
 503 AI_UNAVAILABLE     kill switch is off (answered before a single record is read)
 ```
 
+## Admin billing triage
+
+```text
+POST /api/v1/ai/admin-triage
+```
+
+Roles: `SUPER_ADMIN` only — the same door as `/admin/billing` (docs/24 §5.6). The admin web's Help tab calls it from the answer dialog so the platform team reads a suggested category, urgency and draft beside the seller's own records.
+
+```json
+{ "helpId": "66f1a0c2b3d4e5f6071829c1" }
+```
+
+The schema is strict and `helpId` must be a 24-character hex id, so any extra field is a 400 before a record is read. Nothing in the body names a seller, an invoice or an amount: those are looked up from the request itself.
+
+The answer is the request, the seller's stored billing facts, a classification and a draft:
+
+```json
+{
+  "success": true,
+  "data": {
+    "help": { "id": "66f1a0c2b3d4e5f6071829c1", "subject": "Bill looks high", "message": "…", "createdOn": "2026-11-21T09:10:00.000Z" },
+    "facts": {
+      "seller": { "type": "BRAND", "name": "Ayesha Grocers", "billingStatus": "WARNING", "graceUntil": null },
+      "balance": { "paisa": 47800, "text": "PKR 478.00" },
+      "unpaidInvoices": 2,
+      "oldestDueOn": "2026-11-13",
+      "daysOverdue": 10,
+      "pendingClaims": 1,
+      "recentClaims": [{ "amount": { "paisa": 12000, "text": "PKR 120.00" }, "status": "SUBMITTED", "method": "BANK_TRANSFER" }],
+      "invoices": [{ "periodKey": "2026-10", "amount": { "paisa": 12000, "text": "PKR 120.00" }, "dueOn": "2026-11-13", "status": "OVERDUE" }],
+      "terms": { "commissionText": "1%", "rateBps": 100, "dueDays": 7, "restrictAfterDays": 14, "freezeAfterDays": 21 },
+      "bankReady": true
+    },
+    "classification": { "type": "INVOICE_AMOUNT", "label": "Bill amount", "urgency": "NORMAL", "source": "model" },
+    "draft": "Every amount on an invoice comes from one order's own sale, refund or reversal…",
+    "degraded": false
+  }
+}
+```
+
+What the endpoint guarantees:
+
+* **The records decide, the model only words.** Type is first decided by fixed patterns over the seller's own subject and message (`PAYMENT_CLAIM`, `INVOICE_AMOUNT`, `INVOICE_COPY`, `ACCOUNT_STATUS`, `GRACE_REQUEST`, `OTHER`); the model may rename the type only inside that list. Urgency is `max(rules, model)`, so a model can raise a frozen or overdue case but never quieten it. `classification.source` says which side named the category, and `degraded: true` means the rules answered alone.
+* **Every figure is a stored field.** The balance is the sum of the seller's outstanding `amountDuePaisa`, `daysOverdue` comes from the oldest `dueAt`, claims come from `SellerPaymentClaim` and terms from `getBillingSettings()` (read-only — the seller summary helper is deliberately not used because it refreshes billing state as a side effect). The account number and IBAN are never placed in the facts or the draft.
+* **The request text is data.** The subject and message reach the prompt inside a marked data block after `sanitizeUserText`, so an instruction written in the message cannot change the category, the urgency or the figures.
+* **A draft may not invent or promise.** A draft that carries a `PKR` amount CityCart did not print, a link, or promise wording (`we will refund…`, `has been waived…`) is replaced with the rules draft; the rules draft is also the whole answer when the provider is down or its JSON fails validation.
+* **Nothing is written or sent.** No `BillingHelpRequest`, `SellerInvoice`, `SellerPaymentClaim`, `Brand`, `ServiceProvider` or settings row is modified, and the seller is not notified. The administrator edits the draft and presses the ordinary **Send answer** button (`POST /admin/billing/help/:id/resolve`), which remains the only action that resolves a request.
+* **Scoped to the one seller.** Invoices and claims are filtered by the request's own `sellerType` and `sellerId`; another seller's rows are never read.
+
+Failure codes:
+
+```text
+400 (zod)              helpId is not a 24-character id, or the body carries an extra field
+401                    no session or an ended one
+403 ROLE_NOT_ALLOWED   caller is not a super admin
+404 HELP_NOT_FOUND     no such billing help request
+404 SELLER_NOT_FOUND   the request names a brand or service provider that no longer exists
+429 AI_DAILY_LIMIT / rate limiter
+503 AI_UNAVAILABLE     kill switch is off (answered before a single record is read)
+```
+
 
 ---
 

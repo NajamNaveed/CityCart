@@ -24,6 +24,7 @@ const {
   catalogueMatch,
   csvClean,
   substitutions,
+  adminTriage,
 } = require('../controllers/ai.controller');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
@@ -390,6 +391,21 @@ router.post(
   aiUserLimiter,
   aiDailyLimit,
   substitutions,
+);
+
+// Phase 4b: the platform team's billing triage. Seller billing is the
+// platform's own money, so this is the same SUPER_ADMIN door as
+// /admin/billing (docs/24 §5.6). The draft it returns is a suggestion; writing
+// the answer and notifying the seller still happens on POST
+// /admin/billing/help/:id/resolve, where an administrator owns the decision.
+router.post(
+  '/admin-triage',
+  authenticate,
+  requireRole(ROLES.SUPER_ADMIN),
+  requireAiEnabled,
+  aiUserLimiter,
+  aiDailyLimit,
+  adminTriage,
 );
 
 module.exports = router;

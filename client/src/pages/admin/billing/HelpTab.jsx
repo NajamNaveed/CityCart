@@ -3,6 +3,7 @@ import { CircleHelp, MessageSquare } from 'lucide-react'
 import api, { getErrorMessage } from '../../../services/api'
 import { EmptyState, Modal, Skeleton, toast } from '../../../components/ui'
 import { Pager, StatusBadge, TableScroll, selectClass, tableHead, tableRow } from '../../../components/brand/Bits'
+import HelpTriage from '../../../components/admin/HelpTriage'
 import { btnGhost, btnPine, formatDateTime, inputClass } from '../../../ui'
 
 const STATUS_OPTIONS = ['OPEN', 'RESOLVED']
@@ -155,6 +156,7 @@ export default function HelpTab() {
               <p className="text-sm font-medium text-ink">{answering.subject}</p>
               <p className="mt-0.5 text-[12.5px] leading-relaxed text-ink/55">{answering.message}</p>
             </div>
+            <HelpTriage request={answering} onUse={setNote} />
             <div>
               <label htmlFor="help-answer" className="mb-1.5 block text-[11.5px] font-medium uppercase tracking-[0.1em] text-ink/55">
                 Your answer
