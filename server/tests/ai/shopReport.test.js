@@ -127,8 +127,34 @@ const originalDailyLimit = env.ai.dailyLimit;
 // Two weeks that line up weekday to weekday. "now" is mid-Saturday 21 Nov 2026,
 // so the current window is 15–21 Nov with the 21st still running, and the
 // comparison window is 8–14 Nov, already finished.
+//
+// This feature is about calendar alignment, so the expectations below are the
+// fixed date strings a shop actually reads. Those only hold while the clock the
+// agent sees is the clock the orders were planted on: on the real clock every
+// Saturday-to-Saturday assertion drifts one day further off each day the suite
+// is not run. So only `Date` is frozen. Real timers stay real — a frozen
+// setTimeout would hang supertest without changing a single figure in a report.
 // ---------------------------------------------------------------------------
 const NOW = new Date('2026-11-21T09:00:00Z');
+jest.useFakeTimers({
+  now: NOW.getTime(),
+  doNotFake: [
+    'hrtime',
+    'performance',
+    'nextTick',
+    'queueMicrotask',
+    'setImmediate',
+    'clearImmediate',
+    'setInterval',
+    'clearInterval',
+    'setTimeout',
+    'clearTimeout',
+    'requestAnimationFrame',
+    'cancelAnimationFrame',
+    'requestIdleCallback',
+    'cancelIdleCallback',
+  ],
+});
 const RANGE = currentRange(7, NOW);
 const COMPARE = previousRange(7, NOW);
 
@@ -483,6 +509,7 @@ afterAll(() => {
   global.fetch = originalFetch;
   env.ai.enabled = false;
   env.ai.dailyLimit = originalDailyLimit;
+  jest.useRealTimers();
 });
 
 // ---------------------------------------------------------------------------
