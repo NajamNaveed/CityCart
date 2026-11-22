@@ -61,6 +61,13 @@ const {
   MIN_DAYS: REPORT_MIN_DAYS,
   MAX_DAYS: REPORT_MAX_DAYS,
 } = require('../services/ai/agents/shopReport.agent');
+const {
+  promiseCheck: readPromiseCheck,
+  PromiseCheckError,
+  DEFAULT_DAYS: CHECK_DEFAULT_DAYS,
+  MIN_DAYS: CHECK_MIN_DAYS,
+  MAX_DAYS: CHECK_MAX_DAYS,
+} = require('../services/ai/agents/promiseCheck.agent');
 const { CsvImportError } = require('../services/productCsv.service');
 const { ROUTABLE_MODES, MAX_MESSAGE_CHARS } = require('../services/ai/intent');
 const {
@@ -933,6 +940,66 @@ async function shopReport(req, res, next) {
   }
 }
 
+const promiseCheckSchema = z.object({
+  days: z
+    .number()
+    .int()
+    .min(CHECK_MIN_DAYS)
+    .max(CHECK_MAX_DAYS)
+    .optional()
+    .default(CHECK_DEFAULT_DAYS),
+});
+
+/**
+ * Phase 3d-5: is this shop over-promising. The only input is a window length;
+ * the orders and the settings text are both read inside the tenant
+ * `requireTenant` resolved from the session, so no body can point this at
+ * another shop's deliveries or another shop's promise. It runs on
+ * delivery.view — the same guard as the delivery screens whose timestamps it
+ * reads. Every minute is a subtraction between two timestamps the order already
+ * carried, done by CityCart; the timeframe is the shop's own written words and
+ * is never invented when those words do not state one. Nothing is sent to a
+ * customer and no delivery or order is changed.
+ */
+async function promiseCheck(req, res, next) {
+  const parsed = promiseCheckSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsed.error),
+    });
+  }
+
+  if (!req.tenantBrandId) {
+    return res.status(403).json({ success: false, message: 'This needs a brand account.', code: 'NO_BRAND' });
+  }
+
+  if (!holdsBrandPermission(req, PERMISSIONS.DELIVERY_VIEW)) {
+    return res.status(403).json({
+      success: false,
+      message: 'You are not authorized to perform this action.',
+      code: 'PERMISSION_DENIED',
+      permission: PERMISSIONS.DELIVERY_VIEW,
+    });
+  }
+
+  try {
+    const data = await readPromiseCheck({
+      ...parsed.data,
+      ctx: { userId: req.user._id, role: req.user.role, brandId: req.tenantBrandId },
+    });
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    if (err instanceof PromiseCheckError) {
+      return res
+        .status(err.status)
+        .json({ success: false, message: err.message, ...(err.code && { code: err.code }) });
+    }
+    return next(err);
+  }
+}
+
 module.exports = {
   ping,
   listingDraft,
@@ -950,6 +1017,7 @@ module.exports = {
   restockCalendar,
   listingQuality,
   shopReport,
+  promiseCheck,
   sellerAdvisor,
   catalogueMatch,
   csvClean,

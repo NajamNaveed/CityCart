@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Truck } from 'lucide-react'
 import api, { getErrorMessage } from '../../services/api'
+import PromiseCheck from '../../components/brand/PromiseCheck'
 import { PageHeader, Pager, StatusBadge, TableScroll, selectClass, tableHead, tableRow } from '../../components/brand/Bits'
 import { EmptyState, Skeleton } from '../../components/ui'
 import { humanize } from '../../ui'
@@ -128,6 +129,9 @@ export default function Deliveries() {
         </>
       )}
       <Pager pagination={state.pagination} onPage={(p) => update({ page: p > 1 ? String(p) : '' })} />
+      <div className="mt-6">
+        <PromiseCheck />
+      </div>
     </>
   )
 }

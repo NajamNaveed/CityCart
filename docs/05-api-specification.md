@@ -4209,6 +4209,125 @@ Nothing is stored, mailed or scheduled. No report row is written, no email is qu
 
 ---
 
+## Promise check
+
+```text
+POST /api/v1/ai/promise-check
+```
+
+Roles: `BRAND_ADMIN`, or `BRAND_EMPLOYEE` holding `delivery.view` — the same guard as the delivery list it sits on. The **AI delivery read** card at the foot of `Deliveries.jsx` asks it.
+
+```json
+{ "days": 7 }
+```
+
+`days` is the only field read: an integer from 7 to 30, defaulting to 7 — the panel offers 7, 14 and 30. A `brandId`, a `from`/`to`, a `promise` or a `median` in the body is ignored: the tenant comes from the session, the window is computed server-side from the clock, the promise is read from the shop's own settings, and every duration is measured from the shop's own order records. A window outside 7–30 400s rather than being clamped, because a wider window is a bigger read of the shop's records than it asked for.
+
+The response is the measurement CityCart made, with the model's paragraph attached to it:
+
+```json
+{
+  "success": true,
+  "data": {
+    "window": { "days": 7, "from": "2026-11-15", "to": "2026-11-21", "partialLastDay": "2026-11-21", "now": "2026-11-21T09:30:00.000Z" },
+    "promise": {
+      "text": "24-48 hours",
+      "reason": "RANGE",
+      "readable": "1 day–2 days",
+      "minutes": 2880,
+      "hours": 48,
+      "fromMinutes": 1440,
+      "fromHours": 24,
+      "note": "“24-48 hours” is read as 1 day to 2 days, and lateness is measured against the 2 days end — the only honest test of a range this shop may keep."
+    },
+    "delivered": {
+      "orders": 5, "measured": 4, "missingHistory": 1,
+      "onTime": 4, "late": 0, "pct": 100,
+      "medianMinutes": 975, "medianText": "16.3 hours", "medianHours": 16.3,
+      "averageMinutes": 1148, "averageText": "19.1 hours", "averageHours": 19.1,
+      "fastestMinutes": 510, "fastestText": "8.5 hours",
+      "slowestMinutes": 2130, "slowestText": "1.5 days"
+    },
+    "stages": [
+      { "key": "placed", "label": "Placed to first handling step", "measured": 4, "medianMinutes": 40, "medianText": "40 minutes", "medianHours": 0.7, "averageMinutes": 244, "averageText": "4.1 hours", "note": "Measured on 4 of 5 delivered orders, counted from the order being placed." },
+      { "key": "handling", "label": "First handling step to on the road", "measured": 4, "medianMinutes": 330, "medianText": "5.5 hours", "medianHours": 5.5, "averageMinutes": 453, "averageText": "7.6 hours", "note": "Measured on 4 of 5 delivered orders, counted from the step before it in the shop’s own history." },
+      { "key": "onTheRoad", "label": "On the road to the door", "measured": 4, "medianMinutes": 323, "medianText": "5.4 hours", "medianHours": 5.4, "averageMinutes": 451, "averageText": "7.5 hours", "note": "Measured on 4 of 5 delivered orders, counted from the step before it in the shop’s own history." }
+    ],
+    "byDay": [
+      { "date": "2026-11-18", "delivered": 1, "late": 0, "medianMinutes": 2130, "medianText": "1.5 days", "medianHours": 35.5 },
+      { "date": "2026-11-17", "delivered": 1, "late": 0, "medianMinutes": 510, "medianText": "8.5 hours", "medianHours": 8.5 },
+      { "date": "2026-11-16", "delivered": 2, "late": 0, "medianMinutes": 975, "medianText": "16.3 hours", "medianHours": 16.3 }
+    ],
+    "daysWithDeliveries": 3,
+    "daysOmitted": 0,
+    "open": {
+      "orders": 2, "overPromise": 0,
+      "oldestMinutes": 1350, "oldestText": "22.5 hours", "oldestHours": 22.5,
+      "medianMinutes": 1178, "medianText": "19.6 hours",
+      "statuses": [ { "status": "OUT_FOR_DELIVERY", "count": 1 }, { "status": "PENDING", "count": 1 } ]
+    },
+    "dead": { "orders": 1, "pct": 13 },
+    "slowest": [
+      { "orderId": "66f1a0c2b3d4e5f6071829a4", "date": "2026-11-18", "minutes": 2130, "minutesText": "1.5 days", "hours": 35.5, "overPromiseMinutes": 0, "overPromiseText": "inside the promise" },
+      { "orderId": "66f1a0c2b3d4e5f6071829a2", "date": "2026-11-16", "minutes": 1320, "minutesText": "22 hours", "hours": 22, "overPromiseMinutes": 0, "overPromiseText": "inside the promise" },
+      { "orderId": "66f1a0c2b3d4e5f6071829a1", "date": "2026-11-16", "minutes": 630, "minutesText": "10.5 hours", "hours": 10.5, "overPromiseMinutes": 0, "overPromiseText": "inside the promise" }
+    ],
+    "orders": 8,
+    "sampled": false,
+    "empty": false,
+    "scope": {
+      "branches": null,
+      "note": "This is the whole shop. CityCart does not yet record which branch promised an order, so no branch is measured on its own."
+    },
+    "readable": { "median": "16.3 hours", "promise": "1 day–2 days" },
+    "insight": {
+      "summary": "Every delivery that recorded both timestamps kept the 2 days you wrote down. Median 16.3 hours, and the slowest order — placed 18 November — still arrived inside the promise. The two orders still out are 22.5 hours and 19.6 hours old, so neither has reached it yet.",
+      "notes": [
+        { "orderId": "66f1a0c2b3d4e5f6071829a4", "note": "This one took 1.5 days, the longest in the window, and stayed inside the 2 days you promised." }
+      ],
+      "actions": [
+        "Open the order still out for delivery and mark it delivered when it arrives.",
+        "Record the delivery timestamp on the order that has none, so it is measured next week."
+      ]
+    },
+    "degraded": false
+  }
+}
+```
+
+What the endpoint guarantees about those numbers:
+
+* A duration is a subtraction between two timestamps the order already carried — `createdAt` and a `statusHistory` entry — done in `promiseCheck.rules`. The model never adds, averages, converts or re-ranks, and the prompt prints each figure already worked out. No order total, fee or payout field is read, so a slow week cannot become a financial claim.
+* `promise` is the shop's own writing, read for a number and refused without one. `Brand.settings.estimatedDeliveryTime` is free text, so only `48 hours`, `2 days`, `24-48 hours` and `30 minutes to 2 hours` shapes are trusted, and the **upper end of a range is the yardstick** — a shop that promised 24–48 hours keeps its promise at 48. `reason` says what happened: `RANGE`, `SINGLE`, `NOT_WRITTEN`, `NO_TIMEFRAME`, `AMBIGUOUS` or `OUT_OF_RANGE` (past 30 days). When it is a refusal, `minutes` is `null`, and then `delivered.onTime`, `delivered.late`, `delivered.pct`, `open.overPromise` and every `overPromiseText` are `null` too: nothing is called late against a promise the shop never wrote.
+* Delivered orders with no `DELIVERED` timestamp are counted in `delivered.missingHistory` and on **neither** side of the on-time rate — never as on time. A `statusHistory` entry whose clock runs backwards is bad data, so that order is unmeasured rather than averaged as zero.
+* `stages` measures the shop's own pipeline (placed → first handling step → on the road → the door), and each row publishes `measured` beside its figures: a stage only four orders ever went through is not the shop's normal speed. `DELIVERED` is deliberately not treated as a handling step, which is why an order with nothing but a delivery stamp contributes to no stage instead of producing a 0-minute one.
+* `byDay` holds only days that delivered something, newest first, capped at 7 rows with `daysOmitted` saying how many earlier days were left out; a quiet day is not printed as a slow day. `slowest` is capped at 3 rows — the ids a note may name.
+* Every duration carries its wording (`medianText`, `minutesText`, `overPromiseText`) from the same `describeMinutes` the prompt uses, so the panel and the model read one string and cannot drift apart. `overPromiseText` says `inside the promise` rather than `0 minutes late`.
+* The read is bounded: the newest 500 orders in the window are measured, and `sampled: true` says the window held more than that, so the panel can say these are the newest orders rather than all of them.
+* Only three order fields are read at all — `createdAt`, `orderStatus` and `statusHistory[{status, at}]` — so no `customerId`, order number, address, phone, line item, staff id or money value reaches the provider or comes back in the answer. The `by` id on a history entry is dropped before measurement.
+* A window with no order at all returns `empty: true`, `insight: null`, `degraded: false` and costs none of the shop's daily AI requests.
+
+`scope.branches` is `null` on purpose. Per-branch promises need a branch on the order and a quoted timeframe on the branch; `Order` records no `branchId` and `Branch` carries no delivery window, so this reads the whole shop and says so in `scope.note` instead of splitting by guesswork. That is a schema decision for the owner, not something to infer from rider assignment.
+
+Failure codes:
+
+```text
+400 (zod)              days is not an integer between 7 and 30
+401                    no session, or an employee whose membership has ended
+403 ROLE_NOT_ALLOWED   caller is not a brand admin or brand employee
+403 PERMISSION_DENIED  an employee without delivery.view (carries `permission`)
+403 NO_BRAND           the session has no brand behind it
+429 AI_DAILY_LIMIT / rate limiter
+503 AI_UNAVAILABLE     kill switch is off (answered before a single order is read)
+```
+
+A model that answers in prose, misses the summary, overruns the 600-character paragraph, or names an order that is not in the slowest table, is not an error here: the minutes are CityCart's own arithmetic, so the request still returns 200 with every measurement, `insight: null` and `degraded: true`.
+
+Nothing is written or sent. No order status changes, no delivery is reassigned, no customer is messaged about being late, and no promise is edited in settings — the shop's real actions stay on the delivery and order screens this card links to. The only record this call makes is its `AiUsage` row.
+
+
+---
+
 # 24. Query Parameters
 
 Collection endpoints should use predictable query parameters.

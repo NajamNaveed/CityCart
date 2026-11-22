@@ -17,6 +17,7 @@ const {
   restockCalendar,
   listingQuality,
   shopReport,
+  promiseCheck,
   sellerAdvisor,
   catalogueMatch,
   csvClean,
@@ -305,6 +306,26 @@ router.post(
   aiUserLimiter,
   aiDailyLimit,
   shopReport,
+);
+
+// Phase 3d-5: the promise check. It answers "am I over-promising, and where did
+// today go wrong?" from this shop's own order timestamps and the timeframe the
+// shop itself wrote in its settings, so it runs on delivery.view — the same
+// guard as the delivery screens whose records it reads. The shop comes from
+// requireTenant, never from the body; every duration is CityCart's arithmetic
+// between two timestamps the order already carried, a promise the settings box
+// does not state is reported as unreadable instead of guessed at, no customer is
+// messaged and no delivery or order status is written.
+router.post(
+  '/promise-check',
+  authenticate,
+  requireRole(ROLES.BRAND_ADMIN, ROLES.BRAND_EMPLOYEE),
+  requirePermission(PERMISSIONS.DELIVERY_VIEW),
+  requireTenant,
+  requireAiEnabled,
+  aiUserLimiter,
+  aiDailyLimit,
+  promiseCheck,
 );
 
 module.exports = router;
