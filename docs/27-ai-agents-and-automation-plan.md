@@ -92,6 +92,7 @@ GEMINI_MODEL=gemini-3.5-flash
 GROQ_MODEL=openai/gpt-oss-120b
 OPENROUTER_MODEL=meta-llama/llama-3.3-70b-instruct:free
 AI_USER_DAILY_LIMIT=30
+AI_USER_BURST_LIMIT=10
 AI_REQUEST_TIMEOUT_MS=15000
 ```
 

@@ -81,6 +81,12 @@ const env = {
       const limit = Number((process.env.AI_USER_DAILY_LIMIT || '').trim());
       return Number.isFinite(limit) && limit >= 1 ? Math.min(limit, 1000) : 30;
     })(),
+    // Generations allowed per user in any rolling minute. Tunable so a busy
+    // picker shift can be raised without touching code (docs/29 Phase 7b).
+    burstLimit: (() => {
+      const limit = Number((process.env.AI_USER_BURST_LIMIT || '').trim());
+      return Number.isFinite(limit) && limit >= 1 ? Math.min(limit, 120) : 10;
+    })(),
     gemini: {
       apiKey: (process.env.GEMINI_API_KEY || '').trim(),
       model: (process.env.GEMINI_MODEL || 'gemini-3.5-flash').trim(),

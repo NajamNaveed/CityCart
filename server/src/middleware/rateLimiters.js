@@ -87,10 +87,10 @@ const riderLocationLimiter = rateLimit({
 
 // AI requests share provider free tiers across every user, so each signed-in
 // user gets a small per-minute burst allowance on top of AI_USER_DAILY_LIMIT
-// (docs/27 §3.2, §6).
+// (docs/27 §3.2, §6). The burst size is AI_USER_BURST_LIMIT.
 const aiUserLimiter = rateLimit({
   windowMs: 60 * 1000,
-  limit: 10,
+  limit: env.ai.burstLimit,
   keyGenerator: perUser,
   standardHeaders: 'draft-7',
   legacyHeaders: false,

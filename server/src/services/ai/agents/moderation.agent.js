@@ -1,6 +1,8 @@
+const crypto = require('crypto');
 const { z } = require('zod');
 
 const { generate } = require('../index');
+const { getCached, setCached } = require('../cache');
 const { sanitizeUserText, parseModelJson } = require('../guard');
 const { inspectText, rulesReason, cleanReason, MAX_TEXT } = require('../moderation.rules');
 const { buildModerationMessages } = require('../prompts/moderation.prompt');
@@ -23,6 +25,16 @@ const modelSchema = z.object({
   reason: z.string().trim().min(10).max(280),
 });
 
+// A day is enough: the same words read by another administrator within a day
+// get the same answer, and a phrase that becomes acceptable tomorrow is
+// re-read from scratch. The key is a hash so the checked text is not stored.
+const CACHE_TTL_SECONDS = 60 * 60 * 24;
+
+function cacheKeyOf(text) {
+  const digest = crypto.createHash('sha256').update(text).digest('hex');
+  return `moderation:${digest}`;
+}
+
 async function moderateText({ text, ctx }) {
   const safe = sanitizeUserText(typeof text === 'string' ? text : '', MAX_TEXT);
   const result = inspectText(safe);
@@ -38,6 +50,10 @@ async function moderateText({ text, ctx }) {
   // An empty string after tag/whitespace removal has nothing for a provider to
   // read; the rules answer is already complete.
   if (!safe) return base;
+
+  const key = cacheKeyOf(safe);
+  const cached = await getCached(key);
+  if (cached) return cached;
 
   try {
     const generated = await generate({
@@ -55,7 +71,11 @@ async function moderateText({ text, ctx }) {
       role: ctx.role,
     });
     const parsed = parseModelJson(generated.text, modelSchema);
-    return { ...base, reason: cleanReason(parsed.reason, fallback) };
+    const value = { ...base, reason: cleanReason(parsed.reason, fallback) };
+    // A degraded answer is not cached, so a provider that was down is tried
+    // again next time instead of freezing the fallback sentence for a day.
+    await setCached(key, value, CACHE_TTL_SECONDS);
+    return value;
   } catch (err) {
     if (err.code === 'AI_UNAVAILABLE' || err.name === 'AiGuardError') {
       return { ...base, degraded: true };
@@ -64,4 +84,4 @@ async function moderateText({ text, ctx }) {
   }
 }
 
-module.exports = { moderateText };
+module.exports = { moderateText, cacheKeyOf };

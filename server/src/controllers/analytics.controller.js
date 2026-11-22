@@ -1,5 +1,6 @@
 const { analyticsQuerySchema, resolveDateRange } = require('../validators/analytics.validator');
 const { getBrandAnalytics, getPlatformAnalytics } = require('../services/analytics.service');
+const { getUsageReport } = require('../services/ai/usageReport');
 const { formatZodError } = require('../utils/formatZodError');
 
 function parseRange(req, res) {
@@ -37,4 +38,20 @@ async function platformAnalytics(req, res, next) {
   }
 }
 
-module.exports = { brandAnalytics, platformAnalytics };
+/**
+ * AI usage and fallback figures for the admin analytics page (docs/29 Phase
+ * 7b). Read-only, no generation, and it keeps working when the kill switch is
+ * off because past spend still needs reviewing.
+ */
+async function aiUsage(req, res, next) {
+  const range = parseRange(req, res);
+  if (!range) return;
+  try {
+    const usage = await getUsageReport({ range });
+    return res.status(200).json({ success: true, usage });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+module.exports = { brandAnalytics, platformAnalytics, aiUsage };

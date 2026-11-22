@@ -17,6 +17,10 @@ jest.mock('../../src/models/aiUsage.model', () => ({
   create: jest.fn(),
   countDocuments: jest.fn(),
 }));
+jest.mock('../../src/models/aiCache.model', () => ({
+  findOne: jest.fn(),
+  findOneAndUpdate: jest.fn(),
+}));
 jest.mock('../../src/models/review.model', () => ({
   ...jest.requireActual('../../src/models/review.model'),
   updateOne: jest.fn(),
@@ -28,6 +32,7 @@ jest.mock('../../src/models/review.model', () => ({
 const User = require('../../src/models/user.model');
 const AdminPartner = require('../../src/models/adminPartner.model');
 const AiUsage = require('../../src/models/aiUsage.model');
+const AiCache = require('../../src/models/aiCache.model');
 const Review = require('../../src/models/review.model');
 const app = require('../../src/app');
 const env = require('../../src/config/env');
@@ -90,6 +95,8 @@ beforeEach(() => {
   env.ai.dailyLimit = originalDailyLimit;
   AiUsage.countDocuments.mockResolvedValue(0);
   AiUsage.create.mockResolvedValue({});
+  AiCache.findOne.mockReturnValue({ lean: async () => null });
+  AiCache.findOneAndUpdate.mockResolvedValue({});
   AdminPartner.findOne.mockResolvedValue(null);
   global.fetch = jest.fn().mockResolvedValue(geminiResponse(JSON.stringify({ reason: REASON })));
   asUser(superAdmin);
@@ -297,5 +304,66 @@ describe('the moderation answer', () => {
     expect(cleanReason('short', 'fallback')).toBe('fallback');
     expect(cleanReason('The review was hidden by the team.', 'fallback')).toBe('fallback');
     expect(cleanReason('Mail me at a@b.com about it.', 'fallback')).toBe('fallback');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 7b: the same text is answered from the cache within a day.
+// ---------------------------------------------------------------------------
+describe('moderation cache', () => {
+  function cacheHit(value) {
+    return { lean: async () => ({ key: 'moderation:cached', value, expiresAt: new Date(Date.now() + 60_000) }) };
+  }
+
+  it('answers a repeated text from the cache without a second provider call', async () => {
+    await ask({ text: ABUSIVE });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(AiCache.findOneAndUpdate).toHaveBeenCalledTimes(1);
+
+    const [, update] = AiCache.findOneAndUpdate.mock.calls[0];
+    AiCache.findOne.mockReturnValue(cacheHit(update.$set.value));
+
+    const second = await ask({ text: ABUSIVE });
+    expect(second.status).toBe(200);
+    expect(second.body.data.reason).toBe(REASON);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('keys the cache by a hash so the checked text is not stored', async () => {
+    await ask({ text: ABUSIVE });
+    const [filter, update, options] = AiCache.findOneAndUpdate.mock.calls[0];
+    expect(filter.key).toMatch(/^moderation:[0-9a-f]{64}$/);
+    expect(filter.key).not.toContain('idiot');
+    expect(update.$set.value.reason).toBe(REASON);
+    expect(options.upsert).toBe(true);
+  });
+
+  it('serves a cached verdict without spending a provider call or the daily allowance', async () => {
+    const cached = { score: 65, verdict: 'FLAGGED', labels: ['ABUSE'], reason: REASON, degraded: false };
+    AiCache.findOne.mockReturnValue(cacheHit(cached));
+
+    const res = await ask({ text: ABUSIVE });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual(cached);
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(AiUsage.create).not.toHaveBeenCalled();
+  });
+
+  it('never caches a degraded answer, so a down provider is retried next time', async () => {
+    global.fetch.mockRejectedValue(new Error('network down'));
+    const res = await ask({ text: ABUSIVE });
+    expect(res.body.data.degraded).toBe(true);
+    expect(AiCache.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('still answers when the cache itself fails', async () => {
+    AiCache.findOne.mockReturnValue({ lean: async () => { throw new Error('db down'); } });
+    AiCache.findOneAndUpdate.mockRejectedValue(new Error('db down'));
+
+    const res = await ask({ text: ABUSIVE });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.reason).toBe(REASON);
   });
 });

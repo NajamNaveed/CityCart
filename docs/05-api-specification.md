@@ -650,6 +650,46 @@ GET /robots.txt
 
 Brand analytics is available at `GET /api/v1/brand/analytics` (also `GET /api/v1/analytics/brand` for the analytics module convention) to `BRAND_ADMIN` and employees with `analytics.view`. Scope is derived from the authenticated user's brand. Super Admin platform analytics is available at `GET /api/v1/admin/analytics` (also `GET /api/v1/analytics/admin`). Both endpoints accept optional UTC date-only `from` and `to` query parameters in `YYYY-MM-DD` format; the default is the last 30 days.
 
+### AI usage and fallback report
+
+```text
+GET /api/v1/admin/ai-usage
+```
+
+Super Admin, or an `ADMIN_PARTNER` holding `admin.analytics` (reads are allowed to a read-only partner). Accepts the same `from`/`to` date range as platform analytics. It reads only the accounting columns of `AiUsage` — agent, outcome, attempts, tokens, latency and a capped error summary — never a prompt or a reply, performs no generation, and keeps working when `AI_ENABLED=false` because past spend still needs review.
+
+```json
+{
+  "success": true,
+  "usage": {
+    "labels": { "from": "2026-11-17", "to": "2026-11-23" },
+    "truncated": false,
+    "totals": {
+      "agent": null, "requests": 120, "ok": 114, "failed": 6,
+      "successRate": 95, "fallbackRate": 5, "retried": 4, "retryRate": 3.3,
+      "promptTokens": 182340, "completionTokens": 91230, "totalTokens": 273570,
+      "avgMs": 1240, "users": 12
+    },
+    "agents": [
+      {
+        "agent": "substitutions", "requests": 42, "ok": 41, "failed": 1,
+        "successRate": 97.6, "fallbackRate": 2.4, "retried": 2, "retryRate": 4.8,
+        "promptTokens": 62000, "completionTokens": 24000, "totalTokens": 86000,
+        "avgMs": 890, "users": 7, "lastError": null
+      }
+    ]
+  }
+}
+```
+
+* `failed` is the fallback count: a request whose providers all failed and which the agent answered with deterministic text. `fallbackRate` is `failed / requests`, to one decimal.
+* `retried` counts requests that needed more than one provider (`attempts > 1`); `retryRate` is its share.
+* `users` counts distinct signed-in callers; rows without a user (scheduled work) still count toward requests but not users.
+* `agents` is ordered by volume, so the most expensive agent is first. Agent names are task names (`listing-draft`, `moderation`, …); rows with no task appear as `unknown`.
+* At most 20,000 rows are read per range, newest first; `truncated: true` says the report covers only those.
+
+A schema-guard fallback (the provider answered, but the JSON did not validate) still logs as a successful provider call and is not separable in this report; the provider-failure count is the fallback figure.
+
 ---
 
 ## Suspend Brand
@@ -4845,6 +4885,7 @@ What the endpoint guarantees:
 * **The model only words the reason.** It receives the server result and writes one sentence under 280 characters. A reason that claims something was removed, hidden or blocked, or that carries a link or email, is replaced with CityCart's own wording; a failed provider returns that wording with `degraded: true`.
 * **Nothing is punished.** No review is hidden, deleted, blocked, reported or notified, and no record is read or written. The only write is the caller's own `AiUsage` row, logged by the shared AI layer. Hiding a review remains `PATCH /admin/reviews/:id`.
 * **Tag-only input costs nothing.** A body that is only markup sanitises to an empty string and answers `CLEAR` with score 0 without a provider call.
+* **Repeated text is cached.** The same text (with the same rules score) is answered for one day from `AiCache`, keyed by a SHA-256 hash so the text itself is not stored. A cached answer makes no provider call and spends no daily allowance; a degraded answer is never cached, so a provider that was down is retried.
 
 Failure codes:
 
