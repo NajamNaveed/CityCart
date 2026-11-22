@@ -4885,7 +4885,7 @@ What the endpoint guarantees:
 * **The model only words the reason.** It receives the server result and writes one sentence under 280 characters. A reason that claims something was removed, hidden or blocked, or that carries a link or email, is replaced with CityCart's own wording; a failed provider returns that wording with `degraded: true`.
 * **Nothing is punished.** No review is hidden, deleted, blocked, reported or notified, and no record is read or written. The only write is the caller's own `AiUsage` row, logged by the shared AI layer. Hiding a review remains `PATCH /admin/reviews/:id`.
 * **Tag-only input costs nothing.** A body that is only markup sanitises to an empty string and answers `CLEAR` with score 0 without a provider call.
-* **Repeated text is cached.** The same text (with the same rules score) is answered for one day from `AiCache`, keyed by a SHA-256 hash so the text itself is not stored. A cached answer makes no provider call and spends no daily allowance; a degraded answer is never cached, so a provider that was down is retried.
+* **Repeated text is cached.** The model's sentence is cached for one day for the same text, keyed by a SHA-256 hash so the text itself is not stored. The score, labels and verdict are always recomputed from the current rules, so a rules update applies immediately. A cached reason makes no provider call and spends no daily allowance; a degraded answer is never cached, so a provider that was down is retried.
 
 Failure codes:
 

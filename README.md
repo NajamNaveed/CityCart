@@ -172,6 +172,17 @@ Real-time in-app notifications using Socket.IO for events such as:
 * Reviews
 * Employee changes
 
+### 🤖 AI Assistants
+
+AI is used where it saves a person time, and every decision stays with the person:
+
+* **Shoppers:** a shopping assistant, order and service-booking help, one-tap reply drafts, recipe ingredient lists, product comparison, chat translation, and review summaries on product pages.
+* **Brand teams:** listing drafts and quality checks, review-reply drafts, catalogue matching and CSV clean-up, returns insights, a restock calendar, promise checks, a monthly shop report, a billing explainer, dead-stock pricing and a seller advisor.
+* **Pickers (Staff app):** substitute suggestions drawn from the shop's own stock when a line is unavailable — names, stock and a short reason, never prices.
+* **Platform admins:** billing-help triage, a wording check on reviews, and an AI usage and fallback report in Analytics.
+
+The server owns every score, classification and figure; the model only words an answer or chooses from rows the server already filtered. AI is gated by the same role, permission and brand-tenant checks as the screen it serves, off unless `AI_ENABLED=true`, limited per user per minute and per day, and every agent falls back to deterministic text when providers fail. See `docs/27-ai-agents-and-automation-plan.md`, `docs/29-ai-phase-roadmap.md` and the `/api/v1/ai/*` and `/api/v1/admin/ai-usage` sections of `docs/05-api-specification.md`.
+
 ---
 
 # 🏗️ Architecture
@@ -660,6 +671,12 @@ CLIENT_URL=http://localhost:5173
 CLOUDINARY_CLOUD_NAME=your_cloud_name
 CLOUDINARY_API_KEY=your_api_key
 CLOUDINARY_API_SECRET=your_api_secret
+
+# AI assistants (optional). Off unless enabled; any one provider key is enough.
+AI_ENABLED=false
+GEMINI_API_KEY=
+AI_USER_DAILY_LIMIT=30
+AI_USER_BURST_LIMIT=10
 ```
 
 ## Frontend

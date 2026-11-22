@@ -53,7 +53,9 @@ async function moderateText({ text, ctx }) {
 
   const key = cacheKeyOf(safe);
   const cached = await getCached(key);
-  if (cached) return cached;
+  // Only the model's sentence is cached; the score, labels and verdict are
+  // always recomputed from the current rules, so a rules change applies at once.
+  if (cached && typeof cached.reason === 'string') return { ...base, reason: cached.reason };
 
   try {
     const generated = await generate({
@@ -71,11 +73,11 @@ async function moderateText({ text, ctx }) {
       role: ctx.role,
     });
     const parsed = parseModelJson(generated.text, modelSchema);
-    const value = { ...base, reason: cleanReason(parsed.reason, fallback) };
+    const reason = cleanReason(parsed.reason, fallback);
     // A degraded answer is not cached, so a provider that was down is tried
     // again next time instead of freezing the fallback sentence for a day.
-    await setCached(key, value, CACHE_TTL_SECONDS);
-    return value;
+    await setCached(key, { reason }, CACHE_TTL_SECONDS);
+    return { ...base, reason };
   } catch (err) {
     if (err.code === 'AI_UNAVAILABLE' || err.name === 'AiGuardError') {
       return { ...base, degraded: true };

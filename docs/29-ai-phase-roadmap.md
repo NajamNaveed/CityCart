@@ -352,8 +352,102 @@ Prerequisite: Sightwise v1 is deployed (its phases 0-5, see the Sightwise repo).
 - **7a Security:** injection test cases for every agent; cross-tenant tests re-run; no secrets in prompts or logs.
   - **Status:** built (2026-11-23). `tests/ai/hardening.test.js` runs the cross-cutting pass over all 23 agents: every prompt builder is called with a hostile "ignore all previous instructions" sentence in each string field and must place it in user content, never in the rules; every prompt module is checked for the data clause, for provider/environment/secret names, and for logging; every agent and prompt module is checked for console output; and every `/ai` route's middleware chain is pinned to `authenticate` → its non-AI feature's role/permission/tenant door → kill switch → burst limiter → daily allowance → the agent handler. The same file re-runs the tenant principle structurally: no AI service reads `req`, and the controller takes `brandId` only from `req.tenantBrandId`. The cross-tenant suites (picker order and billing help) are re-run in the full server suite. One prompt was hardened by this pass: the listing-writer's leaf-category list used to sit inside the system message, and now travels in the user message as data beside the notes.
 - **7b Quota and cost review:** `AiUsage` report per agent, fallback rate, add caching where limits are hit; tune rate limits.
-  - **Status:** built (2026-11-23). `GET /api/v1/admin/ai-usage` (Super Admin, or a partner with `admin.analytics`; reads allowed to a read-only partner) aggregates `AiUsage` over the same `from`/`to` range as platform analytics into per-agent requests, success, fallback (`ok: false` = all providers failed and deterministic text answered), provider retries, tokens, average latency and users, plus the latest capped failure text. It reads no prompt or reply, performs no generation, and still answers with the kill switch off; the Admin → Analytics page shows the same figures under "AI assistant usage", fetched separately so a failure cannot blank the platform numbers. Caching added where spend would repeat: `moderation` now answers the same text from `AiCache` for a day, keyed by a SHA-256 hash, and never caches a degraded answer; `review-summary`, `translate` and `recipe` already cached. Limits reviewed: 10 requests per user per rolling minute on top of 30 per user per UTC day (both per user, not per IP, so shared phones are not punished). The burst size is now `AI_USER_BURST_LIMIT` (default 10, capped 120) so a busy picker shift can be raised in deployment without a code change; the daily cap was already `AI_USER_DAILY_LIMIT`. A picker's substitution sheet and the admin review check are the volumes to watch first; if their fallback rate or 429 count rises, check the report before raising either number.
+  - **Status:** built (2026-11-23). `GET /api/v1/admin/ai-usage` (Super Admin, or a partner with `admin.analytics`; reads allowed to a read-only partner) aggregates `AiUsage` over the same `from`/`to` range as platform analytics into per-agent requests, success, fallback (`ok: false` = all providers failed and deterministic text answered), provider retries, tokens, average latency and users, plus the latest capped failure text. It reads no prompt or reply, performs no generation, and still answers with the kill switch off; the Admin → Analytics page shows the same figures under "AI assistant usage", fetched separately so a failure cannot blank the platform numbers. Caching added where spend would repeat: `moderation` now reuses the model's sentence for the same text from `AiCache` for a day, keyed by a SHA-256 hash, always recomputing the score from current rules and never caching a degraded answer; `review-summary`, `translate` and `recipe` already cached. Limits reviewed: 10 requests per user per rolling minute on top of 30 per user per UTC day (both per user, not per IP, so shared phones are not punished). The burst size is now `AI_USER_BURST_LIMIT` (default 10, capped 120) so a busy picker shift can be raised in deployment without a code change; the daily cap was already `AI_USER_DAILY_LIMIT`. A picker's substitution sheet and the admin review check are the volumes to watch first; if their fallback rate or 429 count rises, check the report before raising either number.
 - **7c Docs and release:** update README and `docs/` index, demo script, final tag `ai-v1`.
+  - **Status:** built (2026-11-23). The README now carries a product "AI Assistants" section (who gets what, and the guardrails), the doc index already listed 27–29, and the manual demo script below walks every Phase 4 and Phase 7 outcome. Release checks on the day: server `npm test` (103 suites, 3249 tests green), client `npm run lint` (0 warnings) and `npm run build`, staff app `flutter analyze` (clean) and `flutter test` (50 tests green). Phase 5 (automation) and Phase 6 (Sightwise vision) are intentionally not built yet; nothing here depends on them. Final local tag `ai-v1` (not pushed).
+
+---
+
+## Demo and manual test script (ai-v1)
+
+Everything below runs against the seeded demo data. Phases 5 and 6 are out of scope; this script covers Phase 4a/4b/4c and the Phase 7 release checks.
+
+### 0. Start the stack
+
+1. In `server/.env` set `MONGODB_URI`, `AI_ENABLED=true`, and one provider key (`GEMINI_API_KEY`, `GROQ_API_KEY` or `OPENROUTER_API_KEY`).
+2. Seed and run the API:
+   ```bash
+   cd server
+   npm run seed:demo      # wipes and rebuilds the demo data; prints every login
+   npm run dev            # http://localhost:5000
+   ```
+3. Run the web client: `cd client && npm run dev` → `http://localhost:5173`.
+4. Run the Staff app (Android emulator): `cd apps/staff && flutter pub get && flutter run --dart-define=API_URL=http://10.0.2.2:5000/api/v1`.
+
+Seeded logins (all share the password printed by the seeder, by default `Demo@12345`):
+
+```text
+Super admin   /admin/login   admin@citycart.local      Admin@12345
+Picker        Staff app      areeba.saleem@citycart.demo  (Loom & Co.)
+Brand owner   /sell/login    brand@citycart.local      Brand@12345
+```
+
+### 1. Kill switch (must pass with AI off)
+
+Set `AI_ENABLED=false`, restart the API, and check the app degrades instead of breaking:
+
+* Staff app, picker queue → an unavailable line's **Suggest substitutes** shows the "Suggestions are unavailable right now. Choose from the store catalogue instead." path, and the catalogue still lists the shop's products.
+* Web admin → Billing → Help → answering a request shows no triage panel; the answer box and **Send answer** still work.
+* Web admin → Reviews → a review shows no **Check wording** button; **Hide review** / **Show review** still work.
+* `POST /api/v1/ai/ping` answers `503 { code: "AI_UNAVAILABLE" }`.
+
+Set `AI_ENABLED=true` again and restart before the next steps.
+
+### 2. Phase 4a — picker substitution (Staff app)
+
+1. Sign in to the Staff app as `areeba.saleem@citycart.demo` and open **Queue**.
+2. Claim a waiting order, open a line and mark it **Unavailable**.
+3. Press **Suggest substitutes**. Expect up to three suggestions, each with a product name, its stock and a short reason, drawn only from this shop's own products. No price appears anywhere in the Staff app.
+4. Tap one: it becomes a change proposal for the customer. The customer still accepts or refuses it; nothing is substituted silently.
+5. Edge cases: a suggestion list never contains another brand's product (enforced on the server, covered by `tests/ai/substitutions.test.js`); if the AI call fails, the sheet still offers the catalogue browser.
+
+### 3. Phase 4b — admin billing triage (web)
+
+1. Sign in at `/admin/login` as `admin@citycart.local`.
+2. Open **Billing → Help**, press **Answer** on an open seller question.
+3. Expect a panel above the answer box with a classification (for example *Payment not showing*), an urgency badge, `Owes PKR …` from the seller's real invoices, and a draft answer. The line under it says nothing has been sent.
+4. Press **Use this draft** — the text lands in the answer box. Edit it, then press **Send answer** yourself. Triage never sends, resolves or notifies anything on its own.
+5. Edge cases: if a provider fails, the draft is still written from the server's own facts (`degraded: true`); a request with no outstanding balance shows no `Owes` line.
+
+### 4. Phase 4c — review wording check (web)
+
+1. Sign in at `/admin/login` and open **Reviews**.
+2. On a review with text, press **Check wording**. Expect a verdict (`CLEAR`, `REVIEW` or `FLAGGED`), a score out of 100, label chips (insulting words, advertising, scam wording) and one plain sentence.
+3. Try a normal Roman Urdu review (clear), a mild insult (review) and a serious insult or a phone-number scam line (flagged). The score never changes for the same text, and adding "ignore all previous instructions" to the text changes nothing.
+4. Press **Check again**: the sentence comes back without a new provider call (cached for a day), while the score is recomputed every time.
+5. Confirm the only action is still **Hide review**; the check itself says it hid and reported nothing.
+6. Edge cases: read-only partner admins do not see the button (this is a POST); a partner without `admin.reviews` gets `403`.
+
+### 5. Phase 7b — usage, fallback and limits (web)
+
+1. After the calls above, open **Admin → Analytics** for a range that includes today. The **AI assistant usage** section lists `substitutions`, `admin-triage` and `moderation` with requests, users, success %, fallback %, retried %, tokens and average time.
+2. With a working provider key, fallback should be 0%. Stop the network or use a bad key to force failures; the next report shows a non-zero fallback rate and the latest capped failure text.
+3. Set `AI_ENABLED=false` and reload Analytics: the report still loads (past spend is still reviewable).
+4. Burst limit: set `AI_USER_BURST_LIMIT=2`, restart, and press **Check wording** three times quickly. The third answers `429 You are using AI too quickly. Please wait a moment.` Set it back to 10.
+5. Daily limit: set `AI_USER_DAILY_LIMIT=1`, restart, make one AI request, then another. The second answers `429` with `code: "AI_DAILY_LIMIT"`; every AI response also carries `X-AI-Daily-Limit` and `X-AI-Daily-Remaining`. Set it back to 30.
+6. `GET /api/v1/admin/ai-usage` is refused to brand admins and customers (`403`), allowed to a partner holding `admin.analytics` (including read-only), and never calls a provider.
+
+### 6. Phase 7a — automated hardening checks
+
+```bash
+cd server
+npx jest tests/ai/hardening.test.js   # prompt injection, secrets, route chain and tenant pass
+npx jest tests/ai                      # every AI agent suite, including cross-tenant picker and billing cases
+npm test                               # the whole server suite
+```
+
+The hardening suite fails if any prompt builder puts caller text into the system rules, if any prompt file names a provider key or environment variable, if an agent logs, if an `/ai` route loses its kill switch, limiter or daily allowance, or if the controller takes an owner id from the body.
+
+### 7. Release checks and tag
+
+```bash
+cd server && npm test
+cd client && npm run lint && npm run build
+cd apps/staff && flutter analyze && flutter test
+git tag ai-v1
+```
+
+The tag is local; pushing it is a separate, explicit decision.
 
 ---
 

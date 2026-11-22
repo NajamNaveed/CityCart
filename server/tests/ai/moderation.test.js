@@ -334,18 +334,23 @@ describe('moderation cache', () => {
     const [filter, update, options] = AiCache.findOneAndUpdate.mock.calls[0];
     expect(filter.key).toMatch(/^moderation:[0-9a-f]{64}$/);
     expect(filter.key).not.toContain('idiot');
-    expect(update.$set.value.reason).toBe(REASON);
+    expect(update.$set.value).toEqual({ reason: REASON });
     expect(options.upsert).toBe(true);
   });
 
-  it('serves a cached verdict without spending a provider call or the daily allowance', async () => {
-    const cached = { score: 65, verdict: 'FLAGGED', labels: ['ABUSE'], reason: REASON, degraded: false };
-    AiCache.findOne.mockReturnValue(cacheHit(cached));
+  it('recomputes the score from current rules and reuses only the cached reason', async () => {
+    AiCache.findOne.mockReturnValue(cacheHit({ reason: REASON }));
 
     const res = await ask({ text: ABUSIVE });
 
     expect(res.status).toBe(200);
-    expect(res.body.data).toEqual(cached);
+    expect(res.body.data).toMatchObject({
+      verdict: 'FLAGGED',
+      labels: ['ABUSE'],
+      reason: REASON,
+      degraded: false,
+    });
+    expect(res.body.data.score).toBeGreaterThanOrEqual(FLAG_THRESHOLD);
     expect(global.fetch).not.toHaveBeenCalled();
     expect(AiUsage.create).not.toHaveBeenCalled();
   });
