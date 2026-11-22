@@ -4328,6 +4328,188 @@ Nothing is written or sent. No order status changes, no delivery is reassigned, 
 
 ---
 
+## Bill explainer
+
+```text
+POST /api/v1/ai/billing-explain
+```
+
+Roles: `BRAND_ADMIN` only — never an employee, never a service provider. The **AI bill read** card inside the invoice screen on `Billing.jsx` asks it.
+
+CityCart has no payouts. A brand collects its own cash-on-delivery and *owes* the platform 1% of completed sales, invoiced monthly (docs/15 §1–§2), so the money question a shop admin has is not "where is my payout" but "why is this invoice this size". This endpoint answers that from the four records that already exist: the invoice, the commission lines attached to it, the payments submitted against it, and the orders the largest lines were charged on.
+
+```json
+{ "invoiceId": "66f1a0c2b3d4e5f6071829c0" }
+```
+
+`invoiceId` is the only field accepted, and the schema is strict: a `sellerId`, a `sellerType`, a `brandId`, a `commissionPaisa` or a `rateBps` in the body is a 400, not an ignored field. The seller this explains is the one `requireTenant` resolved from the session, so a caller cannot aim the read at another shop's bill or write its amounts in from the client.
+
+The response is the invoice CityCart already stores, with the comparisons it made and the model's paragraph attached:
+
+```json
+{
+  "success": true,
+  "data": {
+    "invoice": {
+      "id": "66f1a0c2b3d4e5f6071829c0",
+      "periodKey": "2026-10",
+      "period": { "from": "2026-10-01", "to": "2026-11-01" },
+      "status": "PARTIALLY_PAID",
+      "statusRaw": "PARTIALLY_PAID",
+      "statusText": "Part of this bill is paid: some of what you submitted was verified.",
+      "issuedOn": "2026-11-04",
+      "dueOn": "2026-11-17",
+      "paidOn": null,
+      "createdOn": "2026-11-03",
+      "timing": { "overdue": true, "daysPastDue": 5, "daysUntilDue": null },
+      "currency": "PKR"
+    },
+    "money": {
+      "sales": { "paisa": 5805000, "text": "PKR 58,050.00" },
+      "commission": { "paisa": 58050, "text": "PKR 580.50" },
+      "credits": { "paisa": 2250, "text": "PKR 22.50" },
+      "paid": { "paisa": 20000, "text": "PKR 200.00" },
+      "due": { "paisa": 35800, "text": "PKR 358.00" },
+      "billed": { "paisa": 55800, "text": "PKR 558.00" }
+    },
+    "sales": {
+      "count": 8,
+      "eligible": { "paisa": 5805000, "text": "PKR 58,050.00" },
+      "commission": { "paisa": 58050, "text": "PKR 580.50" },
+      "restCount": 3,
+      "restEligible": { "paisa": 145000, "text": "PKR 1,450.00" },
+      "restCommission": { "paisa": 1450, "text": "PKR 14.50" },
+      "missingOrders": 1,
+      "rates": { "bps": [100], "shared": 100, "text": "1%", "mixed": false },
+      "lines": [
+        {
+          "entryId": "66f1a0c2b3d4e5f6071829d0",
+          "kind": "SALE",
+          "sourceType": "ORDER",
+          "sourceLabel": "order",
+          "orderId": "66f1a0c2b3d4e5f6071829a4",
+          "orderNumber": "ORD-778899-29a4",
+          "deliveredOn": "2026-10-24",
+          "occurredOn": "2026-10-24",
+          "eligible": { "paisa": 2300000, "text": "PKR 23,000.00" },
+          "rateBps": 100,
+          "commission": { "paisa": 23000, "text": "PKR 230.00" },
+          "order": {
+            "net": { "paisa": 2300000, "text": "PKR 23,000.00" },
+            "deliveryFee": { "paisa": 0, "text": "PKR 0.00" },
+            "tax": { "paisa": 0, "text": "PKR 0.00" },
+            "excluded": { "paisa": 0, "text": "PKR 0.00" },
+            "returned": { "paisa": 0, "text": "PKR 0.00" },
+            "feeRefunded": false,
+            "fulfilment": "FULL",
+            "fulfilmentText": "Arrived complete."
+          }
+        },
+        {
+          "entryId": "66f1a0c2b3d4e5f6071829d4",
+          "kind": "SALE",
+          "sourceType": "ORDER",
+          "sourceLabel": "order",
+          "orderId": "66f1a0c2b3d4e5f6071829a8",
+          "orderNumber": null,
+          "deliveredOn": null,
+          "occurredOn": "2026-10-26",
+          "eligible": { "paisa": 1000000, "text": "PKR 10,000.00" },
+          "rateBps": 100,
+          "commission": { "paisa": 10000, "text": "PKR 100.00" },
+          "order": null
+        }
+      ]
+    },
+    "credits": {
+      "count": 2,
+      "reversed": { "paisa": 1250, "text": "PKR 12.50" },
+      "eligible": { "paisa": 125000, "text": "PKR 1,250.00" },
+      "restCount": 0,
+      "carriedIn": { "count": 1, "amount": { "paisa": 1000, "text": "PKR 10.00" } },
+      "lines": [
+        {
+          "entryId": "66f1a0c2b3d4e5f6071829e0",
+          "kind": "REVERSAL",
+          "sourceType": "ORDER",
+          "sourceLabel": "order",
+          "orderId": "66f1a0c2b3d4e5f6071829a2",
+          "orderNumber": "ORD-778899-29a2",
+          "occurredOn": "2026-11-06",
+          "eligible": { "paisa": 80000, "text": "PKR 800.00" },
+          "commission": { "paisa": -800, "text": "−PKR 8.00" },
+          "offBill": { "paisa": 800, "text": "PKR 8.00" },
+          "reason": "Refunded the part that came back at the door",
+          "order": { "net": { "paisa": 970000, "text": "PKR 9,700.00" }, "returned": { "paisa": 80000, "text": "PKR 800.00" }, "feeRefunded": true, "fulfilment": "PARTIAL", "fulfilmentText": "Part of it came back at the door." }
+        }
+      ]
+    },
+    "payments": {
+      "count": 3,
+      "total": { "paisa": 26000, "text": "PKR 260.00" },
+      "carriedOut": { "paisa": 0, "text": "PKR 0.00" },
+      "note": "A submitted payment only reduces what you owe after the platform team verifies it.",
+      "byStatus": [
+        { "status": "SUBMITTED", "label": "submitted, not checked yet", "count": 1, "amount": { "paisa": 5000, "text": "PKR 50.00" } },
+        { "status": "VERIFIED", "label": "verified by the platform team", "count": 1, "amount": { "paisa": 20000, "text": "PKR 200.00" } },
+        { "status": "REJECTED", "label": "rejected", "count": 1, "amount": { "paisa": 1000, "text": "PKR 10.00" } }
+      ]
+    },
+    "rate": { "bps": [100], "shared": 100, "text": "1%", "mixed": false },
+    "unkindedLines": 0,
+    "checks": [
+      { "key": "adds-up", "label": "The bill adds up", "ok": true, "detail": "PKR 580.50 commission equals PKR 22.50 credits plus PKR 200.00 paid plus PKR 358.00 due." },
+      { "key": "sales", "label": "The sales behind the bill", "ok": true, "detail": "The 8 sale lines attached to it add up to PKR 58,050.00, which is what the invoice says." },
+      { "key": "commission", "label": "The commission on those lines", "ok": true, "detail": "The 8 sale lines carry PKR 580.50 in total, which is what the invoice charges." },
+      { "key": "credits", "label": "What was taken off", "ok": true, "detail": "PKR 12.50 from 2 refund reversals and PKR 10.00 carried in from an earlier overpayment add up to the PKR 22.50 taken off." }
+    ],
+    "allChecksPass": true,
+    "anyCheckFailed": false,
+    "empty": false,
+    "currency": "PKR",
+    "insight": {
+      "summary": "Your October bill charged PKR 580.50 on PKR 58,050.00 of completed sales. PKR 12.50 came back off it as refund reversals and a further PKR 10.00 was carried in from September's overpayment, so the bill for the period was PKR 558.00. One verified payment of PKR 200.00 is applied and PKR 358.00 is still owed, 5 days past the due date. A PKR 50.00 payment you submitted is not counted until the platform team verifies it.",
+      "notes": [
+        { "entryId": "66f1a0c2b3d4e5f6071829e0", "kind": "REVERSAL", "note": "PKR 8.00 came off this bill because part of the order came back at the door." }
+      ]
+    },
+    "degraded": false
+  }
+}
+```
+
+What the endpoint guarantees about those numbers:
+
+* Every amount is a stored field or the sum of stored fields. `commissionForPaisa` is never called, the 1% is never re-derived, and no figure is worked out from an order's own totals — so this panel can never tell a shop what a charge *should* have been. Order amounts are rupees (docs/08 §6) and the ledger is paisa (docs/15 §13); the conversion happens once, at the edge, reading `netTotal ?? total` exactly the way `recordOrderCommission` read it.
+* `checks` are four comparisons between CityCart's own records: commission = credits + paid + due; the invoice's `salesPaisa` against the SALE lines' eligible amounts; `commissionPaisa` against those lines' commission; and `creditsPaisa` against the REVERSAL lines plus overpayment credits carried in from an earlier invoice. A verdict is `true`, `false`, or `null` when there is nothing to compare — and a `null` is printed as `cannot be checked`, never as a pass.
+* `allChecksPass` says every comparison held. `anyCheckFailed` says at least one came back `false`, and only that may push a shop to the Help tab: an invoice with no lines has two `null` verdicts and is not a month that disagreed with itself. A `false` is reported as a disagreement between records; this panel never says which record is right, because deciding that is the platform team's job (docs/15 §20.8).
+* A door return legitimately leaves `returnedAmount` folded inside an order's `netTotal` (`return.service.js` rewrites it), so the order's stored figures are printed **beside** the line and no per-line equality is ever asserted or denied. That is why `sales.lines[].order` carries `net`, `deliveryFee`, `tax`, `excluded`, `returned`, `feeRefunded` and the fulfilment words rather than a verdict.
+* Only the lines the panel prints get an order read: the 5 largest SALE lines and the 3 largest REVERSAL lines, each sorted by the commission stored on it, with the remainder rolled up into `restCount`/`restEligible`/`restCommission` so the sums still cover the whole month. The order query is pinned to the session's brand in the filter itself, so a line whose order belongs to another shop is reported as unreadable (`order: null`, `sales.missingOrders`) rather than read.
+* Claims are reduced to `amountPaisa`, `status` and `creditPaisa`. A payment reference, an IBAN, a receipt id, a rejection reason, a `verifiedBy` staff id and a customer id never leave the service, and the prompt is told that a submitted payment is not credited until the platform team verifies it (docs/15 §8).
+* Recorded text — a reversal's `reason`, a claim's `comment` — is sanitised and flattened before it reaches a prompt, and the prompt marks it as data. A commission line whose `kind` is neither `SALE` nor `REVERSAL` is counted in `unkindedLines` and described as a line CityCart has no sentence for, never explained.
+* Statuses the enum reserves but the generator never writes today (`DRAFT`, `VOID`) are described honestly rather than guessed; an unknown status string prints "CityCart has no description for this status". A missing `dueAt` yields `timing.overdue: null` and is never called on time.
+* An invoice with no commission lines returns `empty: true` with `insight: null`, `degraded: false` and no provider call, so a quiet month costs the shop none of its daily AI requests.
+* The model may only write `insight.summary` (600 characters) and `insight.notes` (at most 8, each tied to an `entryId` this response actually printed, tagged with that line's `kind`); a note naming a line the shop was not shown is dropped, and the zod schema strips anything else the model invents.
+
+Failure codes:
+
+```text
+400 (zod)              invoiceId is not a 24-character id, or the body carries an extra field
+401                    no session
+403 ROLE_NOT_ALLOWED   caller is not a brand admin
+403 NO_BRAND           the session has no brand behind it
+404 INVOICE_NOT_FOUND  no such invoice for this shop (another shop's invoice answers the same way)
+429 AI_DAILY_LIMIT / rate limiter
+503 AI_UNAVAILABLE     kill switch is off (answered before a single record is read)
+```
+
+A provider that is unreachable, answers in prose, overruns the paragraph, or names an entry the panel never printed, is not an error here: the amounts are CityCart's own records, so the request still returns 200 with the whole invoice, `insight: null` and `degraded: true`.
+
+Nothing is written. No invoice is edited, no commission entry is reversed, no payment claim is verified or rejected, no credit is applied to a later bill and no help request is filed — an issued invoice is immutable by design (docs/15 §7) and this feature has no path to any of those writes. The shop's real actions stay where they already are: **Pay this invoice** on this screen and the Help tab on the Billing page. The only record this call makes is its `AiUsage` row.
+
+
+---
+
 # 24. Query Parameters
 
 Collection endpoints should use predictable query parameters.

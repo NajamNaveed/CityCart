@@ -18,6 +18,7 @@ const {
   listingQuality,
   shopReport,
   promiseCheck,
+  billingExplain,
   sellerAdvisor,
   catalogueMatch,
   csvClean,
@@ -326,6 +327,27 @@ router.post(
   aiUserLimiter,
   aiDailyLimit,
   promiseCheck,
+);
+
+// Phase 3d-6: the bill explainer. CityCart has no payouts — a shop collects its
+// own COD and owes the platform a monthly commission invoice (docs/15 §1-§2) —
+// so the money question this answers is "why is this invoice this size". It runs
+// on the same guards as GET /billing/invoices/:id, which reads those exact
+// records: the seller identity comes from the session and an employee is never
+// let near another shop's bill. Only an invoice id travels in the body, and it is
+// read scoped to the caller's own brand, so a forged id 404s like a missing one.
+// Every figure is CityCart's own stored amount — the model does no money
+// arithmetic — and nothing here issues, edits, credits, verifies or reverses a
+// record.
+router.post(
+  '/billing-explain',
+  authenticate,
+  requireRole(ROLES.BRAND_ADMIN),
+  requireTenant,
+  requireAiEnabled,
+  aiUserLimiter,
+  aiDailyLimit,
+  billingExplain,
 );
 
 module.exports = router;

@@ -68,6 +68,10 @@ const {
   MIN_DAYS: CHECK_MIN_DAYS,
   MAX_DAYS: CHECK_MAX_DAYS,
 } = require('../services/ai/agents/promiseCheck.agent');
+const {
+  billingExplain: readBillingExplain,
+  BillingExplainError,
+} = require('../services/ai/agents/billingExplain.agent');
 const { CsvImportError } = require('../services/productCsv.service');
 const { ROUTABLE_MODES, MAX_MESSAGE_CHARS } = require('../services/ai/intent');
 const {
@@ -1000,6 +1004,55 @@ async function promiseCheck(req, res, next) {
   }
 }
 
+const billingExplainSchema = z
+  .object({
+    invoiceId: z.string().trim().regex(/^[0-9a-f]{24}$/i, 'Choose an invoice to explain.'),
+  })
+  // A seller id in the body is refused, not ignored: the account this explains
+  // is the one requireTenant resolved from the session.
+  .strict();
+
+/**
+ * Phase 3d-6: why this invoice is this size. One invoice id in, and that id is
+ * read only inside the brand `requireTenant` resolved from the session — so
+ * another shop's invoice 404s exactly like a missing one. Every rupee in the
+ * answer is one CityCart already stores on the invoice, its commission lines,
+ * its payments and the orders those lines were charged on; the model adds nothing
+ * and re-speaks nothing. Where the records do not agree the answer says they
+ * disagree and points at the Help tab, because deciding which record wins is the
+ * platform team's call, not a panel's. Nothing here edits an invoice, reverses a
+ * line, verifies a payment or applies a credit.
+ */
+async function billingExplain(req, res, next) {
+  const parsed = billingExplainSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsed.error),
+    });
+  }
+
+  if (!req.tenantBrandId) {
+    return res.status(403).json({ success: false, message: 'This needs a brand account.', code: 'NO_BRAND' });
+  }
+
+  try {
+    const data = await readBillingExplain({
+      invoiceId: parsed.data.invoiceId,
+      ctx: { userId: req.user._id, role: req.user.role, brandId: req.tenantBrandId },
+    });
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    if (err instanceof BillingExplainError) {
+      return res
+        .status(err.status)
+        .json({ success: false, message: err.message, ...(err.code && { code: err.code }) });
+    }
+    return next(err);
+  }
+}
+
 module.exports = {
   ping,
   listingDraft,
@@ -1018,6 +1071,7 @@ module.exports = {
   listingQuality,
   shopReport,
   promiseCheck,
+  billingExplain,
   sellerAdvisor,
   catalogueMatch,
   csvClean,

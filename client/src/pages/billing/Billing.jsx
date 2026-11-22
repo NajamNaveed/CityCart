@@ -31,6 +31,7 @@ import {
   BILLING_STATUS_COPY,
 } from '../../utils/billingUi'
 import PaymentForm from './PaymentForm'
+import BillingExplain from '../../components/brand/BillingExplain'
 
 const TABS = ['Overview', 'Invoices', 'Payments', 'Help']
 
@@ -172,7 +173,7 @@ function StatusPanel({ billing, onPay }) {
   )
 }
 
-function InvoiceDetail({ detail, onClose, onPay, onOpenReceipt }) {
+function InvoiceDetail({ detail, sellerType, onClose, onPay, onOpenReceipt }) {
   const invoice = detail.invoice
   return (
     <Modal open onClose={onClose} title={`Invoice ${invoice.periodKey}`} maxWidth="max-w-2xl">
@@ -208,6 +209,10 @@ function InvoiceDetail({ detail, onClose, onPay, onOpenReceipt }) {
             </button>
           )}
         </div>
+
+        {/* A provider's bill is a booking fee, not a commission on sales, and the
+            explainer reads order records only — so it is offered to shops. */}
+        {sellerType === 'BRAND' && <BillingExplain invoiceId={invoice._id} />}
 
         <div>
           <h3 className="mb-2 font-display text-base font-semibold">Sales behind this bill</h3>
@@ -724,6 +729,7 @@ export default function BillingPage() {
       {detail && !payFor && (
         <InvoiceDetail
           detail={detail}
+          sellerType={billing?.seller?.type}
           onClose={() => setDetail(null)}
           onPay={(invoice) => setPayFor(invoice)}
           onOpenReceipt={openReceipt}
