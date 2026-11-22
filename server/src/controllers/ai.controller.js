@@ -87,6 +87,8 @@ const {
   adminTriage: triageBillingRequest,
   AdminTriageError,
 } = require('../services/ai/agents/adminTriage.agent');
+const { moderateText } = require('../services/ai/agents/moderation.agent');
+const { MAX_TEXT: MODERATION_TEXT_LIMIT } = require('../services/ai/moderation.rules');
 const { CsvImportError } = require('../services/productCsv.service');
 const { ROUTABLE_MODES, MAX_MESSAGE_CHARS } = require('../services/ai/intent');
 const {
@@ -1234,6 +1236,39 @@ async function adminTriage(req, res, next) {
   }
 }
 
+const moderateSchema = z
+  .object({
+    text: z.string().trim().min(1).max(MODERATION_TEXT_LIMIT),
+  })
+  .strict();
+
+/**
+ * Phase 4c: score one piece of text on demand and explain it for the
+ * administrator. The score and labels are the server's own; see
+ * moderation.rules.js. Nothing is written or acted on — the administrator
+ * still decides whether to hide a review.
+ */
+async function moderate(req, res, next) {
+  const parsed = moderateSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: formatZodError(parsed.error),
+    });
+  }
+
+  try {
+    const data = await moderateText({
+      text: parsed.data.text,
+      ctx: { userId: req.user._id, role: req.user.role },
+    });
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    return next(err);
+  }
+}
+
 module.exports = {
   ping,
   listingDraft,
@@ -1259,4 +1294,5 @@ module.exports = {
   csvClean,
   substitutions,
   adminTriage,
+  moderate,
 };

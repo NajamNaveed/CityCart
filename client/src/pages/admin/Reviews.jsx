@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Star } from 'lucide-react'
 import api, { getErrorMessage } from '../../services/api'
 import Stars from '../../components/Stars'
+import ReviewCheck from '../../components/admin/ReviewCheck'
 import { Notice, PageHeader, Pager, StatusBadge, selectClass } from '../../components/brand/Bits'
 import { EmptyState, Skeleton } from '../../components/ui'
 import useReadOnly from '../../hooks/useReadOnly'
@@ -139,6 +140,7 @@ export default function Reviews() {
               <p className="mt-3 text-xs text-ink/55">
                 {r.customerName} on {r.productName} ({r.brandName}) · {formatDate(r.createdAt)}
               </p>
+              {!readOnly && <ReviewCheck title={r.title} comment={r.comment} />}
             </li>
           ))}
         </ul>

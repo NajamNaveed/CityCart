@@ -25,11 +25,14 @@ const {
   csvClean,
   substitutions,
   adminTriage,
+  moderate,
 } = require('../controllers/ai.controller');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
 const requirePermission = require('../middleware/requirePermission');
+const requireAdminPermission = require('../middleware/requireAdminPermission');
 const requireTenant = require('../middleware/requireTenant');
+const { ADMIN_PERMISSIONS } = require('../config/adminPermissions');
 const validateObjectIdParam = require('../middleware/validateObjectIdParam');
 const { chatAccess } = require('../middleware/chatAccess');
 const { ROLES } = require('../config/roles');
@@ -406,6 +409,21 @@ router.post(
   aiUserLimiter,
   aiDailyLimit,
   adminTriage,
+);
+
+// Phase 4c: a text-only moderation check for the platform team. The same door
+// as the admin reviews list (admin.reviews), because this is a read on text the
+// caller already holds; nothing is hidden, blocked or punished from here. The
+// body carries the text, never a review id, so this route cannot reach a
+// record at all.
+router.post(
+  '/moderate',
+  authenticate,
+  requireAdminPermission(ADMIN_PERMISSIONS.REVIEWS),
+  requireAiEnabled,
+  aiUserLimiter,
+  aiDailyLimit,
+  moderate,
 );
 
 module.exports = router;
