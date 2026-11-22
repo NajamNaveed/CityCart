@@ -350,6 +350,7 @@ Prerequisite: Sightwise v1 is deployed (its phases 0-5, see the Sightwise repo).
 ## Phase 7 — Hardening and release
 
 - **7a Security:** injection test cases for every agent; cross-tenant tests re-run; no secrets in prompts or logs.
+  - **Status:** built (2026-11-23). `tests/ai/hardening.test.js` runs the cross-cutting pass over all 23 agents: every prompt builder is called with a hostile "ignore all previous instructions" sentence in each string field and must place it in user content, never in the rules; every prompt module is checked for the data clause, for provider/environment/secret names, and for logging; every agent and prompt module is checked for console output; and every `/ai` route's middleware chain is pinned to `authenticate` → its non-AI feature's role/permission/tenant door → kill switch → burst limiter → daily allowance → the agent handler. The same file re-runs the tenant principle structurally: no AI service reads `req`, and the controller takes `brandId` only from `req.tenantBrandId`. The cross-tenant suites (picker order and billing help) are re-run in the full server suite. One prompt was hardened by this pass: the listing-writer's leaf-category list used to sit inside the system message, and now travels in the user message as data beside the notes.
 - **7b Quota and cost review:** `AiUsage` report per agent, fallback rate, add caching where limits are hit; tune rate limits.
 - **7c Docs and release:** update README and `docs/` index, demo script, final tag `ai-v1`.
 
