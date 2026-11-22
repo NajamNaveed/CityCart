@@ -6,7 +6,8 @@ import ProductImage from '../components/ProductImage'
 import CartTray from '../components/store/CartTray'
 import ProductShelf from '../components/store/ProductShelf'
 import { useCart } from '../hooks/useCart'
-import { EmptyState, ErrorState, Skeleton, btn, panel, shell } from '../design'
+import { EmptyState, ErrorState, Skeleton, btn, shell } from '../design'
+import { Reveal } from '../components/ui'
 import { usePageMeta } from '../hooks/usePageMeta'
 import { breadcrumbLd, storeLd } from '../utils/seo'
 
@@ -39,7 +40,7 @@ function StoreSkeleton() {
       <Skeleton className="h-4 w-40" />
       <Skeleton className="mt-6 aspect-[3/1] w-full rounded-panel" />
       <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_320px]">
-        <div className="space-y-9">
+        <div className="min-w-0 space-y-9">
           {[0, 1].map((row) => (
             <div key={row}>
               <Skeleton className="h-5 w-44" />
@@ -173,36 +174,69 @@ export default function StorePage() {
           <span className="max-w-48 truncate text-ink/70">{name}</span>
         </nav>
 
-        <section className="relative mt-5 overflow-hidden rounded-panel bg-sand">
-          <div className="relative h-[210px] bg-noir-soft sm:h-[280px]">
-            {banner && <ProductImage src={banner} name={name} className="h-full w-full" width={1600} />}
+        <section className="group relative mt-5 overflow-hidden rounded-[26px] shadow-[0_38px_80px_-42px_rgba(21,20,15,0.7)] ring-1 ring-ink/5">
+          <div className="relative h-[232px] bg-noir-soft sm:h-[320px]">
+            {banner && (
+              <div className="img-zoom absolute inset-0">
+                <ProductImage src={banner} name={name} className="h-full w-full" width={1600} />
+              </div>
+            )}
             <div
               aria-hidden="true"
               className={`absolute inset-0 ${
                 banner
-                  ? 'bg-gradient-to-t from-noir/80 via-noir/25 to-transparent'
+                  ? 'bg-gradient-to-t from-noir/90 via-noir/30 to-noir/10'
                   : 'bg-[radial-gradient(120%_120%_at_18%_0%,rgba(28,58,46,0.95),#15140f_72%)]'
               }`}
             />
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute -right-24 -top-28 h-72 w-72 rounded-full border border-white/15 transition-transform duration-700 group-hover:scale-105"
+            />
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute -right-10 -top-16 h-48 w-48 rounded-full border border-white/10"
+            />
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-gold/50 to-transparent"
+            />
+            <span className="absolute right-4 top-4 inline-flex items-center gap-1.5 rounded-full border border-white/30 bg-white/10 px-3 py-1.5 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-cream backdrop-blur-md">
+              <MapPin className="h-3 w-3 text-gold" aria-hidden="true" />
+              Local store
+            </span>
             <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-end gap-4 p-5 sm:p-8">
-              <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-card border border-white/25 bg-cream/95 shadow-lg sm:h-20 sm:w-20">
-                {logo ? (
-                  <img src={logo} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <StoreIcon className="h-7 w-7 text-clay/60" aria-hidden="true" />
-                )}
+              <span className="shrink-0 rounded-[18px] bg-gradient-to-br from-clay via-gold to-clay p-[2px] shadow-lg">
+                <span className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-[16px] bg-cream/95 sm:h-20 sm:w-20">
+                  {logo ? (
+                    <img src={logo} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <StoreIcon className="h-7 w-7 text-clay/60" aria-hidden="true" />
+                  )}
+                </span>
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-cream/60">On your block</p>
-                <h1 className="font-display mt-1.5 text-[30px] font-semibold leading-tight tracking-[-0.02em] text-cream sm:text-[40px]">
+                <h1 className="font-display mt-1.5 text-[30px] font-semibold leading-tight tracking-[-0.02em] text-cream sm:text-[42px]">
                   {name}
                 </h1>
-                {address && (
-                  <p className="mt-1.5 inline-flex items-center gap-1.5 text-[12.5px] text-cream/70">
-                    <MapPin className="h-3.5 w-3.5 text-clay" aria-hidden="true" />
-                    {address}
-                  </p>
-                )}
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {address && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-[12px] text-cream/80 backdrop-blur-sm">
+                      <MapPin className="h-3.5 w-3.5 text-gold" aria-hidden="true" />
+                      {address}
+                    </span>
+                  )}
+                  {hours && openDays.length > 0 && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-[12px] text-cream/80 backdrop-blur-sm">
+                      <Clock className="h-3.5 w-3.5 text-gold" aria-hidden="true" />
+                      {openDays.length} days a week
+                    </span>
+                  )}
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-[12px] text-cream/80 backdrop-blur-sm">
+                    Cash at the door
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -243,7 +277,12 @@ export default function StorePage() {
           </div>
 
           <aside className="lg:sticky lg:top-24 lg:self-start">
-            <div className={`${panel} p-5`}>
+            <Reveal y={14}>
+            <div className="relative overflow-hidden rounded-panel border border-line-warm bg-paper-warm p-5 shadow-[0_28px_60px_-42px_rgba(21,20,15,0.5)]">
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-gold/60 to-transparent"
+              />
               <p className="text-[10.5px] font-semibold uppercase tracking-[0.22em] text-ink/45">Visit the shop</p>
               <h2 className="font-display mt-2 text-[20px] font-semibold tracking-tight text-ink">{store?.name || name}</h2>
 
@@ -285,11 +324,15 @@ export default function StorePage() {
                 <p className="text-[11.5px] leading-relaxed text-ink/55">
                   Cash at the door. This store packs and delivers its own orders inside 1.5 km.
                 </p>
-                <Link to={`/nearby?q=${encodeURIComponent(brand.name)}`} className={`mt-4 w-full ${btn('noir', 'md')}`}>
+                <Link
+                  to={`/nearby?q=${encodeURIComponent(brand.name)}`}
+                  className="shine mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-br from-noir to-forest-deep text-[12px] font-semibold uppercase tracking-[0.1em] text-cream shadow-[0_14px_28px_-16px_rgba(21,20,15,0.8)] transition hover:brightness-110"
+                >
                   Shop this store
                 </Link>
               </div>
             </div>
+            </Reveal>
           </aside>
         </div>
       </div>

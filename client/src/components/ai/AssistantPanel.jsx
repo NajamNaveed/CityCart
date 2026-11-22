@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import {
   ArrowLeftRight,
   ChefHat,
+  ChevronRight,
   Minus,
   Package,
   Plus,
@@ -612,46 +613,63 @@ export default function AssistantPanel() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full bg-noir px-4 py-3 text-[13px] font-semibold text-cream shadow-xl shadow-noir/25 transition hover:bg-forest focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
+        className="fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full bg-gradient-to-br from-noir to-forest-deep px-4 py-3 text-[13px] font-semibold text-cream shadow-[0_18px_44px_-16px_rgba(21,20,15,0.8)] ring-1 ring-white/10 transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
         aria-label="Ask CityCart assistant"
       >
-        <Sparkles className="h-4 w-4" aria-hidden="true" />
+        <span className="relative flex h-6 w-6 items-center justify-center rounded-full bg-white/10">
+          <Sparkles className="h-3.5 w-3.5 text-gold" aria-hidden="true" />
+          <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-gold" />
+        </span>
         Ask CityCart
       </button>
 
       <Drawer open={open} onClose={() => setOpen(false)} title="Ask CityCart" width="max-w-md">
         <div className="flex h-full flex-col">
           <div className="mb-3 flex items-center justify-between gap-2">
-            <p className="text-[11.5px] text-ink/45">
-              One chat — I pick the right helper for your question.
-            </p>
+            <div className="flex min-w-0 items-center gap-2.5">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-forest to-forest-deep text-gold shadow-[0_8px_18px_-12px_rgba(21,20,15,0.8)]">
+                <Sparkles className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-[12.5px] font-semibold leading-tight text-ink">
+                  One chat, the right helper
+                </p>
+                <p className="truncate text-[11px] text-ink/45">Products, orders, services and recipes.</p>
+              </div>
+            </div>
             <Badge tone="sage">AI</Badge>
           </div>
 
           <div className="flex-1 space-y-3 overflow-y-auto pb-3">
             {messages.length === 0 && (
-              <div className="rounded-tile border border-line-warm bg-paper-warm p-4">
-                <p className="text-[13px] leading-relaxed text-ink/70">
-                  Ask anything about CityCart. I can:
-                </p>
+              <div className="rounded-[20px] border border-line-warm bg-gradient-to-br from-cream via-paper-warm to-cream p-3.5 shadow-[0_20px_44px_-38px_rgba(21,20,15,0.6)]">
+                <p className="px-1 text-[13px] leading-relaxed text-ink/70">Ask anything about CityCart. I can:</p>
                 <ul className="mt-3 space-y-1.5">
                   {CAPABILITIES.map(({ mode: key, label, icon: Icon, example }) => (
-                    <li key={key} className="flex items-center gap-2">
-                      <Icon className="h-3.5 w-3.5 shrink-0 text-forest" aria-hidden="true" />
-                      <span className="w-[74px] shrink-0 text-[11.5px] font-medium text-ink/65">
-                        {label}
-                      </span>
+                    <li key={key}>
                       <button
                         type="button"
                         onClick={() => send(example)}
-                        className="min-w-0 flex-1 truncate rounded-full border border-line-warm bg-paper px-2.5 py-1 text-left text-[11.5px] text-ink/75 transition hover:border-forest/30 hover:text-ink"
+                        className="group flex w-full items-center gap-2.5 rounded-[14px] border border-line-warm bg-paper px-2.5 py-2 text-left transition hover:-translate-y-px hover:border-forest/30 hover:shadow-[0_10px_20px_-18px_rgba(21,20,15,0.6)]"
                       >
-                        {example}
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-tile bg-sage/40 text-forest">
+                          <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[11.5px] font-semibold leading-tight text-ink/75">
+                            {label}
+                          </span>
+                          <span className="mt-0.5 block truncate text-[11px] text-ink/45">{example}</span>
+                        </span>
+                        <ChevronRight
+                          className="h-3.5 w-3.5 shrink-0 text-ink/25 transition group-hover:translate-x-0.5 group-hover:text-forest"
+                          aria-hidden="true"
+                        />
                       </button>
                     </li>
                   ))}
                 </ul>
-                <p className="mt-3 text-[10.5px] leading-relaxed text-ink/40">
+                <p className="mt-3 px-1 text-[10.5px] leading-relaxed text-ink/40">
                   English, Urdu or Roman Urdu — no need to pick a mode. Answers use real listings,
                   your own orders and live availability.
                 </p>
@@ -661,7 +679,7 @@ export default function AssistantPanel() {
             {messages.map((entry) =>
               entry.role === 'user' ? (
                 <div key={entry.id} className="flex justify-end">
-                  <p className="max-w-[85%] rounded-2xl rounded-br-sm bg-noir px-3.5 py-2.5 text-[13px] leading-relaxed text-cream">
+                  <p className="max-w-[85%] rounded-2xl rounded-br-sm bg-gradient-to-br from-noir to-forest-deep px-3.5 py-2.5 text-[13px] leading-relaxed text-cream shadow-[0_12px_26px_-20px_rgba(21,20,15,0.9)]">
                     {entry.text}
                   </p>
                 </div>
@@ -734,47 +752,56 @@ export default function AssistantPanel() {
           </div>
 
           <form
-            className="flex items-end gap-2 border-t border-line-warm pt-3"
+            className="pt-3"
             onSubmit={(event) => {
               event.preventDefault()
               send(input)
             }}
           >
-            <label htmlFor="assistant-input" className="sr-only">
-              Your question
-            </label>
-            <textarea
-              id="assistant-input"
-              ref={inputRef}
-              rows={1}
-              value={input}
-              maxLength={500}
-              onChange={(event) => setInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey) {
-                  event.preventDefault()
-                  send(input)
-                }
-              }}
-              placeholder="Ask about products, orders, services or recipes"
-              className="max-h-28 min-h-[42px] flex-1 resize-none rounded-tile border border-line-warm bg-paper px-3 py-2.5 text-[13px] text-ink outline-none focus:border-forest/50"
-            />
-            <VoiceSearchButton
-              className="relative self-center"
-              label="Ask by voice"
-              onResult={(text) => {
-                setInput((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text))
-                inputRef.current?.focus()
-              }}
-            />
-            <button
-              type="submit"
-              disabled={!input.trim() || busy}
-              aria-label="Send"
-              className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-tile bg-forest text-cream transition disabled:opacity-40"
-            >
-              <Send className="h-4 w-4" aria-hidden="true" />
-            </button>
+            <div className="relative rounded-[20px] border border-line-warm bg-paper p-1.5 shadow-[0_18px_40px_-34px_rgba(21,20,15,0.7)] transition focus-within:border-forest/40 focus-within:ring-2 focus-within:ring-forest/10">
+              <label htmlFor="assistant-input" className="sr-only">
+                Your question
+              </label>
+              <textarea
+                id="assistant-input"
+                ref={inputRef}
+                rows={1}
+                value={input}
+                maxLength={500}
+                onChange={(event) => setInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault()
+                    send(input)
+                  }
+                }}
+                placeholder="Ask about products, orders, services or recipes"
+                className="block max-h-28 min-h-[46px] w-full resize-none bg-transparent px-2.5 pb-1 pt-1.5 text-[13px] leading-relaxed text-ink outline-none placeholder:text-ink/35"
+              />
+              <div className="flex items-center gap-1 pl-1.5">
+                <span className="hidden text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink/25 sm:block">
+                  Enter to send
+                </span>
+                <div className="ml-auto flex items-center gap-1">
+                  <VoiceSearchButton
+                    className="relative"
+                    label="Ask by voice"
+                    onResult={(text) => {
+                      setInput((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text))
+                      inputRef.current?.focus()
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={!input.trim() || busy}
+                    aria-label="Send"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-noir to-forest-deep text-cream shadow-[0_10px_20px_-12px_rgba(21,20,15,0.9)] transition hover:brightness-110 disabled:opacity-35"
+                  >
+                    <Send className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+            </div>
           </form>
         </div>
       </Drawer>

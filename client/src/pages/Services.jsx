@@ -12,6 +12,7 @@ import { nextLayerState } from '../utils/layerState'
 import MapLayers from '../components/nearby/MapLayers'
 import RangeSelector from '../components/nearby/RangeSelector'
 import ProductImage from '../components/ProductImage'
+import Spotlight from '../components/ui/Spotlight'
 import VoiceSearchButton from '../components/ui/VoiceSearchButton'
 import { EmptyState, ErrorState, PageHeader, Skeleton, btn, card, cardLift, fieldClass, shell } from '../design'
 import { formatDistance } from '../utils/geo'
@@ -38,15 +39,35 @@ function nextRange(range) {
 }
 
 function ProviderCard({ provider }) {
+  const hasRating = provider.ratingCount > 0
+  const topOfferings = Array.isArray(provider.topOfferings) ? provider.topOfferings : []
+
   return (
-    <article className={`${card} ${cardLift} p-5 sm:p-6`}>
-      <div className="flex flex-wrap items-start justify-between gap-5">
+    <Spotlight as="article" className={`group relative overflow-hidden ${card} ${cardLift} p-5 sm:p-6`}>
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-gold/60 to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+      />
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex min-w-0 items-start gap-4">
-          <ProductImage
-            src={provider.avatar || provider.coverImage}
-            name={provider.displayName}
-            className="size-16 shrink-0 rounded-tile text-sm"
-          />
+          <span className="relative shrink-0 rounded-[18px] bg-gradient-to-br from-gold via-clay to-gold p-[2px] shadow-[0_12px_26px_-18px_rgba(21,20,15,0.8)]">
+            <span className="block overflow-hidden rounded-[16px] bg-paper-warm">
+              <ProductImage
+                src={provider.avatar || provider.coverImage}
+                name={provider.displayName}
+                className="size-16 text-sm"
+                fallbackClassName="text-lg font-light tracking-[0.12em] text-clay/50"
+              />
+            </span>
+            {provider.acceptingNewOrders && (
+              <span
+                className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-paper-warm bg-sage"
+                title="Accepting new bookings"
+              >
+                <span className="sr-only">Accepting new bookings</span>
+              </span>
+            )}
+          </span>
           <div className="min-w-0">
             <Link
               to={`/services/${provider.slug}`}
@@ -59,7 +80,7 @@ function ProviderCard({ provider }) {
               {provider.block?.name && <> · {provider.block.name}</>}
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-ink/55">
-              {provider.ratingCount > 0 ? (
+              {hasRating ? (
                 <span className="inline-flex items-center gap-1">
                   <Star className="h-3.5 w-3.5 fill-clay text-clay" aria-hidden="true" />
                   <span className="font-medium text-ink">{provider.ratingAvg.toFixed(1)}</span>
@@ -80,40 +101,50 @@ function ProviderCard({ provider }) {
             </div>
           </div>
         </div>
-        <div className="text-right">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink/40">Starting at</p>
-          <p className="mt-1 font-display text-[19px] font-semibold text-ink">{formatPrice(provider.startingAtPrice / 100)}</p>
+
+        <div className="ml-auto flex shrink-0 items-center gap-3 rounded-[14px] border border-line-warm bg-cream/80 px-3.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
+          <div>
+            <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-ink/40">Starting at</p>
+            <p className="font-display text-[17px] font-semibold leading-tight text-ink">
+              {formatPrice(provider.startingAtPrice / 100)}
+            </p>
+          </div>
           <Link
             to={`/services/${provider.slug}`}
-            className="mt-1 inline-flex items-center gap-1 text-[12px] font-medium text-clay underline-offset-4 hover:underline"
+            aria-label={`View ${provider.displayName}`}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-noir to-forest-deep text-cream shadow-[0_10px_20px_-12px_rgba(21,20,15,0.9)] transition hover:brightness-110"
           >
-            View services
-            <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+            <ArrowRight className="h-4 w-4" aria-hidden="true" />
           </Link>
         </div>
       </div>
 
       {provider.bio && <p className="mt-4 line-clamp-2 text-[13px] leading-relaxed text-ink/60">{provider.bio}</p>}
 
-      {provider.topOfferings?.length > 0 && (
-        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line-warm pt-3.5">
-          {provider.topOfferings.map((offering) => (
-            <Link
-              key={offering._id}
-              to={`/services/${provider.slug}`}
-              className="rounded-full border border-line-warm bg-canvas px-3 py-1 text-[11.5px] text-ink/70 transition hover:border-clay/40 hover:text-clay"
-            >
-              {offering.title}
-            </Link>
-          ))}
-          {provider.offeringCount > provider.topOfferings.length && (
-            <span className="px-1 text-[11.5px] text-ink/45">
-              +{provider.offeringCount - provider.topOfferings.length} more
-            </span>
-          )}
-        </div>
-      )}
-    </article>
+      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line-warm pt-3.5">
+        {topOfferings.map((offering) => (
+          <Link
+            key={offering._id}
+            to={`/services/${provider.slug}`}
+            className="rounded-full border border-line-warm bg-cream px-3 py-1 text-[11.5px] text-ink/70 transition hover:border-clay/40 hover:text-clay"
+          >
+            {offering.title}
+          </Link>
+        ))}
+        {provider.offeringCount > topOfferings.length && (
+          <span className="px-1 text-[11.5px] text-ink/45">
+            +{provider.offeringCount - topOfferings.length} more
+          </span>
+        )}
+        <Link
+          to={`/services/${provider.slug}`}
+          className="ml-auto inline-flex items-center gap-1 text-[11.5px] font-semibold text-clay underline-offset-4 hover:underline"
+        >
+          View services
+          <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+        </Link>
+      </div>
+    </Spotlight>
   )
 }
 

@@ -14,11 +14,24 @@ function prefersReducedMotion() {
 
 // The tray's own slot for this product, so the photo lands on the thumbnail it
 // is about to become. Only a tray that never heard of the product falls back to
-// its middle, which still reads as "into the bag".
+// its middle, which still reads as "into the bag". A page without a tray (the
+// product page) lands on the navbar's bag instead.
 function slotFor(productId) {
   const key = String(productId)
   const escaped = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(key) : key
-  return document.querySelector(`[data-cart-line="${escaped}"]`) || document.querySelector('[data-cart-dock]')
+  const line = document.querySelector(`[data-cart-line="${escaped}"]`)
+  if (line) return line
+  const dock = document.querySelector('[data-cart-dock]')
+  if (dock) return dock
+  return (
+    [...document.querySelectorAll('[data-cart-target]')].find(
+      (el) => el.getBoundingClientRect().width > 0,
+    ) || null
+  )
+}
+
+function canSettle(el) {
+  return Boolean(el.hasAttribute?.('data-cart-line') || el.hasAttribute?.('data-cart-target'))
 }
 
 function center(box) {
@@ -144,7 +157,7 @@ export function flyToCart({ from, productId, src = '', name = '' }) {
       680,
     )
 
-    const landing = slot.hasAttribute?.('data-cart-line') ? slot : null
+    const landing = canSettle(slot) ? slot : null
     animation.onfinish = () => {
       ghost.remove()
       if (landing) settle(landing)

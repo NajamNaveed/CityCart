@@ -3,12 +3,12 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Check, MapPin, Minus, Plus, X } from 'lucide-react'
 import ProductImage from './ProductImage'
 import Stars from './Stars'
+import Spotlight from './ui/Spotlight'
 import { useAuth } from '../hooks/useAuth'
 import { useCart } from '../hooks/useCart'
 import { getErrorMessage } from '../services/api'
 import { loginUrl } from '../utils/nav'
 import { formatPrice } from '../ui'
-import { card, cardLift } from '../design'
 
 // Same per-add ceiling as the product page.
 const MAX_QTY = 10
@@ -61,8 +61,15 @@ export default function ProductCard({ product, brandName, storeLabel, rating }) 
   }
 
   return (
-    <article className={`group flex h-full flex-col ${card} ${cardLift} p-2.5`}>
-      <div className="relative overflow-hidden rounded-tile bg-sand">
+    <Spotlight
+      as="article"
+      className="group flex h-full flex-col rounded-card border border-line-warm bg-paper-warm p-2.5 transition-all duration-500 hover:-translate-y-1.5 hover:border-gold/50 hover:shadow-[0_32px_60px_-32px_rgba(21,20,15,0.45)]"
+    >
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent via-gold/60 to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+      />
+      <div className="img-zoom relative overflow-hidden rounded-tile bg-sand">
         <Link to={`/product/${product._id}`} className="block" aria-label={product.name}>
           <ProductImage
             src={product.images?.[0] || product.image}
@@ -71,18 +78,22 @@ export default function ProductCard({ product, brandName, storeLabel, rating }) 
             width={700}
           />
         </Link>
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-gradient-to-t from-noir/25 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+        />
         {soldOut && (
           <span className="absolute left-2.5 top-2.5 rounded-full bg-noir/90 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-cream backdrop-blur-sm">
             Sold out
           </span>
         )}
         {!soldOut && discount > 0 && (
-          <span className="absolute left-2.5 top-2.5 rounded-full bg-clay px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-white">
+          <span className="absolute left-2.5 top-2.5 rounded-full bg-gradient-to-r from-clay to-[#cf6a3d] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-white shadow-[0_6px_14px_-6px_rgba(182,71,42,0.8)]">
             {discount}% off
           </span>
         )}
         {store && (
-          <span className="absolute bottom-2.5 left-2.5 inline-flex max-w-[calc(100%-20px)] items-center gap-1 rounded-full bg-cream/90 px-2.5 py-1 text-[10px] font-medium text-ink/80 backdrop-blur-sm">
+          <span className="absolute bottom-2.5 left-2.5 inline-flex max-w-[calc(100%-20px)] items-center gap-1 rounded-full border border-white/50 bg-paper-warm/85 px-2.5 py-1 text-[10px] font-medium text-ink/80 backdrop-blur-md">
             <MapPin className="h-3 w-3 shrink-0 text-clay" aria-hidden="true" />
             <span className="truncate">{store}</span>
           </span>
@@ -109,7 +120,7 @@ export default function ProductCard({ product, brandName, storeLabel, rating }) 
           </p>
         )}
         <p className="mt-auto flex items-baseline gap-2 pt-2.5">
-          <span className="text-[15px] font-semibold text-ink">{formatPrice(product.price)}</span>
+          <span className="font-display text-[16px] font-semibold text-ink">{formatPrice(product.price)}</span>
           {discount > 0 && (
             <span className="text-[12px] text-muted line-through">{formatPrice(product.compareAtPrice)}</span>
           )}
@@ -173,7 +184,7 @@ export default function ProductCard({ product, brandName, storeLabel, rating }) 
           type="button"
           onClick={onAdd}
           disabled={soldOut || status === 'adding'}
-          className="mt-3 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-full bg-noir text-[11px] font-semibold uppercase tracking-[0.1em] text-cream transition-all duration-200 hover:bg-noir-soft active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-line disabled:text-muted"
+          className="shine mt-3 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-full bg-noir text-[11px] font-semibold uppercase tracking-[0.1em] text-cream transition-all duration-300 hover:bg-clay active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-line disabled:text-muted"
         >
           {soldOut ? (
             'Unavailable'
@@ -188,6 +199,6 @@ export default function ProductCard({ product, brandName, storeLabel, rating }) 
         </button>
       )}
       {note && <p className="mt-2 px-1 text-[11px] text-clay">{note}</p>}
-    </article>
+    </Spotlight>
   )
 }

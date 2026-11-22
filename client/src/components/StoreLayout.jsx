@@ -3,6 +3,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useNearby } from '../hooks/useNearby'
 import { useFirstVisitDetect } from '../hooks/useFirstVisitDetect'
 import PageTransition from './ui/PageTransition'
+import ScrollProgress from './ui/ScrollProgress'
 import StoreNavbar from './layout/StoreNavbar'
 import StoreFooter from './layout/StoreFooter'
 import AssistantPanel from './ai/AssistantPanel'
@@ -14,7 +15,9 @@ export default function StoreLayout() {
   useFirstVisitDetect(autoDetect, !user || user.role === 'CUSTOMER')
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="relative flex min-h-screen flex-col">
+      <ScrollProgress />
+      <div className="site-grain" aria-hidden="true" />
       <a
         href="#store-content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[80] focus:rounded-tile focus:bg-noir focus:px-4 focus:py-2 focus:text-[12px] focus:font-semibold focus:text-cream"

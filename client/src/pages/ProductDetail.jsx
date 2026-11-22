@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeftRight,
+  ArrowRight,
   Banknote,
   ChevronLeft,
   ChevronRight,
@@ -27,8 +28,9 @@ import { useProductReviews } from '../hooks/useProductReviews'
 import { useAssistantAvailability } from '../hooks/useAssistantAvailability'
 import { openAssistant } from '../components/ai/assistantBus'
 import { EmptyState } from '../design'
-import { Modal, Reveal } from '../components/ui'
+import { Modal, Reveal, Aurora } from '../components/ui'
 import { loginUrl } from '../utils/nav'
+import { flyToCart } from '../utils/flyToCart'
 import { breadcrumbLd, productLd } from '../utils/seo'
 import { btn, eyebrow, panel, shell } from '../design'
 import { formatPrice } from '../ui'
@@ -101,11 +103,14 @@ function ProductView({ product, brand }) {
   const [zooming, setZooming] = useState(false)
   const [origin, setOrigin] = useState('50% 50%')
   const resumed = useRef(false)
+  const photoRef = useRef(null)
   const assistantAvailable = useAssistantAvailability()
 
   const isCustomer = user?.role === 'CUSTOMER'
   const soldOut = product.availability === 'OUT_OF_STOCK'
   const images = product.images?.length ? product.images : [null]
+  // The URL the gallery already painted, so the flying photo starts on frame one.
+  const photo = images[0] ? optimizedUrl(images[0], 420) : ''
   const discount =
     product.compareAtPrice && product.compareAtPrice > product.price
       ? Math.round((1 - product.price / product.compareAtPrice) * 100)
@@ -191,6 +196,9 @@ function ProductView({ product, brand }) {
       return
     }
     add(qty)
+    // The gallery photo lifts off, crosses the page and lands on the bag icon
+    // in the navbar; the badge there pops as it arrives.
+    flyToCart({ from: photoRef.current, productId: product._id, src: photo, name: product.name })
   }
 
   function trackOrigin(e) {
@@ -200,8 +208,13 @@ function ProductView({ product, brand }) {
 
   return (
     <>
-      <div className="bg-canvas">
-        <div className={`${shell} py-6 sm:py-8`}>
+      <div className="relative overflow-hidden bg-canvas">
+        <Aurora tone="warm" intensity={0.35} />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-gold/40 to-transparent"
+        />
+        <div className={`relative ${shell} py-6 sm:py-8`}>
           <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[12px] text-ink/45">
             <Link to="/" className="transition hover:text-ink">
               Home
@@ -224,11 +237,16 @@ function ProductView({ product, brand }) {
             {/* Gallery */}
             <div>
               <div
-                className="group relative overflow-hidden rounded-panel bg-sand"
+                ref={photoRef}
+                className="group relative overflow-hidden rounded-[26px] bg-sand shadow-[0_36px_80px_-44px_rgba(21,20,15,0.5)] ring-1 ring-ink/5"
                 onMouseEnter={() => setZooming(true)}
                 onMouseLeave={() => setZooming(false)}
                 onMouseMove={trackOrigin}
               >
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-x-0 top-0 z-10 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent"
+                />
                 <div
                   className={`transition-transform duration-300 ease-out ${zooming ? 'scale-[1.7]' : 'scale-100'}`}
                   style={{ transformOrigin: origin }}
@@ -246,7 +264,7 @@ function ProductView({ product, brand }) {
                   </button>
                 )}
                 {discount > 0 && (
-                  <span className="absolute left-4 top-4 rounded-full bg-clay px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-white">
+                  <span className="absolute left-4 top-4 rounded-full bg-gradient-to-br from-clay to-clay-dark px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-white shadow-[0_10px_22px_-12px_rgba(182,71,42,0.9)]">
                     {discount}% off
                   </span>
                 )}
@@ -262,7 +280,7 @@ function ProductView({ product, brand }) {
                       aria-label={`Show image ${i + 1}`}
                       aria-pressed={i === shown}
                       className={`overflow-hidden rounded-tile transition ${
-                        i === shown ? 'ring-2 ring-noir ring-offset-2 ring-offset-canvas' : 'opacity-70 hover:opacity-100'
+                        i === shown ? 'ring-2 ring-clay ring-offset-2 ring-offset-canvas' : 'opacity-70 hover:opacity-100'
                       }`}
                     >
                       <ProductImage src={src} name={product.name} className="aspect-square w-full" />
@@ -294,7 +312,7 @@ function ProductView({ product, brand }) {
               )}
 
               <p className="mt-5 flex items-baseline gap-3">
-                <span className="text-[28px] font-semibold text-ink">{formatPrice(product.price)}</span>
+                <span className="font-display text-[32px] font-semibold tracking-tight text-ink">{formatPrice(product.price)}</span>
                 {discount > 0 && (
                   <>
                     <span className="text-base text-muted line-through">{formatPrice(product.compareAtPrice)}</span>
@@ -326,54 +344,95 @@ function ProductView({ product, brand }) {
               {isCustomer && cartQty === null ? (
                 <div className="mt-8 h-[76px] w-full animate-pulse rounded-tile bg-sand" aria-hidden="true" />
               ) : isCustomer && cartQty > 0 ? (
-                <div className={`mt-8 ${panel} p-4`}>
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-[13px] text-ink/60">
-                      <span className="text-[15px] font-semibold text-ink">{cartQty}</span> in your cart
-                    </p>
+                <div className="relative mt-8 overflow-hidden rounded-[20px] border border-line-warm bg-gradient-to-br from-cream via-paper-warm to-cream shadow-[0_24px_54px_-38px_rgba(21,20,15,0.55)]">
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-gold/70 to-transparent"
+                  />
+                  <div className="flex items-center gap-3 px-4 pb-3.5 pt-4">
+                    <span className="relative h-14 w-14 shrink-0 overflow-hidden rounded-tile bg-sand ring-1 ring-ink/5">
+                      <ProductImage
+                        src={images[0]}
+                        name={product.name}
+                        className="h-full w-full"
+                        width={160}
+                        fallbackClassName="text-lg font-light tracking-[0.12em] text-clay/50"
+                      />
+                      <span
+                        key={cartQty}
+                        className="absolute -bottom-1 -right-1 flex h-6 min-w-6 animate-[cart-badge_240ms_ease-out] items-center justify-center rounded-full border-2 border-cream bg-clay px-1.5 text-[11px] font-semibold leading-none tabular-nums text-white"
+                      >
+                        {cartQty}
+                      </span>
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-forest/70">In your bag</p>
+                      <p className="mt-0.5 truncate text-[14px] font-semibold text-ink">{product.name}</p>
+                      <p className="mt-0.5 text-[12px] text-ink/55">
+                        <span className="font-semibold text-ink/75">{formatPrice(product.price * cartQty)}</span>
+                        <span className="mx-1 text-ink/25">·</span>
+                        {formatPrice(product.price)} each
+                      </p>
+                    </div>
                     <button
                       type="button"
                       onClick={removeFromCart}
                       disabled={cartBusy}
-                      className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-ink/50 transition hover:text-clay disabled:opacity-50"
+                      aria-label="Remove from cart"
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-line-warm bg-paper-warm px-2.5 py-2 text-[12px] font-medium text-ink/50 transition hover:border-clay/30 hover:text-clay disabled:opacity-50"
                     >
-                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                      Remove
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      <span className="hidden sm:inline">Remove</span>
                     </button>
                   </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-3">
-                    <div className="inline-flex h-10 items-center overflow-hidden rounded-tile border border-line-warm bg-paper-warm">
+
+                  <div className="flex items-center gap-3 border-t border-line-warm/70 bg-paper-warm/60 px-4 py-3">
+                    <div className="inline-flex h-10 shrink-0 items-stretch overflow-hidden rounded-full border border-ink/15 bg-paper-warm shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
                       <button
                         type="button"
                         aria-label="Decrease cart quantity"
                         onClick={() => changeCartQuantity(cartQty - 1)}
-                        className="flex h-full w-10 items-center justify-center text-ink/50 transition hover:text-ink disabled:text-ink/20"
+                        className="flex w-9 items-center justify-center text-ink/50 transition hover:bg-noir/5 hover:text-ink disabled:text-ink/20"
                         disabled={cartBusy || soldOut || cartQty <= 1}
                       >
                         <Minus className="h-4 w-4" aria-hidden="true" />
                       </button>
-                      <span className="w-9 text-center text-[13px] font-semibold text-ink" aria-live="polite">
+                      <span
+                        className="flex w-9 items-center justify-center text-[13px] font-semibold tabular-nums text-ink"
+                        aria-live="polite"
+                      >
                         {cartQty}
                       </span>
                       <button
                         type="button"
                         aria-label="Increase cart quantity"
                         onClick={() => changeCartQuantity(cartQty + 1)}
-                        className="flex h-full w-10 items-center justify-center text-ink/50 transition hover:text-ink disabled:text-ink/20"
+                        className="flex w-9 items-center justify-center text-ink/50 transition hover:bg-noir/5 hover:text-ink disabled:text-ink/20"
                         disabled={cartBusy || soldOut || cartQty >= CART_MAX_QTY}
                       >
                         <Plus className="h-4 w-4" aria-hidden="true" />
                       </button>
                     </div>
-                    <span className="text-[12.5px] text-muted">{formatPrice(product.price)} each</span>
-                    <Link to="/cart" className="ml-auto text-[12.5px] font-medium text-clay underline-offset-4 hover:underline">
+                    <p className="hidden text-[11.5px] leading-snug text-ink/45 sm:block">
+                      Change the count here — your bag follows.
+                    </p>
+                    <Link
+                      to="/cart"
+                      className="ml-auto inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-br from-noir to-forest-deep px-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-cream shadow-[0_12px_26px_-14px_rgba(21,20,15,0.9)] transition hover:brightness-110"
+                    >
                       View cart
+                      <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
                     </Link>
                   </div>
-                  {soldOut && <p className="mt-2 text-[12px] text-clay">This product is sold out — remove it or wait for a restock.</p>}
-                  {cartBusy && (
-                    <p className="mt-2 text-[12px] text-muted" role="status">
-                      Updating your cart…
+
+                  {(soldOut || cartBusy) && (
+                    <p
+                      className={`border-t border-line-warm/70 px-4 py-2.5 text-[12px] ${
+                        soldOut ? 'text-clay' : 'text-muted'
+                      }`}
+                      role={cartBusy ? 'status' : undefined}
+                    >
+                      {soldOut ? 'This product is sold out — remove it or wait for a restock.' : 'Updating your cart…'}
                     </p>
                   )}
                 </div>
@@ -406,7 +465,7 @@ function ProductView({ product, brand }) {
                     type="button"
                     onClick={onAddClick}
                     disabled={soldOut || busy}
-                    className={`${btn('noir', 'lg')} flex-1`}
+                    className={`shine ${btn('noir', 'lg')} flex-1 bg-gradient-to-br from-noir to-forest-deep shadow-[0_18px_38px_-20px_rgba(21,20,15,0.85)] transition hover:brightness-110`}
                   >
                     {soldOut ? (
                       'Sold out'

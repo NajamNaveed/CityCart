@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { ArrowUpRight } from 'lucide-react'
 import ProductImage from '../ProductImage'
+import Spotlight from '../ui/Spotlight'
 import { formatPrice } from '../../ui'
 import { formatDistance } from '../../utils/geo'
 
@@ -63,10 +64,16 @@ export default function StoreCard({ store, inBlock }) {
   const shopUrl = `/store/${store._id}`
 
   return (
-    <article
-      className="store-bloom group relative flex h-full flex-col overflow-hidden rounded-panel p-4 text-cream shadow-[0_18px_40px_rgba(21,20,15,0.16)] transition-transform duration-300 motion-safe:hover:-translate-y-1"
+    <Spotlight
+      as="article"
+      dark
+      className="store-bloom group relative flex h-full flex-col overflow-hidden rounded-panel p-4 text-cream shadow-[0_18px_40px_rgba(21,20,15,0.16)] transition-all duration-500 hover:shadow-[0_34px_70px_-28px_rgba(21,20,15,0.5)] motion-safe:hover:-translate-y-1.5"
       style={{ '--bloom-h': bloomHue(store) }}
     >
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-8 top-0 z-[1] h-px bg-gradient-to-r from-transparent via-white/60 to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+      />
       <span className="store-bloom-ring" aria-hidden="true" />
       <span className="store-bloom-ring is-wide" aria-hidden="true" />
 
@@ -137,7 +144,7 @@ export default function StoreCard({ store, inBlock }) {
             <Link
               to={shopUrl}
               aria-label={`Visit ${store.name}`}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-noir text-cream transition-colors duration-300 hover:bg-clay"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-noir to-forest-deep text-cream shadow-[0_8px_18px_-8px_rgba(21,20,15,0.7)] transition-all duration-300 hover:from-clay hover:to-clay-dark"
             >
               <ArrowUpRight
                 className="h-3.5 w-3.5 transition-transform duration-300 group-hover:rotate-45"
@@ -147,6 +154,6 @@ export default function StoreCard({ store, inBlock }) {
           </div>
         </div>
       </div>
-    </article>
+    </Spotlight>
   )
 }
