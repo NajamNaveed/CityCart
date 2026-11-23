@@ -354,7 +354,7 @@ Prerequisite: Sightwise v1 is deployed (its phases 0-5, see the Sightwise repo).
 - **7b Quota and cost review:** `AiUsage` report per agent, fallback rate, add caching where limits are hit; tune rate limits.
   - **Status:** built (2026-11-23). `GET /api/v1/admin/ai-usage` (Super Admin, or a partner with `admin.analytics`; reads allowed to a read-only partner) aggregates `AiUsage` over the same `from`/`to` range as platform analytics into per-agent requests, success, fallback (`ok: false` = all providers failed and deterministic text answered), provider retries, tokens, average latency and users, plus the latest capped failure text. It reads no prompt or reply, performs no generation, and still answers with the kill switch off; the Admin → Analytics page shows the same figures under "AI assistant usage", fetched separately so a failure cannot blank the platform numbers. Caching added where spend would repeat: `moderation` now reuses the model's sentence for the same text from `AiCache` for a day, keyed by a SHA-256 hash, always recomputing the score from current rules and never caching a degraded answer; `review-summary`, `translate` and `recipe` already cached. Limits reviewed: 10 requests per user per rolling minute on top of 30 per user per UTC day (both per user, not per IP, so shared phones are not punished). The burst size is now `AI_USER_BURST_LIMIT` (default 10, capped 120) so a busy picker shift can be raised in deployment without a code change; the daily cap was already `AI_USER_DAILY_LIMIT`. A picker's substitution sheet and the admin review check are the volumes to watch first; if their fallback rate or 429 count rises, check the report before raising either number.
 - **7c Docs and release:** update README and `docs/` index, demo script, final tag `ai-v1`.
-  - **Status:** built (2026-11-23). The README now carries a product "AI Assistants" section (who gets what, and the guardrails), the doc index already listed 27–29, and the manual demo script below walks every Phase 4 and Phase 7 outcome. Release checks on the day: server `npm test` (103 suites, 3249 tests green), client `npm run lint` (0 warnings) and `npm run build`, staff app `flutter analyze` (clean) and `flutter test` (50 tests green). Phase 5 (automation) and Phase 6 (Sightwise vision) are intentionally not built yet; nothing here depends on them. Final local tag `ai-v1` (not pushed).
+  - **Status:** built (2026-11-23). The README now carries a product "AI Assistants" section (who gets what, and the guardrails), the doc index already listed 27–29, and the manual demo script below walks every Phase 4 and Phase 7 outcome. Release checks on the day: server `npm test` (103 suites, 3249 tests green), client `npm run lint` (0 warnings) and `npm run build`, staff app `flutter analyze` (clean) and `flutter test` (50 tests green). Phase 5 (automation) and Phase 6 (Sightwise vision) are intentionally not built yet; nothing here depends on them. The release is tagged locally as `ai-v1`, alongside the gate tags listed in §7; no tag is pushed.
 
 ---
 
@@ -444,10 +444,22 @@ The hardening suite fails if any prompt builder puts caller text into the system
 cd server && npm test
 cd client && npm run lint && npm run build
 cd apps/staff && flutter analyze && flutter test
-git tag ai-v1
 ```
 
-The tag is local; pushing it is a separate, explicit decision.
+The release is tagged locally. Every tag named by a gate above exists, pointing at the last
+commit that gate needed:
+
+```text
+ai-phase-0  9b5438b  route, guards, daily allowance
+ai-phase-1  a69fca0  1a listing copy, 1b review summary, 1c chat translate
+ai-phase-2  be9fbba  2a-2g, ending with the one unified chat
+ai-phase-3  22f0b88  3a-3c + 3d-1 returns insights
+ai-phase-4  56e1b8d  4a substitutions, 4b admin triage, 4c moderation
+ai-v1       879dbe7  the release itself
+```
+
+No tag is pushed; pushing them is a separate, explicit decision. `ai-phase-5` and `ai-phase-6`
+do not exist because Phases 5 and 6 are not built.
 
 ---
 

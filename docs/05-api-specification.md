@@ -2950,7 +2950,7 @@ Super Admin only.
 
 ---
 
-# 23a. AI Endpoints (Phase 0–3a)
+# 23a. AI Endpoints (Phase 0–4)
 
 Base:
 
