@@ -256,3 +256,10 @@ UI Flutter/
 /server/scripts/showcase/
 # Product photos are uploaded to Cloudinary by that seed, then deleted locally.
 /Images/
+
+# -------------------------
+# AI demo fixtures
+# -------------------------
+# Records the document ids scripts/seedAiFixtures.js wrote into a local database,
+# so --undo deletes exactly those. It is per-database state, never repo content.
+/server/scripts/demo/.ai-fixtures.json

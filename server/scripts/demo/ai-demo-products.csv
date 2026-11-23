@@ -1,0 +1,17 @@
+name,price,compareAtPrice,quantity,lowStockThreshold,status,branches,barcode,sku,MRP,Category,Brand,Description
+Embroidered Lawn Kurta 3 Pc / Unstitched,6450,7900,42,5,active,"D Ground, Gulberg",AID0000000001,AID-001,7900,lawn suit,Sahar,Digital print lawn with hand embroidery on the front panel
+  cotton twill trouser   ,3200,,0,,off,Gulberg,,AID-002,,trousers,,Dark grey slim fit
+Linen No-Iron Shirt,"Rs 4,100","Rs 5,200/-",30 pcs,5,new,Gulberg,,AID-003,5200,shirts,Sahar,Garment-washed linen with a roll-down collar
+Basmati Rice 5kg,2250,2499,120 units,20,live,DHA,AID0000000040,AID-040,2650,grocery,,Aged long grain packed after a moisture check
+Ariel Power Sheets Detergent 1 Kg,899,1049,120,10,active,D Ground,AID0000000092,AID-092,1049,detergent,Ariel,Blue sheets for front-load washers
+Ariel Power Sheets 1kg (same thing again),899,,120,,live,D Ground,AID0000000092,AID-092,,,Ariel,
+Chikankari Dupatta,PKR 3900,,0 units,,,Gulberg|D Ground,AID0000000030,AID-030,4500,dupatta,,Hand-worked chikankari on a georgette ground
+Net Dupatta With Woven Border,4200,4.2k,18,4,live,Gulberg,AID0000000031,AID-031,,dupatta,,Net dupatta with a woven border
+Kantha-Work Bridal Dupatta,"Rs 24,000/-",,6,1,live,DHA,AID0000000033,AID-033,28000,dupatta,,Heavily embroidered bridal piece
+Slow Seller Cambric Piece,2800,,14,5,paused,Gulberg,AID0000000010,AID-010,3200,lawn suit,,End of line cambric held in the warehouse
+Wool Shawl, Charcoal,4600,,10,,live,DHA,AID0000000012,AID-012,5200,shawl,,Winter shawl from two seasons back
+Display Piece Organza,,5400,9,,draft,Gulberg,AID0000000020,AID-020,6000,dupatta,,Showroom piece with no order behind it yet
+Mulmul Dupatta,2900,3500,25,5,yes,D Ground,AID0000000032,AID-032,,dupatta,,Lightweight plain mulmul with a rolled edge
+Khaddar Trouser,1450,1450,-4,,0,"Gulberg; D Ground",AID0000000002,AID-014,1650,trousers,,Brushed khaddar for cold weeks
+Lawn Suit Second Colour,4800,4800,18,4,true,Gulberg,AID0000000005,AID-015,,lawn suit,Sahar,Same cut in the emerald shade
+Gift Wrap Set,999,,100 units,10,listed,"DHA phase 6, Bahria Town",AID0000000091,AID-016,1200,gift,,Kraft wrap with a satin ribbon

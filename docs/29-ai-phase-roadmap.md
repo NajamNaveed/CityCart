@@ -370,6 +370,7 @@ Everything below runs against the seeded demo data. Phases 5 and 6 are out of sc
    ```bash
    cd server
    npm run seed:demo      # wipes and rebuilds the demo data; prints every login
+   npm run seed:ai -- --apply   # adds only what the AI endpoints still lack (see 0b)
    npm run dev            # http://localhost:5000
    ```
 3. Run the web client: `cd client && npm run dev` → `http://localhost:5173`.
@@ -382,6 +383,67 @@ Super admin   /admin/login   admin@citycart.local      Admin@12345
 Picker        Staff app      areeba.saleem@citycart.demo  (Loom & Co.)
 Brand owner   /sell/login    brand@citycart.local      Brand@12345
 ```
+
+### 0b. Make every AI feature answer: `npm run seed:ai`
+
+A realistic shop is not automatically a *complete* one. Several agents only speak when the data
+has a specific shape — the review summary needs three approved reviews on **one** listing, the
+substitution agent needs an order a picker is standing at with a line that has no stock, the
+delivery promise needs a timeframe written in the brand's settings. `scripts/seedAiFixtures.js`
+reads the database as it stands and adds only what is missing, so no endpoint answers "not enough
+data" during a demo.
+
+It is a top-up, not a reseed: run it against a database that already holds your data, as many
+times as you like, and it stops as soon as nothing is missing.
+
+```bash
+cd server
+npm run seed:ai                  read-only: prints a ready / needs table, writes nothing
+npm run seed:ai -- --apply       adds the missing rows
+npm run seed:ai -- --undo        deletes exactly the rows --apply wrote
+npm run seed:ai -- --brand="Loom"  choose the tenant (default: the busiest ACTIVE brand)
+npm run seed:ai -- --images --apply  repoint photos that still point at a deleted Cloudinary folder
+```
+
+It never drops a database and never deletes a row it did not create: every id it writes is
+recorded in `server/scripts/demo/.ai-fixtures.json` (gitignored), which is what `--undo` reads.
+Two things are edited rather than created, so `--undo` leaves them in place — a brand's **blank**
+delivery promise (it writes `"2-3 days"` only when the current text cannot be parsed as a
+timeframe) and a service provider's working windows — and both are ordinary settings you can
+change in the UI afterwards. Every fixture is dated from the day it is written, so the
+7/30/90-day windows keep finding it; every name and note carries the mark `AI demo`, so it is
+recognisable in the UI.
+
+**Photos.** The demo listings use the same remote placeholder links as the marketplace seed
+(`picsum.photos`, or `loremflickr.com` with `SEED_IMAGES=keyword`), so nothing has to be uploaded
+to Cloudinary to see an AI feature work — the deleted showcase folder is not a dependency. Rows
+left behind by that showcase run still carry dead `res.cloudinary.com` URLs, and
+`--images --apply` rewrites exactly those to placeholders; the report prints how many it found
+before you run it.
+
+What it puts in place, and which endpoint each one is for:
+
+| Fixture | Endpoint it unblocks |
+| --- | --- |
+| 13 listings (catalogue row + product + stock) | `listing-quality`, `deadstock-pricing`, `substitutions`, `restock-calendar`, `seller-advisor`, `shop-assistant`, `compare`, `recipe-list` |
+| Six approved reviews on one listing, ratings 5→1, plus one unpublished | `GET /ai/products/:id/review-summary` |
+| One review to answer, one already answered, one unpublished | `POST /ai/reply-draft` and `POST /reviews/:id/reply` |
+| Three unpublished reviews: abusive wording, spam with a link, a clean low rating | `POST /ai/moderate` |
+| One thread ending with the customer's question, one ending with the shop | `POST /ai/chat-draft`, `POST /ai/translate` |
+| Eight delivered orders, one per complete week, last week doubling the average, plus one order placed last week so the week-on-week line has something to compare | `POST /ai/restock-calendar`, `POST /ai/shop-report` |
+| Full stage history (`CONFIRMED → … → OUT_FOR_DELIVERY → DELIVERED`) on every demo order | `POST /ai/promise-check` |
+| One PROCESSING order assigned to the picker: a line with no stock, a line one short, and three same-category substitutes at near / low / far prices | `POST /ai/substitutions` |
+| Sold-at-45/100/200/430-days listings, one never-sold listing, one with a compare-at floor | `POST /ai/deadstock-pricing` |
+| A global catalogue entry that mirrors a live listing, plus one the shop has not listed | `POST /ai/catalogue-match` |
+| `scripts/demo/ai-demo-products.csv` — 16 messy supplier rows: `Rs 24,000/-` prices, `120 units` stock, `live`/`yes`/`0` statuses, comma-list branches, a duplicate barcode, one row whose comma was never quoted, four columns the importer does not know | `POST /ai/csv-clean` (upload the file as-is) |
+| 36 `AiUsage` rows over 30 days, 6 of them fallen back | `GET /analytics/ai-usage` |
+| One open billing help request | `POST /ai/admin-triage` |
+
+One feature is deliberately left alone. `returns-insights` reads returns, and a return is only
+meaningful with the delivery and payment trail behind it, so the script prints the count it found
+(`0 return(s) in the last 90 days`) instead of inventing one — the marketplace seed's own returns
+cover it. `billing-explain` is the same story: it needs a real invoice with per-order commission
+lines, which the marketplace seed already issues, so this script never touches money.
 
 ### 1. Kill switch (must pass with AI off)
 
