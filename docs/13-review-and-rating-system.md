@@ -193,6 +193,23 @@ A brand response must only be possible for products owned by that brand.
 
 Brand employees require an appropriate review-management permission.
 
+### Implemented behavior
+
+```text
+POST /api/v1/reviews/:id/reply   { body }
+```
+
+- Stored as `Review.brandReply` — one `{ body, at }` per review, 1000
+  characters, shown publicly under the review on the product page.
+- Today's CityCart has no separate review-management permission for brand
+  employees. The reply therefore runs on the same door as the brand's own
+  review list: `products.view` plus the tenant taken from the login. Adding a
+  dedicated `reviews.manage` permission is a separate RBAC decision.
+- A reply is possible only on a **published** review, and only **once**.
+- The reviewer is notified (§17). No other record changes.
+- `POST /api/v1/ai/reply-draft` can word the response, and the shop presses
+  the same **Post reply** button; the AI layer never writes the reply itself.
+
 ---
 
 ## 9. Review Ownership

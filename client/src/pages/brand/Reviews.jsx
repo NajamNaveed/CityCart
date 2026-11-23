@@ -1,89 +1,102 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Copy, Sparkles, Star } from 'lucide-react'
+import { Sparkles, Star } from 'lucide-react'
 import api, { getErrorMessage } from '../../services/api'
 import Stars from '../../components/Stars'
 import { PageHeader, Pager, selectClass } from '../../components/brand/Bits'
-import { EmptyState, Skeleton, toast } from '../../components/ui'
-import { formatDate } from '../../ui'
+import { EmptyState, Skeleton } from '../../components/ui'
+import { formatDate, inputClass } from '../../ui'
 import { draftErrorMessage } from '../../utils/aiDraft'
 
-// docs/29 Phase 3c. The shop words its own answer; nothing here is posted,
-// because CityCart has no shop reply on a review yet — the draft is for
-// reading, editing and copying.
-function ReplyDraft({ reviewId, available }) {
-  const [busy, setBusy] = useState(false)
+// docs/13 §8, and the reason docs/29 Phase 3c exists: the AI button words the
+// answer, the shop edits it and presses Post reply. The reply endpoint is an
+// ordinary one and works with the AI layer switched off.
+function ReplyBox({ review, aiAvailable, onReplied }) {
+  const [body, setBody] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [drafting, setDrafting] = useState(false)
   const [error, setError] = useState('')
-  const [reply, setReply] = useState('')
 
-  if (!available) return null
-
-  async function write() {
-    setBusy(true)
-    setError('')
-    try {
-      const res = await api.post('/ai/reply-draft', { type: 'review', id: reviewId })
-      setReply(res.data.data.draft)
-    } catch (err) {
-      setError(draftErrorMessage(err))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  function copy() {
-    navigator.clipboard?.writeText(reply).then(
-      () => toast('Copied to the clipboard.', { type: 'success' }),
-      () => toast('Could not copy. Select the text instead.', { type: 'error' }),
+  if (review.brandReply) {
+    return (
+      <div className="mt-3 rounded-tile border border-line-warm bg-sand/40 p-3.5">
+        <p className="font-display text-[12px] font-medium uppercase tracking-[0.08em] text-ink/45">Your reply</p>
+        <p className="mt-1.5 text-[14px] leading-relaxed text-ink">{review.brandReply.body}</p>
+        <p className="mt-1.5 text-[11.5px] text-ink/45">
+          Published under this review on the product page · {formatDate(review.brandReply.at)}
+        </p>
+      </div>
     )
   }
 
+  async function draft() {
+    setDrafting(true)
+    setError('')
+    try {
+      const res = await api.post('/ai/reply-draft', { type: 'review', id: review._id })
+      setBody(res.data.data.draft)
+    } catch (err) {
+      setError(draftErrorMessage(err))
+    } finally {
+      setDrafting(false)
+    }
+  }
+
+  async function submit(event) {
+    event.preventDefault()
+    if (!body.trim()) return setError('Write a reply.')
+    setSaving(true)
+    setError('')
+    try {
+      const res = await api.post(`/reviews/${review._id}/reply`, { body: body.trim() })
+      onReplied(res.data.review)
+    } catch (err) {
+      setError(getErrorMessage(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
-    <div className="mt-3">
-      {reply ? (
-        <div className="rounded-tile border border-line-warm bg-sand/40 p-3.5">
-          <p className="font-display text-[12px] font-medium uppercase tracking-[0.08em] text-ink/45">Suggested reply</p>
-          <p className="mt-1.5 text-[14px] leading-relaxed text-ink">{reply}</p>
-          <p className="mt-2 text-[11.5px] text-ink/45">
-            CityCart does not show shop replies on reviews yet, so this stays here — copy it and send it yourself.
-          </p>
-          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              onClick={copy}
-              className="inline-flex items-center gap-1.5 rounded-md bg-noir px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-cream transition-colors hover:bg-noir-soft"
-            >
-              <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-              Copy
-            </button>
-            <button
-              type="button"
-              onClick={write}
-              disabled={busy}
-              className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[11px] font-medium text-ink/55 transition hover:bg-canvas hover:text-clay disabled:opacity-50"
-            >
-              <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-              {busy ? 'Writing…' : 'Try again'}
-            </button>
-          </div>
-        </div>
-      ) : (
+    <form onSubmit={submit} className="mt-3 space-y-2">
+      <label htmlFor={`reply-${review._id}`} className="sr-only">
+        Reply to this review
+      </label>
+      <textarea
+        id={`reply-${review._id}`}
+        rows={2}
+        maxLength={1000}
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        placeholder="Reply publicly — thank them or explain what you fixed."
+        className={`${inputClass} py-2.5`}
+      />
+      <div className="flex flex-wrap items-center gap-2">
         <button
-          type="button"
-          onClick={write}
-          disabled={busy}
-          className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[11.5px] font-medium text-ink/45 transition hover:bg-canvas hover:text-clay disabled:opacity-50"
+          type="submit"
+          disabled={saving || !body.trim()}
+          className="inline-flex h-9 items-center rounded-tile bg-forest px-3.5 text-[12.5px] font-medium text-cream transition hover:bg-forest-deep disabled:opacity-40"
         >
-          <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-          {busy ? 'Writing…' : 'Draft a reply'}
+          {saving ? 'Posting…' : 'Post reply'}
         </button>
-      )}
+        {aiAvailable && (
+          <button
+            type="button"
+            onClick={draft}
+            disabled={drafting}
+            className="inline-flex h-9 items-center gap-1.5 rounded-tile px-3 text-[12.5px] font-medium text-ink/55 transition hover:bg-sand hover:text-clay disabled:opacity-50"
+          >
+            <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+            {drafting ? 'Writing…' : body.trim() ? 'Rewrite with AI' : 'Draft with AI'}
+          </button>
+        )}
+      </div>
       {error && (
-        <p role="alert" className="mt-1.5 text-[11.5px] text-clay">
+        <p role="alert" className="text-[12.5px] text-clay">
           {error}
         </p>
       )}
-    </div>
+    </form>
   )
 }
 
@@ -126,6 +139,14 @@ export default function Reviews() {
     setParams(next)
   }
 
+  // The reply is written; say so on this card without fetching the page again.
+  function markReplied(updated) {
+    setState((s) => ({
+      ...s,
+      reviews: s.reviews.map((r) => (String(r._id) === String(updated._id) ? { ...r, brandReply: updated.brandReply } : r)),
+    }))
+  }
+
   const loading = state.key !== key
   const { summary } = state
 
@@ -133,7 +154,7 @@ export default function Reviews() {
     <>
       <PageHeader
         title="Reviews"
-        intro="What customers wrote about your products after their orders arrived."
+        intro="What customers wrote about your products after their orders arrived. One public reply per review; shoppers see it under the review."
         action={
           <>
             <label htmlFor="rating" className="sr-only">
@@ -206,7 +227,7 @@ export default function Reviews() {
                   {r.productName}
                 </Link>
               </p>
-              <ReplyDraft reviewId={r._id} available={aiAvailable} />
+              <ReplyBox review={r} aiAvailable={aiAvailable} onReplied={markReplied} />
             </li>
           ))}
         </ul>

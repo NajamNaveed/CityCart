@@ -46,6 +46,12 @@ const adminReviewsQuerySchema = z.object({
 
 const setApprovalSchema = z.object({ isApproved: z.boolean() });
 
+// The shop's public answer to one of its own reviews (docs/13 §8). Text only —
+// no brandId, no customerId: both come from the login and the record.
+const replyToReviewSchema = z
+  .object({ body: z.string().trim().min(1, 'Write a reply.').max(1000) })
+  .strict();
+
 module.exports = {
   createReviewSchema,
   updateReviewSchema,
@@ -55,4 +61,5 @@ module.exports = {
   brandReviewsQuerySchema,
   adminReviewsQuerySchema,
   setApprovalSchema,
+  replyToReviewSchema,
 };

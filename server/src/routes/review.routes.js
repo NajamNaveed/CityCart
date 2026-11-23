@@ -1,6 +1,6 @@
 const express = require('express');
 
-const { summary, create, mine, update, remove, brandList } = require('../controllers/review.controller');
+const { summary, create, mine, update, remove, brandList, reply } = require('../controllers/review.controller');
 const authenticate = require('../middleware/authenticate');
 const requireRole = require('../middleware/requireRole');
 const requirePermission = require('../middleware/requirePermission');
@@ -16,6 +16,17 @@ router.get('/summary', summary);
 
 // The brand dashboard: whoever may see products may read their reviews. Must stay above '/:id'.
 router.get('/brand', authenticate, requirePermission(PERMISSIONS.PRODUCTS_VIEW), requireTenant, brandList);
+
+// docs/13 §8 — the same door answers the reviews it can read. One reply per
+// review, published reviews only, and the tenant comes from requireTenant.
+router.post(
+  '/:id/reply',
+  authenticate,
+  requirePermission(PERMISSIONS.PRODUCTS_VIEW),
+  requireTenant,
+  validateObjectIdParam,
+  reply,
+);
 
 // Customers only: write, list, edit and delete their OWN reviews.
 router.post('/', authenticate, requireRole(ROLES.CUSTOMER), create);

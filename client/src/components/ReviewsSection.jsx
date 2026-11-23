@@ -158,6 +158,14 @@ export default function ReviewsSection({ data, productId, signedIn }) {
                         </span>
                       )}
                     </p>
+                    {review.brandReply && (
+                      <div className="mt-3 rounded-tile border border-line-warm bg-sand/40 p-3.5">
+                        <p className="font-display text-[11.5px] font-medium uppercase tracking-[0.08em] text-ink/45">
+                          Shop reply · {formatDate(review.brandReply.at)}
+                        </p>
+                        <p className="mt-1.5 text-[14px] leading-relaxed text-ink/70">{review.brandReply.body}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </article>

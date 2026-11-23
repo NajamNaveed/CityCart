@@ -296,6 +296,147 @@ describe('GET /api/v1/reviews/brand (dashboard)', () => {
   });
 });
 
+// docs/13 §8 — the shop answers its own published review, once, in public.
+describe('POST /api/v1/reviews/:id/reply (brand response)', () => {
+  const reviewId = oid();
+  const customerId = oid();
+  const body = { body: 'Thank you — we have fixed the sizing chart.' };
+
+  // The update matching means the reply was written.
+  const written = (extra = {}) =>
+    Review.findOneAndUpdate.mockResolvedValue({ _id: reviewId, brandId, customerId, ...extra });
+
+  it('writes the reply on its own review and tells the customer', async () => {
+    const { cookie } = asRole(ROLES.BRAND_ADMIN);
+    written({ brandReply: { body: body.body, at: new Date('2026-11-23') } });
+
+    const res = await request(app).post(`/api/v1/reviews/${reviewId}/reply`).set(...cookie).send(body);
+
+    expect(res.status).toBe(200);
+    expect(res.body.message).toBe('Reply posted.');
+    const [filter, update] = Review.findOneAndUpdate.mock.calls[0];
+    expect(String(filter._id)).toBe(String(reviewId));
+    expect(String(filter.brandId)).toBe(String(brandId)); // the tenant, never the body
+    expect(filter.isApproved).toBe(true); // published reviews only
+    expect(filter.brandReply).toBeNull(); // one reply per review
+    expect(update.$set.brandReply.body).toBe(body.body);
+    expect(update.$set.brandReply.at).toBeInstanceOf(Date);
+    expect(notifications.notifyCustomerOfBrandReply).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns only the reply, so the answer cannot leak who wrote the review', async () => {
+    const { cookie } = asRole(ROLES.BRAND_ADMIN);
+    written({ brandReply: { body: body.body, at: new Date() } });
+
+    const res = await request(app).post(`/api/v1/reviews/${reviewId}/reply`).set(...cookie).send(body);
+
+    expect(Object.keys(res.body.review).sort()).toEqual(['_id', 'brandReply']);
+    expect(JSON.stringify(res.body)).not.toContain(String(customerId));
+  });
+
+  it('treats another shop\'s review exactly like a missing one, and writes nothing', async () => {
+    const { cookie } = asRole(ROLES.BRAND_ADMIN);
+    Review.findOneAndUpdate.mockResolvedValue(null); // the tenant filter cannot match
+    Review.findOne.mockResolvedValue(null);
+
+    const res = await request(app).post(`/api/v1/reviews/${reviewId}/reply`).set(...cookie).send(body);
+
+    expect(res.status).toBe(404);
+    expect(notifications.notifyCustomerOfBrandReply).not.toHaveBeenCalled();
+  });
+
+  it('refuses a second reply, and a reply on a hidden review', async () => {
+    const { cookie } = asRole(ROLES.BRAND_ADMIN);
+    Review.findOneAndUpdate.mockResolvedValue(null);
+
+    Review.findOne.mockResolvedValue({ _id: reviewId, brandId, brandReply: { body: 'Already answered' } });
+    const twice = await request(app).post(`/api/v1/reviews/${reviewId}/reply`).set(...cookie).send(body);
+    expect(twice.status).toBe(409);
+    expect(twice.body.code).toBe('ALREADY_REPLIED');
+
+    Review.findOne.mockResolvedValue({ _id: reviewId, brandId, isApproved: false });
+    const hidden = await request(app).post(`/api/v1/reviews/${reviewId}/reply`).set(...cookie).send(body);
+    expect(hidden.status).toBe(409);
+    expect(hidden.body.code).toBe('REVIEW_NOT_PUBLISHED');
+    expect(notifications.notifyCustomerOfBrandReply).not.toHaveBeenCalled();
+  });
+
+  it('takes only the text, trims it, and rejects anything else', async () => {
+    const { cookie } = asRole(ROLES.BRAND_ADMIN);
+    written({ brandReply: { body: 'Nice', at: new Date() } });
+
+    const trimmed = await request(app)
+      .post(`/api/v1/reviews/${reviewId}/reply`)
+      .set(...cookie)
+      .send({ body: '   Nice   ' });
+    expect(trimmed.status).toBe(200);
+    expect(Review.findOneAndUpdate.mock.calls.at(-1)[1].$set.brandReply.body).toBe('Nice');
+
+    const bad = [
+      {},
+      { body: '' },
+      { body: '   ' },
+      { body: 'x'.repeat(1001) },
+      { body: 5 },
+      { body: null },
+      { body: 'ok', brandId: String(oid()) },
+      { body: 'ok', customerId: String(oid()) },
+      { body: 'ok', isApproved: false },
+    ];
+    for (const payload of bad) {
+      expect((await request(app).post(`/api/v1/reviews/${reviewId}/reply`).set(...cookie).send(payload)).status).toBe(400);
+    }
+    expect((await request(app).post('/api/v1/reviews/not-an-id/reply').set(...cookie).send(body)).status).toBe(400);
+  });
+
+  it('opens to whoever may read the brand\'s reviews, and to nobody else', async () => {
+    written({ brandReply: { body: body.body, at: new Date() } });
+
+    expect((await request(app).post(`/api/v1/reviews/${reviewId}/reply`).send(body)).status).toBe(401);
+    expect(
+      (await request(app).post(`/api/v1/reviews/${reviewId}/reply`).set(...asRole(ROLES.CUSTOMER).cookie).send(body))
+        .status,
+    ).toBe(403);
+
+    const allowed = asRole(ROLES.BRAND_EMPLOYEE, [PERMISSIONS.PRODUCTS_VIEW]);
+    expect((await request(app).post(`/api/v1/reviews/${reviewId}/reply`).set(...allowed.cookie).send(body)).status).toBe(200);
+
+    const denied = asRole(ROLES.BRAND_EMPLOYEE, [PERMISSIONS.ORDERS_VIEW]);
+    const res = await request(app).post(`/api/v1/reviews/${reviewId}/reply`).set(...denied.cookie).send(body);
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('PERMISSION_DENIED');
+
+    const admin = await request(app).post(`/api/v1/reviews/${reviewId}/reply`).set(...asRole(ROLES.SUPER_ADMIN).cookie).send(body);
+    expect(admin.status).toBe(403);
+    expect(admin.body.code).toBe('NO_BRAND');
+  });
+
+  it('shows the reply to shoppers on the product page and to the shop on its own list', async () => {
+    const { cookie } = asRole(ROLES.BRAND_ADMIN);
+    const productId = oid();
+    const reply = { body: 'Thank you — we fixed it.', at: new Date('2026-11-23') };
+    Product.findOne.mockResolvedValue({ _id: productId, brandId });
+    Brand.findOne.mockResolvedValue({ _id: brandId });
+    mockFind([{ _id: reviewId, customerId, productId, rating: 2, comment: 'Ran small.', brandReply: reply, createdAt: new Date() }]);
+    Review.countDocuments.mockResolvedValue(1);
+    Review.aggregate.mockResolvedValue([{ _id: 2, count: 1 }]);
+    User.find.mockReturnValue({ select: () => Promise.resolve([{ _id: customerId, name: 'Ali Raza' }]) });
+    Product.find.mockReturnValue({ select: () => Promise.resolve([{ _id: productId, name: 'Linen Kurta' }]) });
+
+    const shopper = await request(app).get(`/api/v1/products/${productId}/reviews`).set(...cookie);
+    expect(shopper.body.reviews[0].brandReply).toEqual({ body: reply.body, at: expect.any(String) });
+    expect(JSON.stringify(shopper.body)).not.toContain(String(customerId));
+
+    const shop = await request(app).get('/api/v1/reviews/brand').set(...cookie);
+    expect(shop.body.reviews[0].brandReply.body).toBe(reply.body);
+
+    // A review nobody answered still serialises, as null rather than a missing key.
+    mockFind([{ _id: reviewId, customerId, productId, rating: 5, brandReply: null, createdAt: new Date() }]);
+    const unanswered = await request(app).get(`/api/v1/products/${productId}/reviews`);
+    expect(unanswered.body.reviews[0].brandReply).toBeNull();
+  });
+});
+
 describe('super admin moderation', () => {
   it('lists every review (hidden ones too) with names, and filters', async () => {
     const { cookie } = asRole(ROLES.SUPER_ADMIN);

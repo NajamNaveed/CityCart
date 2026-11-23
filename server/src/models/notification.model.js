@@ -35,6 +35,8 @@ const NOTIFICATION_TYPES = [
   'EMPLOYEE_PERMISSION_CHANGED',
   'DELIVERY_ASSIGNED',
   'NEW_REVIEW',
+  // Product review reply from the shop that owns the review (docs/13 §8, §17).
+  'REVIEW_REPLIED',
   'SYSTEM_NOTIFICATION',
   // Service bookings (docs/24 §4.4).
   'SERVICE_BOOKING_REQUESTED',
@@ -56,9 +58,11 @@ const NOTIFICATION_TYPES = [
   'BILLING_CLAIM_REJECTED',
   'BILLING_HELP_ANSWERED',
 ];
-// NEW_REVIEW is the one type added beyond doc12 §4's initial list: §6 lists
-// "New review received" as a brand notification example, and §4 explicitly
-// allows "additional types may be added later". doc04 §29 was updated to match.
+// NEW_REVIEW and REVIEW_REPLIED are the two types added beyond doc12 §4's
+// initial list, both allowed by §4's "additional types may be added later".
+// NEW_REVIEW comes from docs/13 §6 ("New review received" for the brand) and
+// REVIEW_REPLIED from docs/13 §17 ("Brand responded to review" for the
+// customer). doc04 §29 was updated to match.
 
 const notificationSchema = new mongoose.Schema(
   {

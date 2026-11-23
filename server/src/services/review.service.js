@@ -5,7 +5,7 @@ const Order = require('../models/order.model');
 const Product = require('../models/product.model');
 const Brand = require('../models/brand.model');
 const User = require('../models/user.model');
-const { notifyBrandOfNewReview } = require('./notification.service');
+const { notifyBrandOfNewReview, notifyCustomerOfBrandReply } = require('./notification.service');
 
 class ReviewError extends Error {
   constructor(status, message, extra = {}) {
@@ -81,6 +81,7 @@ async function listProductReviews(productId, { page = 1, limit = DEFAULT_LIMIT }
       comment: r.comment,
       reviewerName: shortName(names.get(String(r.customerId))),
       verifiedPurchase: Boolean(r.orderId),
+      brandReply: r.brandReply ? { body: r.brandReply.body, at: r.brandReply.at } : null,
       createdAt: r.createdAt,
     })),
     summary: summarise(groups),
@@ -137,6 +138,33 @@ async function createReview(customerId, { orderId, productId, rating, title, com
   }
 }
 
+// docs/13 §8 — a shop answers one of its own published reviews, once.
+// `brandId` is the caller's tenant, never the request body, so another shop's
+// review reads exactly like a review that does not exist.
+async function replyToReview(brandId, reviewId, { body }) {
+  // The filter carries every precondition, so two employees replying at the
+  // same moment cannot both write: only the first update matches.
+  const review = await Review.findOneAndUpdate(
+    { _id: reviewId, brandId, isApproved: true, brandReply: null },
+    { $set: { brandReply: { body, at: new Date() } } },
+    { new: true, runValidators: true }
+  );
+  if (!review) {
+    // Nothing was written; say which rule stopped it.
+    const existing = await Review.findOne({ _id: reviewId, brandId });
+    if (!existing) throw new ReviewError(404, 'Review not found.');
+    if (existing.brandReply) {
+      throw new ReviewError(409, 'You have already replied to this review.', { code: 'ALREADY_REPLIED' });
+    }
+    throw new ReviewError(409, 'This review is not published, so it cannot be answered.', {
+      code: 'REVIEW_NOT_PUBLISHED',
+    });
+  }
+  // Post-write and best-effort: a failed alert must not fail the reply.
+  await notifyCustomerOfBrandReply(review);
+  return review;
+}
+
 async function listMyReviews(customerId, { orderId } = {}) {
   return Review.find({ customerId, ...(orderId && { orderId }) }).sort({ createdAt: -1 }).limit(100);
 }
@@ -178,6 +206,7 @@ async function listBrandReviews(brandId, { rating, productId, page = 1, limit = 
       reviewerName: shortName(people.get(String(r.customerId))),
       productId: r.productId,
       productName: products.get(String(r.productId)) || 'A product',
+      brandReply: r.brandReply ? { body: r.brandReply.body, at: r.brandReply.at } : null,
       createdAt: r.createdAt,
     })),
     summary: summarise(groups),
@@ -227,6 +256,7 @@ module.exports = {
   listProductReviews,
   ratingsFor,
   createReview,
+  replyToReview,
   listMyReviews,
   updateMyReview,
   removeMyReview,

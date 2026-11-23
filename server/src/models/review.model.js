@@ -21,7 +21,19 @@ const mongoose = require('mongoose');
  * customer should not be able to create unlimited reviews for the same
  * qualifying purchase" (§28) are business rules enforced by a future
  * service, not by this schema.
+ *
+ * `brandReply` is docs/13 §8 (Brand Response), which doc04 §28's field list
+ * never mentioned. Same shape as the service reviews' `providerReply`: one
+ * reply per review, 1000 characters, dated, no sub-document id of its own.
  */
+const replySchema = new mongoose.Schema(
+  {
+    body: { type: String, required: true, trim: true, maxlength: 1000 },
+    at: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
 const reviewSchema = new mongoose.Schema(
   {
     customerId: {
@@ -68,6 +80,7 @@ const reviewSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    brandReply: { type: replySchema, default: null },
   },
   {
     timestamps: true,

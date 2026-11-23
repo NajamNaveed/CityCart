@@ -7,12 +7,14 @@ const {
   brandReviewsQuerySchema,
   adminReviewsQuerySchema,
   setApprovalSchema,
+  replyToReviewSchema,
 } = require('../validators/review.validator');
 const {
   ReviewError,
   listProductReviews,
   ratingsFor,
   createReview,
+  replyToReview,
   listMyReviews,
   updateMyReview,
   removeMyReview,
@@ -117,6 +119,27 @@ async function brandList(req, res, next) {
   }
 }
 
+// POST /reviews/:id/reply  { body }  the shop answers one of its own reviews.
+// The brand comes from the login, never the body. The response carries only
+// the reply, so nothing about the customer widens here.
+async function reply(req, res, next) {
+  const parsed = replyToReviewSchema.safeParse(req.body);
+  if (!parsed.success) return invalid(res, parsed.error);
+  if (!req.tenantBrandId) {
+    return res
+      .status(403)
+      .json({ success: false, message: 'You are not authorized to perform this action.', code: 'NO_BRAND' });
+  }
+  try {
+    const review = await replyToReview(req.tenantBrandId, req.params.id, parsed.data);
+    return res
+      .status(200)
+      .json({ success: true, message: 'Reply posted.', review: { _id: review._id, brandReply: review.brandReply } });
+  } catch (err) {
+    return handleError(err, res, next);
+  }
+}
+
 // GET /admin/reviews
 async function adminList(req, res, next) {
   const parsed = adminReviewsQuerySchema.safeParse(req.query);
@@ -147,4 +170,4 @@ async function adminSetApproval(req, res, next) {
   }
 }
 
-module.exports = { forProduct, summary, create, mine, update, remove, brandList, adminList, adminSetApproval };
+module.exports = { forProduct, summary, create, mine, update, remove, brandList, reply, adminList, adminSetApproval };

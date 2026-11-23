@@ -1775,9 +1775,14 @@ rating
 title
 comment
 isApproved
+brandReply
 createdAt
 updatedAt
 ```
+
+`brandReply` is the shop's single public answer to the review
+(docs/13 §8): an embedded `{ body, at }` with no `_id` of its own, `null`
+until the shop replies.
 
 A review should be associated with a real customer purchase where required by the business rules.
 

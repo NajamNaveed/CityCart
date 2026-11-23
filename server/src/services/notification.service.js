@@ -430,6 +430,21 @@ async function notifyBrandOfNewReview(review) {
   });
 }
 
+// docs/13 §17: the customer who wrote the review is told the shop answered it.
+// Same shape as the service reviews' reply alert, and just as best-effort.
+async function notifyCustomerOfBrandReply(review) {
+  if (!review || !review.brandReply) return;
+  const product = await Product.findById(review.productId).select('name');
+  const name = product ? product.name : 'a product';
+  await notify({
+    userIds: [review.customerId],
+    type: 'REVIEW_REPLIED',
+    title: 'A shop replied to your review',
+    message: `"${name}": ${review.brandReply.body}`,
+    data: { productId: String(review.productId), brandId: String(review.brandId), reviewId: String(review._id) },
+  });
+}
+
 // --- Order adjustments (docs/21 §H.4) ------------------------------------
 
 function adjustmentData(adjustment, order) {
@@ -957,6 +972,7 @@ module.exports = {
   notifyBrandOfReturn: bestEffort(notifyBrandOfReturn),
   notifyPaymentExpired: bestEffort(notifyPaymentExpired),
   notifyBrandOfNewReview: bestEffort(notifyBrandOfNewReview),
+  notifyCustomerOfBrandReply: bestEffort(notifyCustomerOfBrandReply),
   notifySuperAdminsOfNewBrand: bestEffort(notifySuperAdminsOfNewBrand),
   notifySuperAdminsOfNewProvider: bestEffort(notifySuperAdminsOfNewProvider),
   notifyProviderStatusChanged: bestEffort(notifyProviderStatusChanged),
