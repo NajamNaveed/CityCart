@@ -900,7 +900,7 @@ function buildDataset({ now = new Date(), hashes, data = DEMO }) {
 
   const usedReturnOrders = new Set();
   const usedReturnBrands = new Set();
-  const returnOrder = ({ paymentMethod, rider, netZero, partial }) => {
+  const returnOrder = ({ paymentMethod, rider, netZero, partial, sameShop }) => {
     const pool = orders.filter((entry) => {
       const { order, payment, flags } = entry;
       const delivery = deliveryOf(order);
@@ -912,6 +912,7 @@ function buildDataset({ now = new Date(), hashes, data = DEMO }) {
       if (rider && !delivery.riderId) return false;
       if (netZero && (order.tax !== 0 || order.discount !== 0 || order.deliveryFee === 0)) return false;
       if (partial && !partialLine(order)) return false;
+      if (sameShop && String(order.brandId) !== String(sameShop)) return false;
       return true;
     });
     return pool.find((entry) => !usedReturnBrands.has(String(entry.order.brandId))) || pool[0] || null;
@@ -1022,6 +1023,37 @@ function buildDataset({ now = new Date(), hashes, data = DEMO }) {
     addDoorReturn({
       entry: fullyRejected, status: 'IN_TRANSIT',
       lines: fullyRejected.order.items.map((item, index) => returnLine(item, item.quantity, index === 0 ? 'DAMAGED' : 'MISSING')),
+    });
+  }
+
+  // A refusal per shop is enough for the admin screens, but not for the AI returns
+  // clusterer (docs/29 Phase 3d-1): it reads one shop's own 90-day window, so the shop
+  // the demo signs into needs a cluster. That shop is the busiest ACTIVE one — the same
+  // rule scripts/seedAiFixtures.js uses to pick its tenant — and these refusals land on
+  // different products for different reasons, which is what the clusterer groups.
+  const deliveredPerBrand = new Map();
+  for (const { order } of orders) {
+    if (order.orderStatus === 'DELIVERED') {
+      deliveredPerBrand.set(String(order.brandId), (deliveredPerBrand.get(String(order.brandId)) || 0) + 1);
+    }
+  }
+  const demoShop = brands
+    .filter((b) => b.def.status === 'ACTIVE' && b.doc.billingStatus !== 'FROZEN')
+    .sort((a, b) => (deliveredPerBrand.get(String(b.doc._id)) || 0) - (deliveredPerBrand.get(String(a.doc._id)) || 0))[0];
+  for (const refused of demoShop ? [
+    { reason: 'WRONG_ITEM', restock: true },
+    { reason: 'DAMAGED', restock: false },
+    { reason: 'NOT_WANTED', restock: true },
+  ] : []) {
+    const entry = returnOrder({ paymentMethod: 'COD', partial: true, sameShop: demoShop.doc._id });
+    if (!entry) break;
+    const item = partialLine(entry.order);
+    const receivedAt = new Date(Math.min(now.getTime() - 2 * HOUR, completedAtOf(entry).getTime() + 20 * HOUR));
+    addDoorReturn({
+      entry, status: 'RECEIVED', receivedAt, receivedBy: demoShop.owner,
+      lines: [returnLine(item, Math.min(1, item.quantity), refused.reason, {
+        restock: refused.restock, ...(refused.restock && { restockedAt: receivedAt }),
+      })],
     });
   }
 
@@ -1403,6 +1435,15 @@ function buildDataset({ now = new Date(), hashes, data = DEMO }) {
     2: ['Hoping the next one is better.', 'Delivery was on time at least.'],
     1: ['I would think twice before ordering.', 'I have contacted the seller.'],
   };
+  // What a shop says back (docs/13 §8). A low rating is answered with a fix, not an excuse,
+  // because that is the reply the Review page demo is meant to show.
+  const REPLY_LINES = {
+    5: ['Thank you — this is exactly what we aim for. See you again.', 'Glad it landed well. We will keep the batch coming.'],
+    4: ['Thank you for the kind words, and for the note on what was missing — we have passed it to the workshop.', 'Much appreciated. The small niggle is on our list.'],
+    3: ['Thank you for the honest review. If anything specific fell short, tell us and we will put it right.', 'Noted with thanks — we would like to do better next time.'],
+    2: ['Sorry this did not come up to standard. Message us the order number and we will replace or refund it.', 'This is not how we want the piece to reach you. We have flagged it with the maker.'],
+    1: ['We are sorry. Please reply to your order email and we will collect the piece and refund it in full.', 'This is our fault, not yours. Our team has your order open and will contact you today.'],
+  };
   // A customer reviews what they kept, never a unit the rider took back.
   const returnedUnits = new Map();
   for (const ret of ds.returns) {
@@ -1671,6 +1712,19 @@ function buildDataset({ now = new Date(), hashes, data = DEMO }) {
       `A customer reviewed ${product ? product.name : 'a product'}: "${r.title}".`,
       { productId: r.productId, brandId: r.brandId, rating: r.rating },
       new Date(r.createdAt.getTime() + 60 * 1000));
+
+    // Then some of them get an answer, so the Review page shows a posted reply and the
+    // customer's Notifications show one arriving. Only an approved review can be replied
+    // to (review.service.js refuses a hidden one), and a poor rating is answered more
+    // often than a good one — that is the thread a demo needs to see.
+    if (!r.isApproved) continue;
+    if (random() > (r.rating <= 2 ? 0.7 : 0.25)) continue;
+    const repliedAt = new Date(Math.min(now.getTime() - HOUR, r.createdAt.getTime() + between(1, 5) * DAY));
+    r.brandReply = { body: pick(REPLY_LINES[r.rating]), at: repliedAt };
+    r.updatedAt = repliedAt;
+    note(r.customerId, 'REVIEW_REPLIED', 'A shop replied to your review',
+      `"${product ? product.name : 'a product'}": ${r.brandReply.body}`,
+      { productId: r.productId, brandId: r.brandId, reviewId: r._id }, repliedAt);
   }
   for (const brand of brands) {
     for (const s of brand.staff) {

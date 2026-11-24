@@ -365,11 +365,11 @@ Everything below runs against the seeded demo data. Phases 5 and 6 are out of sc
 
 ### 0. Start the stack
 
-1. In `server/.env` set `MONGODB_URI`, `AI_ENABLED=true`, and one provider key (`GEMINI_API_KEY`, `GROQ_API_KEY` or `OPENROUTER_API_KEY`).
+1. In `server/.env` set `MONGODB_URI`, `AI_ENABLED=true`, and one provider key (`GEMINI_API_KEY`, `GROQ_API_KEY` or `OPENROUTER_API_KEY`). For photographed listings, also `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` and `CLOUDINARY_API_SECRET`, and keep the `Images/` folder in the repository root — without either the seed still runs and uses placeholder links (see 0b).
 2. Seed and run the API:
    ```bash
    cd server
-   npm run seed:demo      # wipes and rebuilds the demo data; prints every login
+   npm run seed:demo      # wipes and rebuilds the demo data; uploads Images/, prints every login
    npm run seed:ai -- --apply   # adds only what the AI endpoints still lack (see 0b)
    npm run dev            # http://localhost:5000
    ```
@@ -402,7 +402,7 @@ npm run seed:ai                  read-only: prints a ready / needs table, writes
 npm run seed:ai -- --apply       adds the missing rows
 npm run seed:ai -- --undo        deletes exactly the rows --apply wrote
 npm run seed:ai -- --brand="Loom"  choose the tenant (default: the busiest ACTIVE brand)
-npm run seed:ai -- --images --apply  repoint photos that still point at a deleted Cloudinary folder
+npm run seed:ai -- --images --apply  repoint only the photos whose Cloudinary link answers 404
 ```
 
 It never drops a database and never deletes a row it did not create: every id it writes is
@@ -414,12 +414,21 @@ change in the UI afterwards. Every fixture is dated from the day it is written, 
 7/30/90-day windows keep finding it; every name and note carries the mark `AI demo`, so it is
 recognisable in the UI.
 
-**Photos.** The demo listings use the same remote placeholder links as the marketplace seed
-(`picsum.photos`, or `loremflickr.com` with `SEED_IMAGES=keyword`), so nothing has to be uploaded
-to Cloudinary to see an AI feature work — the deleted showcase folder is not a dependency. Rows
-left behind by that showcase run still carry dead `res.cloudinary.com` URLs, and
-`--images --apply` rewrites exactly those to placeholders; the report prints how many it found
-before you run it.
+**Photos.** Ten listings are photographed for real. `seed:demo` uploads the folders under the
+repository's `Images/` directory to Cloudinary (into `citycart/demo/<folder>`, with the links
+remembered in `server/scripts/demo/.image-cache.json` so seeding twice does not upload twice) and
+gives those listings a gallery of their own photographs: the bedsheet, knife set, oven mitt,
+defrosting tray, kitchen towels and journal at Sukoon Home, the running shoes and travel backpack at
+Zaitoon Footwear, the GPS watch at Mehr Menswear, the USB-C cable at Gulberg Gadgets. Everything the
+camera does not have — cloth, jewellery, kurtas — and every fixture in the table below keeps a
+placeholder link (`picsum.photos`, or `loremflickr.com` with `SEED_IMAGES=keyword`). A missing
+`Images/` folder, a missing Cloudinary key or `SEED_IMAGES` is not an error: the seed prints which
+photos it skipped and seeds links instead, so nothing here depends on media being uploaded.
+
+`--images --apply` rewrites only a `res.cloudinary.com` link that the host answers 404 for, which is
+what the deleted showcase run left behind on its listings. Real photos that still resolve are never
+touched, and with no network nothing is treated as gone, so the repair can only ever shorten a
+listing's broken links.
 
 What it puts in place, and which endpoint each one is for:
 
@@ -439,11 +448,16 @@ What it puts in place, and which endpoint each one is for:
 | 36 `AiUsage` rows over 30 days, 6 of them fallen back | `GET /analytics/ai-usage` |
 | One open billing help request | `POST /ai/admin-triage` |
 
-One feature is deliberately left alone. `returns-insights` reads returns, and a return is only
-meaningful with the delivery and payment trail behind it, so the script prints the count it found
-(`0 return(s) in the last 90 days`) instead of inventing one — the marketplace seed's own returns
-cover it. `billing-explain` is the same story: it needs a real invoice with per-order commission
-lines, which the marketplace seed already issues, so this script never touches money.
+One feature is deliberately left alone by that script. `returns-insights` reads returns, and a
+return is only meaningful with the delivery and payment trail behind it, so `seedAiFixtures.js`
+prints the count it found (`2 return(s) in the last 90 days`) instead of inventing one. The trail
+comes from `seed:demo` instead: it files five door returns, and two of them land on the busiest
+ACTIVE shop inside the window that endpoint reads — a maroon suit the customer refused because the
+wrong piece came, re-shelved when the store took it in, and a shawl refused as damaged and written
+off — different products, different reasons, which is what a cluster needs. Its third refusal (the
+same shawl, on the order from four months back) and the one on each other shop sit outside that
+window and stay as they were. `billing-explain` is the same story: it needs a real invoice with per-order commission lines,
+which the marketplace seed already issues, so this script never touches money.
 
 ### 1. Kill switch (must pass with AI off)
 
