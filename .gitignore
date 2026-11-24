@@ -254,8 +254,15 @@ UI Flutter/
 # -------------------------
 # The showcase catalog and runner contain the logins of every seeded account.
 /server/scripts/showcase/
-# Product photos are uploaded to Cloudinary by that seed, then deleted locally.
+# Product photos are uploaded to Cloudinary by the seeds, then deleted locally.
 /Images/
+
+# -------------------------
+# Demo seed photos
+# -------------------------
+# The Cloudinary links scripts/seedDemo.js made for the Images/ folders, remembered so a
+# second seed does not upload the same photo again. Per-machine state, not repo content.
+/server/scripts/demo/.image-cache.json
 
 # -------------------------
 # AI demo fixtures

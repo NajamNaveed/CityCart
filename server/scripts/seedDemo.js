@@ -6,8 +6,11 @@
  *   npm run seed:demo                 only runs on an empty database
  *   npm run seed:demo -- --reset      wipes the database first (development only)
  *
- * Product photos are links (picsum.photos by default; SEED_IMAGES=keyword picks photos by
- * keyword instead). Refuses to run when NODE_ENV=production.
+ * Product photos: a listing that names a `folder` gets the real photography under
+ * Images/<folder>, uploaded to Cloudinary first (set CLOUDINARY_* in server/.env; URLs are
+ * cached in demo/.image-cache.json so seeding twice does not upload twice). Everything else
+ * is a link — picsum.photos by default, SEED_IMAGES=keyword picks photos by keyword instead.
+ * Refuses to run when NODE_ENV=production.
  */
 require('dotenv').config();
 const dns = require('dns');
@@ -15,6 +18,8 @@ const mongoose = require('mongoose');
 
 const { hashPassword } = require('../src/utils/password');
 const { buildDataset } = require('./demo/build');
+const DEMO = require('./demo/catalog');
+const { planImages, collectImageUrls } = require('./demo/uploadImages');
 
 const MODELS = {
   cities: require('../src/models/city.model'),
@@ -67,6 +72,34 @@ function describeFailure(err) {
   return describeConnectionError(err);
 }
 
+/**
+ * The photographs the catalog asks for, as { folder: [url, ...] }. Missing photos, a missing
+ * Images/ folder, an unconfigured Cloudinary or a rejected upload each only cost the real
+ * picture: the listing keeps its placeholder link and the seed goes on, because a demo store
+ * is worth more than a broken upload.
+ */
+async function collectPhotos() {
+  const requested = [...new Set(DEMO.BRANDS.flatMap((b) => b.products.map((p) => p.folder).filter(Boolean)))];
+  const imageUrls = {};
+  const plan = process.env.SEED_IMAGES
+    ? { ready: false, missing: [], reason: `SEED_IMAGES=${process.env.SEED_IMAGES} asks for links instead of uploads` }
+    : planImages({ requested });
+  if ((plan.missing || []).length) {
+    console.log(`Photos: Images/ has no folder for ${plan.missing.join(', ')}; those listings keep placeholder links.`);
+  }
+  if (!plan.ready) {
+    console.log(`Photos: ${plan.reason}; every listing keeps a placeholder link.`);
+    return imageUrls;
+  }
+  console.log(`Photos: ${plan.reason} to upload...`);
+  try {
+    Object.assign(imageUrls, await collectImageUrls({ requested }));
+  } catch (err) {
+    console.log(`Photos: the upload failed (${err.message}); every listing keeps a placeholder link.`);
+  }
+  return imageUrls;
+}
+
 async function main() {
   if (process.env.NODE_ENV === 'production') throw new Error('Refusing to seed in production.');
   if (!process.env.MONGODB_URI) throw new Error('MONGODB_URI is not set (server/.env).');
@@ -77,6 +110,10 @@ async function main() {
   console.log('Connecting to the database...');
   await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 10000 });
   const dbName = mongoose.connection.name;
+
+  // Photos are uploaded before anything is wiped, so a rejected upload cannot leave an
+  // empty database behind.
+  const imageUrls = await collectPhotos();
 
   const existing = (await Promise.all(Object.values(MODELS).map((m) => m.estimatedDocumentCount()))).reduce((a, b) => a + b, 0);
   if (existing > 0) {
@@ -92,7 +129,7 @@ async function main() {
   console.log('Preparing data (hashing 3 passwords)...');
   const hashes = {};
   for (const [key, value] of Object.entries(PASSWORDS)) hashes[key] = await hashPassword(value);
-  const dataset = buildDataset({ now: new Date(), hashes });
+  const dataset = buildDataset({ now: new Date(), hashes, data: { ...DEMO, imageUrls } });
 
   // Build the collections' indexes first, so the unique rules exist before any data does.
   await Promise.all(Object.values(MODELS).map((m) => m.createIndexes()));

@@ -11,9 +11,9 @@
  *   node scripts/seedAiFixtures.js                  read-only report: ready / needs fixtures
  *   node scripts/seedAiFixtures.js --apply          write what is missing
  *   node scripts/seedAiFixtures.js --undo           delete only the rows this script wrote
- *   node scripts/seedAiFixtures.js --brand="Sahar"  choose the tenant (default: busiest ACTIVE brand)
- *   node scripts/seedAiFixtures.js --images --apply repoint photos that still point at a
- *                                                   deleted Cloudinary folder
+ *   node scripts/seedAiFixtures.js --brand="Loom"   choose the tenant (default: busiest ACTIVE brand)
+ *   node scripts/seedAiFixtures.js --images --apply repoint photos whose Cloudinary link
+ *                                                   no longer resolves (404), nothing else
  *
  * Without --apply it performs no write of any kind. It never drops a database and never
  * deletes a row it did not create; every id it writes goes into demo/.ai-fixtures.json (git-
@@ -58,10 +58,35 @@ const DAY = 24 * HOUR;
 
 const MARK = 'AI demo';
 const MANIFEST = path.resolve(__dirname, 'demo', '.ai-fixtures.json');
-// Photos uploaded by the old showcase run and then deleted from Cloudinary.
-const DEAD_IMAGE_RE = /^https?:\/\/res\.cloudinary\.com\//i;
+// Photos the seeds put on Cloudinary. seed:demo uploads the Images/ folders there, so a
+// Cloudinary link is not stale by itself: it is stale only when Cloudinary answers 404.
+const CLOUDINARY_RE = /^https?:\/\/res\.cloudinary\.com\//i;
 
 const pad = (n, width) => String(n).padStart(width, '0');
+
+/**
+ * Which of these links the host says are gone. A link that cannot be reached at all (no
+ * network, slow DNS) is NOT counted as gone: an unreachable photo is a bad reason to throw
+ * away a working link, so anything other than a clear 404/403 is left alone.
+ */
+async function deadCloudinaryLinks(urls, { fetchImpl = global.fetch, concurrency = 8 } = {}) {
+  const dead = new Set();
+  const queue = [...new Set(urls.filter((url) => CLOUDINARY_RE.test(url)))];
+  if (!queue.length || typeof fetchImpl !== 'function') return dead;
+  const check = async (url) => {
+    try {
+      const response = await fetchImpl(url, { method: 'HEAD', signal: AbortSignal.timeout(8000) });
+      if (response.status === 404 || response.status === 410 || response.status === 403) dead.add(url);
+    } catch {
+      // Unreachable is not the same as deleted.
+    }
+  };
+  const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+    while (queue.length) await check(queue.shift());
+  });
+  await Promise.all(workers);
+  return dead;
+}
 
 // Same placeholder scheme the seeds use, so the demo listings look like the rest of the shop.
 function photo(keyword, n, width = 900, height = 1100) {
@@ -148,7 +173,11 @@ async function resolveContext({ brandFlag }) {
     return staff.find((u) => String(u._id) === String(membership.userId)) || null;
   };
 
-  const staleImages = await Product.countDocuments({ brandId, images: DEAD_IMAGE_RE });
+  // A listing only counts as carrying a dead photo when the link itself answers 404, so a
+  // seed that put real photos on Cloudinary is left alone and an offline run says "nothing stale".
+  const imageRows = await Product.find({ brandId, images: CLOUDINARY_RE }).select('images').lean();
+  const deadImages = await deadCloudinaryLinks(imageRows.flatMap((row) => row.images));
+  const staleImages = imageRows.filter((row) => row.images.some((url) => deadImages.has(url))).length;
 
   return {
     now: new Date(),
@@ -162,6 +191,7 @@ async function resolveContext({ brandFlag }) {
     employee: staffIn('BRAND_EMPLOYEE') || memberLinkedTo('BRAND_EMPLOYEE'),
     picker: staffIn('PICKER') || memberLinkedTo('PICKER'),
     staleImages,
+    deadImages,
   };
 }
 
@@ -986,12 +1016,15 @@ async function undo() {
 }
 
 async function repointDeadImages(ctx) {
-  const rows = await Product.find({ brandId: ctx.brandId, images: DEAD_IMAGE_RE }).select('name images').lean();
+  const rows = await Product.find({ brandId: ctx.brandId, images: CLOUDINARY_RE }).select('name images').lean();
+  let changed = 0;
   for (const row of rows) {
-    const images = row.images.map((url, i) => (DEAD_IMAGE_RE.test(url) ? photo(row.name, i + 1) : url));
+    const images = row.images.map((url, i) => (ctx.deadImages.has(url) ? photo(row.name, i + 1) : url));
+    if (images.every((url, i) => url === row.images[i])) continue;
     await Product.updateOne({ _id: row._id }, { $set: { images } });
+    changed += 1;
   }
-  return `${rows.length} listing(s) repointed away from the deleted Cloudinary folder`;
+  return `${changed} listing(s) repointed away from photos Cloudinary no longer serves`;
 }
 
 function table(rows) {
@@ -1022,7 +1055,7 @@ async function main() {
   console.log(`Sign in as: ${ctx.owner ? `brand owner ${ctx.owner.email}` : 'NO brand owner found'}`
     + `${ctx.employee ? ` · staff ${ctx.employee.email}` : ''}${ctx.picker ? ` · picker ${ctx.picker.email}` : ' · NO picker'}`);
   if (ctx.staleImages) {
-    console.log(`Note: ${ctx.staleImages} listing(s) still point at the deleted Cloudinary photos — add --images to --apply to repoint them.`);
+    console.log(`Note: ${ctx.staleImages} listing(s) point at photos Cloudinary no longer serves — add --images to --apply to repoint them.`);
   }
   console.log('');
 

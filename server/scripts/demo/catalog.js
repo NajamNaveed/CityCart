@@ -6,6 +6,8 @@
  * Product tuple keys:  n name | c category key | p price | cmp compare-at price | d description
  *                      a attributes | s stock now | low low-stock warning | st status
  *                      kw image keyword | track false = made to order
+ *                      folder = photos under the repository's Images/<folder>, used instead
+ *                             of kw links when seedDemo.js managed to upload them
  */
 
 const P = {
@@ -160,6 +162,7 @@ const BRANDS = [
       { key: 'sk', name: 'Shalwar Kameez', description: 'Stitched sets in cotton, wash and wear and blended fabrics.' },
       { key: 'kurta', name: 'Kurtas', description: 'Short and long kurtas, plain and embroidered.' },
       { key: 'waistcoat', name: 'Waistcoats & Coats', description: 'Layers for weddings and winter evenings.' },
+      { key: 'watches', name: 'Watches', description: 'Everyday and sports watches, kept in the counter by the till.' },
     ],
     products: [
       { n: 'Classic White Cotton Shalwar Kameez', c: 'sk', p: 4200, cmp: 4900, s: 60, low: 10, kw: 'white,kurta',
@@ -186,6 +189,12 @@ const BRANDS = [
       { n: 'Kids Kurta Pajama Set, Ivory', c: 'kurta', p: 2600, s: 40, low: 8, kw: 'kids,kurta',
         d: 'A soft ivory kurta pajama for boys aged 2 to 10, with an easy elastic waist for little ones.',
         a: { fabric: 'Cotton', fit: 'Regular', sizes: '2 to 10 years', color: 'Ivory', care: 'Machine wash warm' } },
+      // Photographed listings: the photos are the files under the repository's Images/
+      // directory, uploaded to Cloudinary by scripts/seedDemo.js before the rows are built.
+      { n: 'Garmin Forerunner 55 GPS Running Watch', c: 'watches', p: 38500, cmp: 42000, s: 9, low: 3,
+        kw: 'gps,watch', folder: 'Garmin Forerunner',
+        d: 'A lightweight GPS running watch that tells you the pace to hold for the distance you are going, then predicts the race time. A week of battery in smartwatch mode and it syncs to your phone over Bluetooth.',
+        a: { brand: 'Garmin', battery: 'Up to 14 days smartwatch, 20 hours GPS', water: '5 ATM', strap: 'Silicone', sizes: 'One size with adjustable strap' } },
     ],
   },
 
@@ -206,11 +215,13 @@ const BRANDS = [
     categories: [
       { key: 'bedding', name: 'Bedding', description: 'Sheets, quilts and bed covers in natural fabrics.' },
       { key: 'cushions', name: 'Cushions & Rugs', description: 'Cushion covers, throws and handwoven rugs.' },
-      { key: 'kitchen', name: 'Kitchen & Dining', description: 'Handmade ceramics and table linen.' },
+      { key: 'kitchen', name: 'Kitchen & Dining', description: 'Handmade ceramics, table linen and the tools a kitchen runs on.' },
       { key: 'decor', name: 'Wall & Shelf Decor', description: 'Brass, terracotta and macrame for walls and shelves.' },
+      { key: 'stationery', name: 'Stationery & Desk', description: 'Notebooks and paper goods for the writing desk.' },
     ],
     products: [
       { n: 'Cotton Bedsheet Set, King, Sage Floral', c: 'bedding', p: 4900, cmp: 5800, s: 26, low: 5, kw: 'bedsheet,floral',
+        folder: 'bedsheet',
         d: 'A king-size bedsheet with two pillow covers in 220-thread-count cotton. Soft from the first night, and the sage floral print is gentle on the eyes.',
         a: { size: 'King (108 x 108 inches)', fabric: '220 TC cotton', pieces: '1 sheet, 2 pillow covers', color: 'Sage floral', care: 'Machine wash warm' } },
       { n: 'Quilted Bed Cover, Double, Ivory', c: 'bedding', p: 7200, cmp: 8400, s: 15, low: 4, kw: 'quilt,bed',
@@ -237,6 +248,28 @@ const BRANDS = [
       { n: 'Terracotta Planter, Medium', c: 'decor', p: 1400, s: 70, low: 12, kw: 'terracotta,planter',
         d: 'A glazed-inside terracotta planter with a drainage hole and a saucer. Sized for a money plant or small fern.',
         a: { size: '8 inches', material: 'Terracotta', pieces: 'Pot and saucer' } },
+      // Photographed listings: the photos are the files under the repository's Images/
+      // directory, uploaded to Cloudinary by scripts/seedDemo.js before the rows are built.
+      { n: 'Astercook 15-Piece Knife Set with Block', c: 'kitchen', p: 8900, cmp: 10500, s: 14, low: 4,
+        kw: 'knife,set', folder: 'Astercook Knife Set',
+        d: 'Fifteen stainless-steel knives and kitchen tools in a wooden block: chef knife, bread knife, carving knife, scissors, peeler and a sharpening steel. The handles stay grippy even with wet hands.',
+        a: { pieces: '15', material: 'Stainless steel with wooden block', care: 'Hand wash and dry before storing', origin: 'Imported' } },
+      { n: 'KitchenAid Ribbed Silicone Oven Mitt, Set of 2', c: 'kitchen', p: 2800, cmp: 3200, s: 26, low: 5,
+        kw: 'oven,mitt', folder: 'KITCHENAID Ribbed Soft Silicone Oven Mitt',
+        d: 'A pair of ribbed silicone oven mitts that grip a hot tray without slipping and wipe clean in a moment. Heat resistant to 240 degrees Celsius, with a soft quilted lining.',
+        a: { brand: 'KitchenAid', pieces: '2', heatResistance: 'Up to 240 C', material: 'Silicone with quilted cotton lining', care: 'Wipe clean or machine wash cold' } },
+      { n: 'Rapid Defrosting Tray, Large', c: 'kitchen', p: 2450, s: 22, low: 5,
+        kw: 'defrost,tray', folder: 'Defrosting Tray',
+        d: 'A thick aluminium tray that thaws chicken, mince or fish in a fraction of the usual time, straight on the kitchen counter. No electricity, no microwave, and the juices stay in the tray instead of on the meat.',
+        a: { size: '30 x 20 cm', material: 'Aluminium with non-stick coating', care: 'Hand wash with mild soap', use: 'Food thawing' } },
+      { n: '2-Ply Kitchen Paper Towels, 6 Rolls', c: 'kitchen', p: 1150, s: 41, low: 6,
+        kw: 'paper,towels', folder: 'Paper Towels',
+        d: 'Six rolls of absorbent two-ply kitchen towels, perforated for a half-sheet tear. Strong enough when wet for wiping counters and draining fried food.',
+        a: { rolls: '6', ply: '2', sheetsPerRoll: '120', sheetSize: '23 x 23 cm' } },
+      { n: 'Hardcover Lined Journal, A5', c: 'stationery', p: 1650, s: 48, low: 10,
+        kw: 'notebook,journal', folder: 'Journal Notebook',
+        d: 'A lay-flat hardcover notebook with 200 lined pages, an elastic closure and a pocket at the back. Thick 100 gsm paper that fountain pens do not bleed through.',
+        a: { size: 'A5 (148 x 210 mm)', pages: '200 lined', paper: '100 gsm ivory', binding: 'Hardcover, lay-flat' } },
     ],
   },
 
@@ -287,6 +320,16 @@ const BRANDS = [
       { n: 'Men\'s Leather Belt, Black', c: 'bags', p: 1800, s: 66, low: 10, kw: 'belt,leather',
         d: 'A 35 mm full-grain leather belt with a brushed steel buckle. Available in 30 to 42 inch waist sizes.',
         a: { material: 'Full-grain leather', width: '35 mm', sizes: '30 to 42 inch', color: 'Black' } },
+      // Photographed listings: the photos are the files under the repository's Images/
+      // directory, uploaded to Cloudinary by scripts/seedDemo.js before the rows are built.
+      { n: 'Brooks Adrenaline GTS Running Shoes, Grey', c: 'sneakers', p: 24500, cmp: 27900, s: 16, low: 4,
+        kw: 'running,shoes', folder: 'shoes',
+        d: 'A supportive everyday trainer: grey knit upper, a thick cushioned midsole and a rubber outsole that keeps its grip on wet pavement. The outlet gets these in as imported stock, so the size run is short.',
+        a: { brand: 'Brooks', upper: 'Engineered knit', midsole: 'Nitrogen-infused foam', outsole: 'Rubber', sizes: 'US 8 to 12', color: 'Grey and amber' } },
+      { n: 'Carry-On Travel Backpack, 40 L', c: 'bags', p: 7500, cmp: 8900, s: 18, low: 4,
+        kw: 'travel,backpack', folder: 'Travel Backpack',
+        d: 'A cabin-sized backpack that opens flat like a suitcase and comes with three matching packing cubes. Padded laptop sleeve, a side pocket that holds a bottle, and a strap that slides over a trolley handle.',
+        a: { capacity: '40 L', laptop: 'Up to 15.6 inch', material: 'Water-resistant polyester', pieces: 'Bag and 3 packing cubes', color: 'Sage and cream', warranty: '1 year' } },
     ],
   },
 
@@ -374,8 +417,9 @@ const BRANDS = [
     categories: [{ key: 'acc', name: 'Phone Accessories', description: 'Cases, chargers and cables.' }],
     products: [
       { n: 'Braided USB-C Cable, 2 m', c: 'acc', p: 950, s: 120, low: 20, kw: 'cable,usb',
-        d: 'A 2 metre braided USB-C fast-charge cable with reinforced ends. Tested to 60 W.',
-        a: { length: '2 m', connector: 'USB-C to USB-C', power: 'Up to 60 W', color: 'Black' } },
+        folder: 'USB C to C Fast Charger Cable',
+        d: 'A 2 metre braided USB-C fast-charge cable with reinforced ends, sold as a pack of two so one can stay at the desk and one in the bag. Tested to 60 W.',
+        a: { pieces: '2 cables', length: '2 m', connector: 'USB-C to USB-C', power: 'Up to 60 W', color: 'White' } },
       { n: 'Shockproof Phone Case, Clear', c: 'acc', p: 1200, s: 75, low: 15, kw: 'phone,case',
         d: 'A clear shockproof case with raised edges to protect the screen and camera.',
         a: { material: 'TPU and polycarbonate', color: 'Clear', compatibility: 'Several popular models; choose at checkout' } },
