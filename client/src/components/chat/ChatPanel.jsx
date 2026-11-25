@@ -32,17 +32,21 @@ const baseFor = (kind) =>
 const threadIdOf = (item) => (item.kind === 'booking' ? item.bookingId : item._id)
 
 /**
- * What the shop is told alongside a drafted reply (docs/29 Phase 2i). The reply
- * itself is always safe to send; this is the part only the shop needs to know —
- * the stock figure CityCart keeps out of a customer's reply, that its own words
- * were replaced by a line the server wrote, or that CityCart has no record for
- * the question at all and where the missing data belongs.
+ * What the shop is told alongside a drafted reply (docs/29 Phase 2i, widened by
+ * 3c-2). The reply itself is always safe to send; this is the part only the shop
+ * needs to know — whether the stock figure reached the customer and why, that
+ * its own words were replaced by a line the server wrote, or that CityCart has no
+ * record for the question at all and where the missing data belongs.
  */
 function brandDraftNote(data) {
   if (data.source === 'none') return data.note || 'CityCart has no record that answers this question.'
   const notes = []
   if (data.private?.availableQuantity != null) {
-    notes.push(`Your stock screen shows ${data.private.availableQuantity} left — a customer's reply only says whether it is available.`)
+    notes.push(
+      data.private.countStated
+        ? `Your stock screen shows ${data.private.availableQuantity} left, and the reply gives that number because the customer asked how many were left.`
+        : `Your stock screen shows ${data.private.availableQuantity} left — the reply says only whether it is available, because the customer did not ask for a number or the listing cannot be ordered right now.`
+    )
   }
   if (data.corrected) notes.push('CityCart replaced the wording with what your own records state.')
   return notes.join(' ')

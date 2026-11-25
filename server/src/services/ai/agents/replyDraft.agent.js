@@ -39,8 +39,9 @@ const {
  * lets the model word those records and checks the finished sentence against
  * them (`draftGuard.js`). So what reaches the provider is names, the customer's
  * own text and one small block of this shop's true data — never its whole
- * database, never another shop's row, and never the exact stock quantity, which
- * CityCart shows to the shop alone.
+ * database and never another shop's row. Where the records carry a figure the
+ * customer asked for, that figure is stated; where they do not, the server says
+ * so, because a number CityCart never read is a number nobody may promise.
  */
 const TYPES = ['review', 'chat'];
 const CUSTOMER_SIDE = 'CUSTOMER';

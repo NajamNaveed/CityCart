@@ -83,6 +83,12 @@ jest.mock('../../src/services/inventory.service', () => ({
   getInventoryForProduct: jest.fn(),
   getStockStatus: jest.fn(),
 }));
+// "does anybody rate it" is answered by the same aggregation the product page
+// uses, which reads the review collection through one group pipeline.
+jest.mock('../../src/services/review.service', () => ({
+  ...jest.requireActual('../../src/services/review.service'),
+  ratingsFor: jest.fn(),
+}));
 
 const User = require('../../src/models/user.model');
 const Employee = require('../../src/models/employee.model');
@@ -98,6 +104,7 @@ const Return = require('../../src/models/return.model');
 const Branch = require('../../src/models/branch.model');
 const Block = require('../../src/models/block.model');
 const { getInventoryForProduct, getStockStatus } = require('../../src/services/inventory.service');
+const { ratingsFor } = require('../../src/services/review.service');
 const app = require('../../src/app');
 const env = require('../../src/config/env');
 const { ROLES } = require('../../src/config/roles');
@@ -135,6 +142,9 @@ const shopStaffId = new mongoose.Types.ObjectId();
 
 const riceId = new mongoose.Types.ObjectId();
 const rivalOilId = new mongoose.Types.ObjectId();
+// A listing this shop has taken off the shelf: still this shop's row, still
+// readable, and impossible to order from.
+const oldPackId = new mongoose.Types.ObjectId();
 
 const goodReviewId = new mongoose.Types.ObjectId();
 const quietReviewId = new mongoose.Types.ObjectId();
@@ -154,8 +164,8 @@ const dhaId = new mongoose.Types.ObjectId();
 const brandNameA = 'Kashfi General Store';
 const riceName = 'Basmati Rice 5 kg';
 const ricePrice = 1450;
-// The count CityCart keeps to the shop alone: it may reach the shop's own
-// screen and must never reach a provider or a customer's reply.
+// The shop's own inventory figure: it reaches a customer only when they asked
+// for the number of a listing they could actually order.
 const stockCount = 7;
 
 const users = [
@@ -172,6 +182,7 @@ const listings = [
     compareAtPrice: 1600,
     stock: 40,
     attributes: { weight: '5 kg', 'pack size': '2 bags', nested: { a: 1 } },
+    images: ['r1.jpg', 'r2.jpg'],
     status: 'ACTIVE',
     isActive: true,
   },
@@ -185,6 +196,20 @@ const listings = [
     stock: 7,
     status: 'ACTIVE',
     isActive: true,
+  },
+  {
+    _id: oldPackId,
+    brandId: brandA,
+    name: 'Sella Rice 2 kg (discontinued)',
+    price: 700,
+    compareAtPrice: null,
+    attributes: { weight: '2 kg' },
+    stock: 12,
+    // Taken off the shelf: cart.service.js answers PRODUCT_UNAVAILABLE for it,
+    // so there is no quantity to quote even though the row still carries one.
+    status: 'INACTIVE',
+    isActive: true,
+    images: ['r1.jpg', 'r2.jpg', 'r3.jpg'],
   },
 ];
 
@@ -291,13 +316,15 @@ const allMessages = [...messages, ...shopOnlyMessages, ...rivalMessages];
 
 // The records the drafter reads when a customer asks something factual: one
 // open order per customer, a return against this shop's order, and the two
-// areas this shop's branch is actually in.
+// areas this shop's branch is actually in. The numbers are the real format —
+// `CC-<year>-<6 digits>` is what order.service.js writes — because a customer
+// identifies an order by exactly that string.
 const orders = [
   {
     _id: orderId,
     customerId,
     brandId: brandA,
-    orderNumber: 'ORD-1042',
+    orderNumber: 'CC-2026-001042',
     orderStatus: 'OUT_FOR_DELIVERY',
     createdAt: new Date('2026-11-20'),
     items: [{ quantity: 2 }, { quantity: 1 }],
@@ -306,7 +333,7 @@ const orders = [
     _id: new mongoose.Types.ObjectId(),
     customerId: rivalCustomerId,
     brandId: brandB,
-    orderNumber: 'ORD-7788',
+    orderNumber: 'CC-2026-007788',
     orderStatus: 'SHIPPED',
     createdAt: new Date('2026-11-24'),
     items: [{ quantity: 9 }],
@@ -344,10 +371,15 @@ const branches = [
 // unexpected shape returns no row instead of quietly returning every one.
 // ---------------------------------------------------------------------------
 function matchesValue(value, condition) {
-  // The reads brandChatFacts.js builds use one operator: an order status is
-  // matched against the set that still counts as open.
+  // The reads brandChatFacts.js builds use two operators: an order status is
+  // matched against the set that still counts as open, and an order number a
+  // customer typed is matched as a whole word, case-insensitively.
   if (condition && typeof condition === 'object' && '$in' in condition) {
     return condition.$in.some((item) => String(item) === String(value));
+  }
+  if (condition && typeof condition === 'object' && '$regex' in condition) {
+    if (value === undefined || value === null) return false;
+    return new RegExp(condition.$regex, condition.$options || '').test(String(value));
   }
   if (condition instanceof RegExp) return condition.test(String(value || ''));
   if (value === undefined || value === null) return condition === undefined || condition === null;
@@ -492,10 +524,13 @@ beforeEach(() => {
   // Customer rows by id; asUser() adds the signed-in account on top of this.
   User.findById.mockImplementation((id) => queryOf(users.find((person) => String(person._id) === String(id)) || null));
 
+  // `status` is on the row because cart.service.js refuses to sell from a shop
+  // whose brand is not ACTIVE, and the drafter quotes a quantity only off the
+  // same gate — without it this shop would look closed.
   Brand.findById.mockImplementation((id) =>
     queryOf(
       String(id) === String(brandA)
-        ? { _id: brandA, name: brandNameA, cityId, settings: { estimatedDeliveryTime: '2 to 3 days' } }
+        ? { _id: brandA, name: brandNameA, cityId, status: 'ACTIVE', settings: { estimatedDeliveryTime: '2 to 3 days' } }
         : null
     )
   );
@@ -509,10 +544,11 @@ beforeEach(() => {
   Return.findOne.mockImplementation((filter = {}) => queryOf(returns.find((row) => matchesDoc(row, filter)) || null));
   Branch.find.mockImplementation((filter = {}) => listQuery(branches.filter((row) => matchesDoc(row, filter))));
   Block.find.mockImplementation((filter = {}) => listQuery(blocks.filter((row) => matchesDoc(row, filter))));
-  // The shop's own stock screen figure, which is private to the shop: the
-  // provider is handed the state and the agent is handed the count.
+  // The shop's own stock screen figure. Whether it reaches the provider is the
+  // question each case below answers, not a rule the fixture decides.
   getInventoryForProduct.mockResolvedValue({ availableQuantity: stockCount, reservedQuantity: 2 });
   getStockStatus.mockReturnValue('LOW_STOCK');
+  ratingsFor.mockResolvedValue({});
   mockThreadRows(allMessages);
 
   global.fetch = jest.fn().mockResolvedValue(modelSays({ draft: DRAFT_TEXT }));
@@ -710,7 +746,7 @@ describe('the prompts — the shop speaks and the customer text is data', () => 
   });
 
   it('names the two things a shop may not say whatever the records hold', () => {
-    expect(REPLY_SYSTEM).toContain('Never state how many items are in stock.');
+    expect(REPLY_SYSTEM).toContain('State a stock quantity only when the records below give one');
     expect(REPLY_SYSTEM).toContain('Never state a delivery fee, a minimum order or a coupon');
     // and the records block itself is what the reply may be built from.
     expect(userOf(chatSubject, { price: 1450 })).toContain(
@@ -1032,12 +1068,12 @@ describe('draftReply — only this shop’s own review or thread', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Phase 2i, end to end. Each case below is one sentence a customer really
-// writes: the shop presses "write a reply" and must be handed the truth about
-// this shop's own records — the stock state, the listed price, the areas its
-// branches are in, the state of this customer's order — never a guess, never a
-// promise CityCart cannot keep, and never the exact quantity the platform shows
-// to the shop alone.
+// Phase 2i widened by 3c-2, end to end. Each case below is one sentence a
+// customer really writes: the shop presses "write a reply" and must be handed
+// the truth about this shop's own records — the stock state and, when the
+// customer asked for the number, that count; the listed price; the areas its
+// branches are in; the state of the order this customer named — never a guess,
+// never a promise CityCart cannot keep, and never a figure it did not read.
 // ---------------------------------------------------------------------------
 
 /** A thread whose newest message from the customer says exactly this. */
@@ -1065,7 +1101,7 @@ function modelDrafts(text) {
 }
 
 describe('a drafted reply answers from this shop’s own records', () => {
-  it('answers a stock question with the state and keeps the count for the shop alone', async () => {
+  it('states the count a customer asked for, read from this shop’s own inventory row', async () => {
     const result = await draftChat('tell me how many stock is available for this product');
 
     expect(result).toMatchObject({
@@ -1078,17 +1114,49 @@ describe('a drafted reply answers from this shop’s own records', () => {
     expect(global.fetch).toHaveBeenCalledTimes(1);
 
     const { user, system } = prompts()[0];
-    expect(system).toContain('Never state how many items are in stock.');
     expect(user).toContain('productName: Basmati Rice 5 kg');
     expect(user).toContain('stockState: LOW_STOCK');
+    // The number arrives as a line that says what CityCart verified about it,
+    // not as a field name a model could attach to anything.
+    expect(user).toContain('pieces on our listing that a customer can order right now: 7');
+    expect(user).not.toContain('availableQuantity');
+    expect(user).not.toContain('reservedQuantity');
+    expect(system).toContain('State a stock quantity only when the records below give one');
 
-    // The count is read for the shop's own screen and never reaches a provider.
     expect(getInventoryForProduct).toHaveBeenCalledWith({ _id: riceId, brandId: brandA });
-    expect(result.private).toEqual({ availableQuantity: stockCount, stockStatus: 'LOW_STOCK' });
-    expect(user).not.toMatch(/\b7\b/);
+    // The shop's screen repeats the figure and says that the reply carried it.
+    expect(result.private).toEqual({ availableQuantity: stockCount, stockStatus: 'LOW_STOCK', countStated: true });
+    // A listing row's own `stock` is not what the platform quotes as available.
     expect(user).not.toContain(String(listings[0].stock));
+  });
+
+  it('keeps the count out of the records when the customer only asked whether it is there', async () => {
+    const result = await draftChat('is this product available');
+
+    expect(result.family).toBe('availability');
+    expect(prompts()[0].user).not.toMatch(/\b7\b/);
     expect(rawBody()).not.toContain('availableQuantity');
-    expect(rawBody()).not.toContain('reservedQuantity');
+    expect(result.private).toEqual({ availableQuantity: stockCount, stockStatus: 'LOW_STOCK', countStated: false });
+  });
+
+  it('refuses a number of pieces the records never read, even for a count question', async () => {
+    modelDrafts('We have 40 packets of Basmati Rice 5 kg left.');
+
+    const result = await draftChat('tell me how many stock is available for this product');
+
+    expect(result).toMatchObject({ grounded: false, corrected: true, reasons: ['numbers'] });
+    expect(result.draft).toBe('Basmati Rice 5 kg has only 7 pieces left, so order it soon.');
+  });
+
+  it('names a listing the customer cannot order from instead of quoting it a quantity', async () => {
+    const result = await draftChat('how many pieces are left', oldPackId);
+
+    expect(result).toMatchObject({ family: 'availability', source: 'server', grounded: true });
+    expect(result.draft).toBe(
+      'Sella Rice 2 kg (discontinued) is not on our listing right now, so there is no quantity to quote. Ask again once it is back.'
+    );
+    expect(result.private).toMatchObject({ countStated: false });
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it('quotes the listed price, and the older price, when the price was the question', async () => {
@@ -1113,26 +1181,17 @@ describe('a drafted reply answers from this shop’s own records', () => {
   it('refuses a draft that promises money and hands back one that promises nothing', async () => {
     modelDrafts('We will refund you and resend the bag tomorrow.');
 
-    const result = await draftChat('tell me how many stock is available for this product');
+    const result = await draftChat('is this product available');
 
     expect(result.grounded).toBe(false);
     expect(result.reasons).toContain('action');
     expect(result.draft).toBe('Basmati Rice 5 kg is in stock but running low, so order it soon.');
   });
 
-  it('refuses a draft that quotes the stock count CityCart keeps private', async () => {
-    modelDrafts('We have only 7 packets of Basmati Rice 5 kg left.');
-
-    const result = await draftChat('tell me how many stock is available for this product');
-
-    expect(result).toMatchObject({ grounded: false, corrected: true, reasons: ['numbers'] });
-    expect(result.draft).toBe('Basmati Rice 5 kg is in stock but running low, so order it soon.');
-  });
-
   it('refuses a draft that mentions a fee or a coupon the platform does not have', async () => {
     modelDrafts('We can add a coupon code and delivery is free.');
 
-    const result = await draftChat('tell me how many stock is available for this product');
+    const result = await draftChat('is this product available');
 
     expect(result.reasons).toEqual(['money']);
     expect(result.draft).not.toMatch(/coupon|free/iu);
@@ -1156,8 +1215,122 @@ describe('a drafted reply answers from this shop’s own records', () => {
     expect(result.family).toBe('order');
     expect(Order.findOne.mock.calls[0][0]).toEqual(expect.objectContaining({ customerId, brandId: brandA }));
     expect(prompts()[0].user).toContain('orderState: OUT_FOR_DELIVERY');
-    expect(rawBody()).not.toContain('ORD-');
-    expect(rawBody()).not.toContain('7788');
+    // The row carries the number; a customer who did not type one is not
+    // identified by it, and the shop is not asked to read it off a prompt.
+    expect(rawBody()).not.toContain('CC-2026');
+    expect(rawBody()).not.toContain('001042');
+    expect(rawBody()).not.toContain('007788');
+  });
+
+  it('answers an order the customer named, after verifying it is theirs', async () => {
+    const result = await draftChat('where is my order CC-2026-001042 right now');
+
+    // Keyed by the conversation's own customer and the session's own brand: the
+    // number is treated as a question, never as an owner.
+    expect(Order.findOne.mock.calls[0][0]).toEqual({
+      customerId,
+      brandId: brandA,
+      orderNumber: { $regex: '^CC-2026-001042$', $options: 'i' },
+    });
+    expect(result.family).toBe('order');
+    const { user } = prompts()[0];
+    expect(user).toContain('orderState: OUT_FOR_DELIVERY');
+    // Only their own number is echoed back, and only as a confirmed match.
+    expect(user).toContain("order number CityCart matched to this customer’s own account: CC-2026-001042");
+    expect(rawBody()).not.toContain('CC-2026-007788');
+  });
+
+  it.each([
+    ['a number that belongs to another customer', 'CC-2026-007788'],
+    ['a number CityCart never wrote', 'CC-2026-999999'],
+  ])('says only that it cannot find %s, and asks no provider', async (_label, number) => {
+    const result = await draftChat(`what is the status of order ${number}`);
+
+    expect(result).toMatchObject({ family: 'order', source: 'server', grounded: true });
+    expect(result.draft).toBe(
+      'We could not find that order number under your account with us. Check the number on the order page, or tell us the date you ordered.'
+    );
+    // The same sentence either way, so nothing is learned about whose it is.
+    expect(result.draft).not.toMatch(/\d/);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('refuses to answer for another shop’s order even when this shop is asked nicely', async () => {
+    Order.findOne.mockImplementation((filter = {}) =>
+      queryOf([{ _id: new mongoose.Types.ObjectId(), customerId, brandId: brandB, orderNumber: 'CC-2026-001042', orderStatus: 'DELIVERED', items: [] }].find((row) => matchesDoc(row, filter)) || null)
+    );
+
+    const result = await draftChat('where is my order CC-2026-001042 right now');
+
+    expect(result.source).toBe('server');
+    expect(result.draft).not.toContain('delivered');
+  });
+
+  it('states the cancel and change rules that actually hold for this parcel', async () => {
+    const cancel = await draftChat('can I cancel my order');
+    expect(cancel).toMatchObject({ family: 'order', source: 'server', grounded: true });
+    expect(cancel.draft).toBe(
+      'Your order is on its way with a rider (3 items). It cannot be cancelled from your side any more, so write us here if something is wrong.'
+    );
+
+    const change = await draftChat('I want to change my order');
+    expect(change.source).toBe('server');
+    expect(change.draft).toBe(
+      'Your order is on its way with a rider (3 items). A change request is no longer open on it, so tell us here what you need.'
+    );
+
+    const rider = await draftChat('is my rider near me', null);
+    expect(rider.source).toBe('server');
+    expect(rider.draft).toBe(
+      'Your order is on its way with a rider (3 items). While it is out for delivery, that order’s page shows the rider and where the parcel is. CityCart does not hand out a rider’s phone number.'
+    );
+
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('offers the cancel rule to a customer whose order is still unconfirmed', async () => {
+    Order.findOne.mockImplementation((filter = {}) =>
+      queryOf(
+        [{ ...orders[0], orderStatus: 'PENDING', paymentStatus: 'PENDING' }].find((row) => matchesDoc(row, filter)) || null
+      )
+    );
+
+    const result = await draftChat('can I cancel my order');
+
+    expect(result.draft).toBe(
+      'Your order is waiting for the shop to confirm (3 items). CityCart lets you cancel an order yourself while it is still unconfirmed, from that order’s own page.'
+    );
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('says what this listing’s own reviews really average', async () => {
+    ratingsFor.mockResolvedValue({ [String(riceId)]: { count: 12, average: 4.3 } });
+
+    const result = await draftChat('is this product good');
+
+    expect(result.family).toBe('opinion');
+    expect(ratingsFor).toHaveBeenCalledWith([riceId]);
+    const { user } = prompts()[0];
+    expect(user).toContain('approved reviews of this listing: 12');
+    expect(user).toContain('their average rating, out of 5: 4.3');
+  });
+
+  it('says nobody has reviewed it in the server’s own words when there is nothing to quote', async () => {
+    const result = await draftChat('is this product good');
+
+    expect(result).toMatchObject({ family: 'opinion', source: 'server', grounded: true });
+    expect(result.draft).toBe('Nobody has reviewed that item on CityCart yet, so there is no rating to quote.');
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('answers a self-collection question with the platform’s rule, not the shop’s memory', async () => {
+    const result = await draftChat('can I pick it up from your shop', null);
+
+    expect(result).toMatchObject({ family: 'rule', source: 'server' });
+    expect(result.draft).toBe(
+      'CityCart has no self-collection option — every order is delivered to the address given at checkout.'
+    );
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it('says a platform rule in the server’s own words and costs no provider call', async () => {
@@ -1182,6 +1355,12 @@ describe('a drafted reply answers from this shop’s own records', () => {
     const contact = await draftChat('can you call me on my number', null);
     expect(contact.source).toBe('none');
     expect(contact.note).toContain('does not draft contact details');
+
+    const rider = await draftChat('rider ka phone number do', null);
+    expect(rider.note).toContain("rider's phone number");
+
+    const bulk = await draftChat('do you give wholesale rates', null);
+    expect(bulk.note).toContain('wholesale');
 
     expect(global.fetch).not.toHaveBeenCalled();
   });
@@ -1226,10 +1405,11 @@ describe('a drafted reply answers from this shop’s own records', () => {
   });
 
   it('answers in the language the customer wrote, in the shop’s own voice', async () => {
-    modelDrafts('We have only 7 packets of Basmati Rice 5 kg left.');
-    const roman = await draftChat('kitna stock hai is product ka');
+    modelDrafts('We have 40 packets of it left.');
+    const roman = await draftChat('yeh product available hai');
     expect(roman.language).toBe('roman');
     expect(roman.draft).toContain('stock mein hai magar thora sa reh gaya hai');
+    expect(roman.draft).not.toMatch(/\b40\b/);
 
     modelDrafts('Rs 999 is the listed price.');
     const urdu = await draftChat('یہ کتنے روپے کا ہے');
@@ -1478,14 +1658,40 @@ describe('POST /api/v1/ai/reply-draft', () => {
     });
   });
 
-  it('shows the shop the stock count beside a reply that states only the state', async () => {
+  it('hands the panel the count it read and whether the reply carried it', async () => {
     threadAsking('tell me how many stock is available for this product');
 
     const res = await chatCall(conversationId);
 
-    expect(res.body.data.private).toEqual({ availableQuantity: stockCount, stockStatus: 'LOW_STOCK' });
+    expect(res.body.data.private).toEqual({
+      availableQuantity: stockCount,
+      stockStatus: 'LOW_STOCK',
+      countStated: true,
+    });
     expect(res.body.data.draft).toBe(DRAFT_TEXT);
-    expect(res.body.data.draft).not.toContain(String(stockCount));
+
+    // A question that never asked for the number leaves it on the shop's screen.
+    threadAsking('is this product available');
+    const state = await chatCall(conversationId);
+
+    expect(state.body.data.private).toEqual({
+      availableQuantity: stockCount,
+      stockStatus: 'LOW_STOCK',
+      countStated: false,
+    });
+    expect(state.body.data.draft).toBe(DRAFT_TEXT);
+  });
+
+  it('routes the answer about an order the customer named through the same read', async () => {
+    threadAsking('where is my order CC-2026-001042 right now');
+
+    const res = await chatCall(conversationId);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({ family: 'order', source: 'model', grounded: true });
+    expect(Order.findOne.mock.calls[0][0].orderNumber).toEqual({ $regex: '^CC-2026-001042$', $options: 'i' });
+    // Nothing about another customer's parcel travels with this shop's answer.
+    expect(rawBody()).not.toContain('007788');
   });
 
   it('answers with no draft at all, and the reason, when CityCart has nothing to state', async () => {

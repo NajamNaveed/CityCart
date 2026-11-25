@@ -11,18 +11,26 @@
  * costs the sentence, not the answer: the cards stay and the words are replaced
  * by a line built from those cards, which cannot be wrong because the server
  * wrote every character of it.
+ *
+ * Phase 3c-2 widened what counts as a stated figure, because the drafter is now
+ * handed counts, ratings and order numbers it used to be denied: a review count,
+ * a star average written "4.5 out of 5", a number of pieces or photos, and the
+ * digits inside an identifier, which are never evidence.
  */
 const MONEY = /(?:rs\.?|rupees?|pkr|₨|pk\s?re)\s*([\d,]+(?:\.\d+)?)|([\d,]+(?:\.\d+)?)\s*(?:rupees?|pkr)\b/iu;
 const PERCENT = /(\d+(?:\.\d+)?)\s*%/;
-const UNIT = /(\d+(?:\.\d+)?)\s*(km|kilometres?|kilometers?|minutes?|mins?\b|hours?|★|stars?|rating)/iu;
-const RATING = /(\d(?:\.\d)?)\s*(?:\/\s*5|stars?|rating|★)/iu;
+const UNIT =
+  /(\d+(?:\.\d+)?)\s*(km|kilometres?|kilometers?|minutes?|mins?\b|hours?|★|stars?|ستارے|سٹار|rating|reviews?)/iu;
+const RATING = /(\d(?:\.\d)?)\s*(?:\/\s*5|out\s+of\s*5|stars?|ستارے|سٹار|rating|★)/iu;
 
 const numeric = (value) => Number(String(value).replace(/,/g, ''));
 
 // Identifiers, image urls and slugs are full of digits that are not amounts.
 // Reading them as evidence would let an invented price pass the check because
-// two of its digits happened to appear in an ObjectId.
-const NOT_A_NUMBER_SOURCE = /(?:^|_)(?:id|ids|image|images|thumbnail|url|slug|logo|phone|email|coordinates|year)$/i;
+// two of its digits happened to appear in an ObjectId. `orderNumber` is the same
+// trap in camel case — `CC-2026-000001` would otherwise hand the check a "2026"
+// that no shop ever priced anything at.
+const NOT_A_NUMBER_SOURCE = /(?:^|_)(?:id|ids|image|images|thumbnail|url|slug|logo|phone|email|coordinates|year)$|(?:number|code)$/i;
 const HEX_ID = /^[0-9a-f]{24}$/i;
 
 function collect(value, numbers, key = '') {
@@ -64,16 +72,19 @@ function evidenceNumbers(evidence) {
 
 /**
  * A quantity a shopper or a shop could act on. Only asked for where a count is
- * the thing being claimed (a drafted shop reply about stock): the customer chat
- * is never told a quantity at all, so its replies have no count to check, and
- * switching this on there would only make good sentences worse.
+ * the thing being claimed (a drafted shop reply): since Phase 3c-2 the drafter
+ * is handed a stock count, a review count and a photo count when the records
+ * carry them, so each of those words has to be checked rather than assumed. The
+ * customer chat still never states a quantity, so this stays switched off there
+ * — turning it on would only make good sentences worse.
  */
 const COUNT =
-  /(\d+)\s*(?:pieces?|pcs|units?|bottles?|boxes?|packs?|cartons?|bags?|items?|days?|kilos?|kg|grams?|litres?|liters?|ml|baccha|bacche|bache|bachay|din|ghante)\b/iu;
+  /(\d+)\s*(?:pieces?|pcs|units?|bottles?|boxes?|packs?|cartons?|bags?|items?|days?|kilos?|kg|grams?|litres?|liters?|ml|photos?|pictures?|images?|baccha|bacche|bache|bachay|din|ghante)\b/iu;
 const COUNT_BARE = /\b(?:only|have|has|left|remaining|bas|bacche|baccha)\s+(\d+)\b/iu;
 // Urdu script writes the count and the currency after the number, and the
 // rupee is the amount a shop could promise, so it belongs with the counts.
-const COUNT_URDU = /(\d+)\s*(?:عدد|دن|یونٹ|پیس|کلو|گرم|لیٹر|ڈبے|تھیلے|بوتلیں|شے|روپے|پیسہ)/u;
+const COUNT_URDU =
+  /(\d+)\s*(?:عدد|دن|یونٹ|پیس|کلو|گرم|لیٹر|ڈبے|تھیلے|بوتلیں|شے|تصاویر|فوٹو|پکچر|روپے|پیسہ)/u;
 
 /** The claims a reply makes that a customer could act on. */
 function claimsOf(answer, { counts = false } = {}) {

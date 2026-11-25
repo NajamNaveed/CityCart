@@ -9,8 +9,10 @@
  * it actually read:
  *
  *   1. a money-or-parcel action the platform cannot verify;
- *   2. a figure the records do not contain, including a stock count, which
- *      CityCart publishes to the shop alone;
+ *   2. a figure the records do not contain — which includes a stock count the
+ *      customer never asked for, since `readChatFacts` puts a number in the
+ *      records only when the customer asked how many were left of a listing they
+ *      could actually order;
  *   3. money the platform does not charge at all — a delivery fee, a minimum
  *      order, a coupon.
  *
@@ -25,6 +27,15 @@ const {
   DECLINED_LINES,
   ACKNOWLEDGE_LINES,
   STOCK_LINES,
+  COUNT_LINES,
+  NOT_LIVE_LINES,
+  NUMBER_NOT_FOUND_LINES,
+  CANCEL_LINES,
+  CHANGE_LINES,
+  PROPOSAL_OPEN_LINES,
+  RIDER_LINES,
+  OPINION_LINES,
+  RULE_LINES,
 } = require('../../src/services/ai/draftGuard');
 
 const rice = { productName: 'Basmati Rice 5kg', price: 1600, compareAtPrice: 1900 };
@@ -73,7 +84,10 @@ describe('checkDraft — a promise the platform cannot verify', () => {
 });
 
 describe('checkDraft — a figure the records never said', () => {
-  it('refuses a stock count, which is not public to a customer', () => {
+  it('refuses a stock count the records do not carry', () => {
+    // The customer never asked how many were left, so `readChatFacts` put no
+    // number in the records — and a number the platform never read is a number
+    // nobody may promise.
     const facts = { productName: 'Basmati Rice 5kg', stockState: 'LOW_STOCK' };
     for (const draft of [
       'We have 12 pieces left in stock.',
@@ -87,6 +101,27 @@ describe('checkDraft — a figure the records never said', () => {
       expect(verdict.reasons).toContain('numbers');
       expect(verdict.missing.length).toBeGreaterThan(0);
     }
+  });
+
+  it('allows the quantity the records do carry, and only that one', () => {
+    const facts = { productName: 'Basmati Rice 5kg', stockState: 'LOW_STOCK', availableQuantity: 7 };
+    expect(checkDraft({ draft: 'There are 7 pieces of Basmati Rice 5kg left.', facts }).ok).toBe(true);
+    expect(checkDraft({ draft: 'Basmati Rice 5kg ke 7 piece bacche hain.', facts }).ok).toBe(true);
+    expect(checkDraft({ draft: 'There are 70 pieces of Basmati Rice 5kg left.', facts }).reasons).toContain('numbers');
+  });
+
+  it('allows a rating the listing’s own reviews carry and refuses one they do not', () => {
+    const facts = { productName: 'Basmati Rice 5kg', ratingCount: 12, averageRating: 4.3 };
+    expect(checkDraft({ draft: 'It has 12 reviews at 4.3 stars.', facts }).ok).toBe(true);
+    expect(checkDraft({ draft: 'It has 12 reviews at 4.8 stars.', facts }).reasons).toContain('numbers');
+  });
+
+  it('allows the order number the customer themselves typed', () => {
+    const facts = { orderState: 'OUT_FOR_DELIVERY', itemCount: 3, orderNumber: 'CC-2026-001042' };
+    expect(checkDraft({ draft: 'Order CC-2026-001042 is on its way with a rider (3 items).', facts }).ok).toBe(true);
+    expect(
+      checkDraft({ draft: 'Order CC-2026-001042 has 4 items.', facts: { ...facts, itemCount: 3 } }).reasons
+    ).toContain('numbers');
   });
 
   it('refuses a price the listing does not carry and allows the one it does', () => {
@@ -133,6 +168,121 @@ describe('serverDraft — the line the shop gets instead', () => {
       expect(line).toMatch(/Sella Rice/);
       expect(line).not.toMatch(/\d/);
     }
+  });
+
+  it('gives the number the customer asked for, and only the record’s own', () => {
+    expect(
+      serverDraft({
+        family: 'availability',
+        facts: { productName: 'Sella Rice', stockState: 'LOW_STOCK', availableQuantity: 7 },
+        language: 'en',
+      })
+    ).toBe('Sella Rice has only 7 pieces left, so order it soon.');
+    expect(
+      serverDraft({
+        family: 'availability',
+        facts: { productName: 'Sella Rice', stockState: 'IN_STOCK', availableQuantity: 7 },
+        language: 'roman',
+      })
+    ).toBe('Sella Rice ke 7 piece is listing par bacche hain, aap abhi order kar saktay hain.');
+    // A count of zero is not a quantity to quote; the state says it plainly.
+    expect(
+      serverDraft({
+        family: 'availability',
+        facts: { productName: 'Sella Rice', stockState: 'OUT_OF_STOCK', availableQuantity: 0 },
+        language: 'en',
+      })
+    ).toBe(STOCK_LINES.OUT_OF_STOCK.en('Sella Rice'));
+
+    for (const language of ['en', 'ur', 'roman']) {
+      const line = serverDraft({
+        family: 'availability',
+        facts: { productName: 'Sella Rice', stockState: 'LOW_STOCK', availableQuantity: 7 },
+        language,
+      });
+      expect({ language, ...checkDraft({ draft: line, facts: { productName: 'Sella Rice', stockState: 'LOW_STOCK', availableQuantity: 7 } }) }).toEqual(
+        { language, ok: true, reasons: [], missing: [] }
+      );
+    }
+  });
+
+  it('quotes no number for a listing the customer cannot order', () => {
+    const facts = { productName: 'Sella Rice', stockState: 'LOW_STOCK', activeListing: false };
+    const line = serverDraft({ family: 'availability', facts, language: 'en' });
+    expect(line).toBe(NOT_LIVE_LINES.en('Sella Rice'));
+    expect(line).not.toMatch(/\d/);
+    expect(checkDraft({ draft: line, facts }).ok).toBe(true);
+  });
+
+  it('says it cannot find an order number, and says the same thing every time', () => {
+    for (const language of ['en', 'ur', 'roman']) {
+      const line = serverDraft({ family: 'order', facts: { numberAsked: true }, language });
+      expect(line).toBe(NUMBER_NOT_FOUND_LINES[language]);
+      expect(line).not.toMatch(/\d/);
+      expect(makesActionClaim(line)).toBe(false);
+      expect(checkDraft({ draft: line, facts: { numberAsked: true } }).ok).toBe(true);
+    }
+  });
+
+  it('states the order’s own stage, then the one rule that parcel falls under', () => {
+    const shipped = { orderState: 'OUT_FOR_DELIVERY', isOpen: true, itemCount: 3 };
+    expect(
+      serverDraft({ family: 'order', facts: { ...shipped, canSelfCancel: false }, language: 'en' })
+    ).toBe(`Your order is on its way with a rider (3 items). ${CANCEL_LINES.no.en}`);
+    expect(
+      serverDraft({ family: 'order', facts: { orderState: 'PENDING', isOpen: true, itemCount: 1, canSelfCancel: true }, language: 'roman' })
+    ).toBe(`Aap ka order shop ki confirmation ka wait kar raha hai (1 items). ${CANCEL_LINES.yes.roman}`);
+    expect(
+      serverDraft({ family: 'order', facts: { ...shipped, canProposeChange: false }, language: 'en' })
+    ).toBe(`Your order is on its way with a rider (3 items). ${CHANGE_LINES.no.en}`);
+    expect(
+      serverDraft({ family: 'order', facts: { ...shipped, canProposeChange: true, openProposal: true }, language: 'en' })
+    ).toBe(`Your order is on its way with a rider (3 items). ${PROPOSAL_OPEN_LINES.en}`);
+    expect(serverDraft({ family: 'order', facts: { ...shipped, riderTrackable: true }, language: 'en' })).toBe(
+      `Your order is on its way with a rider (3 items). ${RIDER_LINES.en}`
+    );
+    // An order the customer named by number is repeated back to them by it.
+    expect(
+      serverDraft({ family: 'order', facts: { ...shipped, orderNumber: 'CC-2026-001042' }, language: 'en' })
+    ).toBe('Order CC-2026-001042 is on its way with a rider (3 items).');
+
+    for (const facts of [
+      { ...shipped, canSelfCancel: true },
+      { ...shipped, canSelfCancel: false },
+      { ...shipped, canProposeChange: true },
+      { ...shipped, canProposeChange: false, openProposal: true },
+      { ...shipped, riderTrackable: true },
+    ]) {
+      for (const language of ['en', 'ur', 'roman']) {
+        const line = serverDraft({ family: 'order', facts, language });
+        expect(makesActionClaim(line)).toBe(false);
+        expect({ language, ...checkDraft({ draft: line, facts }) }).toEqual({ language, ok: true, reasons: [], missing: [] });
+      }
+    }
+  });
+
+  it('reads the reviews a listing has, and says plainly when it has none', () => {
+    const seen = { productName: 'Sella Rice', ratingCount: 12, averageRating: 4.3 };
+    expect(serverDraft({ family: 'opinion', facts: seen, language: 'en' })).toBe(
+      'Sella Rice has 12 reviews on CityCart, at an average of 4.3 stars.'
+    );
+    expect(
+      serverDraft({ family: 'opinion', facts: { productName: 'Sella Rice', ratingCount: 1, averageRating: 5 }, language: 'roman' })
+    ).toBe('Sella Rice ke 1 review hain, average 5 star.');
+    for (const facts of [{ productName: 'Sella Rice', ratingCount: 0 }, { productName: 'Sella Rice', ratingCount: 12 }]) {
+      for (const language of ['en', 'ur', 'roman']) {
+        const line = serverDraft({ family: 'opinion', facts, language });
+        expect(line).toBe(OPINION_LINES.none[language]);
+        expect(line).not.toMatch(/\d/);
+      }
+    }
+  });
+
+  it('answers a self-collection request with the platform’s own rule', () => {
+    expect(serverDraft({ family: 'rule', facts: { rule: 'pickup' }, language: 'en' })).toBe(RULE_LINES.pickup.en);
+    expect(serverDraft({ family: 'rule', facts: { rule: 'pickup' }, language: 'roman' })).toBe(RULE_LINES.pickup.roman);
+    expect(makesActionClaim(RULE_LINES.pickup.en)).toBe(false);
+    expect(RULE_LINES.pickup.en).not.toMatch(/\d/);
   });
 
   it('states the listing price and the older listing price, nothing else', () => {
@@ -231,14 +381,23 @@ describe('serverDraft — the line the shop gets instead', () => {
   it('never states a figure the records did not carry, family by family', () => {
     const cases = [
       ['availability', { productName: 'Rice', stockState: 'IN_STOCK' }],
+      ['availability', { productName: 'Rice', stockState: 'LOW_STOCK', availableQuantity: 7 }],
+      ['availability', { productName: 'Rice', stockState: 'LOW_STOCK', activeListing: false }],
       ['price', rice],
       ['detail', { productName: 'Rice', details: [{ key: 'weight', value: '5 kg' }] }],
+      ['detail', { productName: 'Rice', details: [{ key: 'photos on this listing', value: '3' }] }],
+      ['opinion', { productName: 'Rice', ratingCount: 12, averageRating: 4.3 }],
+      ['opinion', { productName: 'Rice', ratingCount: 0 }],
       ['coverage', { zones: ['Gulberg III'] }],
       ['timing', { promise: '2 to 3 days' }],
       ['order', { orderState: 'SHIPPED', itemCount: 2 }],
+      ['order', { numberAsked: true }],
+      ['order', { orderState: 'PENDING', itemCount: 2, canSelfCancel: true }],
+      ['order', { orderState: 'OUT_FOR_DELIVERY', itemCount: 2, riderTrackable: true }],
       ['return', { returnState: 'RECEIVED', refundAmount: 0 }],
       ['complaint', {}],
       ['rule', { rule: 'payment' }],
+      ['rule', { rule: 'pickup' }],
       ['review', { rating: 4 }],
       ['shopOnly', {}],
     ];
@@ -256,12 +415,21 @@ describe('serverDraft — the line the shop gets instead', () => {
       }
     }
   });
+
+  it('keeps a detail answer to the fields the listing stores', () => {
+    const facts = { productName: 'Rice', details: [{ key: 'photos on this listing', value: '3' }] };
+    expect(serverDraft({ family: 'detail', facts, language: 'en' })).toContain('photos on this listing: 3');
+    expect(checkDraft({ draft: serverDraft({ family: 'detail', facts, language: 'en' }), facts }).ok).toBe(true);
+    expect(checkDraft({ draft: 'It comes with 6 photos.', facts }).reasons).toContain('numbers');
+  });
 });
 
 describe('DECLINED_LINES — what the shop is told when there is nothing to read', () => {
   it.each([
     ['NO_HOURS_DATA', 'opening hours'],
     ['NO_CONTACT_DRAFT', 'contact details'],
+    ['NO_RIDER_CONTACT', "rider's phone number"],
+    ['NO_BULK_RATE', 'wholesale'],
     ['NO_DETAIL_DATA', 'no recorded detail'],
     ['NO_AUTHENTICITY_PROOF', 'original'],
     ['NO_PUBLISHED_PROMISE', 'delivery timeframe'],

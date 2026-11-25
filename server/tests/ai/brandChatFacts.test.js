@@ -21,6 +21,7 @@ const mongoose = require('mongoose');
 jest.mock('../../src/models/block.model');
 jest.mock('../../src/models/branch.model');
 jest.mock('../../src/models/brand.model');
+jest.mock('../../src/models/catalogProduct.model');
 jest.mock('../../src/models/order.model');
 jest.mock('../../src/models/product.model');
 jest.mock('../../src/models/return.model');
@@ -34,21 +35,35 @@ jest.mock('../../src/services/inventory.service', () => ({
   getInventoryForProduct: jest.fn(),
   getStockStatus: jest.fn(),
 }));
+// Only the aggregate the product page already uses is faked; the two parcel rules
+// are read from the real services, because a test that stubbed them could pass
+// while the drafter quoted a cancellation right the backend refuses.
+jest.mock('../../src/services/review.service', () => ({
+  ...jest.requireActual('../../src/services/review.service'),
+  ratingsFor: jest.fn(),
+}));
 
 const Block = require('../../src/models/block.model');
 const Branch = require('../../src/models/branch.model');
 const Brand = require('../../src/models/brand.model');
+const CatalogProduct = require('../../src/models/catalogProduct.model');
 const Order = require('../../src/models/order.model');
 const Product = require('../../src/models/product.model');
 const Return = require('../../src/models/return.model');
 const { getInventoryForProduct, getStockStatus } = require('../../src/services/inventory.service');
+const { ratingsFor } = require('../../src/services/review.service');
+const { CANCELLABLE_BY_CUSTOMER } = require('../../src/services/order.service');
+const { ADJUSTABLE_STATUSES } = require('../../src/services/orderAdjustment.service');
 const {
   familyOf,
   readChatFacts,
   listingAsked,
   shopZones,
   latestOrder,
+  orderByNumber,
+  orderNumberIn,
   detailsOf,
+  listingIsLive,
   FAMILIES,
 } = require('../../src/services/ai/brandChatFacts');
 
@@ -63,6 +78,8 @@ const CITY = new mongoose.Types.ObjectId();
 const riceId = new mongoose.Types.ObjectId();
 const oilId = new mongoose.Types.ObjectId();
 const rivalRiceId = new mongoose.Types.ObjectId();
+const delistedRiceId = new mongoose.Types.ObjectId();
+const catalogRowId = new mongoose.Types.ObjectId();
 
 const LISTINGS = [
   {
@@ -72,6 +89,8 @@ const LISTINGS = [
     price: 1600,
     compareAtPrice: 1900,
     attributes: { weight: '5 kg', 'origin ': 'Punjab', nested: { a: 1 }, notes: '', pieces: 4 },
+    images: ['r1.jpg', 'r2.jpg', 'r3.jpg'],
+    catalogProductId: null,
     status: 'ACTIVE',
     isActive: true,
   },
@@ -82,7 +101,22 @@ const LISTINGS = [
     price: 890,
     compareAtPrice: null,
     attributes: null,
+    images: [],
+    catalogProductId: null,
     status: 'ACTIVE',
+    isActive: true,
+  },
+  // The same item taken off the shelf: cart.service.js refuses it, so a quantity
+  // read here would promise stock the customer cannot order.
+  {
+    _id: delistedRiceId,
+    brandId: BRAND,
+    name: 'Basmati Rice 5kg (old pack)',
+    price: 1550,
+    compareAtPrice: null,
+    attributes: {},
+    catalogProductId: null,
+    status: 'INACTIVE',
     isActive: true,
   },
   {
@@ -108,12 +142,15 @@ const BLOCKS = [
 
 const BRANCHES = [{ _id: new mongoose.Types.ObjectId(), brandId: BRAND, isActive: true, blockIds: [GULBERG, DHA] }];
 
+// Numbers in the shape order.service.js writes (`CC-<year>-<6-digit counter>`),
+// so a test that names an order is testing the real spelling.
 const openOrder = {
   _id: new mongoose.Types.ObjectId(),
   customerId: CUSTOMER,
   brandId: BRAND,
-  orderNumber: 'ORD-1042',
+  orderNumber: 'CC-2026-001042',
   orderStatus: 'OUT_FOR_DELIVERY',
+  paymentStatus: 'PENDING',
   createdAt: new Date('2026-11-20'),
   items: [{ quantity: 2 }, { quantity: 1 }],
 };
@@ -121,20 +158,38 @@ const olderOrder = {
   _id: new mongoose.Types.ObjectId(),
   customerId: CUSTOMER,
   brandId: BRAND,
-  orderNumber: 'ORD-900',
+  orderNumber: 'CC-2026-000900',
   orderStatus: 'DELIVERED',
+  paymentStatus: 'PAID',
   createdAt: new Date('2026-10-02'),
   items: [{ quantity: 5 }],
+};
+const pendingOrder = {
+  _id: new mongoose.Types.ObjectId(),
+  customerId: CUSTOMER,
+  brandId: BRAND,
+  orderNumber: 'CC-2026-001100',
+  orderStatus: 'PENDING',
+  paymentStatus: 'PENDING',
+  // Older than `openOrder`, so the plain "where is my order" read still lands on
+  // the parcel the customer is chasing; this one is reached by its own number.
+  createdAt: new Date('2026-11-10'),
+  items: [{ quantity: 1 }],
 };
 const rivalOrder = {
   _id: new mongoose.Types.ObjectId(),
   customerId: OTHER_CUSTOMER,
   brandId: OTHER_BRAND,
+  orderNumber: 'CC-2026-007788',
   orderStatus: 'SHIPPED',
   createdAt: new Date('2026-11-24'),
   items: [{ quantity: 9 }],
 };
 
+// Kept out of `ORDERS` on purpose: the fake `sort` compares dates as strings, so
+// a second open row would move the plain "where is my order" read off
+// `openOrder`. Every test that wants it hands it over directly or names its
+// number, which is the path it exists to prove.
 const ORDERS = [openOrder, olderOrder, rivalOrder];
 
 const returnRow = {
@@ -148,7 +203,9 @@ const returnRow = {
   createdAt: new Date('2026-11-22'),
 };
 
-const BRAND_ROW = { _id: BRAND, cityId: CITY, settings: { estimatedDeliveryTime: '2 to 3 days' } };
+// `status` is what cart.service.js checks before it lets anyone order from a
+// shop, so a fixture without it is a shop a quantity may not be quoted for.
+const BRAND_ROW = { _id: BRAND, cityId: CITY, status: 'ACTIVE', settings: { estimatedDeliveryTime: '2 to 3 days' } };
 
 // ------------------------------------------------------------------ fakes ----
 
@@ -181,6 +238,13 @@ function matches(doc, filter = {}) {
       if (!condition.$in.some((value) => String(value) === String(doc[key]))) return false;
       continue;
     }
+    // The one way an order is addressed by number: an anchored, escaped pattern,
+    // so a test that filters on a *different* number must not match.
+    if (condition && typeof condition === 'object' && '$regex' in condition) {
+      const pattern = new RegExp(condition.$regex, condition.$options || '');
+      if (!pattern.test(String(doc[key] || ''))) return false;
+      continue;
+    }
     if (String(doc[key]) !== String(condition)) return false;
   }
   return true;
@@ -200,6 +264,11 @@ beforeEach(() => {
   Return.findOne.mockImplementation(oneFor([returnRow]));
   getInventoryForProduct.mockResolvedValue({ availableQuantity: 7, reservedQuantity: 2 });
   getStockStatus.mockReturnValue('LOW_STOCK');
+  // Nothing on the shared catalogue and no approved review, until a test hands
+  // one over: a drafter that quoted a size or a rating from these defaults would
+  // be stating a figure no mock ever returned.
+  CatalogProduct.findById.mockImplementation(() => chain([], { single: true }));
+  ratingsFor.mockResolvedValue({});
 });
 
 // ------------------------------------------------------------ the corpus ----
@@ -211,6 +280,7 @@ describe('familyOf — which question a customer is asking', () => {
       'complaint',
       'order',
       'detail',
+      'opinion',
       'availability',
       'price',
       'coverage',
@@ -230,6 +300,11 @@ describe('familyOf — which question a customer is asking', () => {
     ['کیا چاول دستیاب ہیں', 'availability'],
     ['do you have 5 pieces', 'availability'],
 
+    // availability asked as a number, which is now answered with the number
+    ['how many pieces are left of the rice', 'availability'],
+    ['kitne pieces left hain', 'availability'],
+    ['کتنے پیس بچے ہیں', 'availability'],
+
     // price
     ['what is the price of the oil', 'price'],
     ['kitne ka hai', 'price'],
@@ -244,14 +319,41 @@ describe('familyOf — which question a customer is asking', () => {
     ['وزن کتنا ہے', 'detail'],
     ['تفصیل بتا دیں', 'detail'],
 
+    // detail — the gallery a listing carries is a record, not a favour
+    ['are these the real photos', 'detail'],
+    ['asli photos hain?', 'detail'],
+    ['کیا یہ اصلی تصویر ہیں', 'detail'],
+
+    // opinion — what the listing's own reviews say
+    ['how many reviews does this have', 'opinion'],
+    ['is it worth buying', 'opinion'],
+    ['review kaisa hai logon ka', 'opinion'],
+    ['معیار کیسا ہے', 'opinion'],
+
     // order
     ['where is my order', 'order'],
     ['order status kya hai', 'order'],
     ['mera order kahan hai', 'order'],
     ['meri delivery ka rider kahan hai', 'order'],
+    ['is my rider near me', 'order'],
+    ['rider kahan hai ab', 'order'],
     ['آرڈر کی سٹیس کیا ہے', 'order'],
     ['میرا آرڈر کب تک آئے گا', 'order'],
     ['I ordered yesterday, is it packed', 'order'],
+    ['where is my order CC-2026-001042', 'order'],
+
+    // order — the two rules the platform really enforces on that parcel
+    ['can I cancel my order', 'order'],
+    ['mera order cancel kar do', 'order'],
+    ['آرڈر کینسل کیسے کروں', 'order'],
+    ['can I change the delivery address', 'order'],
+    ['mera address change karna hai', 'order'],
+    ['میرا پتہ بدلنا ہے', 'order'],
+
+    // a report of what already happened is a status question, not a request
+    ['why was my order cancelled', 'order'],
+    ['my order was cancelled by the shop', 'order'],
+    ['my order cancel ho gaya tha, kyu', 'order'],
 
     // return
     ['can I return this', 'return'],
@@ -259,6 +361,7 @@ describe('familyOf — which question a customer is asking', () => {
     ['wapas karna hai', 'return'],
     ['مجھے یہ واپس کرنا ہے', 'return'],
     ['ریٹرن کا کیا بنا', 'return'],
+    ['refund status of CC-2026-001042', 'return'],
 
     // complaint — a fault outranks a status word
     ['the packet came damaged', 'complaint'],
@@ -276,10 +379,12 @@ describe('familyOf — which question a customer is asking', () => {
     ['kahan delivery karte ho', 'coverage'],
     ['آپ کس علاقے میں ڈیلیوری کرتے ہیں', 'coverage'],
 
-    // timing
+    // timing — a number of days is a timeframe, never a stock count
     ['kitne din me delivery hogi', 'timing'],
     ['how long does delivery take', 'timing'],
     ['kab tak pohanchega', 'timing'],
+    ['how many days will it take', 'timing'],
+    ['kitne din lagenge', 'timing'],
     ['کتنے دن لگیں گے', 'timing'],
 
     // rule — platform answers, not shop answers
@@ -292,11 +397,17 @@ describe('familyOf — which question a customer is asking', () => {
     ['are you open on sundays', 'rule'],
     ['what is your phone number', 'rule'],
     ['is this original', 'rule'],
+    ['can I pick it up from your shop', 'rule'],
+    ['main dukan se le lunga', 'rule'],
+    ['پک اپ کر دوں گا', 'rule'],
+    ['do you take bulk orders for weddings', 'rule'],
+    ['do you give wholesale rates', 'rule'],
+    ['تھوک میں قیمت بتا دیں', 'rule'],
+    ['rider ka phone number do', 'rule'],
     ['ڈیلیوری چارج کتنا ہے', 'rule'],
     ['کیا یہ اصلی ہے', 'rule'],
 
     // shopOnly — no record exists, so nothing must be drafted
-    ['do you take bulk orders for weddings', 'shopOnly'],
     ['can your rider carry it upstairs', 'shopOnly'],
     ['shukriya', 'shopOnly'],
     ['آپ کا شکریہ', 'shopOnly'],
@@ -311,14 +422,57 @@ describe('readChatFacts — only the records that answer the question asked', ()
   const read = (message, extra = {}) =>
     readChatFacts({ brandId: BRAND, customerId: CUSTOMER, message, ...extra });
 
-  it('answers a stock question with the state and keeps the count private', async () => {
+  it('states the quantity when the customer asks for the number of a live listing', async () => {
     const out = await read('kitna stock hai is product ka?', { productId: riceId });
 
     expect(out.family).toBe('availability');
-    expect(out.facts).toEqual({ productName: 'Basmati Rice 5kg', stockState: 'LOW_STOCK' });
-    expect(out.private).toEqual({ availableQuantity: 7, stockStatus: 'LOW_STOCK' });
-    expect(JSON.stringify(out.facts)).not.toContain('7');
+    expect(out.facts).toEqual({ productName: 'Basmati Rice 5kg', stockState: 'LOW_STOCK', availableQuantity: 7 });
+    expect(out.private).toEqual({ availableQuantity: 7, stockStatus: 'LOW_STOCK', countStated: true });
     expect(getInventoryForProduct).toHaveBeenCalledWith({ _id: riceId, brandId: BRAND });
+  });
+
+  it('states only the state when no number was asked for', async () => {
+    const out = await read('is the rice still available', { productId: riceId });
+
+    expect(out.facts).toEqual({ productName: 'Basmati Rice 5kg', stockState: 'LOW_STOCK' });
+    expect(out.private.availableQuantity).toBe(7);
+    expect(out.private.countStated).toBe(false);
+    expect(JSON.stringify(out.facts)).not.toContain('7');
+  });
+
+  it('quotes no number for a listing nobody can order from', async () => {
+    const out = await read('kitna stock hai is product ka?', { productId: delistedRiceId });
+
+    // cart.service.js answers this listing with PRODUCT_UNAVAILABLE, so a count
+    // here would promise stock the customer cannot put in a cart.
+    expect(out.source).toBe('server');
+    expect(out.facts).toEqual({
+      productName: 'Basmati Rice 5kg (old pack)',
+      stockState: 'LOW_STOCK',
+      activeListing: false,
+    });
+    expect(JSON.stringify(out.facts)).not.toContain('7');
+  });
+
+  it('quotes no number when the shop itself is not live', async () => {
+    Brand.findById.mockImplementation(() =>
+      chain([{ _id: BRAND, cityId: CITY, status: 'PENDING', settings: {} }], { single: true })
+    );
+
+    const out = await read('kitna stock hai is product ka?', { productId: riceId });
+
+    expect(out.source).toBe('server');
+    expect(out.facts.activeListing).toBe(false);
+    expect(out.facts.availableQuantity).toBeUndefined();
+  });
+
+  it('quotes no number for stock the shop does not count', async () => {
+    getInventoryForProduct.mockResolvedValue({ availableQuantity: 7, reservedQuantity: 0, trackInventory: false });
+
+    const out = await read('kitna stock hai is product ka?', { productId: riceId });
+
+    expect(out.facts).toEqual({ productName: 'Basmati Rice 5kg', stockState: 'LOW_STOCK' });
+    expect(out.private.countStated).toBe(false);
   });
 
   it('finds the listing by name when the message was not sent from one', async () => {
@@ -378,6 +532,46 @@ describe('readChatFacts — only the records that answer the question asked', ()
     expect(out.facts).toEqual({});
   });
 
+  it('falls back to the catalogue size when the shop stored no detail', async () => {
+    Product.findOne.mockImplementation(
+      oneFor([{ _id: oilId, brandId: BRAND, name: 'Cold Pressed Mustard Oil 1L', price: 890, attributes: null, images: [], catalogProductId: catalogRowId, status: 'ACTIVE', isActive: true }])
+    );
+    CatalogProduct.findById.mockImplementation(() => chain([{ _id: catalogRowId, size: { value: 1, unit: 'L' } }], { single: true }));
+
+    const out = await read('what size is the oil', { productId: oilId });
+
+    expect(out.family).toBe('detail');
+    expect(out.facts.details).toEqual([{ key: 'size', value: '1 L' }]);
+    expect(CatalogProduct.findById).toHaveBeenCalledWith(catalogRowId);
+  });
+
+  it('answers a photo question with the gallery on the listing', async () => {
+    const out = await read('are these the real photos of the rice', { productId: riceId });
+
+    expect(out.family).toBe('detail');
+    expect(out.facts.details).toContainEqual({ key: 'photos on this listing', value: '3' });
+    expect(JSON.stringify(out.facts)).not.toContain('r1.jpg');
+  });
+
+  it('reads the reviews this listing has', async () => {
+    ratingsFor.mockResolvedValue({ [String(riceId)]: { count: 12, average: 4.3 } });
+
+    const out = await read('how many reviews does this have', { productId: riceId });
+
+    expect(out.family).toBe('opinion');
+    expect(out.source).toBe('model');
+    expect(out.facts).toEqual({ productName: 'Basmati Rice 5kg', ratingCount: 12, averageRating: 4.3 });
+    expect(ratingsFor).toHaveBeenCalledWith([riceId]);
+  });
+
+  it('says nobody has reviewed it, from the read, without paying a model', async () => {
+    const out = await read('is this good, what do reviews say', { productId: oilId });
+
+    expect(out.family).toBe('opinion');
+    expect(out.source).toBe('server');
+    expect(out.facts).toEqual({ productName: 'Cold Pressed Mustard Oil 1L', ratingCount: 0 });
+  });
+
   it('lists the areas its own branches cover', async () => {
     const out = await read('which areas do you deliver to');
 
@@ -421,12 +615,94 @@ describe('readChatFacts — only the records that answer the question asked', ()
     expect(out.facts).toEqual({});
   });
 
-  it('reads the open order first and counts its items', async () => {
+  it('reads the open order first and counts its items, and names no number', async () => {
     const out = await read('where is my order');
 
     expect(out.family).toBe('order');
     expect(out.facts).toEqual({ orderState: 'OUT_FOR_DELIVERY', isOpen: true, itemCount: 3 });
-    expect(JSON.stringify(out.facts)).not.toContain('ORD-1042');
+    expect(JSON.stringify(out.facts)).not.toContain('CC-2026-001042');
+  });
+
+  it('reads the order the customer identified by number', async () => {
+    const out = await read('where is my order CC-2026-001042');
+
+    expect(out.facts).toEqual({
+      orderState: 'OUT_FOR_DELIVERY',
+      isOpen: true,
+      itemCount: 3,
+      orderNumber: 'CC-2026-001042',
+    });
+    // The number is asked about inside this customer's own rows: a body id and a
+    // typed number are both only ever a question, never a right to read.
+    expect(Order.findOne).toHaveBeenCalledWith({
+      customerId: CUSTOMER,
+      brandId: BRAND,
+      orderNumber: { $regex: '^CC-2026-001042$', $options: 'i' },
+    });
+  });
+
+  it.each([
+    ['another customer’s number', 'CC-2026-007788'],
+    ['a number that was never written', 'CC-2025-999999'],
+  ])('says only that it cannot find %s', async (_label, number) => {
+    const out = await read(`where is my order ${number}`);
+
+    // One sentence for every failure, so nothing is revealed about whose order it
+    // is, what state it is in, or whether it exists at all.
+    expect(out.facts).toEqual({ numberAsked: true });
+    expect(out.source).toBe('server');
+    expect(JSON.stringify(out)).not.toContain('SHIPPED');
+    expect(JSON.stringify(out)).not.toContain('CC-2026-001042');
+    expect(Order.find).not.toHaveBeenCalled();
+  });
+
+  it('answers a cancellation request from the rule the backend enforces', async () => {
+    expect(CANCELLABLE_BY_CUSTOMER).toEqual(['PENDING']);
+
+    const moved = await read('can I cancel my order CC-2026-001042');
+    expect(moved.facts.canSelfCancel).toBe(false);
+    expect(moved.facts.orderState).toBe('OUT_FOR_DELIVERY');
+    expect(moved.source).toBe('server');
+
+    Order.findOne.mockImplementation(oneFor([pendingOrder]));
+    const early = await read('can I cancel my order CC-2026-001100');
+    expect(early.facts.canSelfCancel).toBe(true);
+
+    // Money already collected is the other half of the same rule.
+    Order.findOne.mockImplementation(oneFor([{ ...pendingOrder, paymentStatus: 'PAID' }]));
+    const paid = await read('can I cancel my order CC-2026-001100');
+    expect(paid.facts.canSelfCancel).toBe(false);
+  });
+
+  it('answers a change request from the stage adjustments stop at', async () => {
+    expect(ADJUSTABLE_STATUSES).toEqual(['PENDING', 'CONFIRMED', 'PROCESSING']);
+
+    Order.findOne.mockImplementation(oneFor([pendingOrder]));
+    const open = await read('can I change the delivery address on my order CC-2026-001100');
+    expect(open.facts.canProposeChange).toBe(true);
+    expect(open.facts.openProposal).toBe(false);
+    expect(open.source).toBe('server');
+
+    Order.findOne.mockImplementation(oneFor(ORDERS));
+    const moved = await read('can I change the delivery address on my order CC-2026-001042');
+    expect(moved.facts.canProposeChange).toBe(false);
+
+    Order.findOne.mockImplementation(oneFor([{ ...pendingOrder, activeAdjustmentId: new mongoose.Types.ObjectId() }]));
+    const already = await read('can I change the delivery address on my order CC-2026-001100');
+    expect(already.facts.openProposal).toBe(true);
+  });
+
+  it('hands a rider question to the live pin and names no contact', async () => {
+    const out = await read('is my rider near me');
+
+    expect(out.facts.riderTrackable).toBe(true);
+    expect(out.source).toBe('server');
+    expect(JSON.stringify(out)).not.toMatch(/phone|contact|riderId/i);
+
+    Order.findOne.mockImplementation(oneFor([olderOrder]));
+    const delivered = await read('is my rider near me');
+    expect(delivered.facts.riderTrackable).toBeUndefined();
+    expect(delivered.facts.orderState).toBe('DELIVERED');
   });
 
   it('says there is no order when this customer has none with this shop', async () => {
@@ -445,7 +721,28 @@ describe('readChatFacts — only the records that answer the question asked', ()
     expect(out.family).toBe('complaint');
     expect(out.source).toBe('model');
     expect(out.facts.orderState).toBe('OUT_FOR_DELIVERY');
-    expect(JSON.stringify(out)).not.toContain('ORD-1042');
+    expect(JSON.stringify(out)).not.toContain('CC-2026-001042');
+  });
+
+  it('reads the return on the order the customer named', async () => {
+    const out = await read('refund status of CC-2026-001042');
+
+    expect(out.facts).toEqual({
+      returnState: 'RECEIVED',
+      lineCount: 1,
+      refundAmount: 0,
+      orderNumber: 'CC-2026-001042',
+    });
+    expect(Return.findOne).toHaveBeenCalledWith({ orderId: openOrder._id, customerId: CUSTOMER, brandId: BRAND });
+  });
+
+  it('does not answer a return about somebody else’s number with this customer’s own order', async () => {
+    const out = await read('refund status of CC-2026-007788');
+
+    expect(out.facts).toEqual({ numberAsked: true });
+    expect(out.source).toBe('server');
+    expect(Return.findOne).not.toHaveBeenCalled();
+    expect(JSON.stringify(out)).not.toContain('RECEIVED');
   });
 
   it('reads the return on this customer’s order', async () => {
@@ -472,6 +769,7 @@ describe('readChatFacts — only the records that answer the question asked', ()
     ['can I pay by jazzcash', 'payment'],
     ['send me the invoice please', 'receipt'],
     ['do you have a coupon code', 'coupon'],
+    ['can I pick it up from your shop', 'pickup'],
   ])('answers the platform rule "%s" without a model', async (message, rule) => {
     const out = await read(message);
 
@@ -485,6 +783,8 @@ describe('readChatFacts — only the records that answer the question asked', ()
     ['are you open on sundays', 'NO_HOURS_DATA'],
     ['what is your phone number', 'NO_CONTACT_DRAFT'],
     ['is this original', 'NO_AUTHENTICITY_PROOF'],
+    ['do you take bulk orders for weddings', 'NO_BULK_RATE'],
+    ['do you give wholesale rates', 'NO_BULK_RATE'],
   ])('declines "%s" because CityCart stores no such record', async (message, code) => {
     const out = await read(message);
 
@@ -493,8 +793,16 @@ describe('readChatFacts — only the records that answer the question asked', ()
     expect(out.facts.rule).toBeTruthy();
   });
 
+  it('declines a rider’s number as its own answer, not a generic contact note', async () => {
+    const out = await read('rider ka phone number do');
+
+    expect(out.family).toBe('rule');
+    expect(out.declined).toBe('NO_RIDER_CONTACT');
+    expect(out.facts.rule).toBe('contact');
+  });
+
   it('reads nothing at all for a question CityCart has no record of', async () => {
-    const out = await read('do you take bulk orders for weddings');
+    const out = await read('can your rider carry it upstairs');
 
     expect(out.family).toBe('shopOnly');
     expect(out.source).toBe('none');
@@ -597,5 +905,40 @@ describe('the helpers', () => {
     expect(detailsOf(null)).toEqual([]);
     expect(detailsOf('not an object')).toEqual([]);
     expect(detailsOf([{ a: 1 }])).toEqual([]);
+  });
+
+  it('reads only the number shape CityCart itself writes', () => {
+    expect(orderNumberIn('CC-2026-001042')).toBe('CC-2026-001042');
+    expect(orderNumberIn('where is cc-2026-1042')).toBe('CC-2026-001042');
+    expect(orderNumberIn('cc 2026 1042 please')).toBe('CC-2026-001042');
+    // A bare digit, or another platform's spelling, is never guessed at: the
+    // read would have to invent which order it meant.
+    expect(orderNumberIn('my order 1042')).toBeNull();
+    expect(orderNumberIn('ORD-1042')).toBeNull();
+    expect(orderNumberIn('CC-2026')).toBeNull();
+    expect(orderNumberIn('')).toBeNull();
+  });
+
+  it('orderByNumber only ever answers with the customer’s own row', async () => {
+    const mine = await orderByNumber(CUSTOMER, BRAND, 'CC-2026-001042');
+    expect(mine.order._id).toEqual(openOrder._id);
+    expect(mine.isOpen).toBe(true);
+
+    expect(await orderByNumber(OTHER_CUSTOMER, BRAND, 'CC-2026-001042')).toBeNull();
+    expect(await orderByNumber(CUSTOMER, OTHER_BRAND, 'CC-2026-001042')).toBeNull();
+    expect(await orderByNumber(CUSTOMER, BRAND, 'CC-2026-007788')).toBeNull();
+    // Whatever the filter, both ids are in it.
+    expect(Order.findOne).toHaveBeenLastCalledWith({
+      customerId: CUSTOMER,
+      brandId: BRAND,
+      orderNumber: { $regex: '^CC-2026-007788$', $options: 'i' },
+    });
+  });
+
+  it('a listing is quotable only while the cart would accept it', () => {
+    expect(listingIsLive(LISTINGS[0])).toBe(true);
+    expect(listingIsLive(LISTINGS.find((row) => String(row._id) === String(delistedRiceId)))).toBe(false);
+    expect(listingIsLive({ ...LISTINGS[0], isActive: false })).toBe(false);
+    expect(listingIsLive(null)).toBe(false);
   });
 });

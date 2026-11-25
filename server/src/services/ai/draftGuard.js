@@ -1,7 +1,7 @@
 const { isGrounded } = require('./ground');
 
 /**
- * The last check on a drafted shop reply (docs/29 Phase 2i).
+ * The last check on a drafted shop reply (docs/29 Phase 2i, widened by 3c-2).
  *
  * A draft is different from any other AI text in this codebase: the shop reads
  * it, presses "use", and the words become a promise to a real customer. So the
@@ -10,15 +10,19 @@ const { isGrounded } = require('./ground');
  *
  *   1. a money-or-parcel promise the platform cannot back (a refund, a
  *      replacement, a re-delivery, a discount, a coupon, a delivery fee);
- *   2. any figure the read facts do not contain — including a bare stock count,
- *      which CityCart never publishes to customers;
+ *   2. any figure the read facts do not contain — a price, a rating, a stock
+ *      count (a count is stated only when `readChatFacts` put one in the
+ *      records, which since 3c-2 it does when the customer asks for the number
+ *      of a listing they could actually order);
  *   3. nothing at all when CityCart holds no record for the question, which is
  *      said to the shop plainly instead of dressed up as a reply.
  *
  * What is said instead is only ever what was read: the listing's own price, its
- * stock state, the shop's published timeframe, the areas its branches are in,
- * the customer's own order or return state, and the platform rules already
- * stated to shoppers in the chat (facts.js).
+ * stock state and (on demand) its quantity, the photos and sizes recorded on
+ * it, the reviews it has, the areas its branches are in, the shop's published
+ * timeframe, the customer's own order or return state, and the two parcel rules
+ * the platform really enforces on that order — cancelling (order.service.js)
+ * and change requests (orderAdjustment.service.js).
  */
 
 const say = (language, forms) => forms[language] || forms.en;
@@ -141,6 +145,14 @@ const RULE_LINES = {
     ur: 'CityCart پر کوئی کوپن یا پرومو کوڈ نہیں — قیمت کی تبدیلی صرف دکان کی لسٹنگ سے آتی ہے۔',
     roman: 'CityCart par koi coupon ya promo code nahi — price ki tabdeeli sirf shop ki listing se aati hai.',
   },
+  // Every order needs a delivery pin inside a published zone (order.service.js);
+  // no code in the platform offers collection from a shop, so this is CityCart's
+  // rule to state rather than the shop's to remember.
+  pickup: {
+    en: 'CityCart has no self-collection option — every order is delivered to the address given at checkout.',
+    ur: 'CityCart میں دکان سے خود لینے کا آپشن نہیں — ہر آرڈر اسی پتے پر پہنچتا ہے جو چیک آؤٹ پر لکھا گیا ہو۔',
+    roman: 'CityCart mein dukaan se khud lene ka option nahi — har order us address par pohanchta hai jo checkout par likha ho.',
+  },
 };
 
 const ORDER_STATE_WORDS = {
@@ -156,6 +168,108 @@ const ORDER_STATE_WORDS = {
   RETURN_REQUESTED: { en: 'has a return requested', ur: 'اس کی واپسی کی درخواست ہے', roman: 'is ki return request hai' },
   RETURNED: { en: 'came back to the shop', ur: 'دکان واپس آ گیا', roman: 'shop wapas aa gaya' },
   REFUNDED: { en: 'was settled as refunded', ur: 'ری فنڈ کے طور پر طے ہو گیا', roman: 'refund ke taur par set ho gaya' },
+};
+
+/**
+ * The quantity, said when the customer asked for the number and the records
+ * carry one (`readChatFacts` only puts `availableQuantity` in the records for a
+ * listing the customer could actually order). Every number below is the record's
+ * own, so the sentence is still checked by the same guard as a model's.
+ */
+const COUNT_LINES = {
+  IN_STOCK: {
+    en: (name, count) => `There are ${count} pieces of ${name} left on this listing, so you can order them now.`,
+    ur: (name, count) => `اس لسٹنگ پر ${name} کے ${count} پیس بچے ہیں، آپ ابھی آرڈر کر سکتے ہیں۔`,
+    roman: (name, count) => `${name} ke ${count} piece is listing par bacche hain, aap abhi order kar saktay hain.`,
+  },
+  LOW_STOCK: {
+    en: (name, count) => `${name} has only ${count} pieces left, so order it soon.`,
+    ur: (name, count) => `${name} دستیاب ہے مگر صرف ${count} پیس بچے ہیں، جلدی آرڈر کریں۔`,
+    roman: (name, count) => `${name} stock mein hai magar sirf ${count} piece bache hain, jaldi order karein.`,
+  },
+};
+
+/** The listing is not one the customer can order, so no quantity is quoted. */
+const NOT_LIVE_LINES = {
+  en: (name) => `${name} is not on our listing right now, so there is no quantity to quote. Ask again once it is back.`,
+  ur: (name) => `${name} فی الحال ہماری لسٹنگ پر نہیں، اس لیے تعداد کا کوئی عدد نہیں دے سکتے۔`,
+  roman: (name) => `${name} filhal hamari listing par nahi, is liye is ki quantity nahi bata saktay.`,
+};
+
+/**
+ * The customer typed a number; CityCart could not match it to an order belonging
+ * to them with this shop. The line names no order, no state and no quantity, and
+ * it is the same sentence whether the digits were mistyped, the order is another
+ * customer's, or it is another shop's — so it leaks nothing about anyone else.
+ */
+const NUMBER_NOT_FOUND_LINES = {
+  en: 'We could not find that order number under your account with us. Check the number on the order page, or tell us the date you ordered.',
+  ur: 'یہ آرڈر نمبر ہمارے ریکارڈ میں آپ کے اکاؤنٹ پر نہیں ملا۔ اپنے آرڈر صفحے پر لکھا نمبر دیکھیں، یا بتائیں کہ آپ نے کس دن آرڈر کیا۔',
+  roman: 'Yeh order number hamare record mein aap ke account par nahi mila. Apne order page par likha number dekhein, ya humein batayein ke aap ne kis din order kiya.',
+};
+
+/**
+ * Cancelling and changing a parcel, read from the two services that enforce
+ * them (`CANCELLABLE_BY_CUSTOMER` in order.service.js, `ADJUSTABLE_STATUSES` in
+ * orderAdjustment.service.js). Each is a follow-on sentence: the order's own
+ * state is already stated above it, so these say only what CityCart lets the
+ * customer do with an order in that state, and they never promise the shop will
+ * do anything.
+ */
+const CANCEL_LINES = {
+  yes: {
+    en: 'CityCart lets you cancel an order yourself while it is still unconfirmed, from that order’s own page.',
+    ur: 'CityCart آپ کو اجازت دیتا ہے کہ آرڈر کی تصدیق سے پہلے اسے آپ خود اپنے آرڈر صفحے سے منسوخ کر سکیں۔',
+    roman: 'CityCart order ki confirmation se pehle aap ko usay apne order page se khud cancel karne deta hai.',
+  },
+  no: {
+    en: 'It cannot be cancelled from your side any more, so write us here if something is wrong.',
+    ur: 'اب اسے آپ کی طرف سے منسوخ نہیں کیا جا سکتا، اگر کوئی مسئلہ ہے تو یہاں ہمیں لکھیں۔',
+    roman: 'Ab isay aap ki taraf se cancel nahi kiya ja sakta, koi masla ho to yahan humein likhein.',
+  },
+};
+
+/** A change request, read from `ADJUSTABLE_STATUSES` in orderAdjustment.service.js. */
+const CHANGE_LINES = {
+  yes: {
+    en: 'You can still send a change request for it, from that order’s own page.',
+    ur: 'آپ اس کے لیے ابھی تبدیلی کی درخواست بھیج سکتے ہیں، اپنے آرڈر صفحے سے۔',
+    roman: 'Aap is ke liye abhi change request bhej saktay hain, apne order page se.',
+  },
+  no: {
+    en: 'A change request is no longer open on it, so tell us here what you need.',
+    ur: 'اس پر اب تبدیلی کی درخواست نہیں کھول سکتے، اس لیے یہاں بتائیں کہ آپ کو کیا چاہیے۔',
+    roman: 'Is par ab change request nahi khul sakti, is liye yahan batayein ke aap ko kya chahiye.',
+  },
+};
+
+/** An adjustment the customer already raised, read from `activeAdjustmentId`. */
+const PROPOSAL_OPEN_LINES = {
+  en: 'A change request is already open on it, and that is answered from the order page.',
+  ur: 'اس پر پہلے سے ایک تبدیلی کی درخواست کھلی ہے، جس کا جواب آرڈر صفحے سے ملتا ہے۔',
+  roman: 'Is par pehle se ek change request khuli hai, us ka jawab order page par milta hai.',
+};
+
+/** The rider: a name and a live pin, never a number (riderLocation.service.js). */
+const RIDER_LINES = {
+  en: 'While it is out for delivery, that order’s page shows the rider and where the parcel is. CityCart does not hand out a rider’s phone number.',
+  ur: 'جب تک آرڈر ڈیلیوری پر ہے، اس کا صفحہ رائیڈر اور سامان کی جگہ دکھاتا ہے۔ CityCart رائیڈر کا فون نمبر نہیں دیتا۔',
+  roman: 'Jab tak order delivery par hai, us ka page rider aur saman ki jagah dikhata hai. CityCart rider ka phone number nahi deta.',
+};
+
+/** What the listing's own reviews say, read through the same service the product page uses. */
+const OPINION_LINES = {
+  none: {
+    en: 'Nobody has reviewed that item on CityCart yet, so there is no rating to quote.',
+    ur: 'اس چیز کا CityCart پر ابھی کوئی جائزہ نہیں لکھا گیا، اس لیے کوئی ریٹنگ نہیں بتا سکتے۔',
+    roman: 'Us item ka CityCart par abhi koi review nahi likha gaya, is liye koi rating nahi bata saktay.',
+  },
+  seen: {
+    en: (name, count, average) =>
+      `${name} has ${count} ${count === 1 ? 'review' : 'reviews'} on CityCart, at an average of ${average} stars.`,
+    ur: (name, count, average) => `${name} کے ${count} جائزے ہیں اور اوسط ${average} ستارے ہیں۔`,
+    roman: (name, count, average) => `${name} ke ${count} review hain, average ${average} star.`,
+  },
 };
 
 /**
@@ -183,7 +297,17 @@ function serverDraft({ family, facts, language }) {
     });
   }
 
+  // A number the customer typed that CityCart could not match to their own
+  // order outranks everything else: there is nothing verified to say about it.
+  if (f.numberAsked) return say(l, NUMBER_NOT_FOUND_LINES);
+
   if (family === 'availability') {
+    if (f.activeListing === false) return NOT_LIVE_LINES[l](f.productName);
+    const count = Number(f.availableQuantity) || 0;
+    if (count > 0) {
+      const lines = COUNT_LINES[f.stockState] || COUNT_LINES.IN_STOCK;
+      return lines[l](f.productName, count);
+    }
     const lines = STOCK_LINES[f.stockState] || STOCK_LINES.NOT_TRACKED;
     return lines[l](f.productName);
   }
@@ -204,6 +328,13 @@ function serverDraft({ family, facts, language }) {
       ur: `${f.productName} — ${listed}. یہ تفصیل لسٹنگ پر بھی لکھی ہے۔`,
       roman: `${f.productName} — ${listed}. Yeh detail listing par bhi likhi hai.`,
     });
+  }
+
+  if (family === 'opinion') {
+    const count = Number(f.ratingCount) || 0;
+    const average = Number(f.averageRating) || 0;
+    if (!count || !average) return say(l, OPINION_LINES.none);
+    return OPINION_LINES.seen[l](f.productName, count, average);
   }
 
   if (family === 'coverage') {
@@ -246,11 +377,24 @@ function serverDraft({ family, facts, language }) {
     }
     const words = ORDER_STATE_WORDS[f.orderState] || { en: `is ${String(f.orderState).toLowerCase()}`, ur: 'کی حالت لسٹنگ پر ہے', roman: `is ${String(f.orderState).toLowerCase()}` };
     const items = f.itemCount ? ` (${f.itemCount} items)` : '';
-    return say(l, {
-      en: `Your order ${words.en}${items}.`,
-      ur: `آپ کا آرڈر ${words.ur}${f.itemCount ? ` (${f.itemCount} اشیاء)` : ''}۔`,
-      roman: `Aap ka order ${words.roman}${items}.`,
+    // Only an order the customer identified by number is repeated back by that
+    // number; anything else stays "your order", which names no identifier.
+    const named = f.orderNumber
+      ? { en: `Order ${f.orderNumber}`, ur: `آرڈر ${f.orderNumber}`, roman: `Order ${f.orderNumber}` }
+      : { en: 'Your order', ur: 'آپ کا آرڈر', roman: 'Aap ka order' };
+    const state = say(l, {
+      en: `${named.en} ${words.en}${items}.`,
+      ur: `${named.ur} ${words.ur}${f.itemCount ? ` (${f.itemCount} اشیاء)` : ''}۔`,
+      roman: `${named.roman} ${words.roman}${items}.`,
     });
+    // Then the one rule the customer's own parcel falls under, read from the
+    // services that enforce it — stated after the state because both are true at
+    // once, and neither is the model's to guess.
+    if (f.openProposal === true) return `${state} ${say(l, PROPOSAL_OPEN_LINES)}`;
+    if ('canProposeChange' in f) return `${state} ${say(l, CHANGE_LINES[f.canProposeChange ? 'yes' : 'no'])}`;
+    if ('canSelfCancel' in f) return `${state} ${say(l, CANCEL_LINES[f.canSelfCancel ? 'yes' : 'no'])}`;
+    if (f.riderTrackable === true) return `${state} ${say(l, RIDER_LINES)}`;
+    return state;
   }
 
   if (family === 'return') {
@@ -325,7 +469,11 @@ const DECLINED_LINES = {
   NO_CONTACT_DRAFT:
     'CityCart does not draft contact details. Your own phone and e-mail are on your shop page under Contact.',
   NO_DETAIL_DATA:
-    'This listing has no recorded detail for that, and CityCart has no size or variant data — only you can answer it.',
+    'This listing has no recorded detail and no catalogue size for that. CityCart stores no variants, colours or warranty terms — only you can answer it.',
+  NO_RIDER_CONTACT:
+    "CityCart never gives a customer a rider's phone number. While the order is out for delivery its page shows the rider's name and a live position, and nothing else.",
+  NO_BULK_RATE:
+    'CityCart stores one price per listing and has no wholesale or dealer rate, so only you can answer this. Quote any bulk price in your own words.',
   NO_AUTHENTICITY_PROOF:
     'CityCart holds no record that proves an item is original, so only you can answer this. Do not claim authenticity you cannot show.',
   NO_PUBLISHED_PROMISE:
@@ -349,6 +497,14 @@ module.exports = {
   ACKNOWLEDGE_LINES,
   REVIEW_LINES,
   STOCK_LINES,
+  COUNT_LINES,
+  NOT_LIVE_LINES,
+  NUMBER_NOT_FOUND_LINES,
+  CANCEL_LINES,
+  CHANGE_LINES,
+  PROPOSAL_OPEN_LINES,
+  RIDER_LINES,
+  OPINION_LINES,
   RULE_LINES,
   ORDER_STATE_WORDS,
 };
