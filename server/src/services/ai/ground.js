@@ -62,11 +62,25 @@ function evidenceNumbers(evidence) {
   return numbers;
 }
 
+/**
+ * A quantity a shopper or a shop could act on. Only asked for where a count is
+ * the thing being claimed (a drafted shop reply about stock): the customer chat
+ * is never told a quantity at all, so its replies have no count to check, and
+ * switching this on there would only make good sentences worse.
+ */
+const COUNT =
+  /(\d+)\s*(?:pieces?|pcs|units?|bottles?|boxes?|packs?|cartons?|bags?|items?|days?|kilos?|kg|grams?|litres?|liters?|ml|baccha|bacche|bache|bachay|din|ghante)\b/iu;
+const COUNT_BARE = /\b(?:only|have|has|left|remaining|bas|bacche|baccha)\s+(\d+)\b/iu;
+// Urdu script writes the count and the currency after the number, and the
+// rupee is the amount a shop could promise, so it belongs with the counts.
+const COUNT_URDU = /(\d+)\s*(?:عدد|دن|یونٹ|پیس|کلو|گرم|لیٹر|ڈبے|تھیلے|بوتلیں|شے|روپے|پیسہ)/u;
+
 /** The claims a reply makes that a customer could act on. */
-function claimsOf(answer) {
+function claimsOf(answer, { counts = false } = {}) {
   const text = String(answer || '');
+  const patterns = counts ? [MONEY, PERCENT, RATING, UNIT, COUNT, COUNT_BARE, COUNT_URDU] : [MONEY, PERCENT, RATING, UNIT];
   const claims = [];
-  for (const pattern of [MONEY, PERCENT, RATING, UNIT]) {
+  for (const pattern of patterns) {
     const re = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`);
     for (const match of text.matchAll(re)) {
       const raw = match[1] ?? match[2] ?? match[1] ?? match[3];
@@ -82,9 +96,9 @@ function claimsOf(answer) {
  * anywhere in it — a price inside a product name counts, since the shopper
  * reads the same string — so this refuses only what the tools never said.
  */
-function isGrounded(answer, evidence) {
+function isGrounded(answer, evidence, options) {
   const numbers = evidenceNumbers(evidence);
-  const missing = claimsOf(answer).filter((claim) => !numbers.has(claim.value));
+  const missing = claimsOf(answer, options).filter((claim) => !numbers.has(claim.value));
   return { ok: missing.length === 0, missing: missing.map((claim) => claim.text) };
 }
 

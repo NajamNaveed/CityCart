@@ -15,6 +15,7 @@ function ReplyBox({ review, aiAvailable, onReplied }) {
   const [body, setBody] = useState('')
   const [saving, setSaving] = useState(false)
   const [drafting, setDrafting] = useState(false)
+  const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
 
   if (review.brandReply) {
@@ -32,9 +33,14 @@ function ReplyBox({ review, aiAvailable, onReplied }) {
   async function draft() {
     setDrafting(true)
     setError('')
+    setNotice('')
     try {
       const res = await api.post('/ai/reply-draft', { type: 'review', id: review._id })
       setBody(res.data.data.draft)
+      // The server refuses a draft that promises money or a parcel it cannot
+      // verify, so the shop is told when the words it was shown are not its own.
+      if (res.data.data.corrected)
+        setNotice('CityCart replaced the wording: a reply may not promise a refund, a replacement or money.')
     } catch (err) {
       setError(draftErrorMessage(err))
     } finally {
@@ -91,6 +97,7 @@ function ReplyBox({ review, aiAvailable, onReplied }) {
           </button>
         )}
       </div>
+      {notice && <p className="text-[11.5px] text-ink/55">{notice}</p>}
       {error && (
         <p role="alert" className="text-[12.5px] text-clay">
           {error}

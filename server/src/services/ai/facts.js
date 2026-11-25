@@ -724,5 +724,6 @@ module.exports = {
   namedPlace,
   namedPlaceAsked,
   namedRulePlace,
+  areaNamedIn,
   ASKS,
 };

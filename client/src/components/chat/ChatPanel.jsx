@@ -31,6 +31,23 @@ const baseFor = (kind) =>
 // booking id, so the open thread is always addressed by this value.
 const threadIdOf = (item) => (item.kind === 'booking' ? item.bookingId : item._id)
 
+/**
+ * What the shop is told alongside a drafted reply (docs/29 Phase 2i). The reply
+ * itself is always safe to send; this is the part only the shop needs to know —
+ * the stock figure CityCart keeps out of a customer's reply, that its own words
+ * were replaced by a line the server wrote, or that CityCart has no record for
+ * the question at all and where the missing data belongs.
+ */
+function brandDraftNote(data) {
+  if (data.source === 'none') return data.note || 'CityCart has no record that answers this question.'
+  const notes = []
+  if (data.private?.availableQuantity != null) {
+    notes.push(`Your stock screen shows ${data.private.availableQuantity} left — a customer's reply only says whether it is available.`)
+  }
+  if (data.corrected) notes.push('CityCart replaced the wording with what your own records state.')
+  return notes.join(' ')
+}
+
 function Avatar({ name, image, size = 'h-10 w-10' }) {
   return image ? (
     <img src={image} alt="" className={`${size} shrink-0 rounded-full border border-line-warm object-cover`} />
@@ -239,6 +256,7 @@ export default function ChatPanel({ mode = 'customer', source, canReply = true }
   const [draftIntent, setDraftIntent] = useState('')
   const [drafting, setDrafting] = useState(false)
   const [draftError, setDraftError] = useState('')
+  const [draftNote, setDraftNote] = useState('')
   const [loadingEarlier, setLoadingEarlier] = useState(false)
 
   const selectedRef = useRef(selectedKey)
@@ -256,6 +274,7 @@ export default function ChatPanel({ mode = 'customer', source, canReply = true }
     setDraftOpen(false)
     setDraftIntent('')
     setDraftError('')
+    setDraftNote('')
   }, [selectedKey])
 
   // ---- conversation lists --------------------------------------------------
@@ -583,11 +602,18 @@ export default function ChatPanel({ mode = 'customer', source, canReply = true }
     const key = selectedKey
     setDrafting(true)
     setDraftError('')
+    setDraftNote('')
     try {
       const res = await api.post('/ai/reply-draft', { type: 'chat', id: selected.id })
       if (selectedRef.current !== key) return
-      setDraft(res.data.data.draft)
-      textareaRef.current?.focus()
+      const data = res.data.data
+      // Three answers come back: the shop's own words, a line the server wrote
+      // from its records, or nothing. Only the first needs no explanation.
+      if (data.draft) {
+        setDraft(data.draft)
+        textareaRef.current?.focus()
+      }
+      setDraftNote(brandDraftNote(data))
     } catch (err) {
       setDraftError(draftErrorMessage(err))
     } finally {
@@ -795,17 +821,24 @@ export default function ChatPanel({ mode = 'customer', source, canReply = true }
                   {showDraft && (
                     <div className="mb-2">
                       {showBrandDraft ? (
-                        <div className="flex flex-wrap items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={writeBrandDraft}
-                            disabled={drafting}
-                            className="inline-flex items-center gap-1.5 rounded-full px-1.5 py-1 text-[11px] font-medium text-ink/45 transition hover:bg-canvas hover:text-clay disabled:opacity-50"
-                          >
-                            <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-                            {drafting ? 'Writing…' : 'Draft a reply'}
-                          </button>
-                          <span className="text-[10.5px] text-ink/40">It fills the box below — edit it before sending.</span>
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={writeBrandDraft}
+                              disabled={drafting}
+                              className="inline-flex items-center gap-1.5 rounded-full px-1.5 py-1 text-[11px] font-medium text-ink/45 transition hover:bg-canvas hover:text-clay disabled:opacity-50"
+                            >
+                              <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                              {drafting ? 'Writing…' : 'Draft a reply'}
+                            </button>
+                            <span className="text-[10.5px] text-ink/40">
+                              It fills the box below — edit it before sending.
+                            </span>
+                          </div>
+                          {draftNote && (
+                            <p className="mt-1.5 px-0.5 text-[11px] text-ink/55">{draftNote}</p>
+                          )}
                         </div>
                       ) : draftOpen ? (
                         <div className="rounded-tile border border-line-warm bg-canvas/50 p-2">

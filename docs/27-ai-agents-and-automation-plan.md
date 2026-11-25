@@ -130,7 +130,7 @@ Keep it simple and testable:
 | Service booking helper | Customer | service discovery, availability | 2c |
 | Catalogue matcher | Brand | catalogue search | 3b |
 | Seller advisor (pricing, restock, Q&A on analytics) | Brand | analytics, inventory | 3a |
-| Review / chat reply drafter | Brand | reviews, chat thread | 3c |
+| Review / chat reply drafter | Brand | reviews, chat thread, and the records behind the customer's question — own listing + stock **state**, branch areas, published delivery promise, that customer's order and return (docs/29 §3c-1) | 3c, 3c-1 |
 | Picker substitution | Staff / picker | same-category products | 4a |
 | Moderation | System / Admin | none | 4c |
 | Admin triage (billing help, support) | Admin | billing help, order history | 4b |
