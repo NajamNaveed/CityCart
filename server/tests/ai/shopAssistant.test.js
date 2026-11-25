@@ -13,6 +13,11 @@ jest.mock('../../src/models/aiUsage.model', () => ({
 }));
 jest.mock('../../src/services/discover.service', () => ({ discover: jest.fn() }));
 jest.mock('../../src/services/category.service', () => ({ getPublicCategoryTree: jest.fn() }));
+// The assistant measures "near me" from the scope the server resolves. Which
+// blocks a pin or a saved address falls in is tested in tests/ai/chatCorpus.test.js;
+// here the shopper has no saved place, so the search stays the city-wide one
+// this suite was written against, with the same city the request named.
+jest.mock('../../src/services/ai/location', () => require('../helpers/mockShopperScope').locationModule());
 
 const User = require('../../src/models/user.model');
 const AiUsage = require('../../src/models/aiUsage.model');
@@ -22,7 +27,7 @@ const app = require('../../src/app');
 const env = require('../../src/config/env');
 const { ROLES } = require('../../src/config/roles');
 const { getAuthCookie } = require('../helpers/testAuth');
-const { fallbackQueries } = require('../../src/services/ai/agents/shopAssistant.agent');
+const { fallbackQueries } = require('../../src/services/ai/query');
 
 const originalFetch = global.fetch;
 const originalDailyLimit = env.ai.dailyLimit;

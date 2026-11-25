@@ -13,6 +13,9 @@ jest.mock('../../src/models/aiUsage.model', () => ({
 }));
 jest.mock('../../src/services/discover.service', () => ({ discover: jest.fn() }));
 jest.mock('../../src/services/ai/cache');
+// The ingredients are searched from the scope the server resolves; this shopper
+// has no saved place, so they come from the whole city.
+jest.mock('../../src/services/ai/location', () => require('../helpers/mockShopperScope').locationModule());
 
 const User = require('../../src/models/user.model');
 const AiUsage = require('../../src/models/aiUsage.model');

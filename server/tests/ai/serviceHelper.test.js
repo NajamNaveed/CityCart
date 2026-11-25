@@ -14,6 +14,9 @@ jest.mock('../../src/models/aiUsage.model', () => ({
 jest.mock('../../src/services/serviceDiscovery.service', () => ({ discoverServices: jest.fn() }));
 jest.mock('../../src/services/serviceProvider.service', () => ({ listServiceCategories: jest.fn() }));
 jest.mock('../../src/services/serviceAvailability.service', () => ({ getAvailability: jest.fn() }));
+// The provider is found from the scope the server resolves; this shopper has no
+// saved place, so the search stays city-wide like the assertions below assume.
+jest.mock('../../src/services/ai/location', () => require('../helpers/mockShopperScope').locationModule());
 
 const User = require('../../src/models/user.model');
 const AiUsage = require('../../src/models/aiUsage.model');

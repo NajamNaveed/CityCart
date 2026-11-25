@@ -747,6 +747,7 @@ Every AI implementation agent must:
 6. Test negative cases.
 7. Test authorization boundaries.
 8. Test tenant isolation where relevant.
+9. Treat the customer-question matrix in `docs/29` §2h as the regression list for the customer chat: one test per family (location, policy, off-topic, order, product, service, recipe, comparison), in English, Urdu and Roman Urdu, and a case for every answer the server must refuse to guess. Those suites mock the shopper's scope through `tests/helpers/mockShopperScope.js` so a chat test can never quietly depend on the Block collection.
 
 ---
 

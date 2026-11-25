@@ -18,6 +18,9 @@ jest.mock('../../src/models/product.model', () => ({
 }));
 jest.mock('../../src/services/review.service', () => ({ ratingsFor: jest.fn() }));
 jest.mock('../../src/services/discover.service', () => ({ discover: jest.fn() }));
+// "same thing nearby" is measured from the scope the server resolves; this
+// shopper has no saved place, so the alternatives come from the whole city.
+jest.mock('../../src/services/ai/location', () => require('../helpers/mockShopperScope').locationModule());
 
 const User = require('../../src/models/user.model');
 const AiUsage = require('../../src/models/aiUsage.model');

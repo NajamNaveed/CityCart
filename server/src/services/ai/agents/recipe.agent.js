@@ -5,7 +5,8 @@ const { generate } = require('../index');
 const { getCached, setCached } = require('../cache');
 const { sanitizeUserText, parseModelJson } = require('../guard');
 const { buildRecipeMessages } = require('../prompts/recipe.prompt');
-const { createToolContext } = require('../tools');
+const { createShopperContext } = require('../tools');
+const { resolveShopperScope } = require('../location');
 const productTool = require('../tools/product.tool');
 const { plainSearch } = require('./shopAssistant.agent');
 
@@ -121,9 +122,10 @@ function mergeByProduct(rows) {
   return items;
 }
 
-async function buildRecipeList({ message, ctx, cityId, lat, lng }) {
+async function buildRecipeList({ message, ctx, cityId, lat, lng, scope: given }) {
   const text = sanitizeUserText(message, TEXT_LIMIT);
-  const toolCtx = createToolContext({ ...ctx, cityId, lat, lng });
+  const scope = given || (await resolveShopperScope({ userId: ctx.userId, cityId, lat, lng }));
+  const toolCtx = createShopperContext(ctx, scope);
 
   let extracted;
   try {
@@ -148,12 +150,16 @@ async function buildRecipeList({ message, ctx, cityId, lat, lng }) {
   );
   const items = mergeByProduct(rows);
   const matched = items.filter((item) => item.product).length;
+  // The counts come from the matches, never from the model, and "nearby" is
+  // only claimed as the block the search actually covered.
+  const where = scope.blockNames.length ? `in ${scope.blockNames.join(' or ')}` : 'nearby';
+  const reply =
+    matched === 0
+      ? `I could not match any ingredient for ${extracted.title} ${where}.`
+      : `Found ${matched} of ${items.length} ingredients for ${extracted.title} ${where}.`;
 
   return {
-    reply:
-      matched === 0
-        ? `I could not match any ingredient for ${extracted.title} to products nearby.`
-        : `Found ${matched} of ${items.length} ingredients for ${extracted.title} nearby.`,
+    reply: toolCtx.scopeNote ? `${reply} ${toolCtx.scopeNote}` : reply,
     title: extracted.title,
     items,
     products: [],

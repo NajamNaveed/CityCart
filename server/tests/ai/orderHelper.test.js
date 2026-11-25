@@ -21,6 +21,9 @@ jest.mock('../../src/services/order.service', () => {
     getOrderForUser: jest.fn(),
   };
 });
+// "is it near me" questions read the shopper's own block from the scope the
+// server resolves; this shopper has none, so answers stay city-wide.
+jest.mock('../../src/services/ai/location', () => require('../helpers/mockShopperScope').locationModule());
 
 const User = require('../../src/models/user.model');
 const Brand = require('../../src/models/brand.model');

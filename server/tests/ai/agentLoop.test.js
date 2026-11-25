@@ -71,7 +71,11 @@ describe('runAgent', () => {
     const { decision, trace } = await runAgent({ ...base, ctx: toolCtx() });
 
     expect(discover).toHaveBeenCalledTimes(1);
-    expect(trace).toEqual([{ tool: 'search_products', ok: true }]);
+    expect(trace).toHaveLength(1);
+    expect(trace[0]).toMatchObject({ tool: 'search_products', ok: true, args: { query: 'rice' } });
+    // The step's own result travels in the trace, because grounding the answer
+    // checks every number in it against what the tool really returned.
+    expect(trace[0].result.items).toEqual([expect.objectContaining({ name: 'Basmati Rice, 1 kg', price: 480 })]);
     expect(decision.answer).toBe('Basmati rice is Rs 480.');
   });
 

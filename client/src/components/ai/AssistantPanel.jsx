@@ -4,12 +4,14 @@ import {
   ArrowLeftRight,
   ChefHat,
   ChevronRight,
+  MapPin,
   Minus,
   Package,
   Plus,
   Send,
   ShoppingBag,
   Sparkles,
+  Store,
   Wrench,
 } from 'lucide-react'
 
@@ -59,6 +61,14 @@ const CAPABILITIES = [
     icon: ArrowLeftRight,
     example: 'Compare rice brands',
   },
+  {
+    // Last, because the server answers it from the shopper's own saved
+    // location without asking the model anything.
+    mode: 'location',
+    label: 'My area',
+    icon: MapPin,
+    example: 'Stores in my block',
+  },
 ]
 
 const MODE_LABELS = {
@@ -67,11 +77,15 @@ const MODE_LABELS = {
   service: 'Services',
   recipe: 'Recipe',
   compare: 'Compare',
+  location: 'My area',
+  policy: 'CityCart rules',
+  offTopic: 'Assistant',
   help: 'Assistant',
 }
 
 // Used only when the server could not soften a provider failure, exactly like
-// the per-mode fallbacks did before the chat was merged.
+// the per-mode fallbacks did before the chat was merged. The three answers the
+// server writes itself — area, rules, off-topic — always carry a reply.
 const FALLBACKS = {
   shop: 'Showing matches without the assistant.',
   order: 'Here are your latest orders.',
@@ -221,6 +235,35 @@ function providerCard(provider) {
             )
           })}
         </div>
+      )}
+    </Link>
+  )
+}
+
+// A shop the shopper's own area really contains — or, when the answer says so,
+// the nearest ones outside it. Each card shows the blocks the branch is in, so
+// "in my block" is never a claim the card cannot back up.
+function storeCard(store) {
+  return (
+    <Link
+      key={store._id}
+      to={`/store/${store._id}`}
+      className="flex items-center gap-3 rounded-tile border border-line-warm bg-paper px-2.5 py-2 transition hover:border-forest/30 hover:bg-paper-warm"
+    >
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-canvas text-ink/40">
+        <Store className="h-4 w-4" aria-hidden="true" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[13px] font-medium text-ink">{store.name}</span>
+        <span className="block truncate text-[11.5px] text-ink/55">
+          {[store.blocks, store.acceptingNewOrders === false ? 'Not taking orders' : null]
+            .flat()
+            .filter(Boolean)
+            .join(' · ')}
+        </span>
+      </span>
+      {typeof store.km === 'number' && (
+        <span className="shrink-0 text-[11.5px] text-ink/55">{formatDistance(store.km)}</span>
       )}
     </Link>
   )
@@ -376,6 +419,20 @@ function RecipeCard({ entry }) {
   )
 }
 
+// What each answer tells the shopper to double-check. The area answer is
+// written by the server from the shopper's own saved location, so it points at
+// the shop page rather than at a model.
+function disclaimer(entry) {
+  if (entry.providers?.length > 0) {
+    return 'AI can make mistakes — confirm the time and price on the provider page.'
+  }
+  if (entry.stores?.length > 0 && !entry.products?.length) {
+    return 'These are the shops listed in your area — open one to see what it has today.'
+  }
+  if (entry.orders?.length > 0) return 'AI can make mistakes — check the order before acting.'
+  return 'AI can make mistakes — check the listing before acting.'
+}
+
 function availabilityLabel(value) {
   if (value === 'OUT_OF_STOCK') return 'Sold out'
   if (value === 'LOW_STOCK') return 'Low stock'
@@ -502,7 +559,7 @@ function CompareCard({ products }) {
  */
 export default function AssistantPanel() {
   const { cityId } = useCity()
-  const { coords } = useNearby()
+  const { coords, blockIds } = useNearby()
   const [available, setAvailable] = useState(false)
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
@@ -567,6 +624,9 @@ export default function AssistantPanel() {
         message,
         ...(cityId && { cityId }),
         ...(coords && { lat: coords.lat, lng: coords.lng }),
+        // The blocks ticked on the Nearby page. Only context: the server
+        // re-reads each one and a pin or a saved address outranks it.
+        ...(blockIds?.length && { blockIds }),
         ...(lastModeRef.current && { lastMode: lastModeRef.current }),
       })
       const answer = data.data || {}
@@ -582,6 +642,7 @@ export default function AssistantPanel() {
           products: answer.products || [],
           orders: answer.orders || [],
           providers: answer.providers || [],
+          stores: answer.stores || [],
           title: answer.title || null,
           items: answer.items || [],
           hints: answer.hints || [],
@@ -634,7 +695,9 @@ export default function AssistantPanel() {
                 <p className="truncate text-[12.5px] font-semibold leading-tight text-ink">
                   One chat, the right helper
                 </p>
-                <p className="truncate text-[11px] text-ink/45">Products, orders, services and recipes.</p>
+                <p className="truncate text-[11px] text-ink/45">
+                  Products, orders, your area, services and recipes.
+                </p>
               </div>
             </div>
             <Badge tone="sage">AI</Badge>
@@ -728,14 +791,16 @@ export default function AssistantPanel() {
                   {entry.providers?.length > 0 && (
                     <div className="space-y-1.5">{entry.providers.map(providerCard)}</div>
                   )}
+                  {entry.stores?.length > 0 && (
+                    <div className="space-y-1.5">{entry.stores.map(storeCard)}</div>
+                  )}
                   {(entry.products?.length > 0 ||
                     entry.orders?.length > 0 ||
-                    entry.providers?.length > 0) && (
+                    entry.providers?.length > 0 ||
+                    entry.stores?.length > 0) && (
                     <p className="text-[10.5px] text-ink/40">
-                      {entry.degraded ? 'Plain search results. ' : ''}AI can make mistakes —{' '}
-                      {entry.providers?.length > 0
-                        ? 'confirm the time and price on the provider page.'
-                        : `check the ${entry.orders?.length > 0 ? 'order' : 'listing'} before acting.`}
+                      {entry.degraded ? 'Plain search results. ' : ''}
+                      {disclaimer(entry)}
                     </p>
                   )}
                 </div>
@@ -775,7 +840,7 @@ export default function AssistantPanel() {
                     send(input)
                   }
                 }}
-                placeholder="Ask about products, orders, services or recipes"
+                placeholder="Ask about products, orders, your area, services or recipes"
                 className="block max-h-28 min-h-[46px] w-full resize-none bg-transparent px-2.5 pb-1 pt-1.5 text-[13px] leading-relaxed text-ink outline-none placeholder:text-ink/35"
               />
               <div className="flex items-center gap-1 pl-1.5">

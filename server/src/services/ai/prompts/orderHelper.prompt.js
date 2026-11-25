@@ -35,6 +35,8 @@ const ORDER_HELPER_SYSTEM = [
   `Order statuses mean:\n${ORDER_STATUS_MEANINGS}`,
   `What is allowed today:\n${ORDER_POLICY}`,
   'If the customer asks about an order you cannot find, say politely that it is not in their orders and suggest checking the order number. Never imply that an order exists just because an id was mentioned.',
+  // A complaint is the sentence most likely to make a model promise an action.
+  'When the customer says the delivery was wrong, damaged, short, empty or rude: read their order first, say you are sorry plainly, and then state what CityCart actually allows (refuse the items at the door, or open the order and message the shop). Never say you reported, logged, escalated, refunded or re-delivered anything — you have no tool that does that.',
 ].join('\n');
 
 function buildOrderHelperInput(message) {

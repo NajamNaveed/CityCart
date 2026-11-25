@@ -1,10 +1,12 @@
 const { z } = require('zod');
 
 const { runAgent } = require('../agentLoop');
-const { createToolContext, SERVICE_TOOLS } = require('../tools');
+const { createShopperContext, SERVICE_TOOLS } = require('../tools');
 const { findProvidersTool } = require('../tools/service.tool');
 const { sanitizeUserText } = require('../guard');
-const { fallbackQueries } = require('./shopAssistant.agent');
+const { groundedReply } = require('../ground');
+const { resolveShopperScope } = require('../location');
+const { fallbackQueries } = require('../query');
 const { SERVICE_HELPER_SYSTEM, buildServiceHelperInput } = require('../prompts/serviceHelper.prompt');
 
 const MESSAGE_LIMIT = 500;
@@ -49,11 +51,13 @@ async function plainSearch(toolCtx, message) {
 /**
  * Phase 2c. Providers and times come from the tools; the model only chooses
  * which providers to show. It never books: the shopper opens the provider page
- * and uses the normal booking flow.
+ * and uses the normal booking flow. Phase 2h adds the shopper's own block to
+ * the search and checks the sentence against the tool results.
  */
-async function askServiceHelper({ message, ctx, cityId, lat, lng }) {
+async function askServiceHelper({ message, ctx, cityId, lat, lng, scope: given }) {
   const text = sanitizeUserText(message, MESSAGE_LIMIT);
-  const toolCtx = createToolContext({ ...ctx, cityId, lat, lng });
+  const scope = given || (await resolveShopperScope({ userId: ctx.userId, cityId, lat, lng }));
+  const toolCtx = createShopperContext(ctx, scope);
 
   try {
     const { decision, trace } = await runAgent({
@@ -73,7 +77,16 @@ async function askServiceHelper({ message, ctx, cityId, lat, lng }) {
       .filter(Boolean)
       .slice(0, MAX_PROVIDERS);
 
-    return { reply: decision.answer, providers, degraded: false, steps: trace.length };
+    const { reply, corrected } = groundedReply({
+      answer: decision.answer,
+      evidence: trace,
+      mode: 'service',
+      cards: providers,
+      scope,
+      note: toolCtx.scopeNote,
+    });
+
+    return { reply, providers, degraded: false, corrected, steps: trace.length };
   } catch (err) {
     if (err.code === 'AI_UNAVAILABLE' || err.name === 'AiGuardError') {
       const found = await plainSearch(toolCtx, text);

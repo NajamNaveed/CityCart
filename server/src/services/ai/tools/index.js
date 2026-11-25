@@ -17,6 +17,7 @@ const {
   searchCatalogueTool,
   listShopListingsTool,
 } = require('./catalogue.tools');
+const { myLocationTool, checkAreaTool } = require('./location.tool');
 
 /**
  * Read-only tool layer for the assistants (docs/27 §3.4).
@@ -25,7 +26,9 @@ const {
  * ordinary database reads and returns plain JSON for the prompt. Tools never
  * accept ids from the model: the caller's identity, city, coordinates and
  * brand come from `ctx`, which the controller builds from the authenticated
- * request.
+ * request. The shopper's `blockIds` are the ones `resolveShopperScope` worked
+ * out from a position, so a block-scoped answer cannot be steered from the
+ * message.
  *
  * Records a tool found are also remembered in `ctx`, so the agent can only
  * show cards that came from a real query (the model may not invent products,
@@ -38,7 +41,15 @@ function createToolContext({
   lat = null,
   lng = null,
   brandId = null,
+  blockIds = [],
+  blockNames = [],
+  cityName = null,
+  locationSource = null,
+  addressLabel = null,
+  deliverable = null,
 }) {
+  const clean = (values) => [...new Set((Array.isArray(values) ? values : []).map(String).filter(Boolean))];
+
   return {
     userId,
     role,
@@ -46,6 +57,15 @@ function createToolContext({
     lat,
     lng,
     brandId,
+    blockIds: clean(blockIds),
+    blockNames: clean(blockNames),
+    cityName,
+    locationSource,
+    addressLabel,
+    deliverable,
+    // Set by block-aware search when it had to leave the shopper's block to
+    // find anything, so the reply can say so instead of calling it "nearby".
+    scopeNote: null,
     products: new Map(),
     orders: new Map(),
     providers: new Map(),
@@ -89,6 +109,26 @@ function createToolContext({
   };
 }
 
+/**
+ * The context for one shopper request, built from the scope the server resolved
+ * (blocks, city and coordinates it worked out itself) rather than from whatever
+ * the message or the client happened to send.
+ */
+function createShopperContext(ctx, scope = {}) {
+  return createToolContext({
+    ...ctx,
+    cityId: scope.cityId ?? ctx.cityId ?? null,
+    lat: scope.lat ?? null,
+    lng: scope.lng ?? null,
+    blockIds: scope.blockIds || [],
+    blockNames: scope.blockNames || [],
+    cityName: scope.cityName || null,
+    locationSource: scope.source || null,
+    addressLabel: scope.addressLabel || null,
+    deliverable: scope.deliverable ?? null,
+  });
+}
+
 const TOOLS = {
   [productTool.name]: productTool,
   [compareTool.name]: compareTool,
@@ -104,9 +144,11 @@ const TOOLS = {
   [productPerformanceTool.name]: productPerformanceTool,
   [searchCatalogueTool.name]: searchCatalogueTool,
   [listShopListingsTool.name]: listShopListingsTool,
+  [myLocationTool.name]: myLocationTool,
+  [checkAreaTool.name]: checkAreaTool,
 };
 
-const SHOP_TOOLS = [productTool, categoryTool, storeTool];
+const SHOP_TOOLS = [productTool, categoryTool, storeTool, myLocationTool, checkAreaTool];
 const COMPARE_TOOLS = [compareTool];
 const ORDER_TOOLS = [listOrdersTool, getOrderTool];
 const SERVICE_TOOLS = [findProvidersTool, listCategoriesTool, providerSlotsTool];
@@ -126,6 +168,7 @@ function findTool(name) {
 
 module.exports = {
   createToolContext,
+  createShopperContext,
   describeTools,
   findTool,
   SHOP_TOOLS,

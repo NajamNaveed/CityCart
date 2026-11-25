@@ -3,7 +3,7 @@ const { z } = require('zod');
 const ServiceProvider = require('../../../models/serviceProvider.model');
 const ServiceOffering = require('../../../models/serviceOffering.model');
 const ServiceBooking = require('../../../models/serviceBooking.model');
-const { discoverServices } = require('../../serviceDiscovery.service');
+const { providersForShopper } = require('./area');
 const { getAvailability } = require('../../serviceAvailability.service');
 const { listServiceCategories } = require('../../serviceProvider.service');
 const { SLOT_HOLDING_STATUSES } = require('../../../config/serviceBookingStatuses');
@@ -54,7 +54,7 @@ const findProvidersTool = {
   name: 'find_service_providers',
   argsHint: '{ query?: string, categoryId?: string, limit?: 1-5 }',
   description:
-    'Find approved service providers in the shopper’s city, best rated first. Use short trade words (for example "AC repair", "plumber", "deep cleaning"). Returns each provider’s id, area, start price, rating and a few services.',
+    "Find approved service providers near the shopper — in their block when a location is known, otherwise in their city, best rated first. Use short trade words (for example \"AC repair\", \"plumber\", \"deep cleaning\"). Returns each provider's id, area, start price, rating and a few services.",
   argsSchema: z
     .object({
       query: z.string().trim().max(80).optional(),
@@ -63,14 +63,7 @@ const findProvidersTool = {
     })
     .strict(),
   async run(ctx, args) {
-    const result = await discoverServices({
-      q: args.query || undefined,
-      cityId: ctx.cityId || undefined,
-      lat: ctx.lat === null ? undefined : ctx.lat,
-      lng: ctx.lng === null ? undefined : ctx.lng,
-      categoryId: args.categoryId || undefined,
-      limit: MAX_PROVIDERS,
-    });
+    const result = await providersForShopper(ctx, { q: args.query, categoryId: args.categoryId });
 
     const limit = args.limit || MAX_PROVIDERS;
     const items = result.items
@@ -98,7 +91,12 @@ const findProvidersTool = {
         };
       });
 
-    return { count: items.length, items };
+    return {
+      count: items.length,
+      searched: result.searched,
+      ...(result.note ? { note: result.note } : {}),
+      items,
+    };
   },
 };
 

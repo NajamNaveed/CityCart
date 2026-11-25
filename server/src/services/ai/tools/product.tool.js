@@ -1,6 +1,6 @@
 const { z } = require('zod');
 
-const { discover } = require('../../discover.service');
+const { discoverForShopper } = require('./area');
 
 const DEFAULT_LIMIT = 8;
 const MAX_LIMIT = 12;
@@ -15,9 +15,13 @@ const argsSchema = z
   .strict();
 
 /**
- * Product search for the shopping assistant. It runs the same public
+ * Product search for the shopping assistants. It runs the same public
  * discovery query the Stores page uses (ACTIVE products of ACTIVE, non-frozen
  * brands), so the assistant can never surface a listing a guest could not buy.
+ *
+ * With a known block the block is searched first: a shopper who asks for
+ * something "near me" and gets a result from the other side of the city must be
+ * told that, which is what `searched` and the `note` are for.
  *
  * The shop's name travels with each product because the model needs it to
  * answer "which store has it", while the client only needs the product id.
@@ -26,20 +30,13 @@ const productTool = {
   name: 'search_products',
   argsHint: '{ query?: string, maxPrice?: number (rupees), limit?: 1-12 }',
   description:
-    'Find products sold in the shopper’s city. Use short search words (for example "rice", "milk", "gift") rather than a whole sentence. Returns real products with their id, price, stock state and shop name.',
+    'Find products sold near the shopper — in their block when a location is known, otherwise in their city. Use short search words (for example "rice", "milk", "gift") rather than a whole sentence. Returns real products with their id, price, stock state and shop name.',
   argsSchema,
   async run(ctx, args) {
-    const result = await discover({
-      q: args.query || undefined,
-      scope: 'city',
-      cityId: ctx.cityId || undefined,
-      lat: ctx.lat === null ? undefined : ctx.lat,
-      lng: ctx.lng === null ? undefined : ctx.lng,
-      limit: 12,
-    });
+    const found = await discoverForShopper(ctx, { q: args.query });
 
     const items = [];
-    for (const store of result.items) {
+    for (const store of found.items) {
       for (const product of store.products) {
         if (args.maxPrice && product.price > args.maxPrice) continue;
         if (product.availability === 'OUT_OF_STOCK') continue;
@@ -60,7 +57,12 @@ const productTool = {
     }
 
     const limit = args.limit || DEFAULT_LIMIT;
-    return { count: items.length, items: items.slice(0, limit) };
+    return {
+      count: items.length,
+      searched: found.searched,
+      ...(found.note ? { note: found.note } : {}),
+      items: items.slice(0, limit),
+    };
   },
 };
 

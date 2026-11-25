@@ -1,30 +1,17 @@
 const { z } = require('zod');
 
 const { runAgent } = require('../agentLoop');
-const { createToolContext, SHOP_TOOLS } = require('../tools');
+const { createShopperContext, SHOP_TOOLS } = require('../tools');
 const productTool = require('../tools/product.tool');
 const { sanitizeUserText } = require('../guard');
+const { groundedReply } = require('../ground');
+const { resolveShopperScope } = require('../location');
+const { askForDetails } = require('../facts');
+const { fallbackQueries } = require('../query');
 const { SHOP_ASSISTANT_SYSTEM, buildShopAssistantInput } = require('../prompts/shopAssistant.prompt');
 
 const MESSAGE_LIMIT = 500;
 const FALLBACK_LIMIT = 6;
-const FALLBACK_TOKENS = 6;
-
-// Words that carry no product meaning in a plain fallback search.
-const STOPWORDS = new Set([
-  'a', 'an', 'and', 'any', 'are', 'best', 'buy', 'can', 'cheap', 'cheapest', 'find', 'for', 'from', 'get', 'give',
-  'good', 'have', 'how', 'i', 'in', 'is', 'it', 'less', 'me', 'my', 'near', 'need', 'of', 'on', 'or', 'please',
-  'rs', 'rupees', 'show', 'some', 'than', 'the', 'to', 'under', 'want', 'what', 'where', 'which', 'with', 'you',
-]);
-
-/** The user text split into usable search words, longest first. */
-function fallbackQueries(text) {
-  const words = String(text)
-    .toLowerCase()
-    .split(/[^\p{L}\p{N}]+/u)
-    .filter((word) => word.length >= 3 && !STOPWORDS.has(word));
-  return [...new Set(words)].sort((a, b) => b.length - a.length).slice(0, FALLBACK_TOKENS);
-}
 
 /**
  * Plain search used when the model is down. It runs the same read-only product
@@ -44,18 +31,25 @@ async function plainSearch(toolCtx, message) {
 }
 
 /**
- * Phase 2a. The model may only return ids of products a tool actually found;
- * anything else is dropped, so the cards can never be invented.
+ * Phase 2a, located in Phase 2h. The model may only return ids of products a
+ * tool actually found, and the sentence around them is checked against the same
+ * tool results, so neither a card nor a price can be invented.
  */
-async function askShopAssistant({ message, ctx, cityId, lat, lng }) {
+async function askShopAssistant({ message, ctx, cityId, lat, lng, scope: given }) {
   const text = sanitizeUserText(message, MESSAGE_LIMIT);
-  const toolCtx = createToolContext({ ...ctx, cityId, lat, lng });
+  const scope = given || (await resolveShopperScope({ userId: ctx.userId, cityId, lat, lng }));
+  const toolCtx = createShopperContext(ctx, scope);
+
+  // Nothing searchable in the message: ask instead of showing random shops.
+  if (!fallbackQueries(text).length) {
+    return { reply: askForDetails(text), products: [], degraded: false, steps: 0 };
+  }
 
   try {
     const { decision, trace } = await runAgent({
       task: 'shop-assistant',
       system: SHOP_ASSISTANT_SYSTEM,
-      user: buildShopAssistantInput(text),
+      user: buildShopAssistantInput(text, scope),
       tools: SHOP_TOOLS,
       ctx: toolCtx,
       answerShape: { productIds: z.array(z.string().max(64)).max(4).optional() },
@@ -66,7 +60,16 @@ async function askShopAssistant({ message, ctx, cityId, lat, lng }) {
       .filter(Boolean)
       .slice(0, 4);
 
-    return { reply: decision.answer, products, degraded: false, steps: trace.length };
+    const { reply, corrected } = groundedReply({
+      answer: decision.answer,
+      evidence: trace,
+      mode: 'shop',
+      cards: products,
+      scope,
+      note: toolCtx.scopeNote,
+    });
+
+    return { reply, products, degraded: false, corrected, steps: trace.length };
   } catch (err) {
     if (err.code === 'AI_UNAVAILABLE' || err.name === 'AiGuardError') {
       return {
@@ -80,4 +83,4 @@ async function askShopAssistant({ message, ctx, cityId, lat, lng }) {
   }
 }
 
-module.exports = { askShopAssistant, fallbackQueries, plainSearch, MESSAGE_LIMIT };
+module.exports = { askShopAssistant, plainSearch, MESSAGE_LIMIT };

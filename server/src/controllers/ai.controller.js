@@ -432,6 +432,10 @@ const chatSchema = z
     cityId: z.string().regex(/^[0-9a-f]{24}$/i, 'Choose a valid city.').optional(),
     lat: z.number().min(-90).max(90).optional(),
     lng: z.number().min(-180).max(180).optional(),
+    // The blocks the shopper picked on the Nearby page. Only a hint: each id is
+    // re-read from the Block collection and must be active, and a saved address
+    // or a pin in the same request still outranks it (docs/29 Phase 2h).
+    blockIds: z.array(z.string().regex(/^[0-9a-f]{24}$/i, 'Choose a valid block.')).max(10).optional(),
     // Only a hint for short follow-ups; the server still decides the mode.
     lastMode: z.enum(ROUTABLE_MODES).optional(),
   })
@@ -463,6 +467,7 @@ async function chat(req, res, next) {
       cityId: parsed.data.cityId || null,
       lat: parsed.data.lat ?? null,
       lng: parsed.data.lng ?? null,
+      blockIds: parsed.data.blockIds || [],
       lastMode: parsed.data.lastMode || null,
     });
     return res.status(200).json({ success: true, data });

@@ -16,6 +16,22 @@ jest.mock('../../src/services/ai/agents/orderHelper.agent', () => ({ askOrderHel
 jest.mock('../../src/services/ai/agents/serviceHelper.agent', () => ({ askServiceHelper: jest.fn() }));
 jest.mock('../../src/services/ai/agents/recipe.agent', () => ({ buildRecipeList: jest.fn() }));
 jest.mock('../../src/services/ai/agents/compare.agent', () => ({ compareProducts: jest.fn() }));
+// The chat works out where the shopper is once and hands that scope to every
+// agent, so the request's own city, pin and block ids never reach a tool
+// directly. The reads themselves are tested in tests/ai/chatCorpus.test.js.
+jest.mock('../../src/services/ai/location', () => ({
+  resolveShopperScope: jest.fn(),
+  findAreaBlocks: jest.fn(),
+}));
+// The three questions the server answers from its own data, without a model.
+jest.mock('../../src/services/ai/facts', () => ({
+  answerLocation: jest.fn(),
+  answerPolicy: jest.fn(),
+  answerOffTopic: jest.fn(),
+  askForDetails: jest.fn(),
+  namedPlaceAsked: jest.fn(),
+  namedRulePlace: jest.fn(),
+}));
 
 const User = require('../../src/models/user.model');
 const AiUsage = require('../../src/models/aiUsage.model');
@@ -24,6 +40,14 @@ const { askOrderHelper } = require('../../src/services/ai/agents/orderHelper.age
 const { askServiceHelper } = require('../../src/services/ai/agents/serviceHelper.agent');
 const { buildRecipeList } = require('../../src/services/ai/agents/recipe.agent');
 const { compareProducts } = require('../../src/services/ai/agents/compare.agent');
+const { resolveShopperScope } = require('../../src/services/ai/location');
+const {
+  answerLocation,
+  answerPolicy,
+  answerOffTopic,
+  namedPlaceAsked,
+  namedRulePlace,
+} = require('../../src/services/ai/facts');
 const { HINTS } = require('../../src/services/ai/agents/chat.agent');
 const { classifyIntent } = require('../../src/services/ai/intent');
 const app = require('../../src/app');
@@ -33,7 +57,21 @@ const { getAuthCookie } = require('../helpers/testAuth');
 
 const originalDailyLimit = env.ai.dailyLimit;
 const cityId = new mongoose.Types.ObjectId().toString();
+const blockId = new mongoose.Types.ObjectId().toString();
 const customer = { _id: new mongoose.Types.ObjectId(), role: ROLES.CUSTOMER, isActive: true };
+
+/** The scope the server resolved for this shopper, whatever the client sent. */
+const SCOPE = {
+  source: 'pin',
+  cityId,
+  lat: 31.52,
+  lng: 74.35,
+  blockIds: [blockId],
+  blockNames: ['Gulberg III'],
+  cityName: 'Lahore',
+  addressLabel: 'Home',
+  deliverable: true,
+};
 
 const SHOP_ANSWER = { reply: 'Rice packs nearby.', products: [{ _id: 'p1', name: 'Rice' }], degraded: false, steps: 1 };
 const ORDER_ANSWER = { reply: 'It is on the way.', orders: [{ orderId: 'o1' }], degraded: false, steps: 1 };
@@ -64,6 +102,12 @@ beforeEach(() => {
   env.ai.dailyLimit = originalDailyLimit;
   AiUsage.countDocuments.mockResolvedValue(0);
   AiUsage.create.mockResolvedValue({});
+  resolveShopperScope.mockResolvedValue(SCOPE);
+  namedPlaceAsked.mockResolvedValue(null);
+  namedRulePlace.mockResolvedValue(null);
+  answerLocation.mockResolvedValue({ reply: 'You are in Gulberg III, Lahore.', stores: [] });
+  answerPolicy.mockResolvedValue('CityCart does not add a delivery fee.');
+  answerOffTopic.mockReturnValue('I only answer questions about CityCart.');
   askShopAssistant.mockResolvedValue(SHOP_ANSWER);
   askOrderHelper.mockResolvedValue(ORDER_ANSWER);
   askServiceHelper.mockResolvedValue(SERVICE_ANSWER);
@@ -74,7 +118,9 @@ beforeEach(() => {
 describe('chat hints', () => {
   it('every hint reaches the mode it advertises', () => {
     for (const [mode, hints] of Object.entries(HINTS)) {
-      if (mode === 'help') continue;
+      // "help" is a greeting and "offTopic" hints are deliberately real
+      // marketplace questions: they redirect the shopper instead of refusing.
+      if (mode === 'help' || mode === 'offTopic') continue;
       for (const hint of hints) {
         expect({ hint, mode: classifyIntent(hint) }).toEqual({ hint, mode });
       }
@@ -96,8 +142,9 @@ describe('POST /api/v1/ai/chat', () => {
     expect(res.body.data.hints.length).toBeGreaterThan(0);
     expectOnly(askShopAssistant, [askOrderHelper, askServiceHelper, buildRecipeList, compareProducts]);
     expect(askShopAssistant).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'cheap rice nearby', cityId }),
+      expect.objectContaining({ message: 'cheap rice nearby', scope: SCOPE }),
     );
+    expect(resolveShopperScope).toHaveBeenCalledWith(expect.objectContaining({ cityId }));
   });
 
   it('routes an order question to the order agent', async () => {
@@ -109,16 +156,81 @@ describe('POST /api/v1/ai/chat', () => {
     expectOnly(askOrderHelper, [askShopAssistant, askServiceHelper, buildRecipeList, compareProducts]);
   });
 
-  it('routes a service question to the service agent with the area', async () => {
+  it('routes a service question to the service agent with the resolved area', async () => {
     const res = await chat({ message: 'AC repair tomorrow evening', cityId, lat: 31.42, lng: 73.08 });
 
     expect(res.status).toBe(200);
     expect(res.body.data.mode).toBe('service');
     expect(res.body.data.providers).toEqual(SERVICE_ANSWER.providers);
-    expect(askServiceHelper).toHaveBeenCalledWith(
-      expect.objectContaining({ cityId, lat: 31.42, lng: 73.08 }),
-    );
+    // The pin is read once by the server and only the resolved scope is handed
+    // to the agent, so a client cannot search a city it did not send.
+    expect(resolveShopperScope).toHaveBeenCalledWith(expect.objectContaining({ cityId, lat: 31.42, lng: 73.08 }));
+    expect(askServiceHelper).toHaveBeenCalledWith(expect.objectContaining({ scope: SCOPE }));
     expectOnly(askServiceHelper, [askShopAssistant, askOrderHelper, buildRecipeList, compareProducts]);
+  });
+
+  it.each([
+    ['show me all the stores that are in my block', 'location'],
+    ['what is the delivery fee?', 'policy'],
+    ['who made you?', 'offTopic'],
+  ])('answers %s from the server’s own data as %s', async (message, mode) => {
+    const res = await chat({ message, cityId });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.mode).toBe(mode);
+    expect(res.body.data.reply).toBeTruthy();
+    expect(res.body.data.hints.length).toBeGreaterThan(0);
+    for (const agent of [askShopAssistant, askOrderHelper, askServiceHelper, buildRecipeList, compareProducts]) {
+      expect(agent).not.toHaveBeenCalled();
+    }
+  });
+
+  it('answers a shop question that names a place with the shop list', async () => {
+    // "shops in Karachi" has no city id in the request, so only the database can
+    // tell the place name from a product name — and once it knows, the shopper
+    // gets the shops instead of a product search for the word "karachi".
+    namedPlaceAsked.mockResolvedValueOnce({ kind: 'city', name: 'Karachi', names: ['Karachi'], cityId });
+    const res = await chat({ message: 'shops in karachi' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.mode).toBe('location');
+    expect(askShopAssistant).not.toHaveBeenCalled();
+    expect(answerLocation).toHaveBeenCalledWith(expect.objectContaining({ text: 'shops in karachi' }));
+  });
+
+  it('answers a rule question that names a zone with that zone', async () => {
+    // The router cannot know which words are zones, so it sends this to the
+    // rules; the place read then moves it to the zone answer, because "tonight"
+    // is not something CityCart stores and coverage is.
+    namedRulePlace.mockResolvedValueOnce({
+      kind: 'block',
+      name: 'DHA Phase 5',
+      names: ['DHA Phase 5'],
+      blockIds: [blockId],
+    });
+    const res = await chat({ message: 'do you deliver to DHA Phase 5 tonight', cityId });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.mode).toBe('location');
+    expect(answerPolicy).not.toHaveBeenCalled();
+    expect(answerLocation).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'do you deliver to DHA Phase 5 tonight' })
+    );
+  });
+
+  it('refuses a block id the shopper did not pick', async () => {
+    const res = await chat({ message: 'stores in my block', blockIds: ['not-an-id'] });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe('Validation failed.');
+    expect(resolveShopperScope).not.toHaveBeenCalled();
+  });
+
+  it('passes more than ten picked blocks nowhere', async () => {
+    const res = await chat({ message: 'stores in my block', blockIds: Array.from({ length: 11 }, () => blockId) });
+
+    expect(res.status).toBe(400);
+    expect(resolveShopperScope).not.toHaveBeenCalled();
   });
 
   it('routes a dish with servings to the recipe assistant', async () => {

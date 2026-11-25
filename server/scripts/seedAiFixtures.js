@@ -51,6 +51,10 @@ const CommissionEntry = require('../src/models/commissionEntry.model');
 const ServiceAvailability = require('../src/models/serviceAvailability.model');
 const AiUsage = require('../src/models/aiUsage.model');
 const Counter = require('../src/models/counter.model');
+const Address = require('../src/models/address.model');
+const Branch = require('../src/models/branch.model');
+const Block = require('../src/models/block.model');
+const City = require('../src/models/city.model');
 
 const { ObjectId } = mongoose.Types;
 const HOUR = 3600 * 1000;
@@ -464,6 +468,14 @@ const AGENT_NAMES = [
   'shop-report', 'promise-check', 'billing-explain', 'deadstock-pricing', 'substitutions',
   'admin-triage', 'moderation',
 ];
+
+// The block the demo shop physically stands in. A shopper has to be inside it
+// before "shops in my block" has anything to find (docs/29 §2h).
+async function shopBlock(ctx) {
+  const branch = await Branch.findOne({ brandId: ctx.brandId, isActive: true }).select('blockId').lean();
+  if (!branch) return null;
+  return Block.findOne({ _id: branch.blockId, isActive: true }).select('name cityId center').lean();
+}
 
 // ── the features, one check each ────────────────────────────────────────────
 // check(ctx, L) answers "can this be demoed today". fix(ctx, L) writes what was missing and
@@ -901,6 +913,42 @@ const FEATURES = [
     },
   },
   {
+    label: 'Shopper location answers',
+    where: 'customer chat · POST /api/v1/ai/chat with "which block am I in" / "shops in my block"',
+    async check(ctx) {
+      const block = await shopBlock(ctx);
+      const saved = await Address.countDocuments({ isDefault: true });
+      return {
+        ready: saved > 0 && Boolean(block),
+        note: `${saved} saved default address(es), ${block ? `a shop stands in "${block.name}"` : 'no active block holds this shop'}`,
+      };
+    },
+    async fix(ctx) {
+      const block = await shopBlock(ctx);
+      if (!block) return { ids: [], note: 'this shop has no branch inside an active block — draw one on the Blocks page first' };
+      const existing = await Address.findOne({ isDefault: true }).select('_id').lean();
+      if (existing) return { ids: [], note: 'a saved home address already exists for the location answers to read' };
+      const shopper = ctx.buyers[0];
+      const city = await City.findById(block.cityId).select('name').lean();
+      const at = new Date(ctx.now);
+      const made = await insert(Address, {
+        userId: shopper._id,
+        // The centre is the pin the shopper's own blocks are worked out from, so
+        // the address is placed in the block the shop itself stands in.
+        label: 'AI demo home',
+        fullName: shopper.name || 'Demo Customer',
+        phone: '03001112233',
+        addressLine: `${block.name}, ${city ? city.name : 'the demo city'} (${MARK})`,
+        city: city ? city.name : 'Faisalabad',
+        location: { type: 'Point', coordinates: block.center.coordinates },
+        isDefault: true,
+        createdAt: at,
+        updatedAt: at,
+      });
+      return { ids: [made._id], note: `saved home address written for ${shopper.email} inside ${block.name}` };
+    },
+  },
+  {
     label: 'AI cost and fallback report',
     where: 'admin AI usage · GET /api/v1/analytics/ai-usage',
     async check(ctx) {
@@ -1001,7 +1049,7 @@ async function undo() {
   const targets = [
     [Product, '_id'], [Inventory, '_id'], [Review, '_id'], [Order, '_id'],
     [Conversation, '_id'], [Message, '_id'], [CatalogProduct, '_id'],
-    [AiUsage, '_id'], [BillingHelp, '_id'],
+    [AiUsage, '_id'], [BillingHelp, '_id'], [Address, '_id'],
   ];
   let removed = 0;
   for (const [Model, key] of targets) {

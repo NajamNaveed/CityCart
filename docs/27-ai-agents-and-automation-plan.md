@@ -115,6 +115,7 @@ Keep it simple and testable:
 2. Validate with zod. Run the tool with `(ctx, args)`. Append the result.
 3. Maximum **3 steps**, then force an answer.
 4. Tools are **read-only** in phases 1-4. Any "action" (add to cart, cancel) is returned to the client as a *suggested action* that the user taps; the normal API performs it.
+5. Some customer questions are answered **before** the loop runs (2h): the shopper's own area, a named delivery zone, the platform's enforced rules — delivery, timing, payment methods, the checkout total, receipts, password reset, whose phone numbers are published, how to start selling or become a rider — and anything that is not about CityCart at all come from `services/ai/facts.js`; a message that is only "thanks" is answered as a thank you, and a message with no searchable word asks the customer for the item instead of searching. Those answers cost no provider call, so no zone, fee or hour can be invented. Every tool call is also measured from the shopper's own blocks first and the city only as a labelled second step, and every amount, distance and rating in the finished sentence is checked against the numbers the tools returned (docs/29 §2h).
 
 ## 4. Agent catalogue
 
@@ -124,7 +125,7 @@ Keep it simple and testable:
 | Review summarizer | Customer (public) | reviews | 1b |
 | Chat translator | Customer, Brand | none | 1c |
 | CSV cleaner | Brand | none | 3b |
-| Shopping assistant | Customer | product search, categories, discover/nearby | 2a |
+| Shopping assistant | Customer | product search, categories, discover/nearby (block first), `my_location`, `check_area` | 2a, 2h |
 | Order helper | Customer | own orders only | 2b |
 | Service booking helper | Customer | service discovery, availability | 2c |
 | Catalogue matcher | Brand | catalogue search | 3b |

@@ -109,7 +109,10 @@ async function runAgent({
 
     try {
       const result = await tool.run(ctx, parsedArgs.data);
-      trace.push({ tool: tool.name, ok: true });
+      // The args and the result are kept in the trace as well: they are the
+      // evidence the reply is checked against, so a price the tool never
+      // returned cannot reach the shopper (docs/29 Phase 2h).
+      trace.push({ tool: tool.name, ok: true, args: parsedArgs.data, result });
       messages.push({
         role: 'assistant',
         content: JSON.stringify({ tool: tool.name, args: parsedArgs.data }),

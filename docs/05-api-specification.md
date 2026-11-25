@@ -3161,13 +3161,20 @@ Request:
   "cityId": "66f1a0c2b3d4e5f60718293a",
   "lat": 31.4187,
   "lng": 73.0791,
+  "blockIds": ["66f1a0c2b3d4e5f6071829aa"],
   "lastMode": "order"
 }
 ```
 
-`message` is 2–500 characters and is sanitized before routing. `cityId`, `lat` and `lng` are optional and follow the same rules as the shopping assistant. `lastMode` is optional and only a hint for short follow-ups such as `cancel it` or `tomorrow evening`; it is validated against `shop`, `order`, `service`, `recipe` and `compare`, and never selects an agent by itself. Any other client field (including a `mode`) is ignored.
+`message` is 2–500 characters and is sanitized before routing. `cityId`, `lat` and `lng` are optional and follow the same rules as the shopping assistant. `lastMode` is optional and only a hint for short follow-ups such as `cancel it` or `tomorrow evening`; it is validated against `shop`, `order`, `service`, `recipe`, `compare`, `location`, `policy` and `offTopic`, and never selects an agent by itself. Any other client field (including a `mode`) is ignored.
 
-Routing is deterministic (docs/27 §3.4): order questions win first, then comparison, recipes, and services; everything else is a product search. Greetings and `help` / `what can you do` answer with capability hints without calling a provider or spending the daily allowance.
+`blockIds` (docs/29 Phase 2h) is the list — at most 10 — of delivery blocks the shopper picked on the Nearby page. It is only a hint: every id is re-read from the `Block` collection, must belong to an active block, and a list spanning two cities is not trusted — such an id is dropped and the answer falls back to the pin, the default saved address or the city, so a hand-made body can never search a zone the shopper did not choose. A malformed id, or an 11th id, is a **400** from the schema before any read. A pin, or the shopper's own default saved address, still outranks the list.
+
+The shopper's place is resolved **once per request** — pin, then their own default saved address, then the blocks they picked — and the blocks, city and coordinates the server worked out are what every tool receives. The chat and the Nearby page therefore measure "near me" the same way, and no location fact is ever read out of the message.
+
+Routing is deterministic (docs/27 §3.4), in this order: greetings and `help`; anything not about CityCart; the shopper's own orders; how the marketplace works (fee, payment, opening hours, delivery time); where the shopper is and whether a named area is delivered to; comparison; recipes; services; a short follow-up that keeps the thread it was asked in; otherwise a product search.
+
+Three of those families — `location`, `policy` and `offTopic` — are answered **from the server's own data, with no provider call and no daily-allowance spend**, because they are exactly the questions a model can only guess at: which block this shopper set, what the platform charges, and what CityCart is. Their replies are written in the language the question was asked in (English, Urdu or Roman Urdu) and state only numbers the database returned.
 
 The chosen agent is exactly the same one behind its dedicated endpoint below — same read-only tools, same customer scope, same degradation. The response adds `mode` so the client renders the right cards, and `hints` with example follow-up questions:
 
@@ -3189,12 +3196,14 @@ The chosen agent is exactly the same one behind its dedicated endpoint below —
 }
 ```
 
-`mode` is one of `shop`, `order`, `service`, `recipe`, `compare` or `help`. A degraded answer (provider outage or unusable model output) keeps the agent's own plain-search / latest-orders fallback and sets `degraded: true`.
+`mode` is one of `shop`, `order`, `service`, `recipe`, `compare`, `location`, `policy`, `offTopic` or `help`. A degraded answer (provider outage or unusable model output) keeps the agent's own plain-search / latest-orders fallback and sets `degraded: true`. `location` answers carry `stores` cards — the real shops the same search found, each labelled with the blocks it is actually in — and `policy` / `offTopic` / `help` carry none, because there is nothing to show.
+
+Every amount, distance, duration, rating and percentage in `reply` is checked against the numbers the tools actually returned (docs/29 Phase 2h). A number the tools never said costs the sentence, not the answer: the cards stay and the words are replaced by one line the server wrote from those cards. When a search had to leave the shopper's own block to find anything, that warning travels with whichever sentence is used, so listings from the other side of the city are never called nearby.
 
 Failure codes:
 
 ```text
-400 (zod)              message missing/shorter than 2/longer than 500, bad cityId, only one of lat/lng, or unknown lastMode
+400 (zod)              message missing/shorter than 2/longer than 500, bad cityId, bad blockId or more than 10 of them, only one of lat/lng, or unknown lastMode
 403 ROLE_NOT_ALLOWED   caller is not a customer
 429 AI_DAILY_LIMIT / rate limiter
 503 AI_UNAVAILABLE     kill switch is off
