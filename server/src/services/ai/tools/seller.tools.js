@@ -39,9 +39,15 @@ const TREND_PREVIEW = 14;
 const TOP_PRODUCT_PREVIEW = 5;
 const ALERT_LIMIT_DEFAULT = 8;
 const ALERT_LIMIT_MAX = 20;
-// Alerts are read from the service's newest-updated page, then re-ranked here by
-// real urgency, so this scan is deliberately wider than the number of rows shown.
-const ALERT_SCAN = 50;
+const ALERT_STATUSES = ['OUT_OF_STOCK', 'LOW_STOCK'];
+// Alerts are ranked here by real urgency, so the scan has to cover the shop's
+// whole alert set — the inventory service's page is sorted by last edit, and its
+// newest 50 are not the 50 that need restocking first. The pages are read until
+// the set is covered; the cap below only bites past 300 lines in one status, and
+// the result then says so instead of presenting a short list as the whole shop.
+const ALERT_PAGE = 50;
+const ALERT_MAX_PAGES = 6;
+const ALERT_MAX_ROWS = ALERT_PAGE * ALERT_MAX_PAGES;
 
 const objectIdSchema = z.string().regex(/^[0-9a-f]{24}$/i);
 const daysSchema = z.number().int().min(MIN_DAYS).max(MAX_DAYS).optional();
@@ -229,11 +235,42 @@ const salesSummaryTool = {
   },
 };
 
+/**
+ * Every alert line for one status, up to ALERT_MAX_ROWS.
+ *
+ * The inventory service sorts its page by last edit, so its first page is not
+ * the shop's most urgent stock — it is whatever the brand touched last. Reading
+ * the whole alert set and ranking it here is what makes "fix this first" true.
+ * `total` is the service's own count of the set and is the number the answer
+ * quotes; `complete` is false only when the set is past the scan cap.
+ */
+async function scanAlerts(brandId, stockStatus) {
+  const first = await listInventory({ brandId, stockStatus, page: 1, limit: ALERT_PAGE });
+  const total = first.pagination.total;
+  const pages = Math.min(Math.ceil(total / ALERT_PAGE), ALERT_MAX_PAGES);
+  const later =
+    pages > 1
+      ? await Promise.all(
+          Array.from({ length: pages - 1 }, (_unused, index) =>
+            listInventory({ brandId, stockStatus, page: index + 2, limit: ALERT_PAGE })
+          )
+        )
+      : [];
+  const items = [first, ...later].flatMap((page) => page.items).slice(0, ALERT_MAX_ROWS);
+  return { stockStatus, rows: items.map((item) => serializeInventory(item)), total, complete: items.length >= total };
+}
+
+/** The true size of an alert set whose lines are not being ranked. */
+async function countAlerts(brandId, stockStatus) {
+  const { pagination } = await listInventory({ brandId, stockStatus, page: 1, limit: 1 });
+  return pagination.total;
+}
+
 const stockAlertsTool = {
   name: 'list_stock_alerts',
   argsHint: "{ status?: 'LOW_STOCK' | 'OUT_OF_STOCK', limit?: 1-20 }",
   description:
-    'This shop’s products that are out of stock or running low, most urgent first, each with what is left, the threshold the shop set, how many sold in the window and the resulting days of cover. Optionally only one status; both by default.',
+    'This shop’s products that are out of stock or running low, most urgent first, each with what is left, the threshold the shop set, how many sold in the window and the resulting days of cover. Optionally rank only one status; "counts" holds the shop’s true total for both either way, and "complete" says whether the lines below are every alert the shop has.',
   argsSchema: z
     .object({
       status: z.enum(['LOW_STOCK', 'OUT_OF_STOCK']).optional(),
@@ -244,17 +281,25 @@ const stockAlertsTool = {
   async run(ctx, args) {
     const days = args.days || DEFAULT_DAYS;
     const limit = args.limit || ALERT_LIMIT_DEFAULT;
-    const statuses = args.status ? [args.status] : ['OUT_OF_STOCK', 'LOW_STOCK'];
+    const statuses = args.status ? [args.status] : ALERT_STATUSES;
+    const skipped = ALERT_STATUSES.filter((stockStatus) => !statuses.includes(stockStatus));
     const range = currentRange(days);
 
-    const pages = await Promise.all(
-      statuses.map((stockStatus) =>
-        listInventory({ brandId: ctx.brandId, stockStatus, page: 1, limit: ALERT_SCAN }).then(
-          ({ items }) => items.map((item) => serializeInventory(item)),
-        ),
-      ),
-    );
-    const inventories = pages.flat();
+    // Both halves of `counts` are read whatever the question asked for, because
+    // "you have nothing out of stock" is a sentence about the shop, not about the
+    // rows this call happened to rank. The status being skipped costs one page of
+    // one row: only its total is needed, not its lines.
+    const [scans, skippedTotal] = await Promise.all([
+      Promise.all(statuses.map((stockStatus) => scanAlerts(ctx.brandId, stockStatus))),
+      skipped.length ? countAlerts(ctx.brandId, skipped[0]) : Promise.resolve(null),
+    ]);
+
+    const totalOf = (stockStatus) => {
+      const index = statuses.indexOf(stockStatus);
+      return index === -1 ? skippedTotal || 0 : scans[index].total;
+    };
+    const inventories = scans.flatMap((scan) => scan.rows);
+    const partial = scans.filter((scan) => !scan.complete);
 
     const ids = [...new Set(inventories.map((item) => String(item.productId)))];
     const products = ids.length
@@ -273,18 +318,34 @@ const stockAlertsTool = {
       )
       .sort((a, b) => {
         if (a.stockStatus !== b.stockStatus) return a.stockStatus === 'OUT_OF_STOCK' ? -1 : 1;
-        if (a.daysOfCover === null && b.daysOfCover !== null) return 1;
-        if (b.daysOfCover === null && a.daysOfCover !== null) return -1;
-        return (a.daysOfCover ?? 0) - (b.daysOfCover ?? 0);
+        const left = a.daysOfCover === null ? Number.POSITIVE_INFINITY : a.daysOfCover;
+        const right = b.daysOfCover === null ? Number.POSITIVE_INFINITY : b.daysOfCover;
+        if (left !== right) return left - right;
+        // Two empty shelves both have zero days of cover, and a line nobody buys
+        // has no cover to compute at all. What the shop must fix first is the one
+        // it is actually selling out of, so velocity breaks the tie instead of
+        // leaving it to the scan order (docs/29 Phase 3a).
+        return (b.unitsSoldInWindow || 0) - (a.unitsSoldInWindow || 0);
       })
       .slice(0, limit);
 
     return {
       window: { ...range.labels, days },
       counts: {
-        outOfStock: inventories.filter((item) => item.stockStatus === 'OUT_OF_STOCK').length,
-        lowStock: inventories.filter((item) => item.stockStatus === 'LOW_STOCK').length,
+        outOfStock: totalOf('OUT_OF_STOCK'),
+        lowStock: totalOf('LOW_STOCK'),
       },
+      // False only for a shop with more alert lines than the scan covers. The
+      // answer may then rank what it was shown but must not call the list the
+      // whole shop, and must not count products it was never given.
+      complete: partial.length === 0,
+      ...(partial.length
+        ? {
+            partialNote: partial
+              .map((scan) => `Only the newest ${ALERT_MAX_ROWS} of ${scan.total} ${scan.stockStatus} lines were read.`)
+              .join(' '),
+          }
+        : {}),
       untrackedNote: 'Products with stock tracking switched off never appear here.',
       products: rows,
     };

@@ -909,13 +909,21 @@ describe('promiseCheck.rules — the days that delivered something', () => {
   });
 
   it('reads a day’s median from that day’s own deliveries', () => {
+    // The three rows have to share one UTC day, and an offset of 10–12 hours
+    // before a clock between 10:00 and 13:00 UTC does not: it splits them across
+    // midnight and the day the test is about stops existing. Yesterday is a whole
+    // day that has passed at any hour the suite runs, so the day is anchored to it
+    // and the durations (2h, 2h, 10h) still make the median ignore the outlier.
+    const yesterday = new Date(Date.UTC(NOW.getUTCFullYear(), NOW.getUTCMonth(), NOW.getUTCDate() - 1));
+    const on = (hours) => new Date(yesterday.getTime() + hours * HOUR);
     const rows = [
-      { _id: idD1, createdAt: ago(10), orderStatus: 'DELIVERED', statusHistory: [{ status: 'DELIVERED', at: ago(8) }] },
-      { _id: idD2, createdAt: ago(11), orderStatus: 'DELIVERED', statusHistory: [{ status: 'DELIVERED', at: ago(9) }] },
-      { _id: idD4, createdAt: ago(12), orderStatus: 'DELIVERED', statusHistory: [{ status: 'DELIVERED', at: ago(2) }] },
+      { _id: idD1, createdAt: on(1), orderStatus: 'DELIVERED', statusHistory: [{ status: 'DELIVERED', at: on(3) }] },
+      { _id: idD2, createdAt: on(2), orderStatus: 'DELIVERED', statusHistory: [{ status: 'DELIVERED', at: on(4) }] },
+      { _id: idD4, createdAt: on(3), orderStatus: 'DELIVERED', statusHistory: [{ status: 'DELIVERED', at: on(13) }] },
     ];
     const [only] = byDayOf(rows, null);
     expect(only.delivered).toBe(3);
+    expect(only.date).toBe(yesterday.toISOString().slice(0, 10));
     expect(only.late).toBeNull();
     expect(only.medianMinutes).toBe(120);
   });

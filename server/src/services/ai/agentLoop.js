@@ -19,6 +19,9 @@ const { describeTools, findTool } = require('./tools');
 const DEFAULT_MAX_STEPS = 3;
 const MAX_RESULT_CHARS = 4000;
 const MAX_ANSWER_CHARS = 1200;
+// How deep a tool result is searched for the list worth shortening: results are
+// flat records, a list of them, and at most one nesting level inside a record.
+const MAX_LIST_DEPTH = 4;
 
 function decisionSchema(answerShape = {}) {
   return z.object({
@@ -29,9 +32,66 @@ function decisionSchema(answerShape = {}) {
   });
 }
 
+function serialize(value) {
+  return typeof value === 'string' ? value : JSON.stringify(value);
+}
+
+/** The longest list inside a tool result, with the path needed to rebuild it. */
+function findList(node, path = [], depth = 0) {
+  if (!node || typeof node !== 'object' || depth > MAX_LIST_DEPTH) return null;
+  let best = null;
+  for (const [key, value] of Object.entries(node)) {
+    const candidate = Array.isArray(value) && value.length > 1
+      ? { path: [...path, key], entries: value }
+      : findList(value, [...path, key], depth + 1);
+    if (candidate && (!best || candidate.entries.length > best.entries.length)) best = candidate;
+  }
+  return best;
+}
+
+/** The same result, holding only the first `kept` entries of the list at `path`. */
+function withoutTail(value, path, kept) {
+  const [key, ...rest] = path;
+  const copy = Array.isArray(value) ? [...value] : { ...value };
+  copy[key] = rest.length ? withoutTail(value[key], rest, kept) : value[key].slice(0, kept);
+  return copy;
+}
+
+/**
+ * A tool result as one prompt line.
+ *
+ * A result that does not fit is shortened by dropping whole entries from its
+ * longest list, never by cutting JSON in the middle: a model reading a list
+ * that stops mid-object still calls it the shop's stock, and that is how "6
+ * products need you" comes out of a shop with 40 (docs/29 Phase 3a). Whatever
+ * shape the cut takes, the model is told it happened and told not to count what
+ * it cannot see — so a shorter result can never become a quieter wrong answer.
+ */
 function clip(value) {
-  const text = typeof value === 'string' ? value : JSON.stringify(value);
-  return text.length > MAX_RESULT_CHARS ? `${text.slice(0, MAX_RESULT_CHARS)}…` : text;
+  const text = serialize(value);
+  if (text.length <= MAX_RESULT_CHARS) return text;
+
+  const list = value && typeof value === 'object' ? findList(value) : null;
+  if (list) {
+    const field = list.path[list.path.length - 1];
+    const note = (kept) =>
+      `\n\nTRUNCATED: this result shows the first ${kept} of ${list.entries.length} ${field} entries. ` +
+      'The rest exist but are not here, so never describe this list as everything the shop has, ' +
+      'never count entries beyond the ones shown, and never name one that is not here.';
+    let kept = list.entries.length;
+    while (kept > 1) {
+      kept -= 1;
+      const shrunk = serialize(withoutTail(value, list.path, kept));
+      if (shrunk.length + note(kept).length <= MAX_RESULT_CHARS) return `${shrunk}${note(kept)}`;
+    }
+  }
+
+  // A result with no list to shorten, or one whose single entry is still too
+  // big: the text itself is cut, and that is said out loud too.
+  const cut =
+    'TRUNCATED: the data above is incomplete and may stop in the middle of a value. ' +
+    'Do not count it or treat it as the whole set.';
+  return `${text.slice(0, Math.max(0, MAX_RESULT_CHARS - cut.length - 1))}\n${cut}`;
 }
 
 async function runAgent({
@@ -123,10 +183,17 @@ async function runAgent({
           result
         )}\n\nUse only these results. Do not invent items or ids.`,
       });
-    } catch {
-      trace.push({ tool: tool.name, ok: false });
+    } catch (err) {
+      // A tool that throws is a broken tool, not an empty shop. The reason goes
+      // into the log and the trace: hidden here, it would look exactly like a
+      // question with no answer (AGENTS.md §12 — errors are not hidden).
+      trace.push({ tool: tool.name, ok: false, error: err.message || err.name });
+      console.error(`[ai] tool ${tool.name} failed for ${task}: ${err.message || err.name}`);
       messages.push({ role: 'assistant', content: JSON.stringify({ tool: tool.name, args: parsedArgs.data }) });
-      messages.push({ role: 'user', content: `TOOL ERROR: ${tool.name} could not run. Try another search.` });
+      messages.push({
+        role: 'user',
+        content: `TOOL ERROR: ${tool.name} could not run, so it returned no data. Answer from the results you already have, or say the shop's numbers could not be read just now. Do not invent numbers to fill the gap.`,
+      });
     }
   }
 
@@ -142,4 +209,4 @@ async function runAgent({
   throw new AiGuardError('Model did not answer after the tool steps.');
 }
 
-module.exports = { runAgent, decisionSchema, DEFAULT_MAX_STEPS };
+module.exports = { runAgent, decisionSchema, clip, DEFAULT_MAX_STEPS, MAX_RESULT_CHARS };
